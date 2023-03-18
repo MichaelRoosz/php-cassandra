@@ -1,93 +1,162 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra;
+
+use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Frame;
+use Cassandra\Compression\Lz4Decompressor;
+use SplQueue;
+use SplFixedArray;
 
-class Connection {
-
+class Connection
+{
     /**
-     * Connection options
-     * @var array
+     * @var array<int, class-string<Response\Response>> $responseClassMap
      */
-    protected $_options = [
-        'CQL_VERSION' => '3.0.0'
+    protected static array $responseClassMap = [
+        Frame::OPCODE_ERROR => Response\Error::class,
+        Frame::OPCODE_READY => Response\Ready::class,
+        Frame::OPCODE_AUTHENTICATE => Response\Authenticate::class,
+        Frame::OPCODE_SUPPORTED => Response\Supported::class,
+        Frame::OPCODE_RESULT => Response\Result::class,
+        Frame::OPCODE_EVENT => Response\Event::class,
+        Frame::OPCODE_AUTH_CHALLENGE => Response\AuthChallenge::class,
+        Frame::OPCODE_AUTH_SUCCESS => Response\AuthSuccess::class,
     ];
 
     /**
-     * @var string
+     * Connection options
+     * @var array<string,string> $_options
      */
-    protected $_keyspace;
+    protected array $_options = [
+        'CQL_VERSION' => '3.0.0',
+        'DRIVER_NAME' => 'php-cassandra-client',
+        'DRIVER_VERSION' => '0.7.0',
+        // 'COMPRESSION' => 'lz4',
+        // 'THROW_ON_OVERLOAD' => '1',
+    ];
+
+    protected string $_keyspace;
 
     /**
-     * @var array|\Traversable
+     * @var array<string|array{
+     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
+     *  host?: ?string,
+     *  port?: int,
+     *  username?: ?string,
+     *  password?: ?string,
+     *  socket?: array<int, array<mixed>|int|string>,
+     * }|array{
+     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
+     *  host?: ?string,
+     *  port?: int,
+     *  username?: ?string,
+     *  password?: ?string,
+     *  timeout?: int,
+     *  connectTimeout?: int,
+     *  persistent?: bool,
+     *  ssl?: array<string, mixed>,
+     * }> $_nodes
      */
     protected $_nodes;
 
-    /**
-     * @var Connection\Socket|Connection\Stream
-     */
-    protected $_node;
-    
-    /**
-     * @var int
-     */
-    protected $_lastStreamId = 0;
-    
-    /**
-     * 
-     * @var array
-     */
-    protected $_statements = [];
-    
-    /**
-     * 
-     * @var \SplQueue
-     */
-    protected $_recycledStreams;
+    protected ?Connection\Node $_node = null;
+
+    protected Lz4Decompressor $_lz4Decompressor;
+
+    protected int $_lastStreamId = 0;
 
     /**
-     * @var int
+     * @var array<Statement> $_statements
      */
-    protected $_consistency = Request\Request::CONSISTENCY_ONE;
+    protected array $_statements = [];
 
     /**
-     * @param array|\Traversable $nodes
+     * @var SplQueue<int> $_recycledStreams
+     */
+    protected SplQueue $_recycledStreams;
+
+    protected int $_consistency = Request\Request::CONSISTENCY_ONE;
+
+    protected int $_version = 0x03;
+    protected int $_versionIn = 0x83;
+
+    /**
+     * @param array<string|array{
+     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
+     *  host?: ?string,
+     *  port?: int,
+     *  username?: ?string,
+     *  password?: ?string,
+     *  socket?: array<int, array<mixed>|int|string>,
+     * }|array{
+     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
+     *  host?: ?string,
+     *  port?: int,
+     *  username?: ?string,
+     *  password?: ?string,
+     *  timeout?: int,
+     *  connectTimeout?: int,
+     *  persistent?: bool,
+     *  ssl?: array<string, mixed>,
+     * }> $nodes
      * @param string $keyspace
-     * @param array $options
+     * @param array<string,string> $options
      */
-    public function __construct($nodes, $keyspace = '', array $options = []) {
-        if (is_array($nodes))
+    public function __construct(array $nodes, string $keyspace = '', array $options = [])
+    {
+        if (count($nodes) > 1) {
             shuffle($nodes);
-        
+        }
+
         $this->_nodes = $nodes;
-        $this->_options = array_merge($this->_options, $options);
         $this->_keyspace = $keyspace;
-        $this->_recycledStreams = new \SplQueue();
+
+        $this->_lz4Decompressor = new Lz4Decompressor();
+
+        foreach ($options as $optname => $optvalue) {
+            $this->_options[strtoupper($optname)] = $optvalue;
+        }
+
+        /** @var SplQueue<int> $recycledStreams */
+        $recycledStreams = new SplQueue();
+        $this->_recycledStreams = $recycledStreams;
     }
-    
+
     /**
-     * @throws Exception
+     * @throws \Cassandra\Exception
      */
-    protected function _connect() {
-        foreach($this->_nodes as $options){
-            if (is_string($options)){
-                if (!preg_match('/^(((tcp|udp|unix|ssl|tls):\/\/)?[\w\.\-]+)(\:(\d+))?/i', $options, $matches))
+    protected function _connect(): void
+    {
+        foreach ($this->_nodes as $options) {
+            if (is_string($options)) {
+                if (!preg_match('/^(((tcp|udp|unix|ssl|tls):\/\/)?[\w\.\-]+)(\:(\d+))?/i', $options, $matches)) {
                     throw new Exception('Invalid host: ' . $options);
-                
-                $options = [ 'host' => $matches[1],];
-                
-                if (!empty($matches[5]))
-                    $options['port'] = $matches[5];
-                
+                }
+
+                $options = ['host' => $matches[1]];
+
+                if (!empty($matches[5])) {
+                    $options['port'] = (int) $matches[5];
+                }
+
                 // Use Connection\Stream when protocol prefix is defined.
                 try {
                     $this->_node = empty($matches[2]) ? new Connection\Socket($options) : new Connection\Stream($options);
                 } catch (Exception $e) {
                     continue;
                 }
-            }
-            else{
-                $className = isset($options['class']) ? $options['class'] : 'Cassandra\Connection\Socket';
+            } else {
+                $className = isset($options['class']) ? $options['class'] : Connection\Socket::class;
+                if (!is_subclass_of($className, Connection\NodeImplementation::class)) {
+                    throw new Exception('Invalid connection class: ' . $className);
+                }
                 try {
+                    /**
+                     *  @throws \Cassandra\Exception
+                    */
                     $this->_node = new $className($options);
                 } catch (Exception $e) {
                     continue;
@@ -95,281 +164,452 @@ class Connection {
             }
             return;
         }
-        
+
         throw new Exception("Unable to connect to all Cassandra nodes.");
     }
-    
-    /**
-     * @return bool
-     */
-    public function disconnect() {
-        if ($this->_node === null)
-            return true;
-        
-        return $this->_node->close();
+
+    public function disconnect(): void
+    {
+        if ($this->_node !== null) {
+            $this->_node->close();
+            $this->_node = null;
+        }
     }
-    
-    /**
-     * @return bool
-     */
-    public function isConnected() {
+
+    public function isConnected(): bool
+    {
         return $this->_node !== null;
     }
-    
-    /**
-     * 
-     * @param Response\Event $response
-     */
-    public function trigger($response){
+
+    public function trigger(Response\Event $response): void
+    {
     }
-    
+
     /**
-     * 
-     * @param int $streamId
-     * @throws Response\Exception
-     * @return Response\Response
+     * @throws \Cassandra\Exception
      */
-    public function getResponse($streamId = 0){
-        do{
+    public function getResponse(int $streamId = 0): Response\Response
+    {
+        do {
             $response = $this->_getResponse();
-        }
-        while($response->getStream() !== $streamId);
-        
+        } while ($response->getStream() !== $streamId);
+
         return $response;
     }
-    
+
     /**
-     *
-     * @throws Response\Exception
-     * @return Response\Response
+     * @throws \Cassandra\Exception
      */
-    protected function _getResponse() {
-        $version = unpack('C', $this->_node->read(1))[1];
-        switch($version) {
-            case 0x83:
-                $header = unpack('Cflags/nstream/Copcode/Nlength', $this->_node->read(8));
-                $body = $header['length'] === 0 ? '' : $this->_node->read($header['length']);
-                
-                static $responseClassMap = [
-                    Frame::OPCODE_ERROR            => 'Cassandra\Response\Error',
-                    Frame::OPCODE_READY            => 'Cassandra\Response\Ready',
-                    Frame::OPCODE_AUTHENTICATE    => 'Cassandra\Response\Authenticate',
-                    Frame::OPCODE_SUPPORTED        => 'Cassandra\Response\Supported',
-                    Frame::OPCODE_RESULT        => 'Cassandra\Response\Result',
-                    Frame::OPCODE_EVENT            => 'Cassandra\Response\Event',
-                    Frame::OPCODE_AUTH_SUCCESS    => 'Cassandra\Response\AuthSuccess',
-                ];
-                
-                if (!isset($responseClassMap[$header['opcode']]))
-                    throw new Response\Exception('Unknown response');
-                
-                $responseClass = $responseClassMap[$header['opcode']];
-                $response = new $responseClass($header, new Response\StreamReader($body));
-                
-                if ($header['stream'] !== 0){
-                    if (isset($this->_statements[$header['stream']])){
-                        $this->_statements[$header['stream']]->setResponse($response);
-                        unset($this->_statements[$header['stream']]);
-                        $this->_recycledStreams->enqueue($header['stream']);
-                    }
-                    elseif ($response instanceof Response\Event){
-                        $this->trigger($response);
-                    }
-                }
-                
-                return $response;
-            default:
-                throw new Exception('php-cassandra supports CQL binary protocol v3 only, please upgrade your Cassandra to 2.1 or later.');
+    protected function _getResponse(): Response\Response
+    {
+        if ($this->_node === null) {
+            throw new Exception('not connected');
         }
+
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('C', $this->_node->read(1));
+        if ($unpacked === false) {
+            throw new Response\Exception('cannot read version of response');
+        }
+
+        $version = $unpacked[1];
+
+        if ($version !== $this->_versionIn) {
+            throw new Exception('php-cassandra only supports CQL binary protocol versions v3, v4 and v5. Please upgrade your Cassandra to 2.1 or later.');
+        }
+
+        /**
+         * @var false|array{
+         *  flags: int,
+         *  stream: int,
+         *  opcode: int,
+         *  length: int
+         * } $header
+         */
+        $header = unpack('Cflags/nstream/Copcode/Nlength', $this->_node->read(8));
+        if ($header === false) {
+            throw new Exception('cannot read header of response');
+        }
+
+        $body = $header['length'] === 0 ? '' : $this->_node->read($header['length']);
+
+        if (!isset(self::$responseClassMap[$header['opcode']])) {
+            throw new Response\Exception('Unknown response');
+        }
+
+        $responseClass = self::$responseClassMap[$header['opcode']];
+        if (!is_subclass_of($responseClass, Response\Response::class)) {
+            throw new Exception('received invalid response');
+        }
+
+        if ($this->_version < 5 && $header['length'] > 0 && $header['flags'] & Frame::FLAG_COMPRESSION) {
+            $this->_lz4Decompressor->setInput($body);
+            $body = $this->_lz4Decompressor->decompressBlock();
+        }
+
+        $response = new $responseClass($header, new Response\StreamReader($body));
+
+        if ($header['stream'] !== 0) {
+            if (isset($this->_statements[$header['stream']])) {
+                $this->_statements[$header['stream']]->setResponse($response);
+                unset($this->_statements[$header['stream']]);
+                $this->_recycledStreams->enqueue($header['stream']);
+            } elseif ($response instanceof Response\Event) {
+                $this->trigger($response);
+            }
+        }
+
+        return $response;
     }
-    
+
     /**
      * Wait until all statements received response.
+     *
+     * @throws \Cassandra\Exception
      */
-    public function flush(){
-        while(!empty($this->_statements)){
+    public function flush(): void
+    {
+        while ($this->_statements) {
             $this->_getResponse();
         }
     }
-    
-    /**
-     * @return Connection\Node
-     */
-    public function getNode() {
+
+    public function getNode(): ?Connection\Node
+    {
         return $this->_node;
     }
 
     /**
-     * Connect to database
-     * @throws Exception
-     * @return bool
+     * @throws \Cassandra\Exception
      */
-    public function connect() {
-        if ($this->_node !== null)
+    public function connect(): bool
+    {
+        if ($this->_node !== null) {
             return true;
-        
-        $this->_connect();
-        
-        $response = $this->syncRequest(new Request\Startup($this->_options));
-        
-        if ($response instanceof Response\Authenticate){
-            $nodeOptions = $this->_node->getOptions();
-            
-            if (empty($nodeOptions['username']) || empty($nodeOptions['password']))
-                throw new Exception('Username and password are required.');
-            
-            $this->syncRequest(new Request\AuthResponse($nodeOptions['username'], $nodeOptions['password']));
         }
-        
-        if (!empty($this->_keyspace))
+
+        $this->_connect();
+
+        if ($this->_node === null) {
+            throw new Exception('not connected');
+        }
+
+        $node = $this->_node;
+
+        $response = $this->syncRequest(new Request\Options());
+        if (!($response instanceof Response\Supported)) {
+            throw new Exception('Connection options exchange failed.');
+        }
+
+        $this->configureOptions($response);
+
+        $response = $this->syncRequest(new Request\Startup($this->_options));
+
+        if ($response instanceof Response\Authenticate) {
+            $nodeOptions = $node->getOptions();
+
+            if (empty($nodeOptions['username']) || empty($nodeOptions['password'])) {
+                throw new Exception('Username and password are required.');
+            }
+
+            if ($this->_version >= 5) {
+                if (!($node instanceof Connection\NodeImplementation)) {
+                    throw new Exception('Node class is not extending NodeImplementation');
+                }
+                $this->_node = new FrameCodec($node, $this->_options['COMPRESSION'] ?? null);
+            }
+
+            $authResult = $this->syncRequest(new Request\AuthResponse($nodeOptions['username'], $nodeOptions['password']));
+            if (!($authResult instanceof Response\AuthSuccess)) {
+                throw new Exception('Authentication failed.');
+            }
+        } elseif ($response instanceof Response\Ready) {
+            if ($this->_version >= 5) {
+                if (!($node instanceof Connection\NodeImplementation)) {
+                    throw new Exception('Node class is not extending NodeImplementation');
+                }
+                $this->_node = new FrameCodec($node, $this->_options['COMPRESSION'] ?? null);
+            }
+        } else {
+            throw new Exception('Connection startup failed.');
+        }
+
+        if ($this->_keyspace) {
             $this->syncRequest(new Request\Query("USE {$this->_keyspace};"));
-        
+        }
+
         return true;
     }
 
     /**
-     * @param Request\Request $request
-     * @throws Exception
-     * @return Response\Response
+     * @throws \Cassandra\Exception
      */
-    public function syncRequest(Request\Request $request) {
-        if ($this->_node === null)
+    public function syncRequest(Request\Request $request): Response\Response
+    {
+        if ($this->_node === null) {
             $this->connect();
-        
-        $this->_node->write($request->__toString());
-        
+        }
+
+        if ($this->_node === null) {
+            throw new Exception('not connected');
+        }
+
+        $request->setVersion($this->_version);
+
+        $this->_node->writeRequest($request);
+
         $response = $this->getResponse();
-        
-        if ($response instanceof Response\Error)
+
+        if ($response instanceof Response\Error) {
             throw $response->getException();
-        
+        }
+
         return $response;
     }
-    
+
     /**
-     * 
-     * @param Request\Request $request
-     * @return Statement
+     * @throws \Cassandra\Exception
      */
-    public function asyncRequest(Request\Request $request) {
-        if ($this->_node === null)
+    public function asyncRequest(Request\Request $request): Statement
+    {
+        if ($this->_node === null) {
             $this->connect();
-        
+        }
+
+        if ($this->_node === null) {
+            throw new Exception('not connected');
+        }
+
+        $request->setVersion($this->_version);
+
         $streamId = $this->_getNewStreamId();
         $request->setStream($streamId);
-        
-        $this->_node->write($request->__toString());
-        
+
+        $this->_node->writeRequest($request);
+
         return $this->_statements[$streamId] = new Statement($this, $streamId);
     }
 
     /**
-     * 
-     * @throws Exception
-     * @return int
+     * @throws \Cassandra\Exception
      */
-    protected function _getNewStreamId(){
-        if ($this->_lastStreamId < 32767)
+    protected function configureOptions(Response\Supported $supportedReponse): void
+    {
+        $serverOptions = $supportedReponse->getData();
+
+        if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 3;
+        } elseif (in_array('5/v5', $serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 5;
+        } elseif (in_array('4/v4', $serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 4;
+        } elseif (in_array('3/v3', $serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 3;
+        } else {
+            throw new Exception('Server does not support a compatible protocol version.');
+        }
+
+        if (!empty($this->_options['COMPRESSION']) && !empty($serverOptions['COMPRESSION'])) {
+            $compressionAlgo = strtolower($this->_options['COMPRESSION']);
+
+            if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
+                throw new Exception('Compression "' . $compressionAlgo  . '" not supported by server.');
+            }
+
+            $this->_options['COMPRESSION'] = $compressionAlgo;
+        } else {
+            unset($this->_options['COMPRESSION']);
+        }
+
+        if ($this->_version >= 4) {
+            if (!empty($this->_options['THROW_ON_OVERLOAD'])) {
+                $this->_options['THROW_ON_OVERLOAD'] = '1';
+            } else {
+                $this->_options['THROW_ON_OVERLOAD'] = '0';
+            }
+        } else {
+            unset($this->_options['THROW_ON_OVERLOAD']);
+        }
+
+        if ($this->_version < 5) {
+            unset($this->_options['DRIVER_NAME']);
+            unset($this->_options['DRIVER_VERSION']);
+        }
+
+        $this->_versionIn = $this->_version + 0x80;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function _getNewStreamId(): int
+    {
+        if ($this->_lastStreamId < 32767) {
             return ++$this->_lastStreamId;
-        
-        while ($this->_recycledStreams->isEmpty()){
+        }
+
+        while ($this->_recycledStreams->isEmpty()) {
             $this->_getResponse();
         }
-        
+
         return $this->_recycledStreams->dequeue();
     }
-    
-    /***** Shorthand Methods ******/
+
     /**
-     * 
-     * @param string $cql
-     * @throws Exception
-     * @return array
+     * @return null|SplFixedArray<mixed>|string|array{
+     *   id: string,
+     *   result_metadata_id?: string,
+     *   metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     page_state?: ?string,
+     *     new_metadata_id?: string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     *   result_metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     page_state?: ?string,
+     *     new_metadata_id?: string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     * }|array{
+     *  change_type: string,
+     *  target: string,
+     *  keyspace: string,
+     *  name?: string,
+     *  argument_types?: string[]
+     * }
+     *
+     * @throws \Cassandra\Exception
      */
-    public function prepare($cql) {
+    public function prepare(string $cql): null|SplFixedArray|string|array
+    {
         $response = $this->syncRequest(new Request\Prepare($cql));
-        
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('received invalid response');
+        }
+
         return $response->getData();
     }
-    
-    /**
-     * 
-     * @param string $queryId
-     * @param array $values
-     * @param int $consistency
-     * @param array $options
-     * @throws Exception
-     * @return Response\Response
-     */
-    public function executeSync($queryId, array $values = [], $consistency = null, array $options = []){
-        $request = new Request\Execute($queryId, $values, $consistency === null ? $this->_consistency : $consistency, $options);
-        
-        return $this->syncRequest($request);
-    }
-    
-    /**
-     * 
-     * @param string $queryId
-     * @param array $values
-     * @param int $consistency
-     * @param array $options
-     * @throws Exception
-     * @return Statement
-     */
-    public function executeAsync($queryId, array $values = [], $consistency = null, array $options = []){
-        $request = new Request\Execute($queryId, $values, $consistency === null ? $this->_consistency : $consistency, $options);
-        
-        return $this->asyncRequest($request);
-    }
-    
-    /**
-     * 
-     * @param string $cql
-     * @param array $values
-     * @param int $consistency
-     * @param array $options
-     * @throws Exception
-     * @return Response\Response
-     */
-    public function querySync($cql, array $values = [], $consistency = null, array $options = []){
-        $request = new Request\Query($cql, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
-        return $this->syncRequest($request);
-    }
-    
     /**
+     * @param array<mixed> $values
+     * @param array{
+     *  names_for_values?: bool,
+     *  skip_metadata?: bool,
+     *  page_size?: int,
+     *  paging_state?: string,
+     *  serial_consistency?: int,
+     *  default_timestamp?: int,
+     * } $options
      *
-     * @param string $cql
-     * @param array $values
-     * @param int $consistency
-     * @param array $options
-     * @throws Exception
-     * @return Statement
+     * @throws \Cassandra\Exception
      */
-    public function queryAsync($cql, array $values = [], $consistency = null, array $options = []){
+    public function executeSync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Response\Response
+    {
+        $request = new Request\Execute($queryId, $values, $consistency === null ? $this->_consistency : $consistency, $options);
+
+        return $this->syncRequest($request);
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @param array{
+     *  names_for_values?: bool,
+     *  skip_metadata?: bool,
+     *  page_size?: int,
+     *  paging_state?: string,
+     *  serial_consistency?: int,
+     *  default_timestamp?: int,
+     * } $options
+     *
+     * @throws \Cassandra\Exception
+     */
+    public function executeAsync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Statement
+    {
+        $request = new Request\Execute($queryId, $values, $consistency === null ? $this->_consistency : $consistency, $options);
+
+        return $this->asyncRequest($request);
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @param array{
+     *  names_for_values?: bool,
+     *  skip_metadata?: bool,
+     *  page_size?: int,
+     *  paging_state?: string,
+     *  serial_consistency?: int,
+     *  default_timestamp?: int,
+     * } $options
+     *
+     * @throws \Cassandra\Exception
+     */
+    public function querySync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Response\Response
+    {
+        $request = new Request\Query($cql, $values, $consistency === null ? $this->_consistency : $consistency, $options);
+
+        return $this->syncRequest($request);
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @param array{
+     *  names_for_values?: bool,
+     *  skip_metadata?: bool,
+     *  page_size?: int,
+     *  paging_state?: string,
+     *  serial_consistency?: int,
+     *  default_timestamp?: int,
+     * } $options
+     *
+     * @throws \Cassandra\Exception
+     */
+    public function queryAsync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Statement
+    {
         $request = new Request\Query($cql, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
         return $this->asyncRequest($request);
     }
-    
+
     /**
-     * @param string $keyspace
-     * @throws Exception
-     * @return Response\Result
+     * @throws \Cassandra\Exception
      */
-    public function setKeyspace($keyspace) {
+    public function setKeyspace(string $keyspace): ?Response\Result
+    {
         $this->_keyspace = $keyspace;
-        
-        if ($this->_node === null)
-            return;
-        
-        return $this->syncRequest(new Request\Query("USE {$this->_keyspace};"));
+
+        if ($this->_node === null) {
+            return null;
+        }
+
+        $response = $this->syncRequest(new Request\Query("USE {$this->_keyspace};"));
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('received invalid response');
+        }
+
+        return $response;
     }
-    
-    /**
-     * @param int  $consistency
-     */
-    public function setConsistency($consistency){
+
+    public function setConsistency(int $consistency): void
+    {
         $this->_consistency = $consistency;
     }
 }

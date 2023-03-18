@@ -1,114 +1,182 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra\Response;
 
 use Cassandra\Type;
 
-class StreamReader {
+class StreamReader
+{
+    protected string $data;
+    protected int $dataLength;
 
-    /**
-     * @var string
-     */
-    protected $data;
-    
-    /**
-     * @var int
-     */
-    protected $offset = 0;
+    protected int $offset = 0;
+    protected int $extraDataOffset = 0;
 
-    public function __construct($data){
+    public function __construct(string $data)
+    {
         $this->data = $data;
+        $this->dataLength = strlen($data);
     }
 
     /**
-     * Read data from stream.
-     * 
-     * NOTICE When $this->offset == strlen($this->data), substr() will return false.  You'd better avoid call read() when $length == 0.
-     *
-     * @param int $length  $length should be > 0.
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    protected function read($length) {
+    protected function read(int $length): string
+    {
+        if ($length < 1) {
+            return '';
+        }
+
+        if ($this->offset + $length > $this->dataLength) {
+            //$length = $this->dataLength - $this->offset;
+            throw new Exception('Tried to read more data than available');
+        }
+
         $output = substr($this->data, $this->offset, $length);
         $this->offset += $length;
         return $output;
     }
 
-    public function offset($offset){
-        $this->offset = $offset;
+    /**
+     * Sets the extra data offset used to hide extra data at the beginning of the response.
+     */
+    public function extraDataOffset(int $extraDataOffset): void
+    {
+        $this->extraDataOffset = $extraDataOffset;
     }
-    
-    public function reset(){
-        $this->offset = 0;
+
+    public function offset(int $offset): void
+    {
+        $this->offset = $this->extraDataOffset + $offset;
+    }
+
+    public function reset(): void
+    {
+        $this->offset = $this->extraDataOffset;
+    }
+
+    public function pos(): int
+    {
+        return $this->offset - $this->extraDataOffset;
+    }
+
+    public function getData(): string
+    {
+        return $this->data;
     }
 
     /**
-     * Read single character.
-     *
-     * @return int
+     * @throws \Cassandra\Response\Exception
      */
-    public function readChar() {
-        return unpack('C', $this->read(1))[1];
+    public function readChar(): int
+    {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('C', $this->read(1));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        return $unpacked[1];
     }
 
     /**
-     * Read unsigned short.
-     *
-     * @return int
+     * @throws \Cassandra\Response\Exception
      */
-    public function readShort() {
-        return unpack('n', $this->read(2))[1];
+    public function readShort(): int
+    {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('n', $this->read(2));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        return $unpacked[1];
     }
 
     /**
-     * Read unsigned int.
-     *
-     * @return int
+     * @throws \Cassandra\Response\Exception
      */
-    public function readInt() {
-        return unpack('N', $this->read(4))[1];
+    public function readInt(): int
+    {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $this->read(4));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        return $unpacked[1];
     }
 
     /**
-     * Read string.
-     *
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    public function readString() {
-        $length = unpack('n', $this->read(2))[1];
+    public function readString(): string
+    {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('n', $this->read(2));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        $length = $unpacked[1];
         return $length === 0 ? '' : $this->read($length);
     }
 
     /**
-     * Read long string.
-     *
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    public function readLongString() {
-        $length = unpack('N', $this->read(4))[1];
+    public function readLongString(): string
+    {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $this->read(4));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        $length = $unpacked[1];
         return $length === 0 ? '' : $this->read($length);
     }
 
     /**
-     * Read bytes.
-     *
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    public function readBytes() {
+    public function readBytes(): ?string
+    {
         $binaryLength = $this->read(4);
-        if ($binaryLength === "\xff\xff\xff\xff")
+        if ($binaryLength === "\xff\xff\xff\xff") {
             return null;
+        }
 
-        $length = unpack('N', $binaryLength)[1];
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $binaryLength);
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        $length = $unpacked[1];
         return $length === 0 ? '' : $this->read($length);
     }
 
     /**
-     * Read uuid.
-     *
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    public function readUuid() {
+    public function readUuid(): string
+    {
+        /**
+         * @var false|array<int> $data
+         */
         $data = unpack('n8', $this->read(16));
+        if ($data === false) {
+            throw new Exception('Cannot unpack data');
+        }
 
         return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', $data[1], $data[2], $data[3], $data[4], $data[5], $data[6], $data[7], $data[8]);
     }
@@ -116,14 +184,30 @@ class StreamReader {
     /**
      * Read list.
      *
-     * @param array $definition [$valueType]
-     * @return array
+     * @param int|array<int|array<mixed>> $definition [$valueType]
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
-    public function readList(array $definition) {
-        list($valueType) = $definition;
+    public function readList(int|array $definition): array
+    {
+        if (is_array($definition)) {
+            if (count($definition) < 1) {
+                throw new Exception('invalid type definition');
+            } elseif (count($definition) === 1) {
+                [$valueType] = array_values($definition);
+            } else {
+                $valueType = $definition;
+            }
+        } else {
+            $valueType = $definition;
+        }
+
         $list = [];
         $count = $this->readInt();
         for ($i = 0; $i < $count; ++$i) {
+            /** @psalm-suppress MixedAssignment */
             $list[] = $this->readValue($valueType);
         }
         return $list;
@@ -132,106 +216,224 @@ class StreamReader {
     /**
      * Read map.
      *
-     * @param array $definition [$keyType, $valueType]
-     * @return array
+     * @param array<int|array<mixed>> $definition [$keyType, $valueType]
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
-    public function readMap(array $definition) {
-        list($keyType, $valueType) = $definition;
+    public function readMap(array $definition): array
+    {
+        if (count($definition) < 2) {
+            throw new Exception('invalid type definition');
+        }
+
+        [$keyType, $valueType] = array_values($definition);
         $map = [];
         $count = $this->readInt();
+        /** @psalm-suppress MixedAssignment */
         for ($i = 0; $i < $count; ++$i) {
-            $map[$this->readValue($keyType)] = $this->readValue($valueType);
+            $key = $this->readValue($keyType);
+            if (!is_string($key) && !is_int($key)) {
+                throw new Exception('invalid key type');
+            }
+            $map[$key] = $this->readValue($valueType);
         }
         return $map;
     }
 
     /**
-     * 
-     * @param array $definition ['key1'=>$valueType1, 'key2'=>$valueType2, ...]
-     * @return array
+     *
+     * @param array<int|array<mixed>> $definition ['key1'=>$valueType1, 'key2'=>$valueType2, ...]
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
-    public function readTuple(array $definition) {
+    public function readTuple(array $definition): array
+    {
         $tuple = [];
-        $dataLength = strlen($this->data);
         foreach ($definition as $key => $type) {
-            if ($this->offset < $dataLength)
-                $tuple[$key] = $this->readValue($type);
-            else
-                $tuple[$key] = null;
+            /** @psalm-suppress MixedAssignment */
+            $tuple[$key] = $this->readValue($type);
         }
         return $tuple;
     }
 
     /**
-     * Read float.
-     *
-     * @return float
+     * @throws \Cassandra\Response\Exception
      */
-    public function readFloat() {
-        return unpack('f', strrev($this->read(4)))[1];
+    public function readFloat(): float
+    {
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('G', strrev($this->read(4)));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        return $unpacked[1];
     }
 
     /**
-     * Read double.
-     *
-     * @return double
+     * @throws \Cassandra\Response\Exception
      */
-    public function readDouble() {
-        return unpack('d', strrev($this->read(8)))[1];
+    public function readDouble(): float
+    {
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('E', strrev($this->read(8)));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        return $unpacked[1];
     }
 
     /**
-     * Read boolean.
-     *
-     * @return bool
+     * @throws \Cassandra\Response\Exception
      */
-    public function readBoolean() {
+    public function readBoolean(): bool
+    {
         return (bool)$this->readChar();
     }
 
     /**
-     * Read inet.
-     *
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    public function readInet() {
-        return inet_ntop($this->data);
+    public function readInet(): string
+    {
+        $addressLength = $this->readChar();
+
+        if ($addressLength !== 4 && $addressLength !== 16) {
+            throw new Exception('Invalid read inet length');
+        }
+
+        $inet = inet_ntop(chr($addressLength) . $this->read($addressLength));
+        if ($inet === false) {
+            throw new Exception('Cannot read inet');
+        }
+
+        return $inet;
     }
 
     /**
-     * Read variable length integer.
-     *
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    public function readVarint() {
-        list($higher, $lower) = array_values(unpack('N2', $this->data));
+    public function readVarint(): int
+    {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N2', $this->read(8));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+
+        if (count($unpacked) < 2) {
+            throw new Exception('invalid data');
+        }
+
+        [$higher, $lower] = array_values($unpacked);
         return $higher << 32 | $lower;
     }
 
     /**
-     * Read variable length decimal.
-     *
-     * @return string
+     * @throws \Cassandra\Response\Exception
      */
-    public function readDecimal() {
+    public function readDecimal(): string
+    {
         $scale = $this->readInt();
-        $value = $this->readVarint();
+        $value = (string) $this->readVarint();
         $len = strlen($value);
         return substr($value, 0, $len - $scale) . '.' . substr($value, $len - $scale);
     }
-    
-    public function readStringMultimap(){
+
+    /**
+     * @return array<string,?string>
+     *
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readBytesMap(): array
+    {
         $map = [];
         $count = $this->readShort();
-        for($i = 0; $i < $count; $i++){
+        for ($i = 0; $i < $count; $i++) {
             $key = $this->readString();
-                
+            $value = $this->readBytes();
+            $map[$key] = $value;
+        }
+        return $map;
+    }
+
+    /**
+     * @return array<string>
+     *
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readStringList(): array
+    {
+        $list = [];
+        $count = $this->readShort();
+        for ($i = 0; $i < $count; $i++) {
+            $list[] = $this->readString();
+        }
+        return $list;
+    }
+
+    /**
+     * @return array<string,string>
+     *
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readStringMap(): array
+    {
+        $map = [];
+        $count = $this->readShort();
+        for ($i = 0; $i < $count; $i++) {
+            $key = $this->readString();
+            $value = $this->readString();
+            $map[$key] = $value;
+        }
+        return $map;
+    }
+
+    /**
+     * @return array<string,array<int,string>>
+     *
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readStringMultimap(): array
+    {
+        $map = [];
+        $count = $this->readShort();
+        for ($i = 0; $i < $count; $i++) {
+            $key = $this->readString();
+
             $listLength = $this->readShort();
             $list = [];
-            for($j = 0; $j < $listLength; $j++)
+            for ($j = 0; $j < $listLength; $j++) {
                 $list[] = $this->readString();
-                    
+            }
+
             $map[$key] = $list;
+        }
+        return $map;
+    }
+
+    /**
+     * @return array<string,int>
+     *
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readReasonMap(): array
+    {
+        $map = [];
+        $count = $this->readInt();
+        for ($i = 0; $i < $count; $i++) {
+            $key = $this->readInet();
+            $value = $this->readShort();
+            $map[$key] = $value;
         }
         return $map;
     }
@@ -239,87 +441,136 @@ class StreamReader {
     /**
      * alias of readValue()
      * @deprecated
-     * 
-     * @param int|array $type
-     * @return mixed
-     */
-    public function readBytesAndConvertToType($type){
-        return $this->readValue($type);
-    }
-    
-    /**
-     * read a [bytes] and read by type
      *
-     * @param int|array $type
-     * @return mixed
+     * @param int|array<mixed> $dataType
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
-    public function readValue($type){
-        $binaryLength = substr($this->data, $this->offset, 4);
-        $this->offset += 4;
-
-        if ($binaryLength === "\xff\xff\xff\xff")
-            return null;
-
-        $length = unpack('N', $binaryLength)[1];
-
-        // do not use $this->read() for performance
-        // substr() returns FALSE when OFFSET is equal to the length of data
-        $data = ($length == 0) ? '' : substr($this->data, $this->offset, $length);
-        $this->offset += $length;
-        if(!is_array($type)){
-            $class = Type\Base::$typeClassMap[$type];
-            return $class::parse($data);
-        }
-        else{
-            if (!isset(Type\Base::$typeClassMap[$type['type']]))
-                throw new Type\Exception('Unknown type ' . var_export($type, true));
-            $class = Type\Base::$typeClassMap[$type['type']];
-            return $class::parse($data, $type['definition']);
-        }
+    public function readBytesAndConvertToType($dataType): mixed
+    {
+        return $this->readValue($dataType);
     }
 
     /**
-     * @return int|array
+     * @param int|array<mixed> $dataType
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
-    public function readType(){
+    public function readValue($dataType): mixed
+    {
+        $binaryLength = $this->read(4);
+        if ($binaryLength === "\xff\xff\xff\xff") {
+            return null;
+        }
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $binaryLength);
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        $length = $unpacked[1];
+
+        $data = $this->read($length);
+
+        if (is_int($dataType)) {
+            $type = $dataType;
+            $definition = null;
+        } else {
+            $didShift = false;
+
+            if (isset($dataType['type'])) {
+                /** @var int|array<mixed> $type */
+                $type = $dataType['type'];
+            } else {
+                /** @var int|array<mixed> $type */
+                $type = array_shift($dataType);
+                $didShift = true;
+            }
+
+            if (isset($dataType['definition'])) {
+                /** @var int|array<int|array<mixed>> $definition */
+                $definition = $dataType['definition'];
+            } elseif (isset($dataType['value'])) {
+                /** @var int|array<int|array<mixed>> $definition */
+                $definition = $dataType['value'];
+            } elseif (isset($dataType['typeMap'])) {
+                /** @var int|array<int|array<mixed>> $definition */
+                $definition = $dataType['typeMap'];
+            } else {
+                if (!$didShift) {
+                    array_shift($dataType);
+                }
+                /** @var int|array<int|array<mixed>> $definition */
+                $definition = array_shift($dataType);
+            }
+        }
+
+        if ($definition === null && in_array($type, Type\Base::$typesWithDefinition)) {
+            throw new Exception('type is missing its definition');
+        }
+
+        if (!is_int($type)) {
+            throw new Exception('invalid data type');
+        }
+
+        if (!isset(Type\Base::$typeClassMap[$type])) {
+            throw new Exception('invalid data type');
+        }
+
+        $class = Type\Base::$typeClassMap[$type];
+
+        return $class::parse($data, $definition);
+    }
+
+    /**
+     * @return int|array<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function readType()
+    {
         $type = $this->readShort();
         switch ($type) {
             case Type\Base::CUSTOM:
                 return [
-                    'type'    => $type,
+                    'type' => $type,
                     'definition'=> [$this->readString()],
                 ];
             case Type\Base::COLLECTION_LIST:
             case Type\Base::COLLECTION_SET:
                 return [
-                    'type'    => $type,
-                    'definition'    => [$this->readType()],
+                    'type' => $type,
+                    'definition' => [$this->readType()],
                 ];
             case Type\Base::COLLECTION_MAP:
                 return [
-                    'type'    => $type,
+                    'type' => $type,
                     'definition'=> [$this->readType(), $this->readType()],
                 ];
             case Type\Base::UDT:
                 $data = [
-                    'type'        => $type,
-                    'keyspace'    => $this->readString(),
-                    'name'        => $this->readString(),
-                    'definition'    => [],
+                    'type' => $type,
+                    'definition' => [],
+                    'keyspace' => $this->readString(),
+                    'name'=> $this->readString(),
                 ];
                 $length = $this->readShort();
-                for($i = 0; $i < $length; ++$i){
+                for ($i = 0; $i < $length; ++$i) {
                     $key = $this->readString();
                     $data['definition'][$key] = $this->readType();
                 }
                 return $data;
             case Type\Base::TUPLE:
                 $data = [
-                    'type'    => $type,
-                    'definition'    =>    [],
+                    'type' => $type,
+                    'definition' => [],
                 ];
                 $length = $this->readShort();
-                for($i = 0; $i < $length; ++$i){
+                for ($i = 0; $i < $length; ++$i) {
                     $data['definition'][] = $this->readType();
                 }
                 return $data;

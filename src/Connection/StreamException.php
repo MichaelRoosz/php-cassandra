@@ -1,4 +1,9 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra\Connection;
 
-class StreamException extends \Cassandra\Exception {}
+class StreamException extends NodeException
+{
+}

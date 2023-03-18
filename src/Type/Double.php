@@ -1,31 +1,83 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra\Type;
 
-class Double extends Base{
+class Double extends Base
+{
+    protected ?float $_value = null;
 
-    /**
-     * @param double $value
-     * @throws Exception
-     */
-    public function __construct($value = null){
-        if ($value === null)
-            return;
-        
-        if (!is_double($value))
-            throw new Exception('Incoming value must be type of double.');
-    
+    public function __construct(?float $value = null)
+    {
         $this->_value = $value;
     }
-    
-    public static function binary($value){
-        return strrev(pack('d', $value));
-    }
-    
+
     /**
-     * @param string $binary
-     * @return int
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
      */
-    public static function parse($binary){
-        return unpack('d', strrev($binary))[1];
+    protected static function create(mixed $value, null|int|array $definition): self
+    {
+        if ($value !== null && !is_float($value)) {
+            throw new Exception('Invalid value type');
+        }
+
+        return new self($value);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function binaryOfValue(): string
+    {
+        if ($this->_value === null) {
+            throw new Exception('value is null');
+        }
+
+        return static::binary($this->_value);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function parseValue(): ?float
+    {
+        if ($this->_value === null && $this->_binary !== null) {
+            $this->_value = static::parse($this->_binary);
+        }
+
+        return $this->_value;
+    }
+
+    public function __toString(): string
+    {
+        return (string) $this->_value;
+    }
+
+    public static function binary(float $value): string
+    {
+        return strrev(pack('E', $value));
+    }
+
+    /**
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function parse(string $binary, null|int|array $definition = null): float
+    {
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('E', strrev($binary));
+
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack binary.');
+        }
+
+        return $unpacked[1];
     }
 }

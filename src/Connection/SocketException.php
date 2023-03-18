@@ -1,4 +1,9 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra\Connection;
 
-class SocketException extends \Cassandra\Exception {}
+class SocketException extends NodeException
+{
+}

@@ -1,132 +1,269 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra\Connection;
 
-class Stream {
+use Cassandra\Request\Request;
 
-	/**
-	 * @var resource
-	 */
-	protected $_stream;
+/**
+ * @psalm-consistent-constructor
+ */
+class Stream implements NodeImplementation
+{
+    /**
+     * @var ?resource $_stream
+     */
+    protected $_stream;
 
-	/**
-	 * @var array
-	 */
-	protected $_options = [
-		'host'		=> null,
-		'port'		=> 9042,
-		'username'	=> null,
-		'password'	=> null,
-		'timeout'	=> 30,
-		'connectTimeout'=>5,
-		'persistent'=> false,
-	];
+    /**
+     * @var array{
+     *  class: string,
+     *  host: ?string,
+     *  port: int,
+     *  username: ?string,
+     *  password: ?string,
+     *  timeout: int,
+     *  connectTimeout: int,
+     *  persistent: bool,
+     *  ssl: array<string, mixed>,
+     * } & array<string, mixed> $_options
+     */
+    protected array $_options = [
+        'class'     => self::class,
+        'host'		=> null,
+        'port'		=> 9042,
+        'username'	=> null,
+        'password'	=> null,
+        'timeout'	=> 30,
+        'connectTimeout' => 5,
+        'persistent'=> false,
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+            'allow_self_signed' => false,
+        ],
+    ];
 
-	/**
-	 * @param array $options
-	 */
-	public function __construct(array $options) {
-		$this->_options = array_merge($this->_options, $options);
+    /**
+     * @param array{
+     *  class?: string,
+     *  host?: ?string,
+     *  port?: int,
+     *  username?: ?string,
+     *  password?: ?string,
+     * } & array<string, mixed> $options
+     *
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function __construct(array $options)
+    {
+        if (isset($options['timeout'])  && !is_int($options['timeout'])) {
+            throw new StreamException('timeout must be an int value');
+        }
 
-		$this->_connect();
-	}
+        if (isset($options['connectTimeout'])  && !is_int($options['connectTimeout'])) {
+            throw new StreamException('connectTimeout must be an int value');
+        }
 
-	/**
-	 *
-	 * @throws StreamException
-	 * @return resource
-	 */
-	protected function _connect() {
-		if (!empty($this->_stream)) return $this->_stream;
+        if (isset($options['persistent'])  && !is_bool($options['persistent'])) {
+            throw new StreamException('persistent must be a bool value');
+        }
 
-		$this->_stream = $this->_options['persistent']
-			? pfsockopen($this->_options['host'], $this->_options['port'], $errorCode, $errorMessage, $this->_options['connectTimeout'])
-			: fsockopen($this->_options['host'], $this->_options['port'], $errorCode, $errorMessage, $this->_options['connectTimeout']);
 
-		if ($this->_stream === false){
-			throw new StreamException($errorMessage, $errorCode);
-		}
+        if (!isset($options['ssl']) || !is_array($options['ssl'])) {
+            $options['ssl'] = [];
+        } else {
+            foreach (array_keys($options['ssl']) as $optname) {
+                if (!is_string($optname)) {
+                    throw new StreamException('Invalid ssl option - must be of type string');
+                }
+            }
+        }
 
-		stream_set_timeout($this->_stream,$this->_options['timeout']);
-	}
+        $options['ssl'] += $this->_options['ssl'];
 
-	/**
-	 * @return array
-	 */
-	public function getOptions() {
-		return $this->_options;
-	}
+        /**
+         * @var array{
+         *  class: string,
+         *  host: ?string,
+         *  port: int,
+         *  username: ?string,
+         *  password: ?string,
+         *  timeout: int,
+         *  connectTimeout: int,
+         *  persistent: bool,
+         *  ssl: array<string, mixed>,
+         * } & array<string, mixed> $mergedOptions
+         */
+        $mergedOptions = array_merge($this->_options, $options);
+        $this->_options = $mergedOptions;
 
-	/**
-	 * @param $length
-	 * @throws StreamException
-	 * @return string
-	 */
-	public function read($length) {
-		$data = '';
-		do{
-			$readData = fread($this->_stream, $length);
+        $this->_connect();
+    }
 
-			if (feof($this->_stream))
-				throw new StreamException('Connection reset by peer');
+    /**
+     * @return resource
+     * @throws \Cassandra\Connection\StreamException
+     */
+    protected function _connect()
+    {
+        if ($this->_stream) {
+            return $this->_stream;
+        }
 
-			if (stream_get_meta_data($this->_stream)['timed_out'])
-				throw new StreamException('Connection timed out');
+        $host = $this->_options['host'] ??  'localhost';
 
-			if (strlen($readData) == 0)
-				throw new StreamException("Unknown error");
+        $context = stream_context_create();
 
-			$data .= $readData;
-			$length -= strlen($readData);
-		}
-		while($length > 0);
-		
-		return $data;
-	}
+        /** @var mixed $optval */
+        foreach ($this->_options['ssl'] as $optname => $optval) {
+            stream_context_set_option($context, 'ssl', $optname, $optval);
+        }
 
-	/**
-	 * @param $length
-	 * @throws StreamException
-	 * @return string
-	 */
-	public function readOnce($length){
-		$readData = fread($this->_stream, $length);
+        $connFlag = $this->_options['persistent'] ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
+        $stream = stream_socket_client($host . ':' . $this->_options['port'], $errorCode, $errorMessage, $this->_options['connectTimeout'], $connFlag, $context);
+        if ($stream === false) {
+            throw new StreamException($errorMessage, $errorCode);
+        }
 
-		if (feof($this->_stream))
-			throw new StreamException('Connection reset by peer');
+        $this->_stream = $stream;
 
-		if (stream_get_meta_data($this->_stream)['timed_out'])
-			throw new StreamException('Connection timed out');
+        stream_set_timeout($this->_stream, $this->_options['timeout']);
 
-		if (strlen($readData) == 0)
-			throw new StreamException("Unknown error");
+        return $this->_stream;
+    }
 
-		return $readData;
-	}
+    /**
+     * @return array{
+     *  class: string,
+     *  host: ?string,
+     *  port: int,
+     *  username: ?string,
+     *  password: ?string,
+     *  timeout: int,
+     *  connectTimeout: int,
+     *  persistent: bool,
+     *  ssl: array<string, mixed>,
+     * } & array<string, mixed>
+     */
+    public function getOptions(): array
+    {
+        return $this->_options;
+    }
 
-	/**
-	 *
-	 * @param string $binary
-	 * @throws StreamException
-	 */
-	public function write($binary){
-		do{
-			$sentBytes = fwrite($this->_stream, $binary);
-			
-			if (feof($this->_stream))
-				throw new StreamException('Connection reset by peer');
-			
-			if (stream_get_meta_data($this->_stream)['timed_out'])
-				throw new StreamException('Connection timed out');
-			
-			if ($sentBytes == 0)
-				throw new StreamException("Uknown error");
-			
-			$binary = substr($binary, $sentBytes);
-		}
-		while(!empty($binary));
-	}
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function read(int $length): string
+    {
+        if ($this->_stream === null) {
+            throw new StreamException('not connected');
+        }
 
-	public function close(){
-		 fclose($this->_stream);
-	}
+        if ($length < 1) {
+            return '';
+        }
+
+        $data = '';
+        do {
+            $readData = fread($this->_stream, $length);
+
+            if (feof($this->_stream)) {
+                throw new StreamException('Connection reset by peer');
+            }
+
+            if (stream_get_meta_data($this->_stream)['timed_out']) {
+                throw new StreamException('Connection timed out');
+            }
+
+            if ($readData === false || strlen($readData) == 0) {
+                throw new StreamException("Unknown error");
+            }
+
+            $data .= $readData;
+            $length -= strlen($readData);
+        } while ($length > 0);
+
+        return $data;
+    }
+
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function readOnce(int $length): string
+    {
+        if ($this->_stream === null) {
+            throw new StreamException('not connected');
+        }
+
+        if ($length < 1) {
+            return '';
+        }
+
+        $readData = fread($this->_stream, $length);
+
+        if (feof($this->_stream)) {
+            throw new StreamException('Connection reset by peer');
+        }
+
+        if (stream_get_meta_data($this->_stream)['timed_out']) {
+            throw new StreamException('Connection timed out');
+        }
+
+        if ($readData === false || strlen($readData) == 0) {
+            throw new StreamException("Unknown error");
+        }
+
+        return $readData;
+    }
+
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function write(string $binary): void
+    {
+        if ($this->_stream === null) {
+            throw new StreamException('not connected');
+        }
+
+        if (strlen($binary) < 1) {
+            return;
+        }
+
+        do {
+            $sentBytes = fwrite($this->_stream, $binary);
+
+            if (feof($this->_stream)) {
+                throw new StreamException('Connection reset by peer');
+            }
+
+            if (stream_get_meta_data($this->_stream)['timed_out']) {
+                throw new StreamException('Connection timed out');
+            }
+
+            if ($sentBytes === false || $sentBytes < 1) {
+                throw new StreamException("Unknown error");
+            }
+
+            $binary = substr($binary, $sentBytes);
+        } while ($binary);
+    }
+
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function writeRequest(Request $request): void
+    {
+        $this->write($request->__tostring());
+    }
+
+    public function close(): void
+    {
+        if ($this->_stream) {
+            $stream = $this->_stream;
+            $this->_stream = null;
+            fclose($stream);
+        }
+    }
 }

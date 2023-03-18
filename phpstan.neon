@@ -1,0 +1,11 @@
+parameters:
+    level: max
+    paths:
+        - src
+        - php-cassandra.php
+    treatPhpDocTypesAsCertain: false
+    exceptions:
+        implicitThrows: false
+        check:
+            missingCheckedExceptionInThrows: true
+            tooWideThrowType: true

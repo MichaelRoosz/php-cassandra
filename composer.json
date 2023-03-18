@@ -1,6 +1,6 @@
 {
-	"name": "duoshuo/php-cassandra",
-	"description": "Cassandra client library for PHP, which support Protocol v3 and asynchronous request",
+	"name": "mroosz/php-cassandra-client",
+	"description": "Cassandra client library for PHP, which supports Protocol v5 and asynchronous requests",
 	"minimum-stability": "stable",
 	"keywords" : [
 		"cassandra",
@@ -18,12 +18,30 @@
 		{
 			"name": "Evseev Nikolay",
 			"email": "evseevnn@gmail.com"
+		},
+		{
+			"name": "Dennis Birkholz",
+			"email": "birkholz@pubgrade.com"
+		},
+		{
+			"name": "Michael Roosz",
+			"email": "michael.roosz@web.de"
 		}
 	],
 	"require": {
-		"php": ">=5.4.0"
+		"php": ">=8.1.0"
+	},
+	"require-dev": {
+		"phpstan/phpstan": "^1.9.14",
+		"phpunit/phpunit": "^9.5.28",
+		"vimeo/psalm": "^5.6"
 	},
 	"autoload": {
 		"psr-4": { "Cassandra\\": "src/" }
-	}
+	},
+    "scripts": {
+        "phpstan": "vendor/bin/phpstan analyse",
+		"psalm": "vendor/bin/psalm --no-cache",
+		"phpunit": "XDEBUG_MODE=coverage vendor/bin/phpunit --testsuite php-cassandra $@"
+    }
 }

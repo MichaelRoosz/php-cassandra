@@ -1,32 +1,84 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra\Type;
 
-class PhpInt extends Base{
+class PhpInt extends Base
+{
+    protected ?int $_value = null;
+
+    public function __construct(?int $value = null)
+    {
+        $this->_value = $value;
+    }
 
     /**
-     * @param int|string $value
-     * @throws Exception
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
      */
-    public function __construct($value = null){
-        if ($value === null)
-            return;
-        
-        if (!is_numeric($value))
-            throw new Exception('Incoming value must be type of int.');
-    
-        $this->_value = (int) $value;
+    protected static function create(mixed $value, null|int|array $definition): self
+    {
+        if ($value !== null && !is_int($value)) {
+            throw new Exception('Invalid value type');
+        }
+
+        return new self($value);
     }
-    
-    public static function binary($value){
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function binaryOfValue(): string
+    {
+        if ($this->_value === null) {
+            throw new Exception('value is null');
+        }
+
+        return static::binary($this->_value);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function parseValue(): ?int
+    {
+        if ($this->_value === null && $this->_binary !== null) {
+            $this->_value = static::parse($this->_binary);
+        }
+
+        return $this->_value;
+    }
+
+    public function __toString(): string
+    {
+        return (string) $this->_value;
+    }
+
+    public static function binary(int $value): string
+    {
         return pack('N', $value);
     }
-    
+
     /**
-     * @param string $binary
-     * @return int
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
      */
-    public static function parse($binary){
+    public static function parse(string $binary, null|int|array $definition = null): int
+    {
         $bits = PHP_INT_SIZE * 8 - 32;
-        return unpack('N', $binary)[1] << $bits >> $bits;
+
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $binary);
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack binary.');
+        }
+
+        return $unpacked[1] << $bits >> $bits;
     }
 }

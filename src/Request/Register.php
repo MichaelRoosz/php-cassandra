@@ -1,18 +1,21 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra\Request;
+
 use Cassandra\Protocol\Frame;
 use Cassandra\Type;
 
-class Register extends Request{
-    
-    protected $opcode = Frame::OPCODE_REGISTER;
-    
+class Register extends Request
+{
+    protected int $opcode = Frame::OPCODE_REGISTER;
+
     /**
-     * 
-     * @var array
+     * @var array<mixed> $_events
      */
-    protected $_events;
-    
+    protected array $_events;
+
     /**
      * REGISTER
      *
@@ -28,13 +31,18 @@ class Register extends Request{
      * for events on all connections, as this would only result in receiving
      * multiple times the same event messages, wasting bandwidth.
      *
-     * @param array $events
+     * @param array<mixed> $events
      */
-    public function __construct(array $events) {
+    public function __construct(array $events)
+    {
         $this->_events = $events;
     }
-    
-    public function getBody(){
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function getBody(): string
+    {
         return Type\CollectionList::binary($this->_events, [Type\Base::TEXT]);
     }
 }

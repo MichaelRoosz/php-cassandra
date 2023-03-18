@@ -1,14 +1,10 @@
 Cassandra client library for PHP 
 ================================
 
-<a href="https://codeclimate.com/github/duoshuo/php-cassandra/"><img src="https://codeclimate.com/github/duoshuo/php-cassandra.png" /></a>
-<a href="https://scrutinizer-ci.com/g/duoshuo/php-cassandra/"><img src="https://scrutinizer-ci.com/g/duoshuo/php-cassandra/badges/quality-score.png?b=master" /></a>
-<a href="https://scrutinizer-ci.com/g/duoshuo/php-cassandra/"><img src="https://scrutinizer-ci.com/g/duoshuo/php-cassandra/badges/build.png?b=master" /></a>
-
-Cassandra client library for PHP, which support Protocol v3 (Cassandra 2.1) and asynchronous request 
+Cassandra client library for PHP, which supports Protocol v5 (Cassandra 4.x) and asynchronous requests.
 
 ## Features
-* Using Protocol v3 (Cassandra 2.1)
+* Using Protocol v5 (Cassandra 4.x)
 * Support ssl/tls with stream transport layer
 * Support asynchronous and synchronous request
 * Support for logged, unlogged and counter batches
@@ -23,7 +19,7 @@ Cassandra client library for PHP, which support Protocol v3 (Cassandra 2.1) and 
 
 ## Installation
 
-PHP 5.4+ is required. There is no need for additional libraries.
+PHP 8.1+ is required. There is no need for additional libraries.
 
 If you want to use Bigint or Timestamp type, 64-bit system is required.
 
@@ -69,12 +65,14 @@ $nodes = [
 		'timeout'	=> 30, // write/recv timeout, default 30, stream transport only
 		'persistent'	=> true, // use persistent PHP connection, default false,  stream transport only  
 	],
-	[				// advanced way, using SSL
+	[				// advanced way, using SSL/TLS
 		'class'		=> 'Cassandra\Connection\Stream', // "class" must be defined as "Cassandra\Connection\Stream" for ssl or tls
 		'host'		=> 'ssl://10.205.48.70',// or 'tls://10.205.48.70'
 		'port'		=> 9042,
 		'username'	=> 'admin',
 		'password'	=> 'pass',
+		'ssl'		=> ['verify_peer' => false, 'verify_peer_name' => false], //disable certificate verification
+		//'ssl'		=> ['cafile' => 'cassandra.pem', 'verify_peer_name'=>false] //with SSL certificate validation, no name check
 	],
 ];
 
@@ -123,6 +121,16 @@ $row = $response->fetchRow();		// ArrayObject
 
 // Return the first column of the first row of the result set.
 $value = $response->fetchOne();		// mixed
+```
+
+## Iterate over result
+```php
+// Print all roles
+$response = $connection->querySync("SELECT role FROM system_auth.roles");
+foreach($response AS $rowNo => $rowContent)
+{
+	echo $rowContent['role']."\n";
+}
 ```
 
 ## Query Asynchronously
@@ -221,11 +229,18 @@ All types are supported.
 //  Counter
     new Cassandra\Type\Counter(1000);
 
+//  Date (a number of days +- since January 1st, 1970)
+    new Cassandra\Type\Date(19435);
+	new Cassandra\Type\Date(-2000);
+
 //  Decimal
     new Cassandra\Type\Decimal('0.0123');
 
 //  Double
     new Cassandra\Type\Double(2.718281828459);
+
+//  Duration
+    new Cassandra\Type\Duration(['months' => 1, 'days' => 2, 'nanoseconds'=> 3]);
 
 //  Float
     new Cassandra\Type\PhpFloat(2.718);
@@ -234,7 +249,13 @@ All types are supported.
     new Cassandra\Type\Inet('127.0.0.1');
 
 //  Int
-    new Cassandra\Type\PhpInt(1);
+    new Cassandra\Type\PhpInt(12345678);
+
+//  Smallint
+    new Cassandra\Type\Smallint(2048);
+
+//  Tinyint
+    new Cassandra\Type\Tinyint(122);
 
 //  CollectionList
     new Cassandra\Type\CollectionList([1, 1, 1], [Cassandra\Type\Base::INT]);
@@ -244,6 +265,9 @@ All types are supported.
 
 //  CollectionSet
     new Cassandra\Type\CollectionSet([1, 2, 3], [Cassandra\Type\Base::INT]);
+
+//  Time (nanoseconds since midnight)
+	new Cassandra\Type\Time(18000000000000);
 
 //  Timestamp (unit: millisecond)
     new Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
@@ -322,5 +346,12 @@ new Cassandra\Type\CollectionSet([
 * [shen2/cadmin](https://github.com/shen2/cadmin): Web admin panel for Cassandra, like phpmyadmin
 
 ## Inspired by
+* [duoshuo/php-cassandra](https://github.com/duoshuo/php-cassandra)
 * [mauritsl/php-cassandra](https://github.com/mauritsl/php-cassandra)
 * [evseevnn/php-cassandra-binary](https://github.com/evseevnn/php-cassandra-binary)
+
+## Merged contributions for duoshuo/php-cassandra
+* https://github.com/arnaud-lb/php-cassandra/commit/b6444ee5f8f7079d7df80de85201b11f77e0d376
+* https://github.com/duoshuo/php-cassandra/pull/78
+* https://github.com/duoshuo/php-cassandra/pull/77
+* https://github.com/duoshuo/php-cassandra/pull/66

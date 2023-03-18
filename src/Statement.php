@@ -1,50 +1,42 @@
 <?php
+
+declare(strict_types=1);
+
 namespace Cassandra;
 
-class Statement{
-	/**
-	 * @var Connection
-	 */
-	protected $_connection;
-	
-	/**
-	 * 
-	 * @var int
-	 */
-	protected $_streamId;
-	
-	/**
-	 * 
-	 * @var Response\Response
-	 */
-	protected $_response;
-	
-	public function __construct($connection, $streamId){
-		$this->_connection = $connection;
-		$this->_streamId = $streamId;		
-	}
-	
-	/**
-	 * 
-	 * @throws Response\Exception
-	 * @return Response\Response
-	 */
-	public function getResponse(){
-		if($this->_response === null){
-			$this->_connection->getResponse($this->_streamId);
-		}
-		
-		if ($this->_response instanceof Response\Error)
-			throw $this->_response->getException();
-		
-		return $this->_response;
-	}
-	
-	/**
-	 * 
-	 * @param Response\Response $response
-	 */
-	public function setResponse($response){
-		$this->_response = $response;
-	}
+class Statement
+{
+    protected Connection $_connection;
+
+    protected int $_streamId;
+
+    protected ?Response\Response $_response = null;
+
+    public function __construct(Connection $connection, int $streamId)
+    {
+        $this->_connection = $connection;
+        $this->_streamId = $streamId;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getResponse(): Response\Response
+    {
+        if ($this->_response === null) {
+            $this->_response = $this->_connection->getResponse($this->_streamId);
+        }
+
+        if ($this->_response instanceof Response\Error) {
+            throw $this->_response->getException();
+        }
+
+        return $this->_response;
+    }
+
+    public function setResponse(Response\Response $response): void
+    {
+        $this->_response = $response;
+    }
 }
