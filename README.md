@@ -5,25 +5,25 @@ Cassandra client library for PHP, which supports Protocol v5 (Cassandra 4.x) and
 
 ## Features
 * Using Protocol v5 (Cassandra 4.x)
-* Support ssl/tls with stream transport layer
-* Support asynchronous and synchronous request
+* Supports ssl/tls with stream transport layer
+* Supports asynchronous and synchronous requests
 * Support for logged, unlogged and counter batches
 * The ability to specify the consistency, "serial consistency" and all flags defined in the protocol
-* Support Query preparation and execute
-* Support all data types conversion and binding, including collection types, tuple and UDT
-* Support conditional update/insert
+* Supports Query preparation and execute
+* Supports all data types, including collection types, tuple and UDT
+* Supports conditional update/insert
 * 5 fetch methods (fetchAll, fetchRow, fetchPairs, fetchCol, fetchOne)
 * Two transport layers - socket and stream.
-* Using exceptions to report errors
+* Uses exceptions to report errors
 * 800% performance improvement(async mode) than other php cassandra client libraries
 
 ## Installation
 
 PHP 8.1+ is required. There is no need for additional libraries.
 
-If you want to use Bigint or Timestamp type, 64-bit system is required.
+If you want to use the Bigint or Timestamp types, a 64-bit system is required.
 
-Append dependency into composer.json
+Append dependency into composer.json:
 
 ```
 ...
@@ -34,7 +34,7 @@ Append dependency into composer.json
 ...
 ```
 
-Also you can just fetch project from Github and include in your code:
+Also you can just fetch the repository from Github and include it in your code:
 ```
 require 'php-cassandra-folder-on-your-computer/php-cassandra.php';
 ```
@@ -344,16 +344,8 @@ new Cassandra\Type\CollectionSet([
 ]);
 ```
 
-## Recommend Libraries
-* [shen2/fluent-cql](https://github.com/shen2/FluentCQL): write CQL in fluent interface
-* [duoshuo/uuid](https://github.com/duoshuo/uuid): generate UUID and TimeUUID
-* [shen2/crest](https://github.com/shen2/crest): Restful web API for Cassandra
-* [shen2/cadmin](https://github.com/shen2/cadmin): Web admin panel for Cassandra, like phpmyadmin
-
 ## Inspired by
 * [duoshuo/php-cassandra](https://github.com/duoshuo/php-cassandra)
-* [mauritsl/php-cassandra](https://github.com/mauritsl/php-cassandra)
-* [evseevnn/php-cassandra-binary](https://github.com/evseevnn/php-cassandra-binary)
 
 ## Merged contributions for duoshuo/php-cassandra
 * https://github.com/arnaud-lb/php-cassandra/commit/b6444ee5f8f7079d7df80de85201b11f77e0d376
