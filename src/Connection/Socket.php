@@ -25,12 +25,12 @@ class Socket implements NodeImplementation
      * } & array<string, mixed> $_options
      */
     protected array $_options = [
-        'class'     => self::class,
-        'host'		=> null,
-        'port'		=> 9042,
-        'username'	=> null,
-        'password'	=> null,
-        'socket'	=> [
+        'class'       => self::class,
+        'host'        => null,
+        'port'        => 9042,
+        'username'    => null,
+        'password'    => null,
+        'socket'      => [
             SO_RCVTIMEO => ['sec' => 30, 'usec' => 0],
             SO_SNDTIMEO => ['sec' => 5, 'usec' => 0],
         ],

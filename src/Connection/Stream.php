@@ -30,12 +30,12 @@ class Stream implements NodeImplementation
      * } & array<string, mixed> $_options
      */
     protected array $_options = [
-        'class'     => self::class,
-        'host'		=> null,
-        'port'		=> 9042,
-        'username'	=> null,
-        'password'	=> null,
-        'timeout'	=> 30,
+        'class'       => self::class,
+        'host'        => null,
+        'port'        => 9042,
+        'username'    => null,
+        'password'    => null,
+        'timeout'     => 30,
         'connectTimeout' => 5,
         'persistent'=> false,
         'ssl' => [

@@ -26,12 +26,12 @@ If you want to use Bigint or Timestamp type, 64-bit system is required.
 Append dependency into composer.json
 
 ```
-	...
-	"require": {
-		...
-		"mroosz/php-cassandra": "dev-main"
-	}
-	...
+...
+"require": {
+    ...
+    "mroosz/php-cassandra": "dev-main"
+}
+...
 ```
 
 Also you can just fetch project from Github and include in your code:
@@ -39,41 +39,41 @@ Also you can just fetch project from Github and include in your code:
 require 'php-cassandra-folder-on-your-computer/php-cassandra.php';
 ```
 
-## Basic Using
+## Basic Usage
 
 ```php
 <?php
 
 $nodes = [
-	'127.0.0.1',		// simple way, hostname only
-	'192.168.0.2:9042',	// simple way, hostname with port 
-	[				// advanced way, array including username, password and socket options
-		'host'		=> '10.205.48.70',
-		'port'		=> 9042, //default 9042
-		'username'	=> 'admin',
-		'password'	=> 'pass',
-		'socket'	=> [SO_RCVTIMEO => ["sec" => 10, "usec" => 0], //socket transport only
-		],
-	],
-	[				// advanced way, using Connection\Stream, persistent connection
-		'host'		=> '10.205.48.70',
-		'port'		=> 9042,
-		'username'	=> 'admin',
-		'password'	=> 'pass',
-		'class'		=> 'Cassandra\Connection\Stream',//use stream instead of socket, default socket. Stream may not work in some environment
-		'connectTimeout' => 10, // connection timeout, default 5,  stream transport only
-		'timeout'	=> 30, // write/recv timeout, default 30, stream transport only
-		'persistent'	=> true, // use persistent PHP connection, default false,  stream transport only  
-	],
-	[				// advanced way, using SSL/TLS
-		'class'		=> 'Cassandra\Connection\Stream', // "class" must be defined as "Cassandra\Connection\Stream" for ssl or tls
-		'host'		=> 'ssl://10.205.48.70',// or 'tls://10.205.48.70'
-		'port'		=> 9042,
-		'username'	=> 'admin',
-		'password'	=> 'pass',
-		'ssl'		=> ['verify_peer' => false, 'verify_peer_name' => false], //disable certificate verification
-		//'ssl'		=> ['cafile' => 'cassandra.pem', 'verify_peer_name'=>false] //with SSL certificate validation, no name check
-	],
+    '127.0.0.1',        // simple way, hostname only
+    '192.168.0.2:9042', // simple way, hostname with port 
+    [ // advanced way, array including username, password and socket options
+        'host'        => '10.205.48.70',
+        'port'        => 9042, //default 9042
+        'username'    => 'admin',
+        'password'    => 'pass',
+        'socket'      => [SO_RCVTIMEO => ["sec" => 10, "usec" => 0], //socket transport only
+        ],
+    ],
+    [ // advanced way, using Connection\Stream, persistent connection
+        'host'        => '10.205.48.70',
+        'port'        => 9042,
+        'username'    => 'admin',
+        'password'    => 'pass',
+        'class'       => 'Cassandra\Connection\Stream',//use stream instead of socket, default socket. Stream may not work in some environment
+        'connectTimeout' => 10, // connection timeout, default 5,  stream transport only
+        'timeout'    => 30, // write/recv timeout, default 30, stream transport only
+        'persistent'    => true, // use persistent PHP connection, default false,  stream transport only  
+    ],
+    [ // advanced way, using SSL/TLS
+        'class'       => 'Cassandra\Connection\Stream', // "class" must be defined as "Cassandra\Connection\Stream" for ssl or tls
+        'host'        => 'ssl://10.205.48.70',// or 'tls://10.205.48.70'
+        'port'        => 9042,
+        'username'    => 'admin',
+        'password'    => 'pass',
+        'ssl'        => ['verify_peer' => false, 'verify_peer_name' => false], // disable certificate verification
+        //'ssl'        => ['cafile' => 'cassandra.pem', 'verify_peer_name'=>false] // with SSL certificate validation, no name check
+    ],
 ];
 
 // Create a connection.
@@ -82,12 +82,11 @@ $connection = new Cassandra\Connection($nodes, 'my_keyspace');
 //Connect
 try
 {
-	$connection->connect();
+    $connection->connect();
 }
 catch (Cassandra\Exception $e)
 {
-	echo 'Caught exception: ',  $e->getMessage(), "\n";
-	exit;//if connect failed it may be good idea not to continue
+    echo 'Caught exception: ',  $e->getMessage(), "\n";
 }
 
 
@@ -97,7 +96,7 @@ $connection->setConsistency(Request::CONSISTENCY_QUORUM);
 // Run query synchronously.
 try
 {
-	$response = $connection->querySync('SELECT * FROM "users" WHERE "id" = ?', [new Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]);
+    $response = $connection->querySync('SELECT * FROM "users" WHERE "id" = ?', [new Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]);
 }
 catch (Cassandra\Exception $e)
 {
@@ -108,19 +107,19 @@ catch (Cassandra\Exception $e)
 
 ```php
 // Return a SplFixedArray containing all of the result set.
-$rows = $response->fetchAll();		// SplFixedArray
+$rows = $response->fetchAll();   // SplFixedArray
 
 // Return a SplFixedArray containing a specified index column from the result set.
-$col = $response->fetchCol();		// SplFixedArray
+$col = $response->fetchCol();    // SplFixedArray
 
 // Return a assoc array with key-value pairs, the key is the first column, the value is the second column. 
-$col = $response->fetchPairs();		// assoc array
+$col = $response->fetchPairs();  // assoc array
 
 // Return the first row of the result set.
-$row = $response->fetchRow();		// ArrayObject
+$row = $response->fetchRow();    // ArrayObject
 
 // Return the first column of the first row of the result set.
-$value = $response->fetchOne();		// mixed
+$value = $response->fetchOne();  // mixed
 ```
 
 ## Iterate over result
@@ -129,7 +128,7 @@ $value = $response->fetchOne();		// mixed
 $response = $connection->querySync("SELECT role FROM system_auth.roles");
 foreach($response AS $rowNo => $rowContent)
 {
-	echo $rowContent['role']."\n";
+    echo $rowContent['role']."\n";
 }
 ```
 
@@ -139,16 +138,16 @@ foreach($response AS $rowNo => $rowContent)
 // Return a statement immediately
 try
 {
-	$statement1 = $connection->queryAsync($cql1);
-	$statement2 = $connection->queryAsync($cql2);
+    $statement1 = $connection->queryAsync($cql1);
+    $statement2 = $connection->queryAsync($cql2);
 
-	// Wait until received the response, can be reversed order
-	$response2 = $statement2->getResponse();
-	$response1 = $statement1->getResponse();
+    // Wait until received the response, can be reversed order
+    $response2 = $statement2->getResponse();
+    $response1 = $statement1->getResponse();
 
 
-	$rows1 = $response1->fetchAll();
-	$rows2 = $response2->fetchAll();
+    $rows1 = $response1->fetchAll();
+    $rows2 = $response2->fetchAll();
 }
 catch (Cassandra\Exception $e)
 {
@@ -161,21 +160,21 @@ catch (Cassandra\Exception $e)
 $preparedData = $connection->prepare('SELECT * FROM "users" WHERE "id" = :id');
 
 $strictValues = Cassandra\Request\Request::strictTypeValues(
-	[
-		'id' => 'c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
-	],
-	$preparedData['metadata']['columns']
+    [
+        'id' => 'c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
+    ],
+    $preparedData['metadata']['columns']
 );
 
 $response = $connection->executeSync(
-	$preparedData['id'],
-	$strictValues,
-	Cassandra\Request\Request::CONSISTENCY_QUORUM,
-	[
-		'page_size' => 100,
-		'names_for_values' => true,
-		'skip_metadata' => true,
-	]
+    $preparedData['id'],
+    $strictValues,
+    Cassandra\Request\Request::CONSISTENCY_QUORUM,
+    [
+        'page_size' => 100,
+        'names_for_values' => true,
+        'skip_metadata' => true,
+    ]
 );
 
 $response->setMetadata($preparedData['result_metadata']);
@@ -190,19 +189,19 @@ $batchRequest = new Cassandra\Request\Batch();
 // Append a prepared query
 $preparedData = $connection->prepare('UPDATE "students" SET "age" = :age WHERE "id" = :id');
 $values = [
-	'age' => 21,
-	'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
+    'age' => 21,
+    'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
 ];
 $batchRequest->appendQueryId($preparedData['id'], Cassandra\Request\Request::strictTypeValues($values, $preparedData['metadata']['columns']));
 
 // Append a query string
 $batchRequest->appendQuery(
-	'INSERT INTO "students" ("id", "name", "age") VALUES (:id, :name, :age)',
-	[
-		'id' => new Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
-		'name' => new Cassandra\Type\Varchar('Mark'),
-		'age' => 20,
-	]
+    'INSERT INTO "students" ("id", "name", "age") VALUES (:id, :name, :age)',
+    [
+        'id' => new Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
+        'name' => new Cassandra\Type\Varchar('Mark'),
+        'age' => 20,
+    ]
 );
 
 $response = $connection->syncRequest($batchRequest);
@@ -231,7 +230,7 @@ All types are supported.
 
 //  Date (a number of days +- since January 1st, 1970)
     new Cassandra\Type\Date(19435);
-	new Cassandra\Type\Date(-2000);
+    new Cassandra\Type\Date(-2000);
 
 //  Decimal
     new Cassandra\Type\Decimal('0.0123');
@@ -267,7 +266,7 @@ All types are supported.
     new Cassandra\Type\CollectionSet([1, 2, 3], [Cassandra\Type\Base::INT]);
 
 //  Time (nanoseconds since midnight)
-	new Cassandra\Type\Time(18000000000000);
+    new Cassandra\Type\Time(18000000000000);
 
 //  Timestamp (unit: millisecond)
     new Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
@@ -292,7 +291,13 @@ All types are supported.
     new Cassandra\Type\Tuple([1, '2'], [Cassandra\Type\Base::INT, Cassandra\Type\Base::VARCHAR]);
 
 //  UDT
-    new Cassandra\Type\UDT(['intField' => 1, 'textField' => '2'], ['intField' => Cassandra\Type\Base::INT, 'textField' => Cassandra\Type\Base::VARCHAR]); 	// in the order defined by the type
+    new Cassandra\Type\UDT([
+        'intField' => 1, 
+        'textField' => '2'
+    ], [
+        'intField' => Cassandra\Type\Base::INT,
+        'textField' => Cassandra\Type\Base::VARCHAR
+    ]); // in the order defined by the type
 ```
 
 ## Using nested datatypes
@@ -300,42 +305,42 @@ All types are supported.
 ```php
 // CollectionSet<UDT>, where UDT contains: Int, Text, Boolean, CollectionList<Text>, CollectionList<UDT>
 new Cassandra\Type\CollectionSet([
-	[
-		'id' => 1,
-		'name' => 'string',
-		'active' => true,
-		'friends' => ['string1', 'string2', 'string3'],
-		'drinks' => [['qty' => 5, 'brand' => 'Pepsi'], ['qty' => 3, 'brand' => 'Coke']]
-	],[
-		'id' => 2,
-		'name' => 'string',
-		'active' => false,
-		'friends' => ['string4', 'string5', 'string6'],
-		'drinks' => []
-	]
+    [
+        'id' => 1,
+        'name' => 'string',
+        'active' => true,
+        'friends' => ['string1', 'string2', 'string3'],
+        'drinks' => [['qty' => 5, 'brand' => 'Pepsi'], ['qty' => 3, 'brand' => 'Coke']]
+    ],[
+        'id' => 2,
+        'name' => 'string',
+        'active' => false,
+        'friends' => ['string4', 'string5', 'string6'],
+        'drinks' => []
+    ]
 ], [
-	[
-	'type' => Cassandra\Type\Base::UDT,
-	'definition' => [
-		'id' => Cassandra\Type\Base::INT,
-		'name' => Cassandra\Type\Base::VARCHAR,
-		'active' => Cassandra\Type\Base::BOOLEAN,
-		'friends' => [
-			'type' => Cassandra\Type\Base::COLLECTION_LIST,
-			'value' => Cassandra\Type\Base::VARCHAR
-		],
-		'drinks' => [
-			'type' => Cassandra\Type\Base::COLLECTION_LIST,
-			'value' => [
-				'type' => Cassandra\Type\Base::UDT,
-				'typeMap' => [
-					'qty' => Cassandra\Type\Base::INT,
-					'brand' => Cassandra\Type\Base::VARCHAR
-				]
-			]
-		]
-	]
-]
+    [
+        'type' => Cassandra\Type\Base::UDT,
+        'definition' => [
+            'id' => Cassandra\Type\Base::INT,
+            'name' => Cassandra\Type\Base::VARCHAR,
+            'active' => Cassandra\Type\Base::BOOLEAN,
+            'friends' => [
+                'type' => Cassandra\Type\Base::COLLECTION_LIST,
+                'value' => Cassandra\Type\Base::VARCHAR
+            ],
+            'drinks' => [
+                'type' => Cassandra\Type\Base::COLLECTION_LIST,
+                'value' => [
+                    'type' => Cassandra\Type\Base::UDT,
+                    'typeMap' => [
+                        'qty' => Cassandra\Type\Base::INT,
+                        'brand' => Cassandra\Type\Base::VARCHAR
+                    ]
+                ]
+            ]
+        ]
+    ]
 ]);
 ```
 
