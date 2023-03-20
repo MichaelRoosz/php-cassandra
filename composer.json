@@ -1,7 +1,7 @@
 {
     "name": "mroosz/php-cassandra",
     "type": "library",
-    "description": "Cassandra client library for PHP, which supports Protocol v5 and asynchronous requests",
+    "description": "Cassandra client library with support for protocol v5 and asynchronous requests",
     "keywords" : [
         "cassandra",
         "nosql",
@@ -13,22 +13,23 @@
     "license": "MIT",
     "authors": [
         {
-            "name": "Shen Zhenyu",
-            "email": "zhenyupku@gmail.com"
-        },
-        {
-            "name": "Evseev Nikolay",
-            "email": "evseevnn@gmail.com"
+            "name": "Michael Roosz",
+            "email": "michael.roosz@web.de"
         },
         {
             "name": "Dennis Birkholz",
             "email": "birkholz@pubgrade.com"
         },
         {
-            "name": "Michael Roosz",
-            "email": "michael.roosz@web.de"
+            "name": "Shen Zhenyu",
+            "email": "zhenyupku@gmail.com"
+        },
+        {
+            "name": "Evseev Nikolay",
+            "email": "evseevnn@gmail.com"
         }
     ],
+    "homepage": "https://github.com/MichaelRoosz/php-cassandra",
     "require": {
         "php": ">=8.1.0"
     },
