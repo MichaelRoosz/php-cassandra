@@ -63,7 +63,7 @@ class Batch extends Request
      */
     public function getBody(): string
     {
-        return pack('C', $this->_batchType)
+        return chr($this->_batchType)
             . pack('n', count($this->_queryArray)) . implode('', $this->_queryArray)
             . self::batchQueryParameters($this->_consistency, $this->_options, $this->version);
     }
@@ -75,7 +75,7 @@ class Batch extends Request
      */
     public function appendQuery(string $cql, array $values = []): static
     {
-        $binary = pack('C', 0);
+        $binary = chr(0);
 
         $binary .= pack('N', strlen($cql)) . $cql;
         $binary .= Request::valuesBinary($values, !empty($this->_options['names_for_values']));
@@ -92,7 +92,7 @@ class Batch extends Request
      */
     public function appendQueryId(string $queryId, array $values = []): static
     {
-        $binary = pack('C', 1);
+        $binary = chr(1);
 
         $binary .= pack('n', strlen($queryId)) . $queryId;
         $binary .= Request::valuesBinary($values, !empty($this->_options['names_for_values']));
@@ -180,7 +180,7 @@ class Batch extends Request
         }
 
         if ($version < 5) {
-            return pack('n', $consistency) . pack('C', $flags) . $optional;
+            return pack('n', $consistency) . chr($flags) . $optional;
         } else {
             return pack('n', $consistency) . pack('N', $flags) . $optional;
         }

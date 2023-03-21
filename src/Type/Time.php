@@ -54,7 +54,7 @@ class Time extends Bigint
         $minutesInNanoseconds = $value->i * 60 * 1000000000;
         $secondsInNanoseconds = $value->s * 1000000000;
 
-        $microseconds = $value->f * 1000000;
+        $microseconds = (int)($value->f * 1000000);
         $microsecondsInNanoseconds = $microseconds * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;

@@ -296,7 +296,7 @@ abstract class Request implements Frame, Stringable
         }
 
         if ($version < 5) {
-            return pack('n', $consistency) . pack('C', $flags) . $optional;
+            return pack('n', $consistency) . chr($flags) . $optional;
         } else {
             return pack('n', $consistency) . pack('N', $flags) . $optional;
         }

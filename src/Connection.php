@@ -224,15 +224,7 @@ class Connection
             throw new Exception('not connected');
         }
 
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('C', $this->_node->read(1));
-        if ($unpacked === false) {
-            throw new Response\Exception('cannot read version of response');
-        }
-
-        $version = $unpacked[1];
+        $version = ord($this->_node->read(1));
 
         if ($version !== $this->_versionIn) {
             throw new Exception('php-cassandra only supports CQL binary protocol versions v3, v4 and v5. Please upgrade your Cassandra to 2.1 or later.');

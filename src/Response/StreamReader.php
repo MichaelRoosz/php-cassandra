@@ -72,14 +72,7 @@ class StreamReader
      */
     public function readChar(): int
     {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('C', $this->read(1));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-        return $unpacked[1];
+        return ord($this->read(1));
     }
 
     /**
@@ -315,38 +308,6 @@ class StreamReader
         }
 
         return $inet;
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readVarint(): int
-    {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('N2', $this->read(8));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-
-        if (count($unpacked) < 2) {
-            throw new Exception('invalid data');
-        }
-
-        [$higher, $lower] = array_values($unpacked);
-        return $higher << 32 | $lower;
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readDecimal(): string
-    {
-        $scale = $this->readInt();
-        $value = (string) $this->readVarint();
-        $len = strlen($value);
-        return substr($value, 0, $len - $scale) . '.' . substr($value, $len - $scale);
     }
 
     /**

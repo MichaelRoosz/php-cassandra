@@ -228,8 +228,11 @@ class FrameCodec implements Node
         }
 
         if ($this->compression) {
-            $header = pack('V', $payloadLength);
-            $header .= pack('C', $isSelfContained ? 1 << 2 : 0);
+            $header = pack(
+                'VC',
+                $payloadLength,
+                $isSelfContained ? 1 << 2 : 0,
+            );
             $header .= pack('VX', $this->crc24($header, 5));
         } else {
             $header = pack('VX', $payloadLength + ($isSelfContained ? 1 << 17 : 0));

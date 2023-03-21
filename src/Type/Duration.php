@@ -96,7 +96,7 @@ class Duration extends Base
         $minutesInNanoseconds = $value->i * 60 * 1000000000;
         $secondsInNanoseconds = $value->s * 1000000000;
 
-        $microseconds = $value->f * 1000000;
+        $microseconds = (int)($value->f * 1000000);
         $microsecondsInNanoseconds = $microseconds * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
@@ -104,43 +104,82 @@ class Duration extends Base
         return new self([
             'months' => $months,
             'days' => $days,
-            'nanoseconds' => (int)$totalNanoseconds
+            'nanoseconds' => $totalNanoseconds
         ]);
     }
 
     public static function fromString(string $value): self
     {
-        $pattern = '/P((\d+)Y)?((\d+)M)?((\d+)D)?(T((\d+)H)?((\d+)M)?((\d+(?:\.\d+)?)S)?)?/';
+        $pattern = '/';
+        foreach ([
+            'years' => 'y',
+            'months' => 'mo',
+            'weeks' => 'w',
+            'days' => 'd',
+            'hours' => 'h',
+            'minutes' => 'm',
+            'seconds' => 's',
+            'milliseconds' => 'ms',
+            'microseconds' => '(?:us|µs)',
+            'nanoseconds' => 'ns',
+        ] as $name => $unit) {
+            $pattern .= '(?:(?<'. $name . '>\d+)' . $unit . ')?';
+        }
+        $pattern .= '/';
+
+        $matches = [];
         preg_match($pattern, $value, $matches);
 
-        $years = isset($matches[2]) ? intval($matches[2]) : 0;
-        $months = isset($matches[4]) ? intval($matches[4]) : 0;
-        $days = isset($matches[6]) ? intval($matches[6]) : 0;
-        $hours = isset($matches[9]) ? intval($matches[9]) : 0;
-        $minutes = isset($matches[11]) ? intval($matches[11]) : 0;
-        $seconds = isset($matches[13]) ? floatval($matches[13]) : 0;
+        $months = 0;
+        if (isset($matches['years'])) {
+            $months += (int)$matches['years'] * 12;
+        }
+        if (isset($matches['months'])) {
+            $months += (int)$matches['months'];
+        }
 
-        $months += $years * 12;
-        $nanoseconds = ($days * 86400 + $hours * 3600 + $minutes * 60 + $seconds) * 1000000000;
+        $days = 0;
+        if (isset($matches['weeks'])) {
+            $days += (int)$matches['weeks'] * 7;
+        }
+        if (isset($matches['days'])) {
+            $days += (int)$matches['days'];
+        }
+
+        $nanoseconds = 0;
+        if (isset($matches['hours'])) {
+            $nanoseconds += (int)$matches['hours'] * 3600000000000;
+        }
+        if (isset($matches['minutes'])) {
+            $nanoseconds += (int)$matches['minutes'] * 60000000000;
+        }
+        if (isset($matches['seconds'])) {
+            $nanoseconds += (int)$matches['seconds'] * 1000000000;
+        }
+        if (isset($matches['milliseconds'])) {
+            $nanoseconds += (int)$matches['milliseconds'] * 1000000;
+        }
+        if (isset($matches['microseconds'])) {
+            $nanoseconds += (int)$matches['microseconds'] * 1000;
+        }
+        if (isset($matches['nanoseconds'])) {
+            $nanoseconds += (int)$matches['nanoseconds'];
+        }
 
         return new self([
             'months' => $months,
             'days' => $days,
-            'nanoseconds' => (int)$nanoseconds
+            'nanoseconds' => $nanoseconds
         ]);
     }
 
     /**
      * @param array{ months: int, days: int, nanoseconds: int } $value
+     *
+     * @throws \Exception
      */
-    public static function toString(array $value): string
+    public static function toDateInterval(array $value): DateInterval
     {
-        $totalSeconds = $value['nanoseconds'] / 1000000000;
-        $hours = floor($totalSeconds / 3600);
-        $totalSeconds %= 3600;
-        $minutes = floor($totalSeconds / 60);
-        $seconds = $totalSeconds % 60;
-
         $years = floor($value['months'] / 12);
         $value['months'] %= 12;
 
@@ -154,24 +193,111 @@ class Duration extends Base
             $duration .= $value['months'] . 'M';
         }
 
-        if ($value['days'] > 0 || $hours > 0 || $minutes > 0 || $seconds > 0) {
-            $duration .= 'T';
-        }
-
         if ($value['days'] > 0) {
             $duration .= $value['days'] . 'D';
         }
 
+        if ($value['nanoseconds']) {
+            $duration .= 'T';
+
+            $hours = floor($value['nanoseconds'] / 3600000000000);
+            $value['nanoseconds'] %= 3600000000000;
+
+            $minutes = floor($value['nanoseconds'] / 60000000000);
+            $value['nanoseconds'] %= 60000000000;
+
+            $seconds = floor($value['nanoseconds'] / 1000000000);
+            $value['nanoseconds'] %= 1000000000;
+
+            if ($hours > 0) {
+                $duration .= $hours . 'H';
+            }
+
+            if ($minutes > 0) {
+                $duration .= $minutes . 'M';
+            }
+
+            if ($seconds > 0) {
+                $duration .= $seconds . 'S';
+            }
+        }
+
+        $interval = new DateInterval($duration);
+
+        if ($value['nanoseconds']) {
+            $microsecondsInSeconds = $value['nanoseconds'] / 1000000000;
+            $interval->f = $microsecondsInSeconds;
+        }
+
+        return $interval;
+    }
+
+    /**
+     * @param array{ months: int, days: int, nanoseconds: int } $value
+     */
+    public static function toString(array $value): string
+    {
+        $years = floor($value['months'] / 12);
+        $value['months'] %= 12;
+
+        $weeks = floor($value['days'] / 7);
+        $value['days'] %= 7;
+
+        $duration = '';
+
+        if ($years > 0) {
+            $duration .= $years . 'y';
+        }
+
+        if ($value['months'] > 0) {
+            $duration .= $value['months'] . 'mo';
+        }
+
+        if ($weeks > 0) {
+            $duration .= $weeks . 'w';
+        }
+
+        if ($value['days'] > 0) {
+            $duration .= $value['days'] . 'd';
+        }
+
+        $hours = floor($value['nanoseconds'] / 3600000000000);
+        $value['nanoseconds'] %= 3600000000000;
+
+        $minutes = floor($value['nanoseconds'] / 60000000000);
+        $value['nanoseconds'] %= 60000000000;
+
+        $seconds = floor($value['nanoseconds'] / 1000000000);
+        $value['nanoseconds'] %= 1000000000;
+
+        $milliseconds = floor($value['nanoseconds'] / 1000000);
+        $value['nanoseconds'] %= 1000000 ;
+
+        $microseconds = floor($value['nanoseconds'] / 1000);
+        $value['nanoseconds'] %= 1000;
+
         if ($hours > 0) {
-            $duration .= $hours . 'H';
+            $duration .= $hours . 'h';
         }
 
         if ($minutes > 0) {
-            $duration .= $minutes . 'M';
+            $duration .= $minutes . 'm';
         }
 
         if ($seconds > 0) {
-            $duration .= $seconds . 'S';
+            $duration .= $seconds . 's';
+        }
+
+        if ($milliseconds > 0) {
+            $duration .= $milliseconds . 'ms';
+        }
+
+        if ($microseconds > 0) {
+            $duration .= $microseconds . 'us';
+        }
+
+        if ($value['nanoseconds'] > 0) {
+            $duration .= $value['nanoseconds'] . 'ns';
         }
 
         return $duration;
@@ -189,60 +315,77 @@ class Duration extends Base
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected static function encodeVint(int $n): string
+    public static function encodeVint(int $number): string
     {
-        $binary = decbin($n);
-        $numBytes = (int)ceil(strlen($binary) / 8);
-
-        if ($numBytes < 8) {
-            $firstByte = str_repeat('1', $numBytes) . str_repeat('0', 8 - $numBytes);
-        } elseif ($numBytes === 8) {
-            $firstByte = str_repeat('1', 8);
-        } else {
-            throw new Exception('invalid value: ' . $n);
+        if ($number < 0) {
+            throw new Exception('Negative values are not supported');
         }
 
-        $binaryPadded = str_pad($binary, ($numBytes * 8), '0', STR_PAD_LEFT);
-        $bytes = str_split($firstByte . $binaryPadded, 8);
+        $extraBytes = [];
+        $extraBytesCount = 0;
+        $mask = 0x80;
 
-        $encodedVint = '';
-        foreach ($bytes as $byte) {
-            $encodedVint .= chr((int)bindec($byte));
+        while (true) {
+            $cur = $number & 0xFF;
+            $next = $number >> 8;
+
+            if ($next === 0 && ($cur & $mask) === 0) {
+                $number = $cur;
+                break;
+            }
+
+            if ($extraBytesCount === 8) {
+                throw new Exception('Invalid value');
+            }
+
+            $extraBytes[] = $cur;
+            $extraBytesCount++;
+
+            $mask |= $mask >> 1;
+            $number = $next;
         }
 
-        return $encodedVint;
+        if ($extraBytesCount < 8) {
+            $mask <<= 1;
+        }
+
+        $firstByte = $mask | $number;
+
+        return pack('C*', $firstByte, ...array_reverse($extraBytes));
     }
 
     /**
+     * @param array<int> $vint
      * @throws \Cassandra\Type\Exception
      */
-    protected static function decodeVint(string $vint, int &$pos = 0): int
+    public static function decodeVint(array $vint, int &$pos = 0): int
     {
-        $data = str_split($vint);
-        $binary = str_pad(decbin(ord($data[$pos])), 8, '0', STR_PAD_LEFT);
+        $byte = $vint[$pos];
+        $extraBytes = 0;
 
-        $firstZeroPos = strpos($binary, '0');
-        if ($firstZeroPos === false) {
-            $extraBytes = 8;
-        } else {
-            $extraBytes = $firstZeroPos;
+        while (($byte & 0x80) !== 0) {
+            $extraBytes++;
+            $byte <<= 1;
         }
 
         $totalBytes = $extraBytes + 1;
-        $numBits = ($totalBytes * 8) - $extraBytes;
 
-        if ($pos + $totalBytes > count($data)) {
-            throw new Exception('invalid data value');
+        if ($pos + $totalBytes > count($vint)) {
+            throw new Exception('Invalid data value');
         }
+
+        $decodedValue = ($byte & 0x7F) >> $extraBytes;
 
         for ($i = $pos + 1; $i < $pos + $totalBytes; $i++) {
-            $binary .= str_pad(decbin(ord($data[$i])), 8, '0', STR_PAD_LEFT);
+            $decodedValue <<= 8;
+            $decodedValue |= $vint[$i];
         }
 
-        $integerBits = substr($binary, $extraBytes + 1, $numBits);
-        $decodedValue = (int)bindec($integerBits);
-
         $pos += $totalBytes;
+
+        if ($decodedValue < 0) {
+            throw new Exception('Values greater than PHP_INT_MAX are not supported');
+        }
 
         return $decodedValue;
     }
@@ -256,11 +399,11 @@ class Duration extends Base
     {
         $monthsEncoded = ($value['months'] >> 31) ^ ($value['months'] << 1);
         $daysEncoded = ($value['days'] >> 31) ^ ($value['days'] << 1);
-        $nsEncoded = ($value['nanoseconds'] >> 63) ^ ($value['nanoseconds'] << 1);
+        $nanosecondsEncoded = ($value['nanoseconds'] >> 63) ^ ($value['nanoseconds'] << 1);
 
         return self::encodeVint($monthsEncoded)
                 . self::encodeVint($daysEncoded)
-                . self::encodeVint($nsEncoded);
+                . self::encodeVint($nanosecondsEncoded);
     }
 
     /**
@@ -271,16 +414,26 @@ class Duration extends Base
      */
     public static function parse(string $binary, null|int|array $definition = null): array
     {
+        /**
+         * @var false|array<int> $values
+         */
+        $values = unpack('C*', $binary);
+        if ($values === false) {
+            throw new Exception('Cannot unpack duration.');
+        }
+
+        $values = array_values($values);
+
         $pos = 0;
 
-        $monthsEncoded = self::decodeVint($binary, $pos);
-        $daysEncoded = self::decodeVint($binary, $pos);
-        $nsEncoded = self::decodeVint($binary, $pos);
+        $monthsEncoded = self::decodeVint($values, $pos);
+        $daysEncoded = self::decodeVint($values, $pos);
+        $nanosecondsEncoded = self::decodeVint($values, $pos);
 
         return [
             'months' => ($monthsEncoded >> 1) ^ -($monthsEncoded & 1),
             'days' => ($daysEncoded >> 1) ^ -($daysEncoded & 1),
-            'nanoseconds' => ($nsEncoded >> 1) ^ -($nsEncoded & 1)
+            'nanoseconds' => ($nanosecondsEncoded >> 1) ^ -($nanosecondsEncoded & 1)
         ];
     }
 }

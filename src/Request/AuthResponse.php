@@ -38,9 +38,9 @@ class AuthResponse extends Request
 
     public function getBody(): string
     {
-        $body = pack('C', 0);
+        $body = chr(0);
         $body .= $this->_username;
-        $body .= pack('C', 0);
+        $body .= chr(0);
         $body .= $this->_password;
 
         return pack('N', strlen($body)) . $body;
