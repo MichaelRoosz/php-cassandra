@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-abstract class Base
+use Stringable;
+
+abstract class Base implements Stringable
 {
     public const CUSTOM = 0x0000;
     public const ASCII = 0x0001;

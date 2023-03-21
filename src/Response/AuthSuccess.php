@@ -16,6 +16,7 @@ class AuthSuccess extends Response
          * sent by the server either after a STARTUP message if no authentication is
          * required, or after a successful CREDENTIALS message.
          */
+        $this->_stream->offset(0);
         return $this->_stream->readBytes();
     }
 }

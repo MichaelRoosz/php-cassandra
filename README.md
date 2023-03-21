@@ -77,14 +77,14 @@ $nodes = [
 ];
 
 // Create a connection.
-$connection = new Cassandra\Connection($nodes, 'my_keyspace');
+$connection = new \\Cassandra\Connection($nodes, 'my_keyspace');
 
 //Connect
 try
 {
     $connection->connect();
 }
-catch (Cassandra\Exception $e)
+catch (\Cassandra\Exception $e)
 {
     echo 'Caught exception: ',  $e->getMessage(), "\n";
 }
@@ -96,9 +96,9 @@ $connection->setConsistency(Request::CONSISTENCY_QUORUM);
 // Run query synchronously.
 try
 {
-    $response = $connection->querySync('SELECT * FROM "users" WHERE "id" = ?', [new Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]);
+    $result = $connection->querySync('SELECT * FROM "users" WHERE "id" = ?', [new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]);
 }
-catch (Cassandra\Exception $e)
+catch (\Cassandra\Exception $e)
 {
 }
 ```
@@ -107,26 +107,26 @@ catch (Cassandra\Exception $e)
 
 ```php
 // Return a SplFixedArray containing all of the result set.
-$rows = $response->fetchAll();   // SplFixedArray
+$rows = $result->fetchAll();   // SplFixedArray
 
 // Return a SplFixedArray containing a specified index column from the result set.
-$col = $response->fetchCol();    // SplFixedArray
+$col = $result->fetchCol();    // SplFixedArray
 
 // Return a assoc array with key-value pairs, the key is the first column, the value is the second column. 
-$col = $response->fetchPairs();  // assoc array
+$col = $result->fetchPairs();  // assoc array
 
 // Return the first row of the result set.
-$row = $response->fetchRow();    // ArrayObject
+$row = $result->fetchRow();    // ArrayObject
 
 // Return the first column of the first row of the result set.
-$value = $response->fetchOne();  // mixed
+$value = $result->fetchOne();  // mixed
 ```
 
 ## Iterate over result
 ```php
 // Print all roles
-$response = $connection->querySync("SELECT role FROM system_auth.roles");
-foreach($response AS $rowNo => $rowContent)
+$result = $connection->querySync("SELECT role FROM system_auth.roles");
+foreach($result AS $rowNo => $rowContent)
 {
     echo $rowContent['role']."\n";
 }
@@ -141,15 +141,15 @@ try
     $statement1 = $connection->queryAsync($cql1);
     $statement2 = $connection->queryAsync($cql2);
 
-    // Wait until received the response, can be reversed order
-    $response2 = $statement2->getResponse();
-    $response1 = $statement1->getResponse();
+    // Wait until received the result, can be reversed order
+    $result2 = $statement2->getResult();
+    $result1 = $statement1->getResult();
 
 
-    $rows1 = $response1->fetchAll();
-    $rows2 = $response2->fetchAll();
+    $rows1 = $result1->fetchAll();
+    $rows2 = $result2->fetchAll();
 }
-catch (Cassandra\Exception $e)
+catch (\Cassandra\Exception $e)
 {
 }
 ```
@@ -159,17 +159,17 @@ catch (Cassandra\Exception $e)
 ```php
 $preparedData = $connection->prepare('SELECT * FROM "users" WHERE "id" = :id');
 
-$strictValues = Cassandra\Request\Request::strictTypeValues(
+$strictValues = \Cassandra\Request\Request::strictTypeValues(
     [
         'id' => 'c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
     ],
     $preparedData['metadata']['columns']
 );
 
-$response = $connection->executeSync(
+$result = $connection->executeSync(
     $preparedData['id'],
     $strictValues,
-    Cassandra\Request\Request::CONSISTENCY_QUORUM,
+    \Cassandra\Request\Request::CONSISTENCY_QUORUM,
     [
         'page_size' => 100,
         'names_for_values' => true,
@@ -177,14 +177,14 @@ $response = $connection->executeSync(
     ]
 );
 
-$response->setMetadata($preparedData['result_metadata']);
-$rows = $response->fetchAll();
+$result->setMetadata($preparedData['result_metadata']);
+$rows = $result->fetchAll();
 ```
 
 ## Using Batch
 
 ```php
-$batchRequest = new Cassandra\Request\Batch();
+$batchRequest = new \Cassandra\Request\Batch();
 
 // Append a prepared query
 $preparedData = $connection->prepare('UPDATE "students" SET "age" = :age WHERE "id" = :id');
@@ -192,20 +192,20 @@ $values = [
     'age' => 21,
     'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
 ];
-$batchRequest->appendQueryId($preparedData['id'], Cassandra\Request\Request::strictTypeValues($values, $preparedData['metadata']['columns']));
+$batchRequest->appendQueryId($preparedData['id'], \Cassandra\Request\Request::strictTypeValues($values, $preparedData['metadata']['columns']));
 
 // Append a query string
 $batchRequest->appendQuery(
     'INSERT INTO "students" ("id", "name", "age") VALUES (:id, :name, :age)',
     [
-        'id' => new Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
-        'name' => new Cassandra\Type\Varchar('Mark'),
+        'id' => new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
+        'name' => new \Cassandra\Type\Varchar('Mark'),
         'age' => 20,
     ]
 );
 
-$response = $connection->syncRequest($batchRequest);
-$rows = $response->fetchAll();
+$result = $connection->batchSync($batchRequest);
+$rows = $result->fetchAll();
 ```
 
 ## Supported datatypes
@@ -214,89 +214,89 @@ All types are supported.
 
 ```php
 //  Ascii
-    new Cassandra\Type\Ascii('string');
+    new \Cassandra\Type\Ascii('string');
 
 //  Bigint
-    new Cassandra\Type\Bigint(10000000000);
+    new \Cassandra\Type\Bigint(10000000000);
 
 //  Blob
-    new Cassandra\Type\Blob('string');
+    new \Cassandra\Type\Blob('string');
 
 //  Boolean
-    new Cassandra\Type\Boolean(true);
+    new \Cassandra\Type\Boolean(true);
 
 //  Counter
-    new Cassandra\Type\Counter(1000);
+    new \Cassandra\Type\Counter(1000);
 
 //  Date (a number of days +- since January 1st, 1970)
-    new Cassandra\Type\Date(19435);
-    new Cassandra\Type\Date(-2000);
+    new \Cassandra\Type\Date(19435);
+    new \Cassandra\Type\Date(-2000);
 
 //  Decimal
-    new Cassandra\Type\Decimal('0.0123');
+    new \Cassandra\Type\Decimal('0.0123');
 
 //  Double
-    new Cassandra\Type\Double(2.718281828459);
+    new \Cassandra\Type\Double(2.718281828459);
 
 //  Duration
-    new Cassandra\Type\Duration(['months' => 1, 'days' => 2, 'nanoseconds'=> 3]);
+    new \Cassandra\Type\Duration(['months' => 1, 'days' => 2, 'nanoseconds'=> 3]);
 
 //  Float
-    new Cassandra\Type\PhpFloat(2.718);
+    new \Cassandra\Type\PhpFloat(2.718);
 
 //  Inet
-    new Cassandra\Type\Inet('127.0.0.1');
+    new \Cassandra\Type\Inet('127.0.0.1');
 
 //  Int
-    new Cassandra\Type\PhpInt(12345678);
+    new \Cassandra\Type\PhpInt(12345678);
 
 //  Smallint
-    new Cassandra\Type\Smallint(2048);
+    new \Cassandra\Type\Smallint(2048);
 
 //  Tinyint
-    new Cassandra\Type\Tinyint(122);
+    new \Cassandra\Type\Tinyint(122);
 
 //  CollectionList
-    new Cassandra\Type\CollectionList([1, 1, 1], [Cassandra\Type\Base::INT]);
+    new \Cassandra\Type\CollectionList([1, 1, 1], [\Cassandra\Type\Base::INT]);
 
 //  CollectionMap
-    new Cassandra\Type\CollectionMap(['a' => 1, 'b' => 2], [Cassandra\Type\Base::ASCII, Cassandra\Type\Base::INT]);
+    new \Cassandra\Type\CollectionMap(['a' => 1, 'b' => 2], [\Cassandra\Type\Base::ASCII, \Cassandra\Type\Base::INT]);
 
 //  CollectionSet
-    new Cassandra\Type\CollectionSet([1, 2, 3], [Cassandra\Type\Base::INT]);
+    new \Cassandra\Type\CollectionSet([1, 2, 3], [\Cassandra\Type\Base::INT]);
 
 //  Time (nanoseconds since midnight)
-    new Cassandra\Type\Time(18000000000000);
+    new \Cassandra\Type\Time(18000000000000);
 
 //  Timestamp (unit: millisecond)
-    new Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
-    new Cassandra\Type\Timestamp(1409830696263);
+    new \Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
+    new \Cassandra\Type\Timestamp(1409830696263);
 
 //  Uuid
-    new Cassandra\Type\Uuid('62c36092-82a1-3a00-93d1-46196ee77204');
+    new \Cassandra\Type\Uuid('62c36092-82a1-3a00-93d1-46196ee77204');
 
 //  Timeuuid
-    new Cassandra\Type\Timeuuid('2dc65ebe-300b-11e4-a23b-ab416c39d509');
+    new \Cassandra\Type\Timeuuid('2dc65ebe-300b-11e4-a23b-ab416c39d509');
 
 //  Varchar
-    new Cassandra\Type\Varchar('string');
+    new \Cassandra\Type\Varchar('string');
 
 //  Varint
-    new Cassandra\Type\Varint(10000000000);
+    new \Cassandra\Type\Varint(10000000000);
 
 //  Custom
-    new Cassandra\Type\Custom('string', 'var_name');
+    new \Cassandra\Type\Custom('string', 'var_name');
 
 //  Tuple
-    new Cassandra\Type\Tuple([1, '2'], [Cassandra\Type\Base::INT, Cassandra\Type\Base::VARCHAR]);
+    new \Cassandra\Type\Tuple([1, '2'], [\Cassandra\Type\Base::INT, \Cassandra\Type\Base::VARCHAR]);
 
 //  UDT
-    new Cassandra\Type\UDT([
+    new \Cassandra\Type\UDT([
         'intField' => 1, 
         'textField' => '2'
     ], [
-        'intField' => Cassandra\Type\Base::INT,
-        'textField' => Cassandra\Type\Base::VARCHAR
+        'intField' => \Cassandra\Type\Base::INT,
+        'textField' => \Cassandra\Type\Base::VARCHAR
     ]); // in the order defined by the type
 ```
 
@@ -304,7 +304,7 @@ All types are supported.
 
 ```php
 // CollectionSet<UDT>, where UDT contains: Int, Text, Boolean, CollectionList<Text>, CollectionList<UDT>
-new Cassandra\Type\CollectionSet([
+new \Cassandra\Type\CollectionSet([
     [
         'id' => 1,
         'name' => 'string',
@@ -320,28 +320,51 @@ new Cassandra\Type\CollectionSet([
     ]
 ], [
     [
-        'type' => Cassandra\Type\Base::UDT,
+        'type' => \Cassandra\Type\Base::UDT,
         'definition' => [
-            'id' => Cassandra\Type\Base::INT,
-            'name' => Cassandra\Type\Base::VARCHAR,
-            'active' => Cassandra\Type\Base::BOOLEAN,
+            'id' => \Cassandra\Type\Base::INT,
+            'name' => \Cassandra\Type\Base::VARCHAR,
+            'active' => \Cassandra\Type\Base::BOOLEAN,
             'friends' => [
-                'type' => Cassandra\Type\Base::COLLECTION_LIST,
-                'value' => Cassandra\Type\Base::VARCHAR
+                'type' => \Cassandra\Type\Base::COLLECTION_LIST,
+                'value' => \Cassandra\Type\Base::VARCHAR
             ],
             'drinks' => [
-                'type' => Cassandra\Type\Base::COLLECTION_LIST,
+                'type' => \Cassandra\Type\Base::COLLECTION_LIST,
                 'value' => [
-                    'type' => Cassandra\Type\Base::UDT,
+                    'type' => \Cassandra\Type\Base::UDT,
                     'typeMap' => [
-                        'qty' => Cassandra\Type\Base::INT,
-                        'brand' => Cassandra\Type\Base::VARCHAR
+                        'qty' => \Cassandra\Type\Base::INT,
+                        'brand' => \Cassandra\Type\Base::VARCHAR
                     ]
                 ]
             ]
         ]
     ]
 ]);
+```
+
+## Listening for events
+
+```php
+$connection->addEventListener(new class () implements \Cassandra\EventListener {
+    public function onEvent(\Cassandra\Response\Event $event): void
+    {
+        var_dump($event->getData());
+    }
+});
+
+$register = new \Cassandra\Request\Register([
+    \Cassandra\Response\Event::TOPOLOGY_CHANGE,
+    \Cassandra\Response\Event::STATUS_CHANGE,
+    \Cassandra\Response\Event::SCHEMA_CHANGE,
+]);
+
+$connection->syncRequest($register);
+
+while ($connection->getResponse()) {
+    sleep(1);
+}
 ```
 
 ## Inspired by

@@ -6,8 +6,9 @@ namespace Cassandra\Response;
 
 use Cassandra\Protocol\Frame;
 use Cassandra\Response\StreamReader;
+use Stringable;
 
-abstract class Response implements Frame
+abstract class Response implements Frame, Stringable
 {
     /**
      * @var array{

@@ -59,7 +59,7 @@ class Double extends Base
 
     public static function binary(float $value): string
     {
-        return strrev(pack('E', $value));
+        return strrev(pack('e', $value));
     }
 
     /**
@@ -72,7 +72,7 @@ class Double extends Base
         /**
          * @var false|array<float> $unpacked
          */
-        $unpacked = unpack('E', strrev($binary));
+        $unpacked = unpack('e', strrev($binary));
 
         if ($unpacked === false) {
             throw new Exception('Cannot unpack binary.');

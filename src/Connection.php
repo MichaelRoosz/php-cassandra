@@ -8,7 +8,6 @@ use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Frame;
 use Cassandra\Compression\Lz4Decompressor;
 use SplQueue;
-use SplFixedArray;
 
 class Connection
 {
@@ -77,6 +76,11 @@ class Connection
      * @var SplQueue<int> $_recycledStreams
      */
     protected SplQueue $_recycledStreams;
+
+    /**
+     * @var array<EventListener> $_eventListeners
+     */
+    protected array $_eventListeners = [];
 
     protected int $_consistency = Request\Request::CONSISTENCY_ONE;
 
@@ -181,7 +185,21 @@ class Connection
         return $this->_node !== null;
     }
 
-    public function trigger(Response\Event $response): void
+    public function addEventListener(EventListener $eventListener): void
+    {
+        $this->_eventListeners[] = $eventListener;
+    }
+
+    protected function onEvent(Response\Event $event): void
+    {
+        $this->trigger($event);
+
+        foreach ($this->_eventListeners as $listener) {
+            $listener->onEvent($event);
+        }
+    }
+
+    public function trigger(Response\Event $event): void
     {
     }
 
@@ -233,6 +251,8 @@ class Connection
             throw new Exception('cannot read header of response');
         }
 
+        $header['version'] = $version;
+
         $body = $header['length'] === 0 ? '' : $this->_node->read($header['length']);
 
         if (!isset(self::$responseClassMap[$header['opcode']])) {
@@ -257,7 +277,7 @@ class Connection
                 unset($this->_statements[$header['stream']]);
                 $this->_recycledStreams->enqueue($header['stream']);
             } elseif ($response instanceof Response\Event) {
-                $this->trigger($response);
+                $this->onEvent($response);
             }
         }
 
@@ -458,7 +478,7 @@ class Connection
     }
 
     /**
-     * @return null|SplFixedArray<mixed>|string|array{
+     * @return array{
      *   id: string,
      *   result_metadata_id?: string,
      *   metadata: array{
@@ -489,24 +509,22 @@ class Connection
      *       type: int|array<mixed>,
      *     }>,
      *   },
-     * }|array{
-     *  change_type: string,
-     *  target: string,
-     *  keyspace: string,
-     *  name?: string,
-     *  argument_types?: string[]
      * }
      *
      * @throws \Cassandra\Exception
      */
-    public function prepare(string $cql): null|SplFixedArray|string|array
+    public function prepare(string $cql): array
     {
         $response = $this->syncRequest(new Request\Prepare($cql));
         if (!($response instanceof Response\Result)) {
             throw new Exception('received invalid response');
         }
 
-        return $response->getData();
+        if ($response->getKind() !== Response\Result::PREPARED) {
+            throw new Exception('received invalid result');
+        }
+
+        return $response->getPreparedData();
     }
 
     /**
@@ -522,11 +540,17 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function executeSync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Response\Response
+    public function executeSync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Response\Result
     {
         $request = new Request\Execute($queryId, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
-        return $this->syncRequest($request);
+        $response = $this->syncRequest($request);
+
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('received invalid response');
+        }
+
+        return $response;
     }
 
     /**
@@ -562,11 +586,17 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function querySync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Response\Response
+    public function querySync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Response\Result
     {
         $request = new Request\Query($cql, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
-        return $this->syncRequest($request);
+        $response = $this->syncRequest($request);
+
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('received invalid response');
+        }
+
+        return $response;
     }
 
     /**
@@ -587,6 +617,28 @@ class Connection
         $request = new Request\Query($cql, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
         return $this->asyncRequest($request);
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    public function batchSync(Request\Batch $batchRequest): Response\Result
+    {
+        $response = $this->syncRequest($batchRequest);
+
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('received invalid response');
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    public function batchAsync(Request\Batch $batchRequest): Statement
+    {
+        return $this->asyncRequest($batchRequest);
     }
 
     /**

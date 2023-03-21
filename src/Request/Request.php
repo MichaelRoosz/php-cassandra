@@ -7,8 +7,9 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Frame;
 use Cassandra\Type;
 use Cassandra\Value;
+use Stringable;
 
-abstract class Request implements Frame
+abstract class Request implements Frame, Stringable
 {
     public const CONSISTENCY_ANY = 0x0000;
     public const CONSISTENCY_ONE = 0x0001;

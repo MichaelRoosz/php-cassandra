@@ -268,7 +268,7 @@ class StreamReader
         /**
          * @var false|array<float> $unpacked
          */
-        $unpacked = unpack('G', strrev($this->read(4)));
+        $unpacked = unpack('g', strrev($this->read(4)));
         if ($unpacked === false) {
             throw new Exception('Cannot unpack data');
         }
@@ -283,7 +283,7 @@ class StreamReader
         /**
          * @var false|array<float> $unpacked
          */
-        $unpacked = unpack('E', strrev($this->read(8)));
+        $unpacked = unpack('e', strrev($this->read(8)));
         if ($unpacked === false) {
             throw new Exception('Cannot unpack data');
         }

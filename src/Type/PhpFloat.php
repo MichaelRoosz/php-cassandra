@@ -59,7 +59,7 @@ class PhpFloat extends Base
 
     public static function binary(float $value): string
     {
-        return strrev(pack('G', $value));
+        return strrev(pack('g', $value));
     }
 
     /**
@@ -72,7 +72,7 @@ class PhpFloat extends Base
         /**
          * @var false|array<float> $unpacked
          */
-        $unpacked = unpack('G', strrev($binary));
+        $unpacked = unpack('g', strrev($binary));
 
         if ($unpacked === false) {
             throw new Exception('Cannot unpack binary.');

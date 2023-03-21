@@ -35,6 +35,21 @@ class Statement
         return $this->_response;
     }
 
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getResult(): Response\Result
+    {
+        $response = $this->getResponse();
+
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('received invalid response');
+        }
+
+        return $response;
+    }
+
     public function setResponse(Response\Response $response): void
     {
         $this->_response = $response;

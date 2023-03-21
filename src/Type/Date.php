@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use DateInterval;
+use DateTimeImmutable;
+use DateTimeInterface;
+
 class Date extends Base
 {
     protected ?int $_value = null;
@@ -52,9 +56,59 @@ class Date extends Base
         return $this->_value;
     }
 
+    public static function fromDateTime(DateTimeInterface $value): self
+    {
+        $baseDate = new DateTimeImmutable('1970-01-01');
+        $interval = $baseDate->diff($value);
+        $days = pow(2, 31) + intval($interval->format('%r%a'));
+
+        return new self((int)$days);
+    }
+
+    /**
+     * @throws \Exception
+     */
+    public static function fromString(string $value): self
+    {
+        $inputDate = new DateTimeImmutable($value);
+
+        return self::fromDateTime($inputDate);
+    }
+
+    /**
+     * @throws \Exception
+     */
+    public static function toDateTime(int $value): DateTimeImmutable
+    {
+        $value -= pow(2, 31);
+        $baseDate = new DateTimeImmutable('1970-01-01');
+        $interval = new DateInterval('P' . abs($value) . 'D');
+
+        if ($value >= 0) {
+            return $baseDate->add($interval);
+        } else {
+            return $baseDate->sub($interval);
+        }
+    }
+
+    /**
+     * @throws \Exception
+     */
+    public static function toString(int $value): string
+    {
+        return self::toDateTime($value)->format('Y-m-d');
+    }
+
+    /**
+     * @throws \Exception
+     */
     public function __toString(): string
     {
-        return (string) $this->_value;
+        if ($this->_value === null) {
+            return '(null)';
+        }
+
+        return self::toString($this->_value);
     }
 
     public static function binary(int $value): string

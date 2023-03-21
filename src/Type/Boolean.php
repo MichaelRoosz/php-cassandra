@@ -51,7 +51,7 @@ class Boolean extends Base
 
     public function __toString(): string
     {
-        return (string) $this->_value;
+        return $this->_value ? '(true)' : '(false)';
     }
 
     public static function binary(bool $value): string

@@ -46,9 +46,8 @@ class Event extends Response
      */
     public function getData(): array
     {
-        $type = $this->getType();
-
-        $this->_stream->offset(4);
+        $this->_stream->offset(0);
+        $type = $this->_type = $this->_stream->readString();
 
         switch($type) {
             case self::TOPOLOGY_CHANGE:

@@ -11,6 +11,7 @@ class Authenticate extends Response
      */
     public function getData(): string
     {
+        $this->_stream->offset(0);
         return $this->_stream->readString();
     }
 }

@@ -96,61 +96,176 @@ class Result extends Response implements IteratorAggregate
      */
     public function getData(): null|SplFixedArray|string|array
     {
-        $this->_stream->offset(4);
         switch($this->getKind()) {
             case self::VOID:
-                return null;
+                return $this->getVoidData();
 
             case self::ROWS:
-                return $this->fetchAll();
+                return $this->getRowsData();
 
             case self::SET_KEYSPACE:
-                return $this->_stream->readString();
+                return $this->getSetKeyspaceData();
 
             case self::PREPARED:
-                if ($this->getVersion() >= 5) {
-                    $data = [
-                        'id' => $this->_stream->readString(),
-                        'result_metadata_id' => $this->_stream->readString(),
-                        'metadata' => $this->_readMetadata(isPrepareMetaData: true),
-                        'result_metadata' => $this->_readMetadata(isPrepareMetaData: true),
-                    ];
-                } else {
-                    $data = [
-                        'id' => $this->_stream->readString(),
-                        'metadata' => $this->_readMetadata(isPrepareMetaData: true),
-                        'result_metadata' => $this->_readMetadata(isPrepareMetaData: true),
-                    ];
-                }
-                return $data;
+                return $this->getPreparedData();
 
             case self::SCHEMA_CHANGE:
-                $data = [
-                    'change_type' => $this->_stream->readString(),
-                    'target' => $this->_stream->readString(),
-                    'keyspace' => $this->_stream->readString(),
-                ];
-
-                switch ($data['target']) {
-                    case 'TABLE':
-                    case 'TYPE':
-                        $data['name'] = $this->_stream->readString();
-                        break;
-
-                    case 'FUNCTION':
-                    case 'AGGREGATE':
-                        $data['name'] = $this->_stream->readString();
-
-                        /** @var string[] $argument_types */
-                        $argument_types = $this->_stream->readList([Type\Base::TEXT]);
-                        $data['argument_types'] = $argument_types;
-                        break;
-                }
-
-                return $data;
+                return $this->getSchemaChangeData();
         }
 
         return null;
+    }
+
+    /**
+     * @return null
+     *
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getVoidData(): ?string
+    {
+        if ($this->getKind() !== self::VOID) {
+            throw new Exception('Unexpected Response: ' . $this->getKind());
+        }
+
+        $this->_stream->offset(4);
+        return null;
+    }
+
+    /**
+     * @return SplFixedArray<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function getRowsData(): SplFixedArray
+    {
+        if ($this->getKind() !== self::ROWS) {
+            throw new Exception('Unexpected Response: ' . $this->getKind());
+        }
+
+        return $this->fetchAll();
+    }
+
+    /**
+     * @return string
+     *
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getSetKeyspaceData(): string
+    {
+        if ($this->getKind() !== self::SET_KEYSPACE) {
+            throw new Exception('Unexpected Response: ' . $this->getKind());
+        }
+
+        $this->_stream->offset(4);
+        return $this->_stream->readString();
+    }
+
+    /**
+     * @return array{
+     *   id: string,
+     *   result_metadata_id?: string,
+     *   metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     new_metadata_id?: string,
+     *     page_state?: ?string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     *   result_metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     new_metadata_id?: string,
+     *     page_state?: ?string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     * }
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function getPreparedData(): array
+    {
+        if ($this->getKind() !== self::PREPARED) {
+            throw new Exception('Unexpected Response: ' . $this->getKind());
+        }
+
+        $this->_stream->offset(4);
+
+        if ($this->getVersion() >= 5) {
+            $data = [
+                'id' => $this->_stream->readString(),
+                'result_metadata_id' => $this->_stream->readString(),
+                'metadata' => $this->_readMetadata(isPrepareMetaData: true),
+                'result_metadata' => $this->_readMetadata(isPrepareMetaData: true),
+            ];
+        } else {
+            $data = [
+                'id' => $this->_stream->readString(),
+                'metadata' => $this->_readMetadata(isPrepareMetaData: true),
+                'result_metadata' => $this->_readMetadata(isPrepareMetaData: true),
+            ];
+        }
+        return $data;
+    }
+
+    /**
+     * @return array{
+     *  change_type: string,
+     *  target: string,
+     *  keyspace: string,
+     *  name?: string,
+     *  argument_types?: string[]
+     * }
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function getSchemaChangeData(): array
+    {
+        if ($this->getKind() !== self::SCHEMA_CHANGE) {
+            throw new Exception('Unexpected Response: ' . $this->getKind());
+        }
+
+        $this->_stream->offset(4);
+
+        $data = [
+            'change_type' => $this->_stream->readString(),
+            'target' => $this->_stream->readString(),
+            'keyspace' => $this->_stream->readString(),
+        ];
+
+        switch ($data['target']) {
+            case 'TABLE':
+            case 'TYPE':
+                $data['name'] = $this->_stream->readString();
+                break;
+
+            case 'FUNCTION':
+            case 'AGGREGATE':
+                $data['name'] = $this->_stream->readString();
+
+                /** @var string[] $argument_types */
+                $argument_types = $this->_stream->readList([Type\Base::TEXT]);
+                $data['argument_types'] = $argument_types;
+                break;
+        }
+
+        return $data;
     }
 
     /**
