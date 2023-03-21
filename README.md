@@ -217,9 +217,14 @@ All types are supported.
 //  Counter
     new \Cassandra\Type\Counter(1000);
 
-//  Date (a number of days +- since January 1st, 1970)
+//  Date
+    \Cassandra\Type\Date::fromString('2011-02-03');
+    \Cassandra\Type\Date::fromDateTime(new DateTimeImmutable('1970-01-01'));
+
     new \Cassandra\Type\Date(19435);
-    new \Cassandra\Type\Date(-2000);
+
+    $dateAsString = \Cassandra\Type\Date::toString($dateValue);
+    $dateTime = \Cassandra\Type\Date::toDateTime($dateValue);
 
 //  Decimal
     new \Cassandra\Type\Decimal('0.0123');
@@ -228,7 +233,15 @@ All types are supported.
     new \Cassandra\Type\Double(2.718281828459);
 
 //  Duration
+    \Cassandra\Type\Duration::fromString('89h4m48s');
+    \Cassandra\Type\Duration::fromDateInterval(new DateInterval('P10Y11M12DT89H4M48S'));
+
     new \Cassandra\Type\Duration(['months' => 1, 'days' => 2, 'nanoseconds'=> 3]);
+
+    $durationAsString = \Cassandra\Type\Duration::toString($durationValue);
+
+    // warning: loses nanosecond precision, DateInterval only supports microseconds
+    $dateInterval = \Cassandra\Type\Duration::toDateInterval($durationValue);
 
 //  Float
     new \Cassandra\Type\PhpFloat(2.718);
@@ -255,11 +268,26 @@ All types are supported.
     new \Cassandra\Type\CollectionSet([1, 2, 3], [\Cassandra\Type\Base::INT]);
 
 //  Time (nanoseconds since midnight)
+    \Cassandra\Type\Time::fromString('08:12:54.123456789');
+    \Cassandra\Type\Time::fromDateTime(new DateTimeImmutable('08:12:54.123456789'));
+    \Cassandra\Type\Time::fromDateInterval(new DateInterval('PT10H9M20S'));
+
     new \Cassandra\Type\Time(18000000000000);
 
-//  Timestamp (unit: millisecond)
+    $timeAsString = \Cassandra\Type\Time::toString($timeValue);
+
+    // warning: loses nanosecond precision, DateInterval only supports microseconds
+    $dateInterval = \Cassandra\Type\Time::toDateInterval($timeValue);
+
+//  Timestamp
+    \Cassandra\Type\Timestamp::fromString('2011-02-03T04:05:00.000+0000');
+    \Cassandra\Type\Timestamp::fromDateTime(new DateTimeImmutable('2011-02-03T04:05:00.000+0000'))
+
     new \Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
     new \Cassandra\Type\Timestamp(1409830696263);
+
+    $timestampAsString = \Cassandra\Type\Timestamp::toString($timestampValue);
+    $dateTime = \Cassandra\Type\Timestamp::toDateTime($timestampValue);
 
 //  Uuid
     new \Cassandra\Type\Uuid('62c36092-82a1-3a00-93d1-46196ee77204');

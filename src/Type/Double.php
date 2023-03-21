@@ -34,7 +34,7 @@ class Double extends Base
     public function binaryOfValue(): string
     {
         if ($this->_value === null) {
-            throw new Exception('value is null');
+            throw new Exception('Value is null');
         }
 
         return static::binary($this->_value);
@@ -75,7 +75,7 @@ class Double extends Base
         $unpacked = unpack('e', strrev($binary));
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack binary');
         }
 
         return $unpacked[1];

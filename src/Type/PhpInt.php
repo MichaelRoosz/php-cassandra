@@ -6,10 +6,21 @@ namespace Cassandra\Type;
 
 class PhpInt extends Base
 {
+    public const VALUE_MIN = -2147483648;
+    public const VALUE_MAX = 2147483647;
+
     protected ?int $_value = null;
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public function __construct(?int $value = null)
     {
+        if ($value !== null
+            && ($value > self::VALUE_MAX || $value < self::VALUE_MIN)) {
+            throw new Exception('Value "' . $value . '" is outside of possible range');
+        }
+
         $this->_value = $value;
     }
 

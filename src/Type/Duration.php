@@ -15,9 +15,21 @@ class Duration extends Base
 
     /**
      * @param ?array{ months: int, days: int, nanoseconds: int } $value
+     *
+     * @throws \Cassandra\Type\Exception
      */
     public function __construct(?array $value = null)
     {
+        if ($value !== null &&
+            (
+                !($value['months'] <= 0 && $value['days'] <= 0 && $value['nanoseconds'] <= 0)
+                &&
+                !($value['months'] >= 0 && $value['days'] >= 0 && $value['nanoseconds'] >= 0)
+            )
+        ) {
+            throw new Exception('Invalid value type - all values must be either positive or negative');
+        }
+
         $this->_value = $value;
     }
 
@@ -45,14 +57,6 @@ class Duration extends Base
             throw new Exception('Invalid value type - key "nanoseconds" not set or invalid data type');
         }
 
-        if (
-            !($value['months'] <= 0 && $value['days'] <= 0 && $value['nanoseconds'] <= 0)
-            &&
-            !($value['months'] >= 0 && $value['days'] >= 0 && $value['nanoseconds'] >= 0)
-        ) {
-            throw new Exception('Invalid value type - all values must be either positive or negative');
-        }
-
         return new self([
             'months' => $value['months'],
             'days' => $value['days'],
@@ -66,7 +70,7 @@ class Duration extends Base
     public function binaryOfValue(): string
     {
         if ($this->_value === null) {
-            throw new Exception('value is null');
+            throw new Exception('Value is null');
         }
 
         return static::binary($this->_value);
@@ -86,6 +90,9 @@ class Duration extends Base
         return $this->_value;
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function fromDateInterval(DateInterval $value): self
     {
         $months = ($value->y * 12) + $value->m;
@@ -108,6 +115,9 @@ class Duration extends Base
         ]);
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function fromString(string $value): self
     {
         $pattern = '/';

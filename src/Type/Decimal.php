@@ -14,7 +14,7 @@ class Decimal extends Base
     public function __construct(?string $value = null)
     {
         if (!is_numeric($value)) {
-            throw new Exception('Incoming value must be numeric string.');
+            throw new Exception('Value must be a numeric string');
         }
 
         $this->_value = $value;
@@ -41,7 +41,7 @@ class Decimal extends Base
     public function binaryOfValue(): string
     {
         if ($this->_value === null) {
-            throw new Exception('value is null');
+            throw new Exception('Value is null');
         }
 
         return static::binary($this->_value);
@@ -92,7 +92,7 @@ class Decimal extends Base
          */
         $unpacked = unpack('N1scale/C*', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack binary');
         }
 
         $valueByteLen = $length - 4;

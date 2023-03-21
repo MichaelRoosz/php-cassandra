@@ -6,10 +6,21 @@ namespace Cassandra\Type;
 
 class Smallint extends Base
 {
+    public const VALUE_MIN = -32768;
+    public const VALUE_MAX = 32767;
+
     protected ?int $_value = null;
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public function __construct(?int $value = null)
     {
+        if ($value !== null
+            && ($value > self::VALUE_MAX || $value < self::VALUE_MIN)) {
+            throw new Exception('Value "' . $value . '" is outside of possible range');
+        }
+
         $this->_value = $value;
     }
 
@@ -34,7 +45,7 @@ class Smallint extends Base
     public function binaryOfValue(): string
     {
         if ($this->_value === null) {
-            throw new Exception('value is null');
+            throw new Exception('Value is null');
         }
 
         return static::binary($this->_value);
@@ -76,7 +87,7 @@ class Smallint extends Base
          */
         $unpacked = unpack('n', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack binary');
         }
 
         return $unpacked[1] << $bits >> $bits;
