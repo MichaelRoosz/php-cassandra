@@ -59,9 +59,7 @@ class Bigint extends Base
 
     public static function binary(float|int $value): string
     {
-        $higher = ($value & 0xffffffff00000000) >>32;
-        $lower = $value & 0x00000000ffffffff;
-        return pack('NN', $higher, $lower);
+        return pack('J', $value);
     }
 
     /**
@@ -74,11 +72,11 @@ class Bigint extends Base
         /**
          * @var false|array<int> $unpacked
          */
-        $unpacked = unpack('N2', $binary);
+        $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
             throw new Exception('Cannot unpack binary.');
         }
 
-        return $unpacked[1] << 32 | $unpacked[2];
+        return $unpacked[1];
     }
 }

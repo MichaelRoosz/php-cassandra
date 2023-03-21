@@ -73,9 +73,8 @@ class Decimal extends Base
         } else {
             $numericValue = (int)$value;
         }
-        $higher = ($numericValue & 0xffffffff00000000) >> 32;
-        $lower = $numericValue & 0x00000000ffffffff;
-        $binary = pack('NNN', $scaleLen, $higher, $lower);
+
+        $binary = pack('N', $scaleLen) . Varint::binary((int)$numericValue);
         return $binary;
     }
 
@@ -101,8 +100,10 @@ class Decimal extends Base
         for ($i = 1; $i <= $valueByteLen; ++$i) {
             $value |= $unpacked[$i] << (($valueByteLen - $i) * 8);
         }
+
         $shift = (PHP_INT_SIZE - $valueByteLen) * 8;
         $value = (string) ($value << $shift >> $shift);
+
         if ($unpacked['scale'] === 0) {
             return $value;
         } elseif (strlen($value) > $unpacked['scale']) {

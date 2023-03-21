@@ -113,6 +113,7 @@ class Varint extends Base
         foreach ($unpacked as $i => $byte) {
             $value |= $byte << (($length - (int)$i) * 8);
         }
+
         $shift = (PHP_INT_SIZE - $length) * 8;
         return $value << $shift >> $shift;
     }

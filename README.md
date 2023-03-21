@@ -21,22 +21,11 @@ Cassandra client library for PHP, which supports Protocol v5 (Cassandra 4.x) and
 
 PHP 8.1+ is required. There is no need for additional libraries.
 
-If you want to use the Bigint or Timestamp types, a 64-bit system is required.
+If you want to use the Bigint, Counter, Duration, Time or Timestamp types, a 64-bit system is required.
 
-Append dependency into composer.json:
-
+Using composer to install is recommended. However, you may also fetch the repository from Github and load it via its own class loader:
 ```
-...
-"require": {
-    ...
-    "mroosz/php-cassandra": "dev-main"
-}
-...
-```
-
-Also you can just fetch the repository from Github and include it in your code:
-```
-require 'php-cassandra-folder-on-your-computer/php-cassandra.php';
+require 'php-cassandra/php-cassandra.php';
 ```
 
 ## Basic Usage
