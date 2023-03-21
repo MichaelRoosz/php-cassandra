@@ -77,7 +77,7 @@ $nodes = [
 ];
 
 // Create a connection.
-$connection = new \\Cassandra\Connection($nodes, 'my_keyspace');
+$connection = new \Cassandra\Connection($nodes, 'my_keyspace');
 
 //Connect
 try
