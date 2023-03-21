@@ -13,7 +13,7 @@ class Timestamp extends Bigint
     {
         $timestamp = $value->getTimestamp();
         $microseconds = (int) $value->format('u');
-        $milliseconds = $timestamp * 1000 + $microseconds / 1000;
+        $milliseconds = (int)($timestamp * 1000 + $microseconds / 1000);
 
         return new self($milliseconds);
     }
@@ -32,7 +32,7 @@ class Timestamp extends Bigint
      * @throws \Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function toDateTime(float|int $value): DateTimeImmutable
+    public static function toDateTime(int $value): DateTimeImmutable
     {
         $seconds = $value / 1000;
         $microseconds = ($value % 1000) * 1000;
@@ -48,7 +48,7 @@ class Timestamp extends Bigint
     /**
      * @throws \Exception
      */
-    public static function toString(float|int $value): string
+    public static function toString(int $value): string
     {
         return self::toDateTime($value)->format('Y-m-d H:i:s.uO');
     }

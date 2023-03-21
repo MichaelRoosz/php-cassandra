@@ -62,7 +62,7 @@ class Time extends Bigint
         return new self($totalNanoseconds);
     }
 
-    public static function toString(float|int $value): string
+    public static function toString(int $value): string
     {
         $seconds = $value / 1000000000;
         $remaining_nanoseconds = $value % 1000000000;
@@ -81,6 +81,44 @@ class Time extends Bigint
         }
 
         return $formatted_time;
+    }
+
+    /**
+     * @throws \Exception
+     */
+    public static function toDateInterval(int $value): DateInterval
+    {
+        $duration = 'PT';
+
+        $hours = floor($value / 3600000000000);
+        $value %= 3600000000000;
+
+        $minutes = floor($value / 60000000000);
+        $value %= 60000000000;
+
+        $seconds = floor($value / 1000000000);
+        $value %= 1000000000;
+
+        if ($hours > 0) {
+            $duration .= $hours . 'H';
+        }
+
+        if ($minutes > 0) {
+            $duration .= $minutes . 'M';
+        }
+
+        if ($seconds > 0) {
+            $duration .= $seconds . 'S';
+        }
+
+        $interval = new DateInterval($duration);
+
+        if ($value) {
+            $microsecondsInSeconds = $value / 1000000000;
+            $interval->f = $microsecondsInSeconds;
+        }
+
+        return $interval;
     }
 
     public function __toString(): string

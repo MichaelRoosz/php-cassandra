@@ -6,9 +6,9 @@ namespace Cassandra\Type;
 
 class Bigint extends Base
 {
-    protected float|int|null $_value = null;
+    protected ?int $_value = null;
 
-    public function __construct(float|int|null $value = null)
+    public function __construct(?int $value = null)
     {
         $this->_value = $value;
     }
@@ -21,7 +21,7 @@ class Bigint extends Base
      */
     protected static function create(mixed $value, null|int|array $definition): self
     {
-        if ($value !== null && !is_int($value) && !is_float($value)) {
+        if ($value !== null && !is_int($value)) {
             throw new Exception('Invalid value type');
         }
 
@@ -43,7 +43,7 @@ class Bigint extends Base
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function parseValue(): float|int|null
+    public function parseValue(): ?int
     {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);
@@ -57,7 +57,7 @@ class Bigint extends Base
         return (string) $this->_value;
     }
 
-    public static function binary(float|int $value): string
+    public static function binary(int $value): string
     {
         return pack('J', $value);
     }
@@ -67,7 +67,7 @@ class Bigint extends Base
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): float|int
+    public static function parse(string $binary, null|int|array $definition = null): int
     {
         /**
          * @var false|array<int> $unpacked
