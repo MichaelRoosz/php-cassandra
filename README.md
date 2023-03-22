@@ -3,6 +3,8 @@ Cassandra client library for PHP
 
 Cassandra client library for PHP, which supports Protocol v5 (Cassandra 4.x) and asynchronous requests.
 
+https://packagist.org/packages/mroosz/php-cassandra
+
 ## Features
 * Using Protocol v5 (Cassandra 4.x)
 * Supports ssl/tls with stream transport layer
