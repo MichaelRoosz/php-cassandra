@@ -120,7 +120,7 @@ class Duration extends Base
      */
     public static function fromString(string $value): self
     {
-        $pattern = '/';
+        $pattern = '/(?<sign>-)?';
         foreach ([
             'years' => 'y',
             'months' => 'mo',
@@ -140,41 +140,56 @@ class Duration extends Base
         $matches = [];
         preg_match($pattern, $value, $matches);
 
+        $isNegative = !empty($matches['sign']);
+
         $months = 0;
-        if (isset($matches['years'])) {
-            $months += (int)$matches['years'] * 12;
-        }
-        if (isset($matches['months'])) {
-            $months += (int)$matches['months'];
+        foreach([
+            'years' => 12, 
+            'months' => 1,
+        ] as $key => $factor) {
+            if (isset($matches[$key])) {
+                if ($isNegative) {
+                    $months -= (int)$matches[$key] * $factor;
+                } else {
+                    $months += (int)$matches[$key] * $factor;
+                }
+            }
         }
 
         $days = 0;
-        if (isset($matches['weeks'])) {
-            $days += (int)$matches['weeks'] * 7;
-        }
-        if (isset($matches['days'])) {
-            $days += (int)$matches['days'];
+        foreach([
+            'weeks' => 7, 
+            'days' => 1,
+        ] as $key => $factor) {
+            if (isset($matches[$key])) {
+                if ($isNegative) {
+                    $days -= (int)$matches[$key] * $factor;
+                } else {
+                    $days += (int)$matches[$key] * $factor;
+                }
+            }
         }
 
         $nanoseconds = 0;
-        if (isset($matches['hours'])) {
-            $nanoseconds += (int)$matches['hours'] * 3600000000000;
+        foreach([
+            'hours' => 3600000000000, 
+            'minutes' => 60000000000,
+            'seconds' => 1000000000,
+            'milliseconds' => 1000000,
+            'microseconds' => 1000,
+            'nanoseconds' => 1,
+
+        ] as $key => $factor) {
+            if (isset($matches[$key])) {
+                if ($isNegative) {
+                    $nanoseconds -= (int)$matches[$key] * $factor;
+                } else {
+                    $nanoseconds += (int)$matches[$key] * $factor;
+                }
+            }
         }
-        if (isset($matches['minutes'])) {
-            $nanoseconds += (int)$matches['minutes'] * 60000000000;
-        }
-        if (isset($matches['seconds'])) {
-            $nanoseconds += (int)$matches['seconds'] * 1000000000;
-        }
-        if (isset($matches['milliseconds'])) {
-            $nanoseconds += (int)$matches['milliseconds'] * 1000000;
-        }
-        if (isset($matches['microseconds'])) {
-            $nanoseconds += (int)$matches['microseconds'] * 1000;
-        }
-        if (isset($matches['nanoseconds'])) {
-            $nanoseconds += (int)$matches['nanoseconds'];
-        }
+
+        // todo: check overflow of PHP_INT_MAX/MIN
 
         return new self([
             'months' => $months,
@@ -190,44 +205,44 @@ class Duration extends Base
      */
     public static function toDateInterval(array $value): DateInterval
     {
-        $years = floor($value['months'] / 12);
+        $years = intdiv($value['months'], 12);
         $value['months'] %= 12;
 
         $duration = 'P';
 
-        if ($years > 0) {
+        if ($years) {
             $duration .= $years . 'Y';
         }
 
-        if ($value['months'] > 0) {
+        if ($value['months']) {
             $duration .= $value['months'] . 'M';
         }
 
-        if ($value['days'] > 0) {
+        if ($value['days']) {
             $duration .= $value['days'] . 'D';
         }
 
         if ($value['nanoseconds']) {
             $duration .= 'T';
 
-            $hours = floor($value['nanoseconds'] / 3600000000000);
+            $hours = intdiv($value['nanoseconds'], 3600000000000);
             $value['nanoseconds'] %= 3600000000000;
 
-            $minutes = floor($value['nanoseconds'] / 60000000000);
+            $minutes = intdiv($value['nanoseconds'], 60000000000);
             $value['nanoseconds'] %= 60000000000;
 
-            $seconds = floor($value['nanoseconds'] / 1000000000);
+            $seconds = intdiv($value['nanoseconds'], 1000000000);
             $value['nanoseconds'] %= 1000000000;
 
-            if ($hours > 0) {
+            if ($hours) {
                 $duration .= $hours . 'H';
             }
 
-            if ($minutes > 0) {
+            if ($minutes) {
                 $duration .= $minutes . 'M';
             }
 
-            if ($seconds > 0) {
+            if ($seconds) {
                 $duration .= $seconds . 'S';
             }
         }
@@ -247,66 +262,88 @@ class Duration extends Base
      */
     public static function toString(array $value): string
     {
-        $years = floor($value['months'] / 12);
+        $isNegative = $value['months'] < 0 || $value['days'] < 0 || $value['nanoseconds'] < 0;
+        if ($isNegative) {
+            $duration = '-';
+        } else {
+            $duration = '';
+        }
+
+        $years = intdiv($value['months'], 12);
         $value['months'] %= 12;
 
-        $weeks = floor($value['days'] / 7);
+        $weeks = intdiv($value['days'], 7);
         $value['days'] %= 7;
 
-        $duration = '';
+        if ($isNegative) {
+            $years = abs($years);
+            $value['months'] = abs($value['months']);
+            $weeks = abs($weeks);
+            $value['days'] = abs($value['days']);
+        }
 
-        if ($years > 0) {
+        if ($years) {
             $duration .= $years . 'y';
         }
 
-        if ($value['months'] > 0) {
+        if ($value['months']) {
             $duration .= $value['months'] . 'mo';
         }
 
-        if ($weeks > 0) {
+        if ($weeks) {
             $duration .= $weeks . 'w';
         }
 
-        if ($value['days'] > 0) {
+        if ($value['days']) {
             $duration .= $value['days'] . 'd';
         }
 
-        $hours = floor($value['nanoseconds'] / 3600000000000);
+        $hours = intdiv($value['nanoseconds'], 3600000000000);
         $value['nanoseconds'] %= 3600000000000;
 
-        $minutes = floor($value['nanoseconds'] / 60000000000);
+        $minutes = intdiv($value['nanoseconds'], 60000000000);
         $value['nanoseconds'] %= 60000000000;
 
-        $seconds = floor($value['nanoseconds'] / 1000000000);
+        $seconds = intdiv($value['nanoseconds'], 1000000000);
         $value['nanoseconds'] %= 1000000000;
 
-        $milliseconds = floor($value['nanoseconds'] / 1000000);
+        $milliseconds = intdiv($value['nanoseconds'], 1000000);
         $value['nanoseconds'] %= 1000000 ;
 
-        $microseconds = floor($value['nanoseconds'] / 1000);
+        $microseconds = intdiv($value['nanoseconds'], 1000);
         $value['nanoseconds'] %= 1000;
 
-        if ($hours > 0) {
+
+        if ($isNegative) {
+            $hours = abs($hours);
+            $minutes = abs($minutes);
+            $seconds = abs($seconds);
+            $milliseconds = abs($milliseconds);
+            $microseconds = abs($microseconds);
+            $value['nanoseconds'] = abs($value['nanoseconds']);
+        }
+
+        if ($hours) {
             $duration .= $hours . 'h';
         }
 
-        if ($minutes > 0) {
+        if ($minutes) {
             $duration .= $minutes . 'm';
         }
 
-        if ($seconds > 0) {
+        if ($seconds) {
             $duration .= $seconds . 's';
         }
 
-        if ($milliseconds > 0) {
+        if ($milliseconds) {
             $duration .= $milliseconds . 'ms';
         }
 
-        if ($microseconds > 0) {
+        if ($microseconds) {
             $duration .= $microseconds . 'us';
         }
 
-        if ($value['nanoseconds'] > 0) {
+        if ($value['nanoseconds']) {
             $duration .= $value['nanoseconds'] . 'ns';
         }
 

@@ -64,13 +64,13 @@ class Time extends Bigint
 
     public static function toString(int $value): string
     {
-        $seconds = $value / 1000000000;
+        $seconds = intdiv($value, 1000000000);
         $remaining_nanoseconds = $value % 1000000000;
 
-        $hours = floor($seconds / 3600);
+        $hours = intdiv($seconds, 3600);
         $remaining_seconds = $seconds % 3600;
 
-        $minutes = floor($remaining_seconds / 60);
+        $minutes = intdiv($remaining_seconds, 60);
         $remaining_seconds %= 60;
 
         $formatted_time = sprintf('%02d:%02d:%02d', $hours, $minutes, $remaining_seconds);
@@ -90,13 +90,13 @@ class Time extends Bigint
     {
         $duration = 'PT';
 
-        $hours = floor($value / 3600000000000);
+        $hours = intdiv($value, 3600000000000);
         $value %= 3600000000000;
 
-        $minutes = floor($value / 60000000000);
+        $minutes = intdiv($value, 60000000000);
         $value %= 60000000000;
 
-        $seconds = floor($value / 1000000000);
+        $seconds = intdiv($value, 1000000000);
         $value %= 1000000000;
 
         if ($hours > 0) {

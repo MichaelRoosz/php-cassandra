@@ -13,7 +13,7 @@ class Timestamp extends Bigint
     {
         $timestamp = $value->getTimestamp();
         $microseconds = (int) $value->format('u');
-        $milliseconds = (int)($timestamp * 1000 + $microseconds / 1000);
+        $milliseconds = $timestamp * 1000 + intdiv($microseconds, 1000);
 
         return new self($milliseconds);
     }
@@ -34,7 +34,7 @@ class Timestamp extends Bigint
      */
     public static function toDateTime(int $value): DateTimeImmutable
     {
-        $seconds = $value / 1000;
+        $seconds = intdiv($value, 1000);
         $microseconds = ($value % 1000) * 1000;
         $datetime = new DateTimeImmutable('@' . $seconds);
         $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
