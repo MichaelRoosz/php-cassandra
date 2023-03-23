@@ -56,12 +56,12 @@ class Decimal extends Base
         $pos = strpos($value, '.');
         $scaleLen = $pos === false ? 0 : strlen($value) - $pos - 1;
         if ($scaleLen) {
-            $numericValue = (float)$value * pow(10, $scaleLen);
+            $numericValue = (int)(((float)$value) * pow(10, $scaleLen));
         } else {
             $numericValue = (int)$value;
         }
 
-        $binary = pack('N', $scaleLen) . Varint::binary((int)$numericValue);
+        $binary = pack('N', $scaleLen) . Varint::binary($numericValue);
         return $binary;
     }
 

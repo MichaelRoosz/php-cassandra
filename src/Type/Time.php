@@ -10,6 +10,21 @@ use DateTimeInterface;
 
 class Time extends Bigint
 {
+    public const VALUE_MAX = 86399999999999;
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function __construct(?int $value = null)
+    {
+        if ($value !== null
+            && ($value > self::VALUE_MAX || $value < 0)) {
+            throw new Exception('Value "' . $value . '" is outside of possible range');
+        }
+
+        $this->_value = $value;
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
@@ -23,8 +38,8 @@ class Time extends Bigint
 
             if ($hours >= 0 && $hours < 24 && $minutes >= 0 && $minutes < 60 && $seconds >= 0 && $seconds < 60) {
                 $totalNanoseconds = (
-                    ($hours * 60 * 60 * 1000000000) +
-                    ($minutes * 60 * 1000000000) +
+                    ($hours * 3600000000000) +
+                    ($minutes * 60000000000) +
                     ($seconds * 1000000000) +
                     $nanoseconds
                 );
@@ -38,6 +53,9 @@ class Time extends Bigint
         }
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function fromDateTime(DateTimeInterface $value): self
     {
         $copy = DateTimeImmutable::createFromInterface($value);
@@ -48,10 +66,13 @@ class Time extends Bigint
         return self::fromDateInterval($interval);
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function fromDateInterval(DateInterval $value): self
     {
-        $hoursInNanoseconds = $value->h * 3600 * 1000000000;
-        $minutesInNanoseconds = $value->i * 60 * 1000000000;
+        $hoursInNanoseconds = $value->h * 3600000000000;
+        $minutesInNanoseconds = $value->i * 60000000000;
         $secondsInNanoseconds = $value->s * 1000000000;
 
         $microseconds = (int)($value->f * 1000000);

@@ -47,17 +47,13 @@ class Varint extends Base
     public static function binary(int $value): string
     {
         $isNegative = $value < 0;
-
-        if ($isNegative) {
-            $value = -$value;
-            $value -= 1;
-        }
+        $breakValue = $isNegative ? -1 : 0;
 
         $result = [];
         do {
-            $result[] = $isNegative ? ~$value & 0xFF : $value & 0xFF;
+            $result[] = $value & 0xFF;
             $value >>= 8;
-        } while ($value > 0);
+        } while ($value !== $breakValue);
 
         $length = count($result);
 
@@ -66,17 +62,8 @@ class Varint extends Base
             // Add an extra byte with 0 value to keep the number positive
             $result[] = 0;
         }
-        // Check if the most significant bit is not set, which could be interpreted as a positive number
-        elseif ($isNegative && ($result[$length - 1] & 0x80) === 0) {
-            // Add an extra byte with 0 value to keep the number positive
-            $result[] = 0xFF;
-        }
 
-        // Reverse the result to get big endian
-        $result = array_reverse($result);
-
-        // Use pack() function to convert each byte to its corresponding character
-        return pack('C*', ...$result);
+        return pack('C*', ...array_reverse($result));
     }
 
     /**
