@@ -25,7 +25,12 @@ PHP 8.1+ is required. There is no need for additional libraries.
 
 If you want to use the Bigint, Counter, Duration, Time or Timestamp types, a 64-bit system is required.
 
-Using composer to install is recommended. However, you may also fetch the repository from Github and load it via its own class loader:
+Using composer to install is recommended.
+```
+composer require mroosz/php-cassandra
+```
+
+However, you may also fetch the repository from Github and load it via its own class loader:
 ```
 require 'php-cassandra/php-cassandra.php';
 ```
