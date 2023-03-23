@@ -6,7 +6,9 @@ namespace Cassandra\Type;
 
 class Double extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
+    use CommonToString;
 
     protected ?float $_value = null;
 
@@ -29,7 +31,7 @@ class Double extends Base
 
         return new self($value);
     }
-    
+
     /**
      * @throws \Cassandra\Type\Exception
      */
@@ -40,11 +42,6 @@ class Double extends Base
         }
 
         return $this->_value;
-    }
-
-    public function __toString(): string
-    {
-        return (string) $this->_value;
     }
 
     public static function binary(float $value): string

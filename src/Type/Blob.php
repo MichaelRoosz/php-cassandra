@@ -6,7 +6,9 @@ namespace Cassandra\Type;
 
 class Blob extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
+    use CommonToString;
 
     protected ?string $_value = null;
 
@@ -37,11 +39,6 @@ class Blob extends Base
         }
 
         return $this->_value;
-    }
-
-    public function __toString(): string
-    {
-        return (string) $this->parseValue();
     }
 
     public static function binary(string $value): string

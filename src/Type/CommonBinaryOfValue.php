@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-trait Common
+trait CommonBinaryOfValue
 {
     /**
      * @throws \Cassandra\Type\Exception
@@ -16,9 +16,5 @@ trait Common
         }
 
         return static::binary($this->_value);
-    }
-
-    protected function resetValue(): void {
-        $this->_value = null;
     }
 }

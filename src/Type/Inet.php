@@ -6,7 +6,9 @@ namespace Cassandra\Type;
 
 class Inet extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
+    use CommonToString;
 
     protected ?string $_value = null;
 
@@ -40,11 +42,6 @@ class Inet extends Base
         }
 
         return $this->_value;
-    }
-
-    public function __toString(): string
-    {
-        return (string) $this->_value;
     }
 
     /**

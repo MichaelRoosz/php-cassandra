@@ -8,7 +8,8 @@ use DateInterval;
 
 class Duration extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
 
     /**
      * @var ?array{ months: int, days: int, nanoseconds: int } $_value
@@ -133,8 +134,8 @@ class Duration extends Base
         $isNegative = !empty($matches['sign']);
 
         $months = 0;
-        foreach([
-            'years' => 12, 
+        foreach ([
+            'years' => 12,
             'months' => 1,
         ] as $key => $factor) {
             if (isset($matches[$key])) {
@@ -147,8 +148,8 @@ class Duration extends Base
         }
 
         $days = 0;
-        foreach([
-            'weeks' => 7, 
+        foreach ([
+            'weeks' => 7,
             'days' => 1,
         ] as $key => $factor) {
             if (isset($matches[$key])) {
@@ -161,8 +162,8 @@ class Duration extends Base
         }
 
         $nanoseconds = 0;
-        foreach([
-            'hours' => 3600000000000, 
+        foreach ([
+            'hours' => 3600000000000,
             'minutes' => 60000000000,
             'seconds' => 1000000000,
             'milliseconds' => 1000000,
@@ -338,12 +339,15 @@ class Duration extends Base
         return $duration;
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public function __toString(): string
     {
         $value = $this->parseValue();
 
         if ($value === null) {
-            return '';
+            return 'null';
         }
 
         return self::toString($value);

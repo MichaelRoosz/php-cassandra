@@ -6,7 +6,9 @@ namespace Cassandra\Type;
 
 class Uuid extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
+    use CommonToString;
 
     protected ?string $_value = null;
 
@@ -40,11 +42,6 @@ class Uuid extends Base
         }
 
         return $this->_value;
-    }
-
-    public function __toString(): string
-    {
-        return (string) $this->_value;
     }
 
     public static function binary(string $value): string

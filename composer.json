@@ -37,9 +37,9 @@
         "psr-4": { "Cassandra\\": "src/" }
     },
     "require-dev": {
-        "phpstan/phpstan": "^1.9.14",
-        "phpunit/phpunit": "^9.5.28",
-        "vimeo/psalm": "^5.6"
+        "phpstan/phpstan": "^1.10.7",
+        "phpunit/phpunit": "^9.6.5",
+        "vimeo/psalm": "^5.8"
     },
     "scripts": {
         "phpstan": "vendor/bin/phpstan analyse",

@@ -8,6 +8,9 @@ use Cassandra\Response\StreamReader;
 
 class Tuple extends Base
 {
+    use CommonResetValue;
+    use CommonToString;
+
     /**
      * @var array<int|array<mixed>> $_definition
      */
@@ -72,15 +75,6 @@ class Tuple extends Base
         }
 
         return $this->_value;
-    }
-
-    protected function resetValue(): void {
-        $this->_value = null;
-    }
-
-    public function __toString(): string
-    {
-        return (string) json_encode($this->_value);
     }
 
     /**

@@ -6,7 +6,9 @@ namespace Cassandra\Type;
 
 class Tinyint extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
+    use CommonToString;
 
     public const VALUE_MIN = -128;
     public const VALUE_MAX = 127;
@@ -51,11 +53,6 @@ class Tinyint extends Base
         }
 
         return $this->_value;
-    }
-
-    public function __toString(): string
-    {
-        return (string) $this->_value;
     }
 
     public static function binary(int $value): string

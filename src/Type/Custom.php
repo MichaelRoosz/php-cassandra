@@ -6,20 +6,16 @@ namespace Cassandra\Type;
 
 class Custom extends Base
 {
-    /**
-     * @var int|array<int|array<mixed>> $_definition
-     */
-    protected int|array $_definition;
+    use CommonResetValue;
+    use CommonToString;
+
+    protected string $_javaClassName;
 
     protected ?string $_value = null;
 
-    /**
-     * @param ?string $value
-     * @param int|array<int|array<mixed>> $definition
-     */
-    public function __construct(?string $value, int|array $definition)
+    public function __construct(?string $value, string $javaClassName = '')
     {
-        $this->_definition = $definition;
+        $this->_javaClassName = $javaClassName;
         $this->_value = $value;
     }
 
@@ -31,15 +27,12 @@ class Custom extends Base
      */
     protected static function create(mixed $value, null|int|array $definition): self
     {
-        if ($value !== null && !is_string($value)) {
-            throw new Exception('Invalid value type');
-        }
+        throw new Exception('not implemented');
+    }
 
-        if ($definition === null) {
-            throw new Exception('Invalid definition');
-        }
-
-        return new self($value, $definition);
+    public function getJavaClassName(): string
+    {
+        return $this->_javaClassName;
     }
 
     /**
@@ -51,7 +44,7 @@ class Custom extends Base
             throw new Exception('value is null');
         }
 
-        return static::binary($this->_value, $this->_definition);
+        return static::binary($this->_value);
     }
 
     /**
@@ -60,25 +53,13 @@ class Custom extends Base
     public function parseValue(): ?string
     {
         if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary, $this->_definition);
+            $this->_value = static::parse($this->_binary);
         }
 
         return $this->_value;
     }
 
-    protected function resetValue(): void {
-        $this->_value = null;
-    }
-
-    public function __toString(): string
-    {
-        return (string) $this->_value;
-    }
-
-    /**
-     * @param int|array<int|array<mixed>> $definition
-     */
-    public static function binary(string $value, int|array $definition): string
+    public static function binary(string $value): string
     {
         return pack('n', strlen($value)) . $value;
     }

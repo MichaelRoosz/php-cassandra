@@ -6,7 +6,9 @@ namespace Cassandra\Type;
 
 class Boolean extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
+    use CommonToString;
 
     protected ?bool $_value = null;
 
@@ -37,11 +39,6 @@ class Boolean extends Base
         }
 
         return $this->_value;
-    }
-
-    public function __toString(): string
-    {
-        return (string)$this->parseValue();
     }
 
     public static function binary(bool $value): string

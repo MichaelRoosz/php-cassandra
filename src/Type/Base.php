@@ -199,6 +199,24 @@ abstract class Base implements Stringable
             throw new Exception('invalid data type');
         }
 
+        if ($type === self::CUSTOM) {
+            if (!is_string($value)) {
+                throw new Exception('custom value is not a string');
+            }
+
+            if (!isset($dataType['definition'][0]) || !is_array($dataType['definition'])) {
+                throw new Exception('cannot read custom java class name');
+            }
+
+            $javaClassName = $dataType['definition'][0];
+
+            if (!is_string($javaClassName)) {
+                throw new Exception('custom java class name is not a string');
+            }
+
+            return new Custom($value, $javaClassName);
+        }
+
         if (!isset(self::$typeClassMap[$type])) {
             throw new Exception('unknown data type');
         }

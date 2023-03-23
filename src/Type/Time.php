@@ -123,10 +123,12 @@ class Time extends Bigint
 
     public function __toString(): string
     {
-        if ($this->_value === null) {
-            return '';
+        $value = $this->parseValue();
+
+        if ($value === null) {
+            return 'null';
         }
 
-        return self::toString($this->_value);
+        return self::toString($value);
     }
 }

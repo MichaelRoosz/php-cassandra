@@ -10,7 +10,8 @@ use DateTimeInterface;
 
 class Date extends Base
 {
-    use Common;
+    use CommonResetValue;
+    use CommonBinaryOfValue;
 
     protected ?int $_value = null;
 
@@ -94,11 +95,13 @@ class Date extends Base
      */
     public function __toString(): string
     {
-        if ($this->_value === null) {
-            return '';
+        $value = $this->parseValue();
+
+        if ($value === null) {
+            return 'null';
         }
 
-        return self::toString($this->_value);
+        return self::toString($value);
     }
 
     public static function binary(int $value): string

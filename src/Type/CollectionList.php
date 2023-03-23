@@ -8,6 +8,9 @@ use Cassandra\Response\StreamReader;
 
 class CollectionList extends Base
 {
+    use CommonResetValue;
+    use CommonToString;
+
     /**
      * @var int|array<int|array<mixed>> $_definition
      */
@@ -72,15 +75,6 @@ class CollectionList extends Base
         }
 
         return $this->_value;
-    }
-
-    protected function resetValue(): void {
-        $this->_value = null;
-    }
-
-    public function __toString(): string
-    {
-        return json_encode($this->parseValue());
     }
 
     /**
