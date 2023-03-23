@@ -59,7 +59,7 @@ class Timestamp extends Bigint
     public function __toString(): string
     {
         if ($this->_value === null) {
-            return '(null)';
+            return '';
         }
 
         return self::toString($this->_value);

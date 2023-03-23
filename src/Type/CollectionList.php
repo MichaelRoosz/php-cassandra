@@ -50,7 +50,7 @@ class CollectionList extends Base
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function binaryOfValue(): string
+    protected function binaryOfValue(): string
     {
         if ($this->_value === null) {
             throw new Exception('value is null');
@@ -74,9 +74,13 @@ class CollectionList extends Base
         return $this->_value;
     }
 
+    protected function resetValue(): void {
+        $this->_value = null;
+    }
+
     public function __toString(): string
     {
-        return (string) json_encode($this->_value);
+        return json_encode($this->parseValue());
     }
 
     /**

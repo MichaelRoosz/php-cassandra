@@ -84,9 +84,11 @@ abstract class Base implements Stringable
 
     protected ?string $_binary = null;
 
-    abstract public function binaryOfValue(): string;
+    abstract protected function binaryOfValue(): string;
 
-    abstract public function parseValue(): mixed;
+    abstract protected function parseValue(): mixed;
+
+    abstract protected function resetValue(): void;
 
     abstract public function __toString(): string;
 
@@ -109,6 +111,7 @@ abstract class Base implements Stringable
     public function setBinary(string $binary): static
     {
         $this->_binary = $binary;
+        $this->resetValue();
 
         return $this;
     }

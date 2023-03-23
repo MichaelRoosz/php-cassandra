@@ -74,6 +74,10 @@ class Tuple extends Base
         return $this->_value;
     }
 
+    protected function resetValue(): void {
+        $this->_value = null;
+    }
+
     public function __toString(): string
     {
         return (string) json_encode($this->_value);

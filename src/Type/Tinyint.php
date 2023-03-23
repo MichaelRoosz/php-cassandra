@@ -6,6 +6,8 @@ namespace Cassandra\Type;
 
 class Tinyint extends Base
 {
+    use Common;
+
     public const VALUE_MIN = -128;
     public const VALUE_MAX = 127;
 
@@ -42,19 +44,7 @@ class Tinyint extends Base
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function binaryOfValue(): string
-    {
-        if ($this->_value === null) {
-            throw new Exception('Value is null');
-        }
-
-        return static::binary($this->_value);
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function parseValue(): ?int
+    protected function parseValue(): ?int
     {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);

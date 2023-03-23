@@ -6,6 +6,8 @@ namespace Cassandra\Type;
 
 class Varchar extends Base
 {
+    use Common;
+
     protected ?string $_value = null;
 
     public function __construct(?string $value = null)
@@ -28,19 +30,7 @@ class Varchar extends Base
         return new self($value);
     }
 
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function binaryOfValue(): string
-    {
-        if ($this->_value === null) {
-            throw new Exception('value is null');
-        }
-
-        return static::binary($this->_value);
-    }
-
-    public function parseValue(): ?string
+    protected function parseValue(): ?string
     {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);

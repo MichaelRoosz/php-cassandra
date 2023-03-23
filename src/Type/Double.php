@@ -6,6 +6,8 @@ namespace Cassandra\Type;
 
 class Double extends Base
 {
+    use Common;
+
     protected ?float $_value = null;
 
     public function __construct(?float $value = null)
@@ -27,23 +29,11 @@ class Double extends Base
 
         return new self($value);
     }
-
+    
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function binaryOfValue(): string
-    {
-        if ($this->_value === null) {
-            throw new Exception('Value is null');
-        }
-
-        return static::binary($this->_value);
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function parseValue(): ?float
+    protected function parseValue(): ?float
     {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);

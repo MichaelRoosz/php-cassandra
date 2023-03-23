@@ -8,6 +8,8 @@ use DateInterval;
 
 class Duration extends Base
 {
+    use Common;
+
     /**
      * @var ?array{ months: int, days: int, nanoseconds: int } $_value
      */
@@ -65,23 +67,11 @@ class Duration extends Base
     }
 
     /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function binaryOfValue(): string
-    {
-        if ($this->_value === null) {
-            throw new Exception('Value is null');
-        }
-
-        return static::binary($this->_value);
-    }
-
-    /**
      * @return ?array{ months: int, days: int, nanoseconds: int }
      *
      * @throws \Cassandra\Type\Exception
      */
-    public function parseValue(): ?array
+    protected function parseValue(): ?array
     {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);
@@ -188,8 +178,6 @@ class Duration extends Base
                 }
             }
         }
-
-        // todo: check overflow of PHP_INT_MAX/MIN
 
         return new self([
             'months' => $months,
@@ -352,11 +340,13 @@ class Duration extends Base
 
     public function __toString(): string
     {
-        if ($this->_value === null) {
-            return '(null)';
+        $value = $this->parseValue();
+
+        if ($value === null) {
+            return '';
         }
 
-        return self::toString($this->_value);
+        return self::toString($value);
     }
 
     /**

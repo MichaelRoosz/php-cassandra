@@ -66,6 +66,10 @@ class Custom extends Base
         return $this->_value;
     }
 
+    protected function resetValue(): void {
+        $this->_value = null;
+    }
+
     public function __toString(): string
     {
         return (string) $this->_value;

@@ -10,6 +10,8 @@ use DateTimeInterface;
 
 class Date extends Base
 {
+    use Common;
+
     protected ?int $_value = null;
 
     public function __construct(?int $value = null)
@@ -35,19 +37,7 @@ class Date extends Base
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function binaryOfValue(): string
-    {
-        if ($this->_value === null) {
-            throw new Exception('value is null');
-        }
-
-        return static::binary($this->_value);
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function parseValue(): ?int
+    protected function parseValue(): ?int
     {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);
@@ -105,7 +95,7 @@ class Date extends Base
     public function __toString(): string
     {
         if ($this->_value === null) {
-            return '(null)';
+            return '';
         }
 
         return self::toString($this->_value);

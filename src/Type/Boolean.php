@@ -6,6 +6,8 @@ namespace Cassandra\Type;
 
 class Boolean extends Base
 {
+    use Common;
+
     protected ?bool $_value = null;
 
     public function __construct(?bool $value = null)
@@ -28,19 +30,7 @@ class Boolean extends Base
         return new self($value);
     }
 
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function binaryOfValue(): string
-    {
-        if ($this->_value === null) {
-            throw new Exception('value is null');
-        }
-
-        return static::binary($this->_value);
-    }
-
-    public function parseValue(): ?bool
+    protected function parseValue(): ?bool
     {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);
@@ -51,7 +41,7 @@ class Boolean extends Base
 
     public function __toString(): string
     {
-        return $this->_value ? '(true)' : '(false)';
+        return (string)$this->parseValue();
     }
 
     public static function binary(bool $value): string
