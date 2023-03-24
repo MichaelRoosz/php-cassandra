@@ -32,6 +32,8 @@ $connection->connect();
 // SELECT * FROM test1.test1;
 
 /*
+var_dump((string)new Type\Counter(1234));
+
 var_dump((string)new Type\Duration([
     'months' => 1,
     'days' => 2,
@@ -45,30 +47,33 @@ var_dump((string)new Type\Duration([
 ]));
 
 var_dump((string)new Type\Duration([
-    'months' => PHP_INT_MIN,
-    'days' => PHP_INT_MIN,
+    'months' => -2147483648,
+    'days' => -2147483648,
     'nanoseconds' => PHP_INT_MIN,
 ]));
 
 var_dump((string)new Type\Duration([
-    'months' => PHP_INT_MAX,
-    'days' => PHP_INT_MAX,
+    'months' => 2147483647,
+    'days' => 2147483647,
     'nanoseconds' => PHP_INT_MAX,
 ]));
-
-var_dump((string)Type\Duration::fromString('-1d2h10m'));
-var_dump((string)Type\Duration::fromString('-768614336404564650y8mo1317624576693539401w1d2562047h47m16s854ms775us808ns'));
-var_dump((string)Type\Duration::fromString('768614336404564650y7mo1317624576693539401w2562047h47m16s854ms775us807ns'));
-
-var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 1, 'days' => 2, 'nanoseconds'=> 3])));
-var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 223231, 'days' => 277756, 'nanoseconds'=> 320688000000000])));
 */
+
+#var_dump((string)Type\Duration::fromString('-1d2h10m'));
+
+#var_dump((string)Type\Duration::fromString('-768614336404564650y8mo1317624576693539401w1d2562047h47m16s854ms775us808ns'));
+#var_dump((string)Type\Duration::fromString('768614336404564650y7mo1317624576693539401w2562047h47m16s854ms775us807ns'));
+
+#var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 1, 'days' => 2, 'nanoseconds'=> 3])));
+#var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 223231, 'days' => 277756, 'nanoseconds'=> 320688000000000])));
+
 
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 2147483647, 'days' => 2147483647, 'nanoseconds'=> PHP_INT_MAX])));
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => -2147483648, 'days' => -2147483648, 'nanoseconds'=> PHP_INT_MIN])));
 
 var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MAX)));
 var_dump(Type\Varint::parse(Type\Varint::binary(-1)));
+var_dump(Type\Varint::parse(Type\Varint::binary(-129)));
 var_dump(Type\Varint::parse(Type\Varint::binary(-5555)));
 var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN+1)));
 var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN)));

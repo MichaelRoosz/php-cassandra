@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use ReflectionClass;
+
 class Bigint extends Base
 {
     use CommonResetValue;
@@ -12,8 +14,16 @@ class Bigint extends Base
 
     protected ?int $_value = null;
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public function __construct(?int $value = null)
     {
+        if (PHP_INT_SIZE < 8) {
+            $className = (new ReflectionClass(static::class))->getShortName();
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
+        }
+
         $this->_value = $value;
     }
 
@@ -44,8 +54,16 @@ class Bigint extends Base
         return $this->_value;
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function binary(int $value): string
     {
+        if (PHP_INT_SIZE < 8) {
+            $className = (new ReflectionClass(static::class))->getShortName();
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
+        }
+
         return pack('J', $value);
     }
 
@@ -56,6 +74,11 @@ class Bigint extends Base
      */
     public static function parse(string $binary, null|int|array $definition = null): int
     {
+        if (PHP_INT_SIZE < 8) {
+            $className = (new ReflectionClass(static::class))->getShortName();
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
+        }
+
         /**
          * @var false|array<int> $unpacked
          */

@@ -59,8 +59,13 @@ class Varint extends Base
 
         // Check if the most significant bit is set, which could be interpreted as a negative number
         if (!$isNegative && ($result[$length - 1] & 0x80) !== 0) {
-            // Add an extra byte with 0 value to keep the number positive
+            // Add an extra byte with a 0x00 value to keep the number positive
             $result[] = 0;
+        }
+        // Check if the most significant bit is not set, which could be interpreted as a positive number
+        elseif ($isNegative && ($result[$length - 1] & 0x80) === 0) {
+            // Add an extra byte with a 0xFF value to keep the number negative
+            $result[] = 0xFF;
         }
 
         return pack('C*', ...array_reverse($result));
@@ -82,6 +87,10 @@ class Varint extends Base
         $unpacked = unpack('C*', $binary);
         if ($unpacked === false) {
             throw new Exception('Cannot unpack binary.');
+        }
+
+        if (count($unpacked) > PHP_INT_SIZE) {
+            throw new Exception('Value of Varint ist outside of possible range (this system only supports signed ' . (PHP_INT_SIZE*8) . '-bit integers).');
         }
 
         foreach ($unpacked as $i => $byte) {

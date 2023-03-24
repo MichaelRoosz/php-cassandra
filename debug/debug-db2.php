@@ -109,23 +109,24 @@ bd23b48a-99de-11ed-a8fc-0242ac120002,
 // SELECT * FROM test.test2;
 
 
-$result1 = $connection->querySync('SELECT * FROM test.test2');
+$result1 = $connection->querySync('SELECT * FROM test.test1');
 $data1 = $result1->fetchAll();
 
 var_dump($data1);
 
 var_dump([
-    (string)\Cassandra\Type\Date::fromString('2011-02-03'),
-    (string)\Cassandra\Type\Date::fromDateTime(new DateTimeImmutable('1970-01-01')),
-    (string)new \Cassandra\Type\Date(19435),
-    (string)\Cassandra\Type\Duration::fromString('89h4m48s'),
+    #(string)\Cassandra\Type\Date::fromString('2011-02-03'),
+    #(string)\Cassandra\Type\Date::fromDateTime(new DateTimeImmutable('1970-01-01')),
+    #(string)new \Cassandra\Type\Date(19435),
 
-    (string)\Cassandra\Type\Time::fromString('08:12:54.123456789'),
-    (string)\Cassandra\Type\Time::fromDateTime(new DateTimeImmutable('08:12:54.123456789')),
-    (string)\Cassandra\Type\Time::fromDateInterval(new DateInterval('PT10H9M20S')),
-    (string)new \Cassandra\Type\Time(18000000000000),
-    \Cassandra\Type\Time::toString(18000000000000),
-    \Cassandra\Type\Time::toDateInterval(18000000000000)->format('%yY %mM %dD %hH %iM %sS %fF'),
+    #(string)\Cassandra\Type\Duration::fromString('89h4m48s'),
+
+    #(string)\Cassandra\Type\Time::fromString('08:12:54.123456789'),
+    #(string)\Cassandra\Type\Time::fromDateTime(new DateTimeImmutable('08:12:54.123456789')),
+    #(string)\Cassandra\Type\Time::fromDateInterval(new DateInterval('PT10H9M20S')),
+    #(string)new \Cassandra\Type\Time(18000000000000),
+    #\Cassandra\Type\Time::toString(18000000000000),
+    #\Cassandra\Type\Time::toDateInterval(18000000000000)->format('%yY %mM %dD %hH %iM %sS %fF'),
 ]);
 
 #var_dump((string)(new Type\Tinyint(1024)));

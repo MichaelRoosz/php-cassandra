@@ -26,6 +26,10 @@ class Duration extends Base
      */
     public function __construct(?array $value = null)
     {
+        if (PHP_INT_SIZE < 8) {
+            throw new Exception('The Duration data type requires a 64-bit system');
+        }
+
         if ($value !== null) {
             self::validateValue($value);
         }
@@ -465,9 +469,15 @@ class Duration extends Base
 
     /**
      * @param array{ months: int, days: int, nanoseconds: int } $value
+     *
+     * @throws \Cassandra\Type\Exception
      */
     public static function binary(array $value): string
     {
+        if (PHP_INT_SIZE < 8) {
+            throw new Exception('The Duration data type requires a 64-bit system');
+        }
+
         $monthsEncoded = ($value['months'] >> 31) ^ ($value['months'] << 1);
         $daysEncoded = ($value['days'] >> 31) ^ ($value['days'] << 1);
         $nanosecondsEncoded = ($value['nanoseconds'] >> 63) ^ ($value['nanoseconds'] << 1);
@@ -485,6 +495,10 @@ class Duration extends Base
      */
     public static function parse(string $binary, null|int|array $definition = null): array
     {
+        if (PHP_INT_SIZE < 8) {
+            throw new Exception('The Duration data type requires a 64-bit system');
+        }
+
         /**
          * @var false|array<int> $values
          */

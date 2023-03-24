@@ -9,6 +9,9 @@ use DateTimeInterface;
 
 class Timestamp extends Bigint
 {
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function fromDateTime(DateTimeInterface $value): self
     {
         $timestamp = $value->getTimestamp();
@@ -20,6 +23,7 @@ class Timestamp extends Bigint
 
     /**
      * @throws \Exception
+     * @throws \Cassandra\Type\Exception
      */
     public static function fromString(string $value): self
     {
