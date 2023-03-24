@@ -32,7 +32,7 @@ composer require mroosz/php-cassandra
 
 However, you may also fetch the repository from Github and load it via its own class loader:
 ```
-require 'php-cassandra/php-cassandra.php';
+require __DIR__ . '/php-cassandra/php-cassandra.php';
 ```
 
 ## Basic Usage
