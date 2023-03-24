@@ -103,7 +103,7 @@ class Batch extends Request
     }
 
     /**
-     * @deprecated batchQueryParameters should be used instead
+     * @deprecated batchQueryParameters() should be used instead
      *
      * @param array<mixed> $values - always empty
      * @param array{

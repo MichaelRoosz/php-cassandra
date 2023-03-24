@@ -400,8 +400,7 @@ class StreamReader
     }
 
     /**
-     * alias of readValue()
-     * @deprecated
+     * @deprecated readValue() should be used instead
      *
      * @param int|array<mixed> $dataType
      *
