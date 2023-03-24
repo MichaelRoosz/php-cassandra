@@ -7,8 +7,7 @@ namespace Cassandra\Connection;
 /**
  * @psalm-consistent-constructor
  */
-interface NodeImplementation extends Node
-{
+interface NodeImplementation extends Node {
     /**
      * @param array{
      *  class?: string,

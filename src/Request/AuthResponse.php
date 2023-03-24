@@ -6,8 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 
-class AuthResponse extends Request
-{
+class AuthResponse extends Request {
     protected int $opcode = Frame::OPCODE_AUTH_RESPONSE;
 
     protected string $_username;
@@ -30,14 +29,12 @@ class AuthResponse extends Request
      * The response to a CREDENTIALS is a READY message (or an ERROR message).
      *
      */
-    public function __construct(string $username, string $password)
-    {
+    public function __construct(string $username, string $password) {
         $this->_username = $username;
         $this->_password = $password;
     }
 
-    public function getBody(): string
-    {
+    public function getBody(): string {
         $body = chr(0);
         $body .= $this->_username;
         $body .= chr(0);

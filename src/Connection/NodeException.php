@@ -6,6 +6,5 @@ namespace Cassandra\Connection;
 
 use Cassandra\Exception;
 
-class NodeException extends Exception
-{
+class NodeException extends Exception {
 }

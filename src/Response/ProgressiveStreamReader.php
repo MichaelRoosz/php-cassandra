@@ -6,34 +6,29 @@ namespace Cassandra\Response;
 
 use Cassandra\Connection\Node;
 
-class ProgressiveStreamReader extends StreamReader
-{
+class ProgressiveStreamReader extends StreamReader {
     protected ?Node $source = null;
 
-    public function __construct(string $data = '')
-    {
+    public function __construct(string $data = '') {
         $this->data = $data;
         $this->dataLength = strlen($data);
     }
 
-    public function setSource(Node $source): void
-    {
+    public function setSource(Node $source): void {
         $this->source = $source;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function getData(): string
-    {
+    public function getData(): string {
         throw new Exception('not supported');
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    protected function read(int $length): string
-    {
+    protected function read(int $length): string {
         if ($length < 1) {
             return '';
         }
@@ -49,6 +44,7 @@ class ProgressiveStreamReader extends StreamReader
 
         $output = substr($this->data, $this->offset, $length);
         $this->offset += $length;
+
         return $output;
     }
 }

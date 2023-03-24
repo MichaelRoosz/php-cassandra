@@ -6,8 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 
-class Prepare extends Request
-{
+class Prepare extends Request {
     public const FLAG_WITH_KEYSPACE = 0x01;
 
     protected int $opcode = Frame::OPCODE_PREPARE;
@@ -26,8 +25,7 @@ class Prepare extends Request
      *  keyspace?: string,
      * } $options
      */
-    public function __construct(string $cql, array $options = [])
-    {
+    public function __construct(string $cql, array $options = []) {
         $this->_cql = $cql;
         $this->_options = $options;
     }
@@ -35,8 +33,7 @@ class Prepare extends Request
     /**
      * @throws \Cassandra\Request\Exception
      */
-    public function getBody(): string
-    {
+    public function getBody(): string {
         $flags = 0;
         $optional = '';
 

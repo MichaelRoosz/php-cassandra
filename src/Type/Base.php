@@ -6,8 +6,7 @@ namespace Cassandra\Type;
 
 use Stringable;
 
-abstract class Base implements Stringable
-{
+abstract class Base implements Stringable {
     public const CUSTOM = 0x0000;
     public const ASCII = 0x0001;
     public const BIGINT = 0x0002;
@@ -84,21 +83,7 @@ abstract class Base implements Stringable
 
     protected ?string $_binary = null;
 
-    abstract protected function binaryOfValue(): string;
-
-    abstract protected function parseValue(): mixed;
-
-    abstract protected function resetValue(): void;
-
     abstract public function __toString(): string;
-
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    abstract protected static function create(mixed $value, null|int|array $definition): Base;
 
     /**
      * @param null|int|array<int|array<mixed>> $definition
@@ -108,16 +93,14 @@ abstract class Base implements Stringable
      */
     abstract public static function parse(string $binary, null|int|array $definition = null): mixed;
 
-    public function setBinary(string $binary): static
-    {
+    public function setBinary(string $binary): static {
         $this->_binary = $binary;
         $this->resetValue();
 
         return $this;
     }
 
-    public function getBinary(): string
-    {
+    public function getBinary(): string {
         if ($this->_binary === null) {
             $this->_binary = $this->binaryOfValue();
         }
@@ -125,8 +108,7 @@ abstract class Base implements Stringable
         return $this->_binary;
     }
 
-    public function getValue(): mixed
-    {
+    public function getValue(): mixed {
         return $this->parseValue();
     }
 
@@ -136,8 +118,7 @@ abstract class Base implements Stringable
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function getBinaryByType(int|array $dataType, mixed $value): string
-    {
+    public static function getBinaryByType(int|array $dataType, mixed $value): string {
         $type = static::getTypeObject($dataType, $value);
         if ($type === null) {
             throw new Exception('Cannot get type object');
@@ -152,8 +133,7 @@ abstract class Base implements Stringable
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function getTypeObject(int|array $dataType, mixed $value): ?Base
-    {
+    public static function getTypeObject(int|array $dataType, mixed $value): ?Base {
         if ($value === null) {
             return null;
         }
@@ -229,4 +209,18 @@ abstract class Base implements Stringable
 
         return $class::create($value, $definition);
     }
+
+    abstract protected function binaryOfValue(): string;
+
+    abstract protected function parseValue(): mixed;
+
+    abstract protected function resetValue(): void;
+
+    /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    abstract protected static function create(mixed $value, null|int|array $definition): Base;
 }

@@ -6,8 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 
-class Startup extends Request
-{
+class Startup extends Request {
     protected int $opcode = Frame::OPCODE_STARTUP;
 
     /**
@@ -36,18 +35,17 @@ class Startup extends Request
      *
      * @param array<string, string> $options
      */
-    public function __construct(array $options = [])
-    {
+    public function __construct(array $options = []) {
         $this->_options = $options;
     }
 
-    public function getBody(): string
-    {
+    public function getBody(): string {
         $body = pack('n', count($this->_options));
         foreach ($this->_options as $name => $value) {
             $body .= pack('n', strlen($name)) . $name;
             $body .= pack('n', strlen($value)) . $value;
         }
+
         return $body;
     }
 }

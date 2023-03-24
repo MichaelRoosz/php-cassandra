@@ -8,8 +8,7 @@ use Cassandra\Protocol\Frame;
 use Cassandra\Type;
 use Cassandra\Exception;
 
-class Batch extends Request
-{
+class Batch extends Request {
     public const TYPE_LOGGED = 0;
     public const TYPE_UNLOGGED = 1;
     public const TYPE_COUNTER = 2;
@@ -51,8 +50,7 @@ class Batch extends Request
      *  now_in_seconds?: int,
      * } $options
      */
-    public function __construct(?int $type = null, ?int $consistency = null, array $options = [])
-    {
+    public function __construct(?int $type = null, ?int $consistency = null, array $options = []) {
         $this->_batchType = $type === null ? Batch::TYPE_LOGGED : $type;
         $this->_consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
         $this->_options = $options;
@@ -61,8 +59,7 @@ class Batch extends Request
     /**
      * @throws \Cassandra\Exception
      */
-    public function getBody(): string
-    {
+    public function getBody(): string {
         return chr($this->_batchType)
             . pack('n', count($this->_queryArray)) . implode('', $this->_queryArray)
             . self::batchQueryParameters($this->_consistency, $this->_options, $this->version);
@@ -73,8 +70,7 @@ class Batch extends Request
      *
      * @throws \Cassandra\Type\Exception
      */
-    public function appendQuery(string $cql, array $values = []): static
-    {
+    public function appendQuery(string $cql, array $values = []): static {
         $binary = chr(0);
 
         $binary .= pack('N', strlen($cql)) . $cql;
@@ -90,8 +86,7 @@ class Batch extends Request
      *
      * @throws \Cassandra\Type\Exception
      */
-    public function appendQueryId(string $queryId, array $values = []): static
-    {
+    public function appendQueryId(string $queryId, array $values = []): static {
         $binary = chr(1);
 
         $binary .= pack('n', strlen($queryId)) . $queryId;
@@ -119,8 +114,7 @@ class Batch extends Request
      *
      * @throws \Cassandra\Exception
      */
-    public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string
-    {
+    public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string {
         return self::batchQueryParameters($consistency, $options, $version);
     }
 
@@ -138,8 +132,7 @@ class Batch extends Request
      *
      * @throws \Cassandra\Exception
      */
-    public static function batchQueryParameters(int $consistency, array $options = [], int $version = 3): string
-    {
+    public static function batchQueryParameters(int $consistency, array $options = [], int $version = 3): string {
         $flags = 0;
         $optional = '';
 

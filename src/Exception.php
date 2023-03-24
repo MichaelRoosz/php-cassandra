@@ -7,8 +7,7 @@ namespace Cassandra;
 use Exception as PhpException;
 use Throwable;
 
-class Exception extends PhpException
-{
+class Exception extends PhpException {
     /**
      * @var array<string, string|int|array<int|string, int|string>> $context
      */
@@ -18,8 +17,7 @@ class Exception extends PhpException
     /**
      * @param array<string, string|int|array<int|string, int|string>> $context
      */
-    public function __construct(string $message = "", int $code = 0, array $context = [], ?Throwable $previous = null)
-    {
+    public function __construct(string $message = '', int $code = 0, array $context = [], ?Throwable $previous = null) {
         parent::__construct($message, $code, $previous);
 
         $this->context = $context;
@@ -28,8 +26,7 @@ class Exception extends PhpException
     /**
      * @return array<string, string|int|array<int|string, int|string>> $context
      */
-    public function getContext(): array
-    {
+    public function getContext(): array {
         return $this->context;
     }
 }

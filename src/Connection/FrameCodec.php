@@ -7,8 +7,7 @@ namespace Cassandra\Connection;
 use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Request\Request;
 
-class FrameCodec implements Node
-{
+class FrameCodec implements Node {
     public const PAYLOAD_MAX_SIZE = 131071;
     public const CRC24_INIT = 0x875060;
     public const CRC24_POLYNOMIAL = 0x1974F0B;
@@ -27,8 +26,7 @@ class FrameCodec implements Node
     /**
      * @throws \Cassandra\Connection\NodeException
      */
-    public function __construct(NodeImplementation $node, ?string $compression = null)
-    {
+    public function __construct(NodeImplementation $node, ?string $compression = null) {
         if ($compression && $compression !== 'lz4') {
             throw new NodeException('Unsupported compression');
         }
@@ -58,8 +56,7 @@ class FrameCodec implements Node
      *  password: ?string,
      * } & array<string, mixed> $_options
      */
-    public function getOptions(): array
-    {
+    public function getOptions(): array {
         return $this->node->getOptions();
     }
 
@@ -67,8 +64,7 @@ class FrameCodec implements Node
      * @throws \Cassandra\Connection\NodeException
      * @throws \Cassandra\Compression\Exception
      */
-    public function read(int $length): string
-    {
+    public function read(int $length): string {
         if ($this->inputDataOffset + $length > $this->inputDataLength) {
             $this->readFrame();
         }
@@ -83,8 +79,7 @@ class FrameCodec implements Node
      * @throws \Cassandra\Connection\NodeException
      * @throws \Cassandra\Compression\Exception
      */
-    public function readOnce(int $length): string
-    {
+    public function readOnce(int $length): string {
         if ($this->inputDataOffset >= $this->inputDataLength) {
             $this->readFrame();
         }
@@ -99,9 +94,8 @@ class FrameCodec implements Node
     /**
      * @throws \Cassandra\Connection\NodeException
      */
-    public function writeRequest(Request $request): void
-    {
-        $data = $request->__tostring();
+    public function writeRequest(Request $request): void {
+        $data = $request->__toString();
         $dataLength = strlen($data);
 
         if ($dataLength < self::PAYLOAD_MAX_SIZE) {
@@ -120,8 +114,7 @@ class FrameCodec implements Node
         }
     }
 
-    public function close(): void
-    {
+    public function close(): void {
         $this->node->close();
     }
 
@@ -129,8 +122,7 @@ class FrameCodec implements Node
      * @throws \Cassandra\Connection\NodeException
      * @throws \Cassandra\Compression\Exception
      */
-    protected function readFrame(): void
-    {
+    protected function readFrame(): void {
         if ($this->compression) {
             $header = $this->node->read(8);
             $headerLength = 5;
@@ -217,8 +209,7 @@ class FrameCodec implements Node
     /**
      * @throws \Cassandra\Connection\NodeException
      */
-    protected function writeFrame(string $outputData, bool $isSelfContained, int $dataOffset = 0, int $payloadLength = 0): void
-    {
+    protected function writeFrame(string $outputData, bool $isSelfContained, int $dataOffset = 0, int $payloadLength = 0): void {
         if ($payloadLength < 1) {
             $payloadLength = strlen($outputData);
         }
@@ -254,8 +245,7 @@ class FrameCodec implements Node
         $this->node->write($header . $payload . $payloadCrc32);
     }
 
-    protected function crc24(string $data, int $length = 0): int
-    {
+    protected function crc24(string $data, int $length = 0): int {
         $crc = self::CRC24_INIT;
         $len = $length > 0 ? $length : strlen($data);
         for ($i = 0; $i < $len; $i++) {

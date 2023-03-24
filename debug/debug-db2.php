@@ -1,6 +1,6 @@
 <?php
 
-require __DIR__ .  '/../php-cassandra.php';
+require __DIR__ . '/../php-cassandra.php';
 
 use Cassandra\Connection;
 use Cassandra\Type;
@@ -15,7 +15,7 @@ $nodes =[
         'connectTimeout' => 10,                             // connection timeout, default 5,  stream transport only
         'timeout' => 30,                                    // write/recv timeout, default 30, stream transport only
         'persistent' => false,                              // use persistent PHP connection, default false,  stream transport only
-    ]
+    ],
 ];
 
 $keyspace = '';
@@ -157,8 +157,7 @@ var_dump((string)Type\Timestamp::fromString('2011-02-03T04:05:00.000+0000'));
 
 #var_dump(measure_execution_time2());
 
-function measure_execution_time(int $loops = 1000000)
-{
+function measure_execution_time(int $loops = 1000000) {
     $original = [];
     $binary = [];
 
@@ -213,7 +212,7 @@ function measure_execution_time(int $loops = 1000000)
         $output1[$i] = Type\Duration::decodeVint($binary[$i]);
         if ($original[$i] !== $output1[$i]) {
             throw new Exception('failed: ' . var_export(['original' => $original[$i] ,  'output1' => $output1[$i] ], true));
-        };
+        }
     }
     $end_time_function1 = microtime(true);
     $execution_time_function1 = $end_time_function1 - $start_time_function1;
@@ -237,12 +236,11 @@ function measure_execution_time(int $loops = 1000000)
         'execution_time_function1' => $execution_time_function1,
         'execution_time_function2' => $execution_time_function2,
         'outputs_are_equal' => $outputs_are_equal,
-       // 'outputs_diff' => array_diff($output1, $output2),
+        // 'outputs_diff' => array_diff($output1, $output2),
     ];
 }
 
-function measure_execution_time2(int $loops = 1000000)
-{
+function measure_execution_time2(int $loops = 1000000) {
     $original = [];
 
     for ($i = 0; $i < $loops; $i++) {
@@ -257,7 +255,7 @@ function measure_execution_time2(int $loops = 1000000)
         $output1[$i] = Type\Bigint::parse(Type\Bigint::binary($original[$i]));
         if ($original[$i] !== $output1[$i]) {
             throw new Exception('failed: ' . var_export(['original' => $original[$i] ,  'output1' => $output1[$i] ], true));
-        };
+        }
     }
     $end_time_function1 = microtime(true);
     $execution_time_function1 = $end_time_function1 - $start_time_function1;
@@ -285,8 +283,7 @@ function measure_execution_time2(int $loops = 1000000)
     ];
 }
 
-function tobin($data)
-{
+function tobin($data) {
     $bin = '';
     foreach (str_split($data) as $byte) {
         $bin .= ' ' . str_pad(decbin(ord($byte)), 8, '0', STR_PAD_LEFT);

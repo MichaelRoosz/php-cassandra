@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Protocol;
 
-interface Frame
-{
+interface Frame {
     public const FLAG_COMPRESSION = 0x01; // deprecated in v5
     public const FLAG_TRACING = 0x02;
     public const FLAG_CUSTOM_PAYLOAD = 0x04;

@@ -10,8 +10,7 @@ use Iterator;
 /**
  * @implements Iterator<ArrayObject<string, mixed>|array<string, mixed>|null>
  */
-class ResultIterator implements Iterator
-{
+class ResultIterator implements Iterator {
     /**
      * Stream containing the raw result data
      */
@@ -76,8 +75,7 @@ class ResultIterator implements Iterator
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function __construct(StreamReader $stream, array $metadata, ?string $rowClass = null)
-    {
+    public function __construct(StreamReader $stream, array $metadata, ?string $rowClass = null) {
         if ($rowClass !== null && !is_subclass_of($rowClass, ArrayObject::class)) {
             throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
         }
@@ -96,8 +94,7 @@ class ResultIterator implements Iterator
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function current(): ArrayObject|array|null
-    {
+    public function current(): ArrayObject|array|null {
         $data = [];
 
         if (isset($this->_metadata['columns'])) {
@@ -121,24 +118,21 @@ class ResultIterator implements Iterator
     /**
      * The current position in this result set
      */
-    public function key(): int
-    {
+    public function key(): int {
         return $this->_row;
     }
 
     /**
      * Move forward to next element
      */
-    public function next(): void
-    {
+    public function next(): void {
         $this->_row++;
     }
 
     /**
      * Reset the result set
      */
-    public function rewind(): void
-    {
+    public function rewind(): void {
         $this->_row = 0;
         $this->_stream->offset($this->_offset);
     }
@@ -146,8 +140,7 @@ class ResultIterator implements Iterator
     /**
      * Checks if current position is valid
      */
-    public function valid(): bool
-    {
+    public function valid(): bool {
         return (($this->_row >= 0) && ($this->_row < $this->_count));
     }
 }

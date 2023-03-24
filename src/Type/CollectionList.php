@@ -6,8 +6,7 @@ namespace Cassandra\Type;
 
 use Cassandra\Response\StreamReader;
 
-class CollectionList extends Base
-{
+class CollectionList extends Base {
     use CommonResetValue;
     use CommonToString;
 
@@ -25,41 +24,9 @@ class CollectionList extends Base
      * @param ?array<mixed> $value
      * @param int|array<int|array<mixed>> $definition
      */
-    public function __construct(?array $value, int|array $definition)
-    {
+    public function __construct(?array $value, int|array $definition) {
         $this->_definition = $definition;
         $this->_value = $value;
-    }
-
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function create(mixed $value, null|int|array $definition): self
-    {
-        if ($value !== null && !is_array($value)) {
-            throw new Exception('Invalid value type');
-        }
-
-        if ($definition === null) {
-            throw new Exception('Invalid definition');
-        }
-
-        return new self($value, $definition);
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function binaryOfValue(): string
-    {
-        if ($this->_value === null) {
-            throw new Exception('value is null');
-        }
-
-        return static::binary($this->_value, $this->_definition);
     }
 
     /**
@@ -68,8 +35,7 @@ class CollectionList extends Base
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function parseValue(): ?array
-    {
+    public function parseValue(): ?array {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary, $this->_definition);
         }
@@ -83,8 +49,7 @@ class CollectionList extends Base
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function binary(array $value, int|array $definition): string
-    {
+    public static function binary(array $value, int|array $definition): string {
         $binary = pack('N', count($value));
 
         if (is_array($definition)) {
@@ -104,6 +69,7 @@ class CollectionList extends Base
             $itemPacked = Base::getBinaryByType($valueType, $val);
             $binary .= pack('N', strlen($itemPacked)) . $itemPacked;
         }
+
         return $binary;
     }
 
@@ -114,12 +80,40 @@ class CollectionList extends Base
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): array
-    {
+    public static function parse(string $binary, null|int|array $definition = null): array {
         if ($definition === null) {
             throw new Exception('invalid CollectionList definition');
         }
 
         return (new StreamReader($binary))->readList($definition);
+    }
+
+    /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    protected static function create(mixed $value, null|int|array $definition): self {
+        if ($value !== null && !is_array($value)) {
+            throw new Exception('Invalid value type');
+        }
+
+        if ($definition === null) {
+            throw new Exception('Invalid definition');
+        }
+
+        return new self($value, $definition);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    protected function binaryOfValue(): string {
+        if ($this->_value === null) {
+            throw new Exception('value is null');
+        }
+
+        return static::binary($this->_value, $this->_definition);
     }
 }

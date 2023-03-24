@@ -6,8 +6,7 @@ namespace Cassandra\Connection;
 
 use Cassandra\Request\Request;
 
-interface Node
-{
+interface Node {
     /**
      * @return array{
      *  class: string,

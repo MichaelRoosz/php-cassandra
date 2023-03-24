@@ -9,8 +9,7 @@ use Cassandra\Protocol\Frame;
 use Cassandra\Compression\Lz4Decompressor;
 use SplQueue;
 
-class Connection
-{
+class Connection {
     /**
      * @var array<int, class-string<Response\Response>> $responseClassMap
      */
@@ -109,8 +108,7 @@ class Connection
      * @param string $keyspace
      * @param array<string,string> $options
      */
-    public function __construct(array $nodes, string $keyspace = '', array $options = [])
-    {
+    public function __construct(array $nodes, string $keyspace = '', array $options = []) {
         if (count($nodes) > 1) {
             shuffle($nodes);
         }
@@ -129,149 +127,31 @@ class Connection
         $this->_recycledStreams = $recycledStreams;
     }
 
-    /**
-     * @throws \Cassandra\Exception
-     */
-    protected function _connect(): void
-    {
-        foreach ($this->_nodes as $options) {
-            if (is_string($options)) {
-                if (!preg_match('/^(((tcp|udp|unix|ssl|tls):\/\/)?[\w\.\-]+)(\:(\d+))?/i', $options, $matches)) {
-                    throw new Exception('Invalid host: ' . $options);
-                }
-
-                $options = ['host' => $matches[1]];
-
-                if (!empty($matches[5])) {
-                    $options['port'] = (int) $matches[5];
-                }
-
-                // Use Connection\Stream when protocol prefix is defined.
-                try {
-                    $this->_node = empty($matches[2]) ? new Connection\Socket($options) : new Connection\Stream($options);
-                } catch (Exception $e) {
-                    continue;
-                }
-            } else {
-                $className = isset($options['class']) ? $options['class'] : Connection\Socket::class;
-                if (!is_subclass_of($className, Connection\NodeImplementation::class)) {
-                    throw new Exception('Invalid connection class: ' . $className);
-                }
-                try {
-                    /**
-                     *  @throws \Cassandra\Exception
-                    */
-                    $this->_node = new $className($options);
-                } catch (Exception $e) {
-                    continue;
-                }
-            }
-            return;
-        }
-
-        throw new Exception("Unable to connect to all Cassandra nodes.");
-    }
-
-    public function disconnect(): void
-    {
+    public function disconnect(): void {
         if ($this->_node !== null) {
             $this->_node->close();
             $this->_node = null;
         }
     }
 
-    public function isConnected(): bool
-    {
+    public function isConnected(): bool {
         return $this->_node !== null;
     }
 
-    public function addEventListener(EventListener $eventListener): void
-    {
+    public function addEventListener(EventListener $eventListener): void {
         $this->_eventListeners[] = $eventListener;
     }
 
-    protected function onEvent(Response\Event $event): void
-    {
-        $this->trigger($event);
-
-        foreach ($this->_eventListeners as $listener) {
-            $listener->onEvent($event);
-        }
-    }
-
-    public function trigger(Response\Event $event): void
-    {
+    public function trigger(Response\Event $event): void {
     }
 
     /**
      * @throws \Cassandra\Exception
      */
-    public function getResponse(int $streamId = 0): Response\Response
-    {
+    public function getResponse(int $streamId = 0): Response\Response {
         do {
             $response = $this->_getResponse();
         } while ($response->getStream() !== $streamId);
-
-        return $response;
-    }
-
-    /**
-     * @throws \Cassandra\Exception
-     */
-    protected function _getResponse(): Response\Response
-    {
-        if ($this->_node === null) {
-            throw new Exception('not connected');
-        }
-
-        $version = ord($this->_node->read(1));
-
-        if ($version !== $this->_versionIn) {
-            throw new Exception('php-cassandra only supports CQL binary protocol versions v3, v4 and v5. Please upgrade your Cassandra to 2.1 or later.');
-        }
-
-        /**
-         * @var false|array{
-         *  flags: int,
-         *  stream: int,
-         *  opcode: int,
-         *  length: int
-         * } $header
-         */
-        $header = unpack('Cflags/nstream/Copcode/Nlength', $this->_node->read(8));
-        if ($header === false) {
-            throw new Exception('cannot read header of response');
-        }
-
-        $header['version'] = $version;
-
-        $body = $header['length'] === 0 ? '' : $this->_node->read($header['length']);
-
-        if (!isset(self::$responseClassMap[$header['opcode']])) {
-            throw new Response\Exception('Unknown response');
-        }
-
-        $responseClass = self::$responseClassMap[$header['opcode']];
-        if (!is_subclass_of($responseClass, Response\Response::class)) {
-            throw new Exception('received invalid response');
-        }
-
-        if ($this->_version < 5 && $header['length'] > 0 && $header['flags'] & Frame::FLAG_COMPRESSION) {
-            $this->_lz4Decompressor->setInput($body);
-            $body = $this->_lz4Decompressor->decompressBlock();
-        }
-
-        $response = new $responseClass($header, new Response\StreamReader($body));
-
-        if ($header['stream'] !== 0) {
-            if (isset($this->_statements[$header['stream']])) {
-                $this->_statements[$header['stream']]->setResponse($response);
-                unset($this->_statements[$header['stream']]);
-                $this->_recycledStreams->enqueue($header['stream']);
-            } elseif ($response instanceof Response\Event) {
-                $this->onEvent($response);
-            }
-        }
 
         return $response;
     }
@@ -281,23 +161,20 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function flush(): void
-    {
+    public function flush(): void {
         while ($this->_statements) {
             $this->_getResponse();
         }
     }
 
-    public function getNode(): ?Connection\Node
-    {
+    public function getNode(): ?Connection\Node {
         return $this->_node;
     }
 
     /**
      * @throws \Cassandra\Exception
      */
-    public function connect(): bool
-    {
+    public function connect(): bool {
         if ($this->_node !== null) {
             return true;
         }
@@ -358,8 +235,7 @@ class Connection
     /**
      * @throws \Cassandra\Exception
      */
-    public function syncRequest(Request\Request $request): Response\Response
-    {
+    public function syncRequest(Request\Request $request): Response\Response {
         if ($this->_node === null) {
             $this->connect();
         }
@@ -384,8 +260,7 @@ class Connection
     /**
      * @throws \Cassandra\Exception
      */
-    public function asyncRequest(Request\Request $request): Statement
-    {
+    public function asyncRequest(Request\Request $request): Statement {
         if ($this->_node === null) {
             $this->connect();
         }
@@ -402,71 +277,6 @@ class Connection
         $this->_node->writeRequest($request);
 
         return $this->_statements[$streamId] = new Statement($this, $streamId);
-    }
-
-    /**
-     * @throws \Cassandra\Exception
-     */
-    protected function configureOptions(Response\Supported $supportedReponse): void
-    {
-        $serverOptions = $supportedReponse->getData();
-
-        if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->_version = 3;
-        } elseif (in_array('5/v5', $serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->_version = 5;
-        } elseif (in_array('4/v4', $serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->_version = 4;
-        } elseif (in_array('3/v3', $serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->_version = 3;
-        } else {
-            throw new Exception('Server does not support a compatible protocol version.');
-        }
-
-        if (!empty($this->_options['COMPRESSION']) && !empty($serverOptions['COMPRESSION'])) {
-            $compressionAlgo = strtolower($this->_options['COMPRESSION']);
-
-            if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
-                throw new Exception('Compression "' . $compressionAlgo  . '" not supported by server.');
-            }
-
-            $this->_options['COMPRESSION'] = $compressionAlgo;
-        } else {
-            unset($this->_options['COMPRESSION']);
-        }
-
-        if ($this->_version >= 4) {
-            if (!empty($this->_options['THROW_ON_OVERLOAD'])) {
-                $this->_options['THROW_ON_OVERLOAD'] = '1';
-            } else {
-                $this->_options['THROW_ON_OVERLOAD'] = '0';
-            }
-        } else {
-            unset($this->_options['THROW_ON_OVERLOAD']);
-        }
-
-        if ($this->_version < 5) {
-            unset($this->_options['DRIVER_NAME']);
-            unset($this->_options['DRIVER_VERSION']);
-        }
-
-        $this->_versionIn = $this->_version + 0x80;
-    }
-
-    /**
-     * @throws \Cassandra\Exception
-     */
-    protected function _getNewStreamId(): int
-    {
-        if ($this->_lastStreamId < 32767) {
-            return ++$this->_lastStreamId;
-        }
-
-        while ($this->_recycledStreams->isEmpty()) {
-            $this->_getResponse();
-        }
-
-        return $this->_recycledStreams->dequeue();
     }
 
     /**
@@ -505,8 +315,7 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function prepare(string $cql): array
-    {
+    public function prepare(string $cql): array {
         $response = $this->syncRequest(new Request\Prepare($cql));
         if (!($response instanceof Response\Result)) {
             throw new Exception('received invalid response');
@@ -532,8 +341,7 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function executeSync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Response\Result
-    {
+    public function executeSync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Response\Result {
         $request = new Request\Execute($queryId, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
         $response = $this->syncRequest($request);
@@ -558,8 +366,7 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function executeAsync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Statement
-    {
+    public function executeAsync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Statement {
         $request = new Request\Execute($queryId, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
         return $this->asyncRequest($request);
@@ -578,8 +385,7 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function querySync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Response\Result
-    {
+    public function querySync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Response\Result {
         $request = new Request\Query($cql, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
         $response = $this->syncRequest($request);
@@ -604,8 +410,7 @@ class Connection
      *
      * @throws \Cassandra\Exception
      */
-    public function queryAsync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Statement
-    {
+    public function queryAsync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Statement {
         $request = new Request\Query($cql, $values, $consistency === null ? $this->_consistency : $consistency, $options);
 
         return $this->asyncRequest($request);
@@ -614,8 +419,7 @@ class Connection
     /**
      * @throws \Cassandra\Exception
      */
-    public function batchSync(Request\Batch $batchRequest): Response\Result
-    {
+    public function batchSync(Request\Batch $batchRequest): Response\Result {
         $response = $this->syncRequest($batchRequest);
 
         if (!($response instanceof Response\Result)) {
@@ -628,16 +432,14 @@ class Connection
     /**
      * @throws \Cassandra\Exception
      */
-    public function batchAsync(Request\Batch $batchRequest): Statement
-    {
+    public function batchAsync(Request\Batch $batchRequest): Statement {
         return $this->asyncRequest($batchRequest);
     }
 
     /**
      * @throws \Cassandra\Exception
      */
-    public function setKeyspace(string $keyspace): ?Response\Result
-    {
+    public function setKeyspace(string $keyspace): ?Response\Result {
         $this->_keyspace = $keyspace;
 
         if ($this->_node === null) {
@@ -652,8 +454,182 @@ class Connection
         return $response;
     }
 
-    public function setConsistency(int $consistency): void
-    {
+    public function setConsistency(int $consistency): void {
         $this->_consistency = $consistency;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function _connect(): void {
+        foreach ($this->_nodes as $options) {
+            if (is_string($options)) {
+                if (!preg_match('/^(((tcp|udp|unix|ssl|tls):\/\/)?[\w\.\-]+)(\:(\d+))?/i', $options, $matches)) {
+                    throw new Exception('Invalid host: ' . $options);
+                }
+
+                $options = ['host' => $matches[1]];
+
+                if (!empty($matches[5])) {
+                    $options['port'] = (int) $matches[5];
+                }
+
+                // Use Connection\Stream when protocol prefix is defined.
+                try {
+                    $this->_node = empty($matches[2]) ? new Connection\Socket($options) : new Connection\Stream($options);
+                } catch (Exception $e) {
+                    continue;
+                }
+            } else {
+                $className = isset($options['class']) ? $options['class'] : Connection\Socket::class;
+                if (!is_subclass_of($className, Connection\NodeImplementation::class)) {
+                    throw new Exception('Invalid connection class: ' . $className);
+                }
+
+                try {
+                    /**
+                     *  @throws \Cassandra\Exception
+                    */
+                    $this->_node = new $className($options);
+                } catch (Exception $e) {
+                    continue;
+                }
+            }
+
+            return;
+        }
+
+        throw new Exception('Unable to connect to all Cassandra nodes.');
+    }
+
+    protected function onEvent(Response\Event $event): void {
+        $this->trigger($event);
+
+        foreach ($this->_eventListeners as $listener) {
+            $listener->onEvent($event);
+        }
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function _getResponse(): Response\Response {
+        if ($this->_node === null) {
+            throw new Exception('not connected');
+        }
+
+        $version = ord($this->_node->read(1));
+
+        if ($version !== $this->_versionIn) {
+            throw new Exception('php-cassandra only supports CQL binary protocol versions v3, v4 and v5. Please upgrade your Cassandra to 2.1 or later.');
+        }
+
+        /**
+         * @var false|array{
+         *  flags: int,
+         *  stream: int,
+         *  opcode: int,
+         *  length: int
+         * } $header
+         */
+        $header = unpack('Cflags/nstream/Copcode/Nlength', $this->_node->read(8));
+        if ($header === false) {
+            throw new Exception('cannot read header of response');
+        }
+
+        $header['version'] = $version;
+
+        $body = $header['length'] === 0 ? '' : $this->_node->read($header['length']);
+
+        if (!isset(self::$responseClassMap[$header['opcode']])) {
+            throw new Response\Exception('Unknown response');
+        }
+
+        $responseClass = self::$responseClassMap[$header['opcode']];
+        if (!is_subclass_of($responseClass, Response\Response::class)) {
+            throw new Exception('received invalid response');
+        }
+
+        if ($this->_version < 5 && $header['length'] > 0 && $header['flags'] & Frame::FLAG_COMPRESSION) {
+            $this->_lz4Decompressor->setInput($body);
+            $body = $this->_lz4Decompressor->decompressBlock();
+        }
+
+        $response = new $responseClass($header, new Response\StreamReader($body));
+
+        if ($header['stream'] !== 0) {
+            if (isset($this->_statements[$header['stream']])) {
+                $this->_statements[$header['stream']]->setResponse($response);
+                unset($this->_statements[$header['stream']]);
+                $this->_recycledStreams->enqueue($header['stream']);
+            } elseif ($response instanceof Response\Event) {
+                $this->onEvent($response);
+            }
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function configureOptions(Response\Supported $supportedReponse): void {
+        $serverOptions = $supportedReponse->getData();
+
+        if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 3;
+        } elseif (in_array('5/v5', $serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 5;
+        } elseif (in_array('4/v4', $serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 4;
+        } elseif (in_array('3/v3', $serverOptions['PROTOCOL_VERSIONS'])) {
+            $this->_version = 3;
+        } else {
+            throw new Exception('Server does not support a compatible protocol version.');
+        }
+
+        if (!empty($this->_options['COMPRESSION']) && !empty($serverOptions['COMPRESSION'])) {
+            $compressionAlgo = strtolower($this->_options['COMPRESSION']);
+
+            if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
+                throw new Exception('Compression "' . $compressionAlgo . '" not supported by server.');
+            }
+
+            $this->_options['COMPRESSION'] = $compressionAlgo;
+        } else {
+            unset($this->_options['COMPRESSION']);
+        }
+
+        if ($this->_version >= 4) {
+            if (!empty($this->_options['THROW_ON_OVERLOAD'])) {
+                $this->_options['THROW_ON_OVERLOAD'] = '1';
+            } else {
+                $this->_options['THROW_ON_OVERLOAD'] = '0';
+            }
+        } else {
+            unset($this->_options['THROW_ON_OVERLOAD']);
+        }
+
+        if ($this->_version < 5) {
+            unset($this->_options['DRIVER_NAME']);
+            unset($this->_options['DRIVER_VERSION']);
+        }
+
+        $this->_versionIn = $this->_version + 0x80;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function _getNewStreamId(): int {
+        if ($this->_lastStreamId < 32767) {
+            return ++$this->_lastStreamId;
+        }
+
+        while ($this->_recycledStreams->isEmpty()) {
+            $this->_getResponse();
+        }
+
+        return $this->_recycledStreams->dequeue();
     }
 }

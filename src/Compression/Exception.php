@@ -6,6 +6,5 @@ namespace Cassandra\Compression;
 
 use Cassandra\Exception as CassandraException;
 
-class Exception extends CassandraException
-{
+class Exception extends CassandraException {
 }

@@ -6,8 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 
-class Execute extends Request
-{
+class Execute extends Request {
     protected int $opcode = Frame::OPCODE_EXECUTE;
 
     protected string $_queryId;
@@ -59,8 +58,7 @@ class Execute extends Request
      *  now_in_seconds?: int,
      * } $options
      */
-    public function __construct(string $queryId, array $values, ?int $consistency = null, array $options = [])
-    {
+    public function __construct(string $queryId, array $values, ?int $consistency = null, array $options = []) {
         $this->_queryId = $queryId;
         $this->_values = $values;
 
@@ -78,8 +76,7 @@ class Execute extends Request
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
-    public function getBody(): string
-    {
+    public function getBody(): string {
         $body = pack('n', strlen($this->_queryId)) . $this->_queryId;
 
         $body .= Request::queryParameters($this->_consistency, $this->_values, $this->_options, $this->version);

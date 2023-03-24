@@ -6,8 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 
-class Query extends Request
-{
+class Query extends Request {
     public const FLAG_VALUES = 0x01;
     public const FLAG_SKIP_METADATA = 0x02;
     public const FLAG_PAGE_SIZE = 0x04;
@@ -67,8 +66,7 @@ class Query extends Request
      *  now_in_seconds?: int,
      * } $options
      */
-    public function __construct(string $cql, array $values = [], ?int $consistency = null, array $options = [])
-    {
+    public function __construct(string $cql, array $values = [], ?int $consistency = null, array $options = []) {
         $this->_cql = $cql;
         $this->_values = $values;
         $this->_consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
@@ -79,10 +77,10 @@ class Query extends Request
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
-    public function getBody(): string
-    {
+    public function getBody(): string {
         $body = pack('N', strlen($this->_cql)) . $this->_cql;
         $body .= Request::queryParameters($this->_consistency, $this->_values, $this->_options, $this->version);
+
         return $body;
     }
 }

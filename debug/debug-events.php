@@ -1,6 +1,6 @@
 <?php
 
-require __DIR__ .  '/../php-cassandra.php';
+require __DIR__ . '/../php-cassandra.php';
 
 $nodes =[
     [
@@ -12,7 +12,7 @@ $nodes =[
         'connectTimeout' => 10,                             // connection timeout, default 5,  stream transport only
         'timeout' => 3600,                                    // write/recv timeout, default 30, stream transport only
         'persistent' => false,                              // use persistent PHP connection, default false,  stream transport only
-    ]
+    ],
 ];
 
 $keyspace = '';
@@ -20,9 +20,8 @@ $connection = new \Cassandra\Connection($nodes, $keyspace, ['COMPRESSION' => 'lz
 $connection->connect();
 
 
-$connection->addEventListener(new class () implements \Cassandra\EventListener {
-    public function onEvent(\Cassandra\Response\Event $event): void
-    {
+$connection->addEventListener(new class() implements \Cassandra\EventListener {
+    public function onEvent(\Cassandra\Response\Event $event): void {
         var_dump($event->getData());
     }
 });

@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Decimal extends Base
-{
+class Decimal extends Base {
     use CommonResetValue;
     use CommonBinaryOfValue;
     use CommonToString;
@@ -15,8 +14,7 @@ class Decimal extends Base
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function __construct(?string $value = null)
-    {
+    public function __construct(?string $value = null) {
         if (!is_numeric($value)) {
             throw new Exception('Value must be a numeric string');
         }
@@ -24,44 +22,17 @@ class Decimal extends Base
         $this->_value = $value;
     }
 
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function create(mixed $value, null|int|array $definition): self
-    {
-        if ($value !== null && !is_string($value)) {
-            throw new Exception('Invalid value type');
-        }
-
-        return new self($value);
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function parseValue(): ?string
-    {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
-        }
-
-        return $this->_value;
-    }
-
-    public static function binary(string $value): string
-    {
+    public static function binary(string $value): string {
         $pos = strpos($value, '.');
         $scaleLen = $pos === false ? 0 : strlen($value) - $pos - 1;
         if ($scaleLen) {
-            $numericValue = (int)(((float)$value) * pow(10, $scaleLen));
+            $numericValue = (int) (((float) $value) * pow(10, $scaleLen));
         } else {
-            $numericValue = (int)$value;
+            $numericValue = (int) $value;
         }
 
         $binary = pack('N', $scaleLen) . Varint::binary($numericValue);
+
         return $binary;
     }
 
@@ -70,8 +41,7 @@ class Decimal extends Base
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): string
-    {
+    public static function parse(string $binary, null|int|array $definition = null): string {
         $length = strlen($binary);
 
         /**
@@ -98,5 +68,30 @@ class Decimal extends Base
         } else {
             return $value >= 0 ? sprintf("0.%0$unpacked[scale]d", $value) : sprintf("-0.%0$unpacked[scale]d", -$value);
         }
+    }
+
+    /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    protected static function create(mixed $value, null|int|array $definition): self {
+        if ($value !== null && !is_string($value)) {
+            throw new Exception('Invalid value type');
+        }
+
+        return new self($value);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    protected function parseValue(): ?string {
+        if ($this->_value === null && $this->_binary !== null) {
+            $this->_value = static::parse($this->_binary);
+        }
+
+        return $this->_value;
     }
 }

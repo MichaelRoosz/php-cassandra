@@ -8,8 +8,7 @@ use Cassandra\Protocol\Frame;
 use Cassandra\Response\StreamReader;
 use Stringable;
 
-abstract class Response implements Frame, Stringable
-{
+abstract class Response implements Frame, Stringable {
     /**
      * @var array{
      *  version: int,
@@ -44,8 +43,7 @@ abstract class Response implements Frame, Stringable
      *
      * @throws \Cassandra\Response\Exception
      */
-    final public function __construct(array $header, StreamReader $stream)
-    {
+    final public function __construct(array $header, StreamReader $stream) {
         $this->_header = $header;
 
         $this->_stream = $stream;
@@ -53,60 +51,9 @@ abstract class Response implements Frame, Stringable
         $this->readExtraData();
     }
 
-    public function getVersion(): int
-    {
-        return $this->_header['version'];
-    }
-
-    public function getFlags(): int
-    {
-        return $this->_header['flags'];
-    }
-
-    public function getStream(): int
-    {
-        return $this->_header['stream'];
-    }
-
-    public function getOpcode(): int
-    {
-        return $this->_header['opcode'];
-    }
-
-    public function getBody(): string
-    {
-        return $this->_stream->getData();
-    }
-
-    public function getBodyStreamReader(): StreamReader
-    {
-        return $this->_stream;
-    }
-
-    public function getTracingUuid(): ?string
-    {
-        return $this->_tracingUuid;
-    }
-
-    /**
-     * @return ?array<string>
-     */
-    public function getWarnings(): ?array
-    {
-        return $this->_warnings;
-    }
-
-    /**
-     * @return ?array<string,?string>
-     */
-    public function getPayload(): ?array
-    {
-        return $this->_payload;
-    }
-
-    public function __toString(): string
-    {
+    public function __toString(): string {
         $body = $this->getBody();
+
         return pack(
             'CCnCN',
             $this->_header['version'],
@@ -117,11 +64,52 @@ abstract class Response implements Frame, Stringable
         ) . $body;
     }
 
+    public function getVersion(): int {
+        return $this->_header['version'];
+    }
+
+    public function getFlags(): int {
+        return $this->_header['flags'];
+    }
+
+    public function getStream(): int {
+        return $this->_header['stream'];
+    }
+
+    public function getOpcode(): int {
+        return $this->_header['opcode'];
+    }
+
+    public function getBody(): string {
+        return $this->_stream->getData();
+    }
+
+    public function getBodyStreamReader(): StreamReader {
+        return $this->_stream;
+    }
+
+    public function getTracingUuid(): ?string {
+        return $this->_tracingUuid;
+    }
+
+    /**
+     * @return ?array<string>
+     */
+    public function getWarnings(): ?array {
+        return $this->_warnings;
+    }
+
+    /**
+     * @return ?array<string,?string>
+     */
+    public function getPayload(): ?array {
+        return $this->_payload;
+    }
+
     /**
      * @throws \Cassandra\Response\Exception
      */
-    protected function readExtraData(): void
-    {
+    protected function readExtraData(): void {
         $flags = $this->_header['flags'];
 
         if ($flags & self::FLAG_TRACING) {

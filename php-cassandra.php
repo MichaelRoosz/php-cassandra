@@ -8,6 +8,6 @@ declare(strict_types=1);
 spl_autoload_register(function ($class) {
     if (str_starts_with($class, 'Cassandra\\')) {
         $path = str_replace('\\', '/', substr($class, strlen('Cassandra\\')));
-        require  __DIR__ . '/src/' . $path . '.php';
+        require __DIR__ . '/src/' . $path . '.php';
     }
 });

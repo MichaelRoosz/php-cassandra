@@ -6,8 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 
-class Register extends Request
-{
+class Register extends Request {
     protected int $opcode = Frame::OPCODE_REGISTER;
 
     /**
@@ -32,13 +31,11 @@ class Register extends Request
      *
      * @param array<string> $events
      */
-    public function __construct(array $events)
-    {
+    public function __construct(array $events) {
         $this->_events = $events;
     }
 
-    public function getBody(): string
-    {
+    public function getBody(): string {
         $body = pack('n', count($this->_events));
 
         foreach ($this->_events as $value) {

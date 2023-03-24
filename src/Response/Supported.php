@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-class Supported extends Response
-{
+class Supported extends Response {
     /**
      * @return array<string,array<int,string>>
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function getData(): array
-    {
+    public function getData(): array {
         $this->_stream->offset(0);
         /**
          * Indicates which startup options are supported by the server. This message

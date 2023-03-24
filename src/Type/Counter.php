@@ -4,6 +4,5 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Counter extends Bigint
-{
+class Counter extends Bigint {
 }

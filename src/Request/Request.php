@@ -9,8 +9,7 @@ use Cassandra\Type;
 use Cassandra\Value;
 use Stringable;
 
-abstract class Request implements Frame, Stringable
-{
+abstract class Request implements Frame, Stringable {
     public const CONSISTENCY_ANY = 0x0000;
     public const CONSISTENCY_ONE = 0x0001;
     public const CONSISTENCY_TWO = 0x0002;
@@ -39,8 +38,7 @@ abstract class Request implements Frame, Stringable
     /**
      * @param ?array<string,string> $payload
      */
-    public function __construct(int $opcode, int $stream = 0, int $flags = 0, array $payload = null, int $version = 3)
-    {
+    public function __construct(int $opcode, int $stream = 0, int $flags = 0, array $payload = null, int $version = 3) {
         $this->opcode = $opcode;
         $this->stream = $stream;
         $this->flags = $flags;
@@ -48,70 +46,7 @@ abstract class Request implements Frame, Stringable
         $this->version = $version;
     }
 
-    public function getOpcode(): int
-    {
-        return $this->opcode;
-    }
-
-    public function getStream(): int
-    {
-        return $this->stream;
-    }
-
-    public function getFlags(): int
-    {
-        return $this->flags;
-    }
-
-    /**
-     * @return ?array<string,string>
-     */
-    public function getPayload(): ?array
-    {
-        return $this->payload;
-    }
-
-    public function getVersion(): int
-    {
-        return $this->version;
-    }
-
-    public function getBody(): string
-    {
-        return '';
-    }
-
-    public function setStream(int $stream): void
-    {
-        $this->stream = $stream;
-    }
-
-    public function setFlags(int $flags): void
-    {
-        $this->flags = $flags;
-    }
-
-    public function enableTracing(): void
-    {
-        $this->flags |= self::FLAG_TRACING;
-    }
-
-    /**
-     * @param array<string,string> $payload
-     */
-    public function setPayload(array $payload): void
-    {
-        $this->payload = $payload;
-        $this->flags |= self::FLAG_CUSTOM_PAYLOAD;
-    }
-
-    public function setVersion(int $version): void
-    {
-        $this->version = $version;
-    }
-
-    public function __toString(): string
-    {
+    public function __toString(): string {
         $body = $this->getBody();
 
         if ($this->flags & self::FLAG_CUSTOM_PAYLOAD) {
@@ -139,13 +74,63 @@ abstract class Request implements Frame, Stringable
         ) . $body;
     }
 
+    public function getOpcode(): int {
+        return $this->opcode;
+    }
+
+    public function getStream(): int {
+        return $this->stream;
+    }
+
+    public function getFlags(): int {
+        return $this->flags;
+    }
+
+    /**
+     * @return ?array<string,string>
+     */
+    public function getPayload(): ?array {
+        return $this->payload;
+    }
+
+    public function getVersion(): int {
+        return $this->version;
+    }
+
+    public function getBody(): string {
+        return '';
+    }
+
+    public function setStream(int $stream): void {
+        $this->stream = $stream;
+    }
+
+    public function setFlags(int $flags): void {
+        $this->flags = $flags;
+    }
+
+    public function enableTracing(): void {
+        $this->flags |= self::FLAG_TRACING;
+    }
+
+    /**
+     * @param array<string,string> $payload
+     */
+    public function setPayload(array $payload): void {
+        $this->payload = $payload;
+        $this->flags |= self::FLAG_CUSTOM_PAYLOAD;
+    }
+
+    public function setVersion(int $version): void {
+        $this->version = $version;
+    }
+
     /**
      * @param array<mixed> $values
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function valuesBinary(array $values, bool $namesForValues = false): string
-    {
+    public static function valuesBinary(array $values, bool $namesForValues = false): string {
         $valuesBinary = pack('n', count($values));
 
         /** @var mixed $value */
@@ -153,21 +138,27 @@ abstract class Request implements Frame, Stringable
             switch (true) {
                 case $value instanceof Type\Base:
                     $binary = $value->getBinary();
+
                     break;
                 case $value instanceof Value\NotSet:
                     $binary = $value;
+
                     break;
                 case $value === null:
                     $binary = null;
+
                     break;
                 case is_int($value):
                     $binary = pack('N', $value);
+
                     break;
                 case is_string($value):
                     $binary = $value;
+
                     break;
                 case is_bool($value):
                     $binary = $value ? chr(1) : chr(0);
+
                     break;
                 default:
                     throw new Type\Exception('Unknown type.');
@@ -205,8 +196,7 @@ abstract class Request implements Frame, Stringable
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function strictTypeValues(array $values, array $columns): array
-    {
+    public static function strictTypeValues(array $values, array $columns): array {
         $strictTypeValues = [];
         foreach ($columns as $index => $column) {
             $key = array_key_exists($column['name'], $values) ? $column['name'] : $index;
@@ -239,8 +229,7 @@ abstract class Request implements Frame, Stringable
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
-    public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string
-    {
+    public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string {
         $flags = 0;
         $optional = '';
 

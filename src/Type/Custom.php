@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Custom extends Base
-{
+class Custom extends Base {
     use CommonResetValue;
     use CommonToString;
 
@@ -13,33 +12,19 @@ class Custom extends Base
 
     protected ?string $_value = null;
 
-    public function __construct(?string $value, string $javaClassName = '')
-    {
+    public function __construct(?string $value, string $javaClassName = '') {
         $this->_javaClassName = $javaClassName;
         $this->_value = $value;
     }
 
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function create(mixed $value, null|int|array $definition): self
-    {
-        throw new Exception('not implemented');
-    }
-
-    public function getJavaClassName(): string
-    {
+    public function getJavaClassName(): string {
         return $this->_javaClassName;
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function binaryOfValue(): string
-    {
+    public function binaryOfValue(): string {
         if ($this->_value === null) {
             throw new Exception('value is null');
         }
@@ -50,8 +35,7 @@ class Custom extends Base
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function parseValue(): ?string
-    {
+    public function parseValue(): ?string {
         if ($this->_value === null && $this->_binary !== null) {
             $this->_value = static::parse($this->_binary);
         }
@@ -59,8 +43,7 @@ class Custom extends Base
         return $this->_value;
     }
 
-    public static function binary(string $value): string
-    {
+    public static function binary(string $value): string {
         return pack('n', strlen($value)) . $value;
     }
 
@@ -69,8 +52,7 @@ class Custom extends Base
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): string
-    {
+    public static function parse(string $binary, null|int|array $definition = null): string {
         /**
          * @var false|array<int> $unpacked
          */
@@ -82,5 +64,15 @@ class Custom extends Base
         $length = $unpacked[1];
 
         return substr($binary, 2, $length);
+    }
+
+    /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    protected static function create(mixed $value, null|int|array $definition): self {
+        throw new Exception('not implemented');
     }
 }

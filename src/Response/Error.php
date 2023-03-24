@@ -6,8 +6,7 @@ namespace Cassandra\Response;
 
 use Cassandra\Type;
 
-class Error extends Response
-{
+class Error extends Response {
     public const SERVER_ERROR = 0x0000;
     public const PROTOCOL_ERROR = 0x000A;
     public const AUTHENTICATION_ERROR = 0x0100;
@@ -49,8 +48,7 @@ class Error extends Response
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function getData(): array
-    {
+    public function getData(): array {
         $this->_stream->offset(0);
 
         $code = $this->_stream->readInt();
@@ -63,35 +61,42 @@ class Error extends Response
         switch($code) {
             case self::SERVER_ERROR:
                 $data['message'] = 'Server error: ' . $message;
+
                 break;
 
             case self::PROTOCOL_ERROR:
                 $data['message'] = 'Protocol error: ' . $message;
+
                 break;
 
             case self::AUTHENTICATION_ERROR:
                 $data['message'] = 'Authentication error: ' . $message;
+
                 break;
 
             case self::UNAVAILABLE_EXCEPTION:
                 $data['context'] += [
                     'consistency' => $this->_stream->readShort(),
                     'nodes_required' => $this->_stream->readInt(),
-                    'nodes_alive' => $this->_stream->readInt()
+                    'nodes_alive' => $this->_stream->readInt(),
                 ];
                 $data['message'] = 'Unavailable exception. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::OVERLOADED:
                 $data['message'] = 'Overloaded: ' . $message;
+
                 break;
 
             case self::IS_BOOTSTRAPPING:
                 $data['message'] = 'Is_bootstrapping: ' . $message;
+
                 break;
 
             case self::TRUNCATE_ERROR:
                 $data['message'] = 'Truncate_error: ' . $message;
+
                 break;
 
             case self::WRITE_TIMEOUT:
@@ -99,7 +104,7 @@ class Error extends Response
                     'consistency' => $this->_stream->readShort(),
                     'nodes_acknowledged' => $this->_stream->readInt(),
                     'nodes_required' => $this->_stream->readInt(),
-                    'write_type' => $this->_stream->readString()
+                    'write_type' => $this->_stream->readString(),
                 ];
 
                 if ($this->getVersion() >= 5) {
@@ -107,6 +112,7 @@ class Error extends Response
                 }
 
                 $data['message'] = 'Write_timeout. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::READ_TIMEOUT:
@@ -114,10 +120,11 @@ class Error extends Response
                     'consistency' => $this->_stream->readShort(),
                     'nodes_answered' => $this->_stream->readInt(),
                     'nodes_required' => $this->_stream->readInt(),
-                    'data_present' => $this->_stream->readChar()
+                    'data_present' => $this->_stream->readChar(),
                 ];
 
                 $data['message'] = 'Read_timeout. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::READ_FAILURE:
@@ -136,6 +143,7 @@ class Error extends Response
                 $data['context']['data_present'] = $this->_stream->readChar();
 
                 $data['message'] = 'Read_failure. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::FUNCTION_FAILURE:
@@ -146,6 +154,7 @@ class Error extends Response
                 ];
 
                 $data['message'] = 'Function_failure. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::WRITE_FAILURE:
@@ -164,10 +173,12 @@ class Error extends Response
                 $data['context']['write_type'] = $this->_stream->readString();
 
                 $data['message'] = 'Write_failure. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::CDC_WRITE_FAILURE:
                 $data['message'] = 'CDC_WRITE_FAILURE: ' . $message;
+
                 break;
 
             case self::CAS_WRITE_UNKNOWN:
@@ -178,22 +189,27 @@ class Error extends Response
                 ];
 
                 $data['message'] = 'CAS_WRITE_UNKNOWN. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::SYNTAX_ERROR:
                 $data['message'] = 'Syntax_error: ' . $message;
+
                 break;
 
             case self::UNAUTHORIZED:
                 $data['message'] = 'Unauthorized: ' . $message;
+
                 break;
 
             case self::INVALID:
                 $data['message'] = 'Invalid: ' . $message;
+
                 break;
 
             case self::CONFIG_ERROR:
                 $data['message'] = 'Config_error: ' . $message;
+
                 break;
 
             case self::ALREADY_EXISTS:
@@ -203,6 +219,7 @@ class Error extends Response
                 ];
 
                 $data['message'] = 'Already_exists. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             case self::UNPREPARED:
@@ -211,6 +228,7 @@ class Error extends Response
                 ];
 
                 $data['message'] = 'Unprepared. Error data: ' . var_export($data['context'], true);
+
                 break;
 
             default:
@@ -223,9 +241,9 @@ class Error extends Response
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function getException(): Exception
-    {
+    public function getException(): Exception {
         $data = $this->getData();
+
         return new Exception($data['message'], $data['code'], $data['context']);
     }
 }

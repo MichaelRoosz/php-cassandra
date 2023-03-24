@@ -8,15 +8,13 @@ use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
 
-class Time extends Bigint
-{
+class Time extends Bigint {
     public const VALUE_MAX = 86399999999999;
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function __construct(?int $value = null)
-    {
+    public function __construct(?int $value = null) {
         if ($value !== null
             && ($value > self::VALUE_MAX || $value < 0)) {
             throw new Exception('Value "' . $value . '" is outside of possible range');
@@ -25,11 +23,20 @@ class Time extends Bigint
         $this->_value = $value;
     }
 
+    public function __toString(): string {
+        $value = $this->parseValue();
+
+        if ($value === null) {
+            return 'null';
+        }
+
+        return self::toString($value);
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromString(string $value): self
-    {
+    public static function fromString(string $value): self {
         if (preg_match('/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/', $value, $matches)) {
             $hours = (int) $matches[1];
             $minutes = (int) $matches[2];
@@ -56,8 +63,7 @@ class Time extends Bigint
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromDateTime(DateTimeInterface $value): self
-    {
+    public static function fromDateTime(DateTimeInterface $value): self {
         $copy = DateTimeImmutable::createFromInterface($value);
         $midnight = $copy->setTime(0, 0, 0, 0);
 
@@ -69,21 +75,19 @@ class Time extends Bigint
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromDateInterval(DateInterval $value): self
-    {
-        $hoursInNanoseconds = (int)$value->format('%h') * 3600000000000;
-        $minutesInNanoseconds = (int)$value->format('%i') * 60000000000;
-        $secondsInNanoseconds = (int)$value->format('%s') * 1000000000;
+    public static function fromDateInterval(DateInterval $value): self {
+        $hoursInNanoseconds = (int) $value->format('%h') * 3600000000000;
+        $minutesInNanoseconds = (int) $value->format('%i') * 60000000000;
+        $secondsInNanoseconds = (int) $value->format('%s') * 1000000000;
 
-        $microsecondsInNanoseconds = (int)$value->format('%f') * 1000;
+        $microsecondsInNanoseconds = (int) $value->format('%f') * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
 
         return new self($totalNanoseconds);
     }
 
-    public static function toString(int $value): string
-    {
+    public static function toString(int $value): string {
         $seconds = intdiv($value, 1000000000);
         $remaining_nanoseconds = $value % 1000000000;
 
@@ -106,8 +110,7 @@ class Time extends Bigint
     /**
      * @throws \Exception
      */
-    public static function toDateInterval(int $value): DateInterval
-    {
+    public static function toDateInterval(int $value): DateInterval {
         $isNegative = $value < 0;
         $sign = $isNegative ? '' : '+';
 
@@ -135,7 +138,7 @@ class Time extends Bigint
         if ($seconds > 0) {
             $duration .= $sign . $seconds . ' seconds ';
         }
-        
+
         if ($microseconds) {
             $duration .= $sign . $microseconds . ' microseconds ';
         }
@@ -146,16 +149,5 @@ class Time extends Bigint
         }
 
         return $interval;
-    }
-
-    public function __toString(): string
-    {
-        $value = $this->parseValue();
-
-        if ($value === null) {
-            return 'null';
-        }
-
-        return self::toString($value);
     }
 }

@@ -3,7 +3,7 @@
 use Cassandra\Connection;
 use Cassandra\Type;
 
-require __DIR__ .  '/../php-cassandra.php';
+require __DIR__ . '/../php-cassandra.php';
 
 $nodes = [
     [
@@ -15,7 +15,7 @@ $nodes = [
         'connectTimeout' => 10,                             // connection timeout, default 5,  stream transport only
         'timeout' => 30,                                    // write/recv timeout, default 30, stream transport only
         //'persistent' => true,                              // use persistent PHP connection, default false,  stream transport only
-    ]
+    ],
 ];
 
 $keyspace = '';
@@ -120,4 +120,3 @@ var_dump(
     $minDuration,
     Type\Duration::fromDateInterval(Type\Duration::toDateInterval($minDuration))->getValue()
 );
-

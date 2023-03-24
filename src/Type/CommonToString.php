@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-trait CommonToString
-{
+trait CommonToString {
     /**
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Response\Exception
      */
-    public function __toString(): string
-    {
+    public function __toString(): string {
         /**
          *  @throws \Cassandra\Type\Exception
          *  @throws \Cassandra\Response\Exception

@@ -9,8 +9,7 @@ use Cassandra\Request\Request;
 /**
  * @psalm-consistent-constructor
  */
-class Stream implements NodeImplementation
-{
+class Stream implements NodeImplementation {
     /**
      * @var ?resource $_stream
      */
@@ -56,8 +55,7 @@ class Stream implements NodeImplementation
      *
      * @throws \Cassandra\Connection\StreamException
      */
-    public function __construct(array $options)
-    {
+    public function __construct(array $options) {
         if (isset($options['timeout'])  && !is_int($options['timeout'])) {
             throw new StreamException('timeout must be an int value');
         }
@@ -103,11 +101,137 @@ class Stream implements NodeImplementation
     }
 
     /**
+     * @return array{
+     *  class: string,
+     *  host: ?string,
+     *  port: int,
+     *  username: ?string,
+     *  password: ?string,
+     *  timeout: int,
+     *  connectTimeout: int,
+     *  persistent: bool,
+     *  ssl: array<string, mixed>,
+     * } & array<string, mixed>
+     */
+    public function getOptions(): array {
+        return $this->_options;
+    }
+
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function read(int $length): string {
+        if ($this->_stream === null) {
+            throw new StreamException('not connected');
+        }
+
+        if ($length < 1) {
+            return '';
+        }
+
+        $data = '';
+        do {
+            $readData = fread($this->_stream, $length);
+
+            if (feof($this->_stream)) {
+                throw new StreamException('Connection reset by peer');
+            }
+
+            if (stream_get_meta_data($this->_stream)['timed_out']) {
+                throw new StreamException('Connection timed out');
+            }
+
+            if ($readData === false || strlen($readData) == 0) {
+                throw new StreamException('Unknown error');
+            }
+
+            $data .= $readData;
+            $length -= strlen($readData);
+        } while ($length > 0);
+
+        return $data;
+    }
+
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function readOnce(int $length): string {
+        if ($this->_stream === null) {
+            throw new StreamException('not connected');
+        }
+
+        if ($length < 1) {
+            return '';
+        }
+
+        $readData = fread($this->_stream, $length);
+
+        if (feof($this->_stream)) {
+            throw new StreamException('Connection reset by peer');
+        }
+
+        if (stream_get_meta_data($this->_stream)['timed_out']) {
+            throw new StreamException('Connection timed out');
+        }
+
+        if ($readData === false || strlen($readData) == 0) {
+            throw new StreamException('Unknown error');
+        }
+
+        return $readData;
+    }
+
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function write(string $binary): void {
+        if ($this->_stream === null) {
+            throw new StreamException('not connected');
+        }
+
+        if (strlen($binary) < 1) {
+            return;
+        }
+
+        do {
+            $sentBytes = fwrite($this->_stream, $binary);
+
+            if (feof($this->_stream)) {
+                throw new StreamException('Connection reset by peer');
+            }
+
+            if (stream_get_meta_data($this->_stream)['timed_out']) {
+                throw new StreamException('Connection timed out');
+            }
+
+            if ($sentBytes === false || $sentBytes < 1) {
+                throw new StreamException('Unknown error');
+            }
+
+            $binary = substr($binary, $sentBytes);
+        } while ($binary);
+    }
+
+    /**
+     * @throws \Cassandra\Connection\StreamException
+     */
+    public function writeRequest(Request $request): void {
+        $this->write($request->__toString());
+    }
+
+    public function close(): void {
+        if ($this->_stream) {
+            $stream = $this->_stream;
+            $this->_stream = null;
+            fclose($stream);
+        }
+    }
+
+    /**
      * @return resource
      * @throws \Cassandra\Connection\StreamException
      */
-    protected function _connect()
-    {
+    protected function _connect() {
         if ($this->_stream) {
             return $this->_stream;
         }
@@ -132,138 +256,5 @@ class Stream implements NodeImplementation
         stream_set_timeout($this->_stream, $this->_options['timeout']);
 
         return $this->_stream;
-    }
-
-    /**
-     * @return array{
-     *  class: string,
-     *  host: ?string,
-     *  port: int,
-     *  username: ?string,
-     *  password: ?string,
-     *  timeout: int,
-     *  connectTimeout: int,
-     *  persistent: bool,
-     *  ssl: array<string, mixed>,
-     * } & array<string, mixed>
-     */
-    public function getOptions(): array
-    {
-        return $this->_options;
-    }
-
-    /**
-     * @throws \Cassandra\Connection\StreamException
-     */
-    public function read(int $length): string
-    {
-        if ($this->_stream === null) {
-            throw new StreamException('not connected');
-        }
-
-        if ($length < 1) {
-            return '';
-        }
-
-        $data = '';
-        do {
-            $readData = fread($this->_stream, $length);
-
-            if (feof($this->_stream)) {
-                throw new StreamException('Connection reset by peer');
-            }
-
-            if (stream_get_meta_data($this->_stream)['timed_out']) {
-                throw new StreamException('Connection timed out');
-            }
-
-            if ($readData === false || strlen($readData) == 0) {
-                throw new StreamException("Unknown error");
-            }
-
-            $data .= $readData;
-            $length -= strlen($readData);
-        } while ($length > 0);
-
-        return $data;
-    }
-
-    /**
-     * @throws \Cassandra\Connection\StreamException
-     */
-    public function readOnce(int $length): string
-    {
-        if ($this->_stream === null) {
-            throw new StreamException('not connected');
-        }
-
-        if ($length < 1) {
-            return '';
-        }
-
-        $readData = fread($this->_stream, $length);
-
-        if (feof($this->_stream)) {
-            throw new StreamException('Connection reset by peer');
-        }
-
-        if (stream_get_meta_data($this->_stream)['timed_out']) {
-            throw new StreamException('Connection timed out');
-        }
-
-        if ($readData === false || strlen($readData) == 0) {
-            throw new StreamException("Unknown error");
-        }
-
-        return $readData;
-    }
-
-    /**
-     * @throws \Cassandra\Connection\StreamException
-     */
-    public function write(string $binary): void
-    {
-        if ($this->_stream === null) {
-            throw new StreamException('not connected');
-        }
-
-        if (strlen($binary) < 1) {
-            return;
-        }
-
-        do {
-            $sentBytes = fwrite($this->_stream, $binary);
-
-            if (feof($this->_stream)) {
-                throw new StreamException('Connection reset by peer');
-            }
-
-            if (stream_get_meta_data($this->_stream)['timed_out']) {
-                throw new StreamException('Connection timed out');
-            }
-
-            if ($sentBytes === false || $sentBytes < 1) {
-                throw new StreamException("Unknown error");
-            }
-
-            $binary = substr($binary, $sentBytes);
-        } while ($binary);
-    }
-
-    /**
-     * @throws \Cassandra\Connection\StreamException
-     */
-    public function writeRequest(Request $request): void
-    {
-        $this->write($request->__tostring());
-    }
-
-    public function close(): void
-    {
-        if ($this->_stream) {
-            $stream = $this->_stream;
-            $this->_stream = null;
-            fclose($stream);
-        }
     }
 }

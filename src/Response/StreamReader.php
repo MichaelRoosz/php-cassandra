@@ -6,80 +6,52 @@ namespace Cassandra\Response;
 
 use Cassandra\Type;
 
-class StreamReader
-{
+class StreamReader {
     protected string $data;
     protected int $dataLength;
 
     protected int $offset = 0;
     protected int $extraDataOffset = 0;
 
-    public function __construct(string $data)
-    {
+    public function __construct(string $data) {
         $this->data = $data;
         $this->dataLength = strlen($data);
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     */
-    protected function read(int $length): string
-    {
-        if ($length < 1) {
-            return '';
-        }
-
-        if ($this->offset + $length > $this->dataLength) {
-            //$length = $this->dataLength - $this->offset;
-            throw new Exception('Tried to read more data than available');
-        }
-
-        $output = substr($this->data, $this->offset, $length);
-        $this->offset += $length;
-        return $output;
-    }
-
-    /**
      * Sets the extra data offset used to hide extra data at the beginning of the response.
      */
-    public function extraDataOffset(int $extraDataOffset): void
-    {
+    public function extraDataOffset(int $extraDataOffset): void {
         $this->extraDataOffset = $extraDataOffset;
     }
 
-    public function offset(int $offset): void
-    {
+    public function offset(int $offset): void {
         $this->offset = $this->extraDataOffset + $offset;
     }
 
-    public function reset(): void
-    {
+    public function reset(): void {
         $this->offset = $this->extraDataOffset;
     }
 
-    public function pos(): int
-    {
+    public function pos(): int {
         return $this->offset - $this->extraDataOffset;
     }
 
-    public function getData(): string
-    {
+    public function getData(): string {
         return $this->data;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readChar(): int
-    {
+    public function readChar(): int {
         return ord($this->read(1));
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readShort(): int
-    {
+    public function readShort(): int {
         /**
          * @var false|array<int> $unpacked
          */
@@ -87,14 +59,14 @@ class StreamReader
         if ($unpacked === false) {
             throw new Exception('Cannot unpack data');
         }
+
         return $unpacked[1];
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readInt(): int
-    {
+    public function readInt(): int {
         /**
          * @var false|array<int> $unpacked
          */
@@ -102,14 +74,14 @@ class StreamReader
         if ($unpacked === false) {
             throw new Exception('Cannot unpack data');
         }
+
         return $unpacked[1];
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readString(): string
-    {
+    public function readString(): string {
         /**
          * @var false|array<int> $unpacked
          */
@@ -118,14 +90,14 @@ class StreamReader
             throw new Exception('Cannot unpack data');
         }
         $length = $unpacked[1];
+
         return $length === 0 ? '' : $this->read($length);
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readLongString(): string
-    {
+    public function readLongString(): string {
         /**
          * @var false|array<int> $unpacked
          */
@@ -134,14 +106,14 @@ class StreamReader
             throw new Exception('Cannot unpack data');
         }
         $length = $unpacked[1];
+
         return $length === 0 ? '' : $this->read($length);
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readBytes(): ?string
-    {
+    public function readBytes(): ?string {
         $binaryLength = $this->read(4);
         if ($binaryLength === "\xff\xff\xff\xff") {
             return null;
@@ -155,14 +127,14 @@ class StreamReader
             throw new Exception('Cannot unpack data');
         }
         $length = $unpacked[1];
+
         return $length === 0 ? '' : $this->read($length);
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readUuid(): string
-    {
+    public function readUuid(): string {
         /**
          * @var false|array<int> $data
          */
@@ -183,8 +155,7 @@ class StreamReader
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readList(int|array $definition): array
-    {
+    public function readList(int|array $definition): array {
         if (is_array($definition)) {
             if (count($definition) < 1) {
                 throw new Exception('invalid type definition');
@@ -203,6 +174,7 @@ class StreamReader
             /** @psalm-suppress MixedAssignment */
             $list[] = $this->readValue($valueType);
         }
+
         return $list;
     }
 
@@ -215,8 +187,7 @@ class StreamReader
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readMap(array $definition): array
-    {
+    public function readMap(array $definition): array {
         if (count($definition) < 2) {
             throw new Exception('invalid type definition');
         }
@@ -232,6 +203,7 @@ class StreamReader
             }
             $map[$key] = $this->readValue($valueType);
         }
+
         return $map;
     }
 
@@ -243,21 +215,20 @@ class StreamReader
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readTuple(array $definition): array
-    {
+    public function readTuple(array $definition): array {
         $tuple = [];
         foreach ($definition as $key => $type) {
             /** @psalm-suppress MixedAssignment */
             $tuple[$key] = $this->readValue($type);
         }
+
         return $tuple;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readFloat(): float
-    {
+    public function readFloat(): float {
         /**
          * @var false|array<float> $unpacked
          */
@@ -265,14 +236,14 @@ class StreamReader
         if ($unpacked === false) {
             throw new Exception('Cannot unpack data');
         }
+
         return $unpacked[1];
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readDouble(): float
-    {
+    public function readDouble(): float {
         /**
          * @var false|array<float> $unpacked
          */
@@ -280,22 +251,21 @@ class StreamReader
         if ($unpacked === false) {
             throw new Exception('Cannot unpack data');
         }
+
         return $unpacked[1];
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readBoolean(): bool
-    {
-        return (bool)$this->readChar();
+    public function readBoolean(): bool {
+        return (bool) $this->readChar();
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readInet(): string
-    {
+    public function readInet(): string {
         $addressLength = $this->readChar();
 
         if ($addressLength !== 4 && $addressLength !== 16) {
@@ -315,8 +285,7 @@ class StreamReader
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readBytesMap(): array
-    {
+    public function readBytesMap(): array {
         $map = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
@@ -324,6 +293,7 @@ class StreamReader
             $value = $this->readBytes();
             $map[$key] = $value;
         }
+
         return $map;
     }
 
@@ -332,13 +302,13 @@ class StreamReader
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readStringList(): array
-    {
+    public function readStringList(): array {
         $list = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
             $list[] = $this->readString();
         }
+
         return $list;
     }
 
@@ -347,8 +317,7 @@ class StreamReader
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readStringMap(): array
-    {
+    public function readStringMap(): array {
         $map = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
@@ -356,6 +325,7 @@ class StreamReader
             $value = $this->readString();
             $map[$key] = $value;
         }
+
         return $map;
     }
 
@@ -364,8 +334,7 @@ class StreamReader
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readStringMultimap(): array
-    {
+    public function readStringMultimap(): array {
         $map = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
@@ -379,6 +348,7 @@ class StreamReader
 
             $map[$key] = $list;
         }
+
         return $map;
     }
 
@@ -387,8 +357,7 @@ class StreamReader
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readReasonMap(): array
-    {
+    public function readReasonMap(): array {
         $map = [];
         $count = $this->readInt();
         for ($i = 0; $i < $count; $i++) {
@@ -396,6 +365,7 @@ class StreamReader
             $value = $this->readShort();
             $map[$key] = $value;
         }
+
         return $map;
     }
 
@@ -407,8 +377,7 @@ class StreamReader
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readBytesAndConvertToType($dataType): mixed
-    {
+    public function readBytesAndConvertToType($dataType): mixed {
         return $this->readValue($dataType);
     }
 
@@ -418,8 +387,7 @@ class StreamReader
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readValue($dataType): mixed
-    {
+    public function readValue($dataType): mixed {
         $binaryLength = $this->read(4);
         if ($binaryLength === "\xff\xff\xff\xff") {
             return null;
@@ -491,8 +459,7 @@ class StreamReader
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readType()
-    {
+    public function readType() {
         $type = $this->readShort();
         switch ($type) {
             case Type\Base::CUSTOM:
@@ -523,6 +490,7 @@ class StreamReader
                     $key = $this->readString();
                     $data['definition'][$key] = $this->readType();
                 }
+
                 return $data;
             case Type\Base::TUPLE:
                 $data = [
@@ -533,9 +501,29 @@ class StreamReader
                 for ($i = 0; $i < $length; ++$i) {
                     $data['definition'][] = $this->readType();
                 }
+
                 return $data;
             default:
                 return $type;
         }
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    protected function read(int $length): string {
+        if ($length < 1) {
+            return '';
+        }
+
+        if ($this->offset + $length > $this->dataLength) {
+            //$length = $this->dataLength - $this->offset;
+            throw new Exception('Tried to read more data than available');
+        }
+
+        $output = substr($this->data, $this->offset, $length);
+        $this->offset += $length;
+
+        return $output;
     }
 }

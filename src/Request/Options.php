@@ -6,8 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 
-class Options extends Request
-{
+class Options extends Request {
     protected int $opcode = Frame::OPCODE_OPTIONS;
 
     /**
@@ -17,7 +16,6 @@ class Options extends Request
      * OPTIONS message should be empty and the server will respond with a SUPPORTED
      * message.
      */
-    public function __construct()
-    {
+    public function __construct() {
     }
 }

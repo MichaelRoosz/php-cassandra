@@ -28,8 +28,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Compression;
 
-class Lz4Decompressor
-{
+class Lz4Decompressor {
     protected string $input;
     protected string $output;
 
@@ -39,8 +38,7 @@ class Lz4Decompressor
     protected int $inputOffset;
     protected int $outputOffset;
 
-    public function __construct(?string $compressedData = null, int $inputOffset = 0, int $inputLength = 0)
-    {
+    public function __construct(?string $compressedData = null, int $inputOffset = 0, int $inputLength = 0) {
         if ($compressedData !== null) {
             $this->setInput($compressedData, $inputOffset, $inputLength);
         } else {
@@ -55,8 +53,7 @@ class Lz4Decompressor
         }
     }
 
-    public function setInput(string $compressedData, int $inputOffset = 0, int $inputLength = 0): void
-    {
+    public function setInput(string $compressedData, int $inputOffset = 0, int $inputLength = 0): void {
         $this->input = $compressedData;
         $this->inputOffset = $inputOffset;
 
@@ -70,8 +67,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    public function decompress(bool $validateChecksums = true): string
-    {
+    public function decompress(bool $validateChecksums = true): string {
         do {
             $magic = $this->readMagicBytes();
 
@@ -96,8 +92,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    public function decompressBlock(): string
-    {
+    public function decompressBlock(): string {
         $this->decompressBlockAtOffset($this->inputOffset, $this->inputLength);
 
         return $this->output;
@@ -106,8 +101,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function decompressBlockAtOffset(int $inputOffset, int $inputLength): void
-    {
+    protected function decompressBlockAtOffset(int $inputOffset, int $inputLength): void {
         while ($inputOffset < $inputLength) {
             $token = ord($this->input[$inputOffset++]);
             $nLiterals = $token >> 4;
@@ -176,8 +170,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function readMagicBytes(): int
-    {
+    protected function readMagicBytes(): int {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new Exception('invalid lz4 frame data - input overflow while reading magic number');
         }
@@ -196,8 +189,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function readVersionOneFrame(int $magicBytes, bool $validateChecksums): bool
-    {
+    protected function readVersionOneFrame(int $magicBytes, bool $validateChecksums): bool {
         if ($magicBytes !== 0x184D2204) {
             return false;
         }
@@ -276,8 +268,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function readVersionOneBlock(int $flgBlockChecksum, bool $validateChecksums): bool
-    {
+    protected function readVersionOneBlock(int $flgBlockChecksum, bool $validateChecksums): bool {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new Exception('invalid lz4 frame data - input overflow while reading block size');
         }
@@ -337,8 +328,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function readSkipableFrame(int $magicBytes): bool
-    {
+    protected function readSkipableFrame(int $magicBytes): bool {
         if ($magicBytes < 0x184D2A50 || $magicBytes > 0x184D2A5F) {
             return false;
         }
@@ -367,8 +357,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function readLegacyFrame(int $magicBytes): bool
-    {
+    protected function readLegacyFrame(int $magicBytes): bool {
         if ($magicBytes !== 0x184C2102) {
             return false;
         }
@@ -400,8 +389,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function validateHeaderChecksum(string $in, int $headerStart, int $headerLength, int $checksum): void
-    {
+    protected function validateHeaderChecksum(string $in, int $headerStart, int $headerLength, int $checksum): void {
         $headerData = substr($in, $headerStart, $headerLength);
 
         $currentChecksum = hash('xxh32', $headerData, true, ['seed' => 0]);
@@ -419,8 +407,7 @@ class Lz4Decompressor
     /**
      * @throws \Cassandra\Compression\Exception
      */
-    protected function validateChecksum(string $type, string $in, int $dataStart, int $dataLength, int $checksum): void
-    {
+    protected function validateChecksum(string $type, string $in, int $dataStart, int $dataLength, int $checksum): void {
         $data = substr($in, $dataStart, $dataLength);
 
         $currentChecksum = hash('xxh32', $data, true, ['seed' => 0]);

@@ -6,8 +6,7 @@ namespace Cassandra\Response;
 
 use Cassandra\Type;
 
-class Event extends Response
-{
+class Event extends Response {
     public const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
     public const STATUS_CHANGE = 'STATUS_CHANGE';
     public const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
@@ -17,8 +16,7 @@ class Event extends Response
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function getType(): string
-    {
+    public function getType(): string {
         if ($this->_type === null) {
             $this->_stream->offset(0);
             $this->_type = $this->_stream->readString();
@@ -44,8 +42,7 @@ class Event extends Response
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function getData(): array
-    {
+    public function getData(): array {
         $this->_stream->offset(0);
         $type = $this->_type = $this->_stream->readString();
 
@@ -70,6 +67,7 @@ class Event extends Response
                     case 'TABLE':
                     case 'TYPE':
                         $data['name'] = $this->_stream->readString();
+
                         break;
 
                     case 'FUNCTION':
@@ -79,6 +77,7 @@ class Event extends Response
                         /** @var string[] $argument_types */
                         $argument_types = $this->_stream->readList([Type\Base::TEXT]);
                         $data['argument_types'] = $argument_types;
+
                         break;
                 }
 
