@@ -151,14 +151,14 @@ class FrameCodec implements Node
 
         if ($this->compression) {
             $payloadLength = $unpacked[1] & 0x1FFFF;
-            $uncompressedLength = ($unpacked[1] >> 17) + (($unpacked[2] & 0x3) << 15);
+            $uncompressedLength = (($unpacked[1] >> 17) & 0x7FFF) + (($unpacked[2] & 0x3) << 15);
             //$isSelfContained = $unpacked[2] & 0x4;
-            $headerCrc24 = ($unpacked[2] & 0xFFFFFF00) >> 8;
+            $headerCrc24 = ($unpacked[2] >> 8) & 0xFFFFFF;
         } else {
             $payloadLength = $unpacked[1] + (($unpacked[2] & 0x1) << 16);
             $uncompressedLength = 0;
             //$isSelfContained = $unpacked[2] & 0x2;
-            $headerCrc24 = (($unpacked[2] & 0xFF00) >> 8) + ($unpacked[3] << 8);
+            $headerCrc24 = (($unpacked[2] >> 8) & 0xFF) + ($unpacked[3] << 8);
         }
 
         if ($this->crc24($header, $headerLength) !== $headerCrc24) {
