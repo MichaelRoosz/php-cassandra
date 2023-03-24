@@ -71,11 +71,11 @@ class Time extends Bigint
      */
     public static function fromDateInterval(DateInterval $value): self
     {
-        $hoursInNanoseconds = $value->h * 3600000000000;
-        $minutesInNanoseconds = $value->i * 60000000000;
-        $secondsInNanoseconds = $value->s * 1000000000;
+        $hoursInNanoseconds = (int)$value->format('%h') * 3600000000000;
+        $minutesInNanoseconds = (int)$value->format('%i') * 60000000000;
+        $secondsInNanoseconds = (int)$value->format('%s') * 1000000000;
 
-        $microseconds = (int)($value->f * 1000000);
+        $microseconds = (int)((float)$value->format('%f') * 1000000);
         $microsecondsInNanoseconds = $microseconds * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
@@ -135,8 +135,17 @@ class Time extends Bigint
         $interval = new DateInterval($duration);
 
         if ($value) {
-            $microsecondsInSeconds = $value / 1000000000;
-            $interval->f = $microsecondsInSeconds;
+            $microseconds = intdiv($value, 1000);
+
+            $date1 = new DateTimeImmutable();
+            $date2 = $date1->add($interval);
+            $date2 = $date2->modify('+' . $microseconds . ' microseconds');
+
+            if ($date2 === false) {
+                throw new Exception('Cannot set microseconds for DateInterval');
+            }
+
+            $interval = $date1->diff($date2);
         }
 
         return $interval;

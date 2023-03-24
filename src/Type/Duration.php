@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use DateInterval;
+use DateTimeImmutable;
 
 class Duration extends Base
 {
@@ -116,20 +117,34 @@ class Duration extends Base
      */
     public static function fromDateInterval(DateInterval $value): self
     {
-        $months = ($value->y * 12) + $value->m;
+        if ($value->format('%r') === '-') {
+            $months = ((int)('-' . $value->format('%y')) * 12) + (int)('-' . $value->format('%m'));
+            $days = (int)('-' . $value->format('%d'));
+
+            $secondsInNanoseconds = (int)('-' . $value->format('%s')) * 1000000000;
+
+            $hoursInNanoseconds = (int)('-' . $value->format('%h')) * 3600 * 1000000000;
+            $minutesInNanoseconds = (int)('-' . $value->format('%i')) * 60 * 1000000000;
+            $secondsInNanoseconds = (int)('-' . $value->format('%s')) * 1000000000;
+
+            $microseconds = (int)((float)('-' . $value->format('%f')) * 1000000);
+        } else {
+            $months = ((int)$value->format('%y') * 12) + (int)$value->format('%m');
+            $days = (int)$value->format('%d');
+
+            $secondsInNanoseconds = (int)$value->format('%s') * 1000000000;
+
+            $hoursInNanoseconds = (int)$value->format('%h') * 3600 * 1000000000;
+            $minutesInNanoseconds = (int)$value->format('%i') * 60 * 1000000000;
+            $secondsInNanoseconds = (int)$value->format('%s') * 1000000000;
+
+            $microseconds = (int)((float)$value->format('%f') * 1000000);
+        }
+
         if (!is_int($months)) {
             throw new Exception('Cannot create Duration from DateInterval - months value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
         }
 
-        $days = $value->d;
-
-        $secondsInNanoseconds = $value->s * 1000000000;
-
-        $hoursInNanoseconds = $value->h * 3600 * 1000000000;
-        $minutesInNanoseconds = $value->i * 60 * 1000000000;
-        $secondsInNanoseconds = $value->s * 1000000000;
-
-        $microseconds = (int)($value->f * 1000000);
         $microsecondsInNanoseconds = $microseconds * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
@@ -149,7 +164,7 @@ class Duration extends Base
      */
     public static function fromString(string $value): self
     {
-        $pattern = '/(?<sign>-)?';
+        $pattern = '/(?<sign>[+-])?';
         foreach ([
             'years' => 'y',
             'months' => 'mo',
@@ -169,7 +184,7 @@ class Duration extends Base
         $matches = [];
         preg_match($pattern, $value, $matches);
 
-        $isNegative = !empty($matches['sign']);
+        $isNegative = isset($matches['sign']) && $matches['sign'] === '-';
 
         $months = 0;
         foreach ([
@@ -178,7 +193,7 @@ class Duration extends Base
         ] as $key => $factor) {
             if (isset($matches[$key])) {
                 if ($isNegative) {
-                    $months -= (int)$matches[$key] * $factor;
+                    $months += (int)('-' . $matches[$key]) * $factor;
                 } else {
                     $months += (int)$matches[$key] * $factor;
                 }
@@ -195,7 +210,7 @@ class Duration extends Base
         ] as $key => $factor) {
             if (isset($matches[$key])) {
                 if ($isNegative) {
-                    $days -= (int)$matches[$key] * $factor;
+                    $days += (int)('-' . $matches[$key]) * $factor;
                 } else {
                     $days += (int)$matches[$key] * $factor;
                 }
@@ -217,7 +232,7 @@ class Duration extends Base
         ] as $key => $factor) {
             if (isset($matches[$key])) {
                 if ($isNegative) {
-                    $nanoseconds -= (int)$matches[$key] * $factor;
+                    $nanoseconds += (int)('-' . $matches[$key]) * $factor;
                 } else {
                     $nanoseconds += (int)$matches[$key] * $factor;
                 }
@@ -238,11 +253,20 @@ class Duration extends Base
      * @param array{ months: int, days: int, nanoseconds: int } $value
      *
      * @throws \Exception
+     * @throws \Cassandra\Type\Exception
      */
     public static function toDateInterval(array $value): DateInterval
     {
+        $isNegative = $value['months'] < 0 || $value['days'] < 0 || $value['nanoseconds'] < 0;
+
         $years = intdiv($value['months'], 12);
         $value['months'] %= 12;
+
+        if ($isNegative) {
+            $years = abs($years);
+            $value['months'] = abs($value['months']);
+            $value['days'] = abs($value['days']);
+        }
 
         $duration = 'P';
 
@@ -270,6 +294,13 @@ class Duration extends Base
             $seconds = intdiv($value['nanoseconds'], 1000000000);
             $value['nanoseconds'] %= 1000000000;
 
+            if ($isNegative) {
+                $hours = abs($hours);
+                $minutes = abs($minutes);
+                $seconds = abs($seconds);
+                $value['nanoseconds'] = abs($value['nanoseconds']);
+            }
+
             if ($hours) {
                 $duration .= $hours . 'H';
             }
@@ -286,8 +317,27 @@ class Duration extends Base
         $interval = new DateInterval($duration);
 
         if ($value['nanoseconds']) {
-            $microsecondsInSeconds = $value['nanoseconds'] / 1000000000;
-            $interval->f = $microsecondsInSeconds;
+            $microseconds = intdiv($value['nanoseconds'], 1000);
+
+            if ($isNegative) {
+                $microseconds = abs($microseconds);
+            }
+
+            $date1 = new DateTimeImmutable();
+            $date2 = $date1->add($interval);
+            $date2 = $date2->modify('+' . $microseconds . ' microseconds');
+
+            if ($date2 === false) {
+                throw new Exception('Cannot set microseconds for DateInterval');
+            }
+
+            $interval = $date1->diff($date2);
+        }
+
+        if ($isNegative) {
+            $date1 = new DateTimeImmutable();
+            $date2 = $date1->sub($interval);
+            $interval = $date1->diff($date2);
         }
 
         return $interval;

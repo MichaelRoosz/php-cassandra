@@ -71,9 +71,18 @@ var_dump((string)new Type\Duration([
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 2147483647, 'days' => 2147483647, 'nanoseconds'=> PHP_INT_MAX])));
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => -2147483648, 'days' => -2147483648, 'nanoseconds'=> PHP_INT_MIN])));
 
-var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MAX)));
-var_dump(Type\Varint::parse(Type\Varint::binary(-1)));
-var_dump(Type\Varint::parse(Type\Varint::binary(-129)));
-var_dump(Type\Varint::parse(Type\Varint::binary(-5555)));
-var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN+1)));
-var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN)));
+#var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MAX)));
+#var_dump(Type\Varint::parse(Type\Varint::binary(-1)));
+#var_dump(Type\Varint::parse(Type\Varint::binary(-129)));
+#var_dump(Type\Varint::parse(Type\Varint::binary(-5555)));
+#var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN+1)));
+#var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN)));
+
+var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('-1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
+var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
+
+var_dump((string)(Type\Duration::fromString('-1d' . substr(PHP_INT_MIN, 1) . 'ns')));
+var_dump('+' . (string)(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns')));
+
+var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('-1d' . substr(PHP_INT_MIN, 1) . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
+var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
