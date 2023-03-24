@@ -117,35 +117,17 @@ class Duration extends Base
      */
     public static function fromDateInterval(DateInterval $value): self
     {
-        if ($value->format('%r') === '-') {
-            $months = ((int)('-' . $value->format('%y')) * 12) + (int)('-' . $value->format('%m'));
-            $days = (int)('-' . $value->format('%d'));
-
-            $secondsInNanoseconds = (int)('-' . $value->format('%s')) * 1000000000;
-
-            $hoursInNanoseconds = (int)('-' . $value->format('%h')) * 3600 * 1000000000;
-            $minutesInNanoseconds = (int)('-' . $value->format('%i')) * 60 * 1000000000;
-            $secondsInNanoseconds = (int)('-' . $value->format('%s')) * 1000000000;
-
-            $microseconds = (int)((float)('-' . $value->format('%f')) * 1000000);
-        } else {
-            $months = ((int)$value->format('%y') * 12) + (int)$value->format('%m');
-            $days = (int)$value->format('%d');
-
-            $secondsInNanoseconds = (int)$value->format('%s') * 1000000000;
-
-            $hoursInNanoseconds = (int)$value->format('%h') * 3600 * 1000000000;
-            $minutesInNanoseconds = (int)$value->format('%i') * 60 * 1000000000;
-            $secondsInNanoseconds = (int)$value->format('%s') * 1000000000;
-
-            $microseconds = (int)((float)$value->format('%f') * 1000000);
-        }
-
+        $months = ((int)$value->format('%r%y') * 12) + (int)$value->format('%r%m');
         if (!is_int($months)) {
             throw new Exception('Cannot create Duration from DateInterval - months value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
         }
 
-        $microsecondsInNanoseconds = $microseconds * 1000;
+        $days = (int)$value->format('%r%d');
+
+        $hoursInNanoseconds = (int)$value->format('%r%h') * 3600000000000;
+        $minutesInNanoseconds = (int)$value->format('%r%i') * 60000000000;
+        $secondsInNanoseconds = (int)$value->format('%r%s') * 1000000000;
+        $microsecondsInNanoseconds = (int)$value->format('%r%f') * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
         if (!is_int($totalNanoseconds)) {
@@ -258,33 +240,34 @@ class Duration extends Base
     public static function toDateInterval(array $value): DateInterval
     {
         $isNegative = $value['months'] < 0 || $value['days'] < 0 || $value['nanoseconds'] < 0;
+        $sign = $isNegative ? '' : '+';
 
         $years = intdiv($value['months'], 12);
         $value['months'] %= 12;
 
-        if ($isNegative) {
-            $years = abs($years);
-            $value['months'] = abs($value['months']);
-            $value['days'] = abs($value['days']);
-        }
+        $weeks = intdiv($value['days'], 7);
+        $value['days'] %= 7;
 
-        $duration = 'P';
+        $duration = '';
 
         if ($years) {
-            $duration .= $years . 'Y';
+            $duration .= $sign . $years . ' years ';
         }
 
         if ($value['months']) {
-            $duration .= $value['months'] . 'M';
+            $duration .= $sign . $value['months'] . ' months ';
+        }
+
+        if ($weeks) {
+            $duration .= $sign . $weeks . ' weeks ';
         }
 
         if ($value['days']) {
-            $duration .= $value['days'] . 'D';
+            $duration .= $sign . $value['days'] . ' days ';
         }
 
         if ($value['nanoseconds']) {
-            $duration .= 'T';
-
+    
             $hours = intdiv($value['nanoseconds'], 3600000000000);
             $value['nanoseconds'] %= 3600000000000;
 
@@ -294,50 +277,28 @@ class Duration extends Base
             $seconds = intdiv($value['nanoseconds'], 1000000000);
             $value['nanoseconds'] %= 1000000000;
 
-            if ($isNegative) {
-                $hours = abs($hours);
-                $minutes = abs($minutes);
-                $seconds = abs($seconds);
-                $value['nanoseconds'] = abs($value['nanoseconds']);
-            }
+            $microseconds = intdiv($value['nanoseconds'], 1000);
 
             if ($hours) {
-                $duration .= $hours . 'H';
+                $duration .= $sign . $hours . ' hours ';
             }
 
             if ($minutes) {
-                $duration .= $minutes . 'M';
+                $duration .= $sign . $minutes . ' minutes ';
             }
 
             if ($seconds) {
-                $duration .= $seconds . 'S';
+                $duration .= $sign . $seconds . ' seconds ';
+            }
+
+            if ($microseconds) {
+                $duration .= $sign . $microseconds . ' microseconds ';
             }
         }
 
-        $interval = new DateInterval($duration);
-
-        if ($value['nanoseconds']) {
-            $microseconds = intdiv($value['nanoseconds'], 1000);
-
-            if ($isNegative) {
-                $microseconds = abs($microseconds);
-            }
-
-            $date1 = new DateTimeImmutable();
-            $date2 = $date1->add($interval);
-            $date2 = $date2->modify('+' . $microseconds . ' microseconds');
-
-            if ($date2 === false) {
-                throw new Exception('Cannot set microseconds for DateInterval');
-            }
-
-            $interval = $date1->diff($date2);
-        }
-
-        if ($isNegative) {
-            $date1 = new DateTimeImmutable();
-            $date2 = $date1->sub($interval);
-            $interval = $date1->diff($date2);
+        $interval = DateInterval::createFromDateString($duration);
+        if ($interval === false) {
+            throw new Exception('Cannot convert Time to DateInterval');
         }
 
         return $interval;

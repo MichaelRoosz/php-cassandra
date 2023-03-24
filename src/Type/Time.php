@@ -75,8 +75,7 @@ class Time extends Bigint
         $minutesInNanoseconds = (int)$value->format('%i') * 60000000000;
         $secondsInNanoseconds = (int)$value->format('%s') * 1000000000;
 
-        $microseconds = (int)((float)$value->format('%f') * 1000000);
-        $microsecondsInNanoseconds = $microseconds * 1000;
+        $microsecondsInNanoseconds = (int)$value->format('%f') * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
 
@@ -109,7 +108,10 @@ class Time extends Bigint
      */
     public static function toDateInterval(int $value): DateInterval
     {
-        $duration = 'PT';
+        $isNegative = $value < 0;
+        $sign = $isNegative ? '' : '+';
+
+        $duration = '';
 
         $hours = intdiv($value, 3600000000000);
         $value %= 3600000000000;
@@ -120,32 +122,27 @@ class Time extends Bigint
         $seconds = intdiv($value, 1000000000);
         $value %= 1000000000;
 
+        $microseconds = intdiv($value, 1000);
+
         if ($hours > 0) {
-            $duration .= $hours . 'H';
+            $duration .= $sign . $hours . ' hours ';
         }
 
         if ($minutes > 0) {
-            $duration .= $minutes . 'M';
+            $duration .= $sign . $minutes . ' minutes ';
         }
 
         if ($seconds > 0) {
-            $duration .= $seconds . 'S';
+            $duration .= $sign . $seconds . ' seconds ';
+        }
+        
+        if ($microseconds) {
+            $duration .= $sign . $microseconds . ' microseconds ';
         }
 
-        $interval = new DateInterval($duration);
-
-        if ($value) {
-            $microseconds = intdiv($value, 1000);
-
-            $date1 = new DateTimeImmutable();
-            $date2 = $date1->add($interval);
-            $date2 = $date2->modify('+' . $microseconds . ' microseconds');
-
-            if ($date2 === false) {
-                throw new Exception('Cannot set microseconds for DateInterval');
-            }
-
-            $interval = $date1->diff($date2);
+        $interval = DateInterval::createFromDateString($duration);
+        if ($interval === false) {
+            throw new Exception('Cannot convert Time to DateInterval');
         }
 
         return $interval;

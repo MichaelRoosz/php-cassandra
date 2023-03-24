@@ -3,9 +3,6 @@
 require __DIR__ .  '/../php-cassandra.php';
 
 use Cassandra\Connection;
-use Cassandra\Exception as CassandraException;
-use Cassandra\Request\Request;
-use Cassandra\Response\Result;
 use Cassandra\Type;
 
 $nodes =[
@@ -22,7 +19,6 @@ $nodes =[
 ];
 
 $keyspace = '';
-#$connection = new Connection($nodes, $keyspace);
 $connection = new Connection($nodes, $keyspace, ['COMPRESSION' => 'lz4']);
 $connection->connect();
 

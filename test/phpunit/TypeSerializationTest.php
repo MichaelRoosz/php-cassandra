@@ -114,12 +114,149 @@ final class TypeSerializationTest extends TestCase
 
     public function testDuration(): void
     {
-        $duration = [
-            'months' => 1234567890,
-            'days' => 2034567890,
-            'nanoseconds' => 223372036854775807,
+        $minDuration = [
+            'months' => -2147483648,
+            'days' => -2147483648,
+            'nanoseconds' => PHP_INT_MIN,
         ];
-        $this->assertSame($duration, Type\Duration::parse(Type\Duration::binary($duration)));
+
+        $minDurationAsString = '-178956970y8mo306783378w2d2562047h47m16s854ms775us808ns';
+
+        $maxDuration = [
+            'months' => 2147483647,
+            'days' => 2147483647,
+            'nanoseconds' => PHP_INT_MAX,
+        ];
+
+        $maxDurationAsString = '178956970y7mo306783378w1d2562047h47m16s854ms775us807ns';
+
+        $exampleDuration = [
+            'months' => 1,
+            'days' => 2,
+            'nanoseconds' => 3000,
+        ];
+
+        $saneDurationString = '3000y11mo2w6d23h59m59s123ms456us789ns';
+
+        $this->assertSame(
+            $maxDuration, 
+            Type\Duration::parse(Type\Duration::binary($maxDuration))
+        );
+
+        $this->assertSame(
+            $minDurationAsString,
+            (string)new Type\Duration($minDuration)
+        );
+        
+        $this->assertSame(
+            $maxDurationAsString,
+            (string)new Type\Duration($maxDuration)
+        );
+
+        $this->assertSame(
+            $minDuration,
+            Type\Duration::fromString($minDurationAsString)->getValue()
+        );
+
+        $this->assertSame(
+            $maxDuration,
+            Type\Duration::fromString($maxDurationAsString)->getValue()
+        );
+        
+        $this->assertSame(
+            $saneDurationString,
+            (string)Type\Duration::fromString($saneDurationString)
+        );
+
+        $this->assertSame(
+            '+ 0Y 1M 2D 0H 0M 0S 3F',
+            Type\Duration::toDateInterval($exampleDuration)->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            '+ 3000Y 11M 20D 23H 59M 59S 123456F',
+            Type\Duration::toDateInterval(Type\Duration::fromString($saneDurationString)->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            '+ -3000Y -11M -20D -23H -59M -59S -123456F',
+            Type\Duration::toDateInterval(Type\Duration::fromString('-' . $saneDurationString)->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            '+ -178956970Y -8M -2147483648D -2562047H -47M -16S -854775F',
+            Type\Duration::toDateInterval($minDuration)->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            '+ 178956970Y 7M 2147483647D 2562047H 47M 16S 854775F',
+            Type\Duration::toDateInterval($maxDuration)->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            $exampleDuration,
+            Type\Duration::fromDateInterval(Type\Duration::toDateInterval($exampleDuration))->getValue()
+        );
+
+        $this->assertSame(
+            '3000y11mo2w6d23h59m59s123ms456us',
+            (string)Type\Duration::fromDateInterval(Type\Duration::toDateInterval(Type\Duration::fromString($saneDurationString)->getValue()))
+        );
+
+        $this->assertSame(
+            '-3000y11mo2w6d23h59m59s123ms456us',
+            (string)Type\Duration::fromDateInterval(Type\Duration::toDateInterval(Type\Duration::fromString('-' . $saneDurationString)->getValue()))
+        );
+
+        $this->assertSame(
+            [
+                'months' => -2147483648,
+                'days' => -2147483648,
+                'nanoseconds' => PHP_INT_MIN + 808,
+            ],
+            Type\Duration::fromDateInterval(Type\Duration::toDateInterval($minDuration))->getValue()
+        );
+
+        $this->assertSame(
+            [
+                'months' => 2147483647,
+                'days' => 2147483647,
+                'nanoseconds' => PHP_INT_MAX - 807,
+            ],
+            Type\Duration::fromDateInterval(Type\Duration::toDateInterval($maxDuration))->getValue()
+        );
+
+/*
+        $this->assertSame(
+            '- 0Y 0M 1D 2H 10M 0S 0F',
+            Type\Duration::toDateInterval(Type\Duration::fromString('-1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            '+ 0Y 0M 1D 2H 10M 0S 0F',
+            Type\Duration::toDateInterval(Type\Duration::fromString('1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            '-1d2562047h47m16s854ms775us808ns',
+            (string)(Type\Duration::fromString('-1d' . substr((string)PHP_INT_MIN, 1) . 'ns'))
+        );
+
+        $this->assertSame(
+            '+1d2562047h47m16s854ms775us807ns',
+            '+' . (string)(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns'))
+        );
+
+        $this->assertSame(
+            '- 292Y 3M 11D 0H 47M 16S 854775F',
+            Type\Duration::toDateInterval(Type\Duration::fromString('-1d' . substr((string)PHP_INT_MIN, 1) . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+
+        $this->assertSame(
+            '+ 292Y 3M 11D 0H 47M 16S 854775F',
+            Type\Duration::toDateInterval(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+        );
+*/
     }
 
     public function testInet(): void

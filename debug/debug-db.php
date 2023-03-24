@@ -1,9 +1,6 @@
 <?php
 
 use Cassandra\Connection;
-use Cassandra\Exception as CassandraException;
-use Cassandra\Request\Request;
-use Cassandra\Response\Result;
 use Cassandra\Type;
 
 require __DIR__ .  '/../php-cassandra.php';
@@ -77,6 +74,18 @@ var_dump((string)new Type\Duration([
 #var_dump(Type\Varint::parse(Type\Varint::binary(-5555)));
 #var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN+1)));
 #var_dump(Type\Varint::parse(Type\Varint::binary(PHP_INT_MIN)));
+/*
+var_dump((string)new Type\Duration([
+    'months' => -2147483648,
+    'days' => -2147483648,
+    'nanoseconds' => PHP_INT_MIN,
+]));
+
+var_dump((string)new Type\Duration([
+    'months' => 2147483647,
+    'days' => 2147483647,
+    'nanoseconds' => PHP_INT_MAX,
+]));
 
 var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('-1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
 var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
@@ -86,3 +95,29 @@ var_dump('+' . (string)(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns')));
 
 var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('-1d' . substr(PHP_INT_MIN, 1) . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
 var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF'));
+
+var_dump(Type\Duration::toDateInterval(Type\Duration::fromString('-1d' . substr((string)PHP_INT_MIN, 1) . 'ns')->getValue()));
+
+var_dump(            '-178956970y8mo306783378w2d2562047h47m16s854ms775us808ns',
+(string)new Type\Duration([
+    'months' => -2147483648,
+    'days' => -2147483648,
+    'nanoseconds' => PHP_INT_MIN,
+]));
+
+var_dump(
+    '- 184836873Y 5M 19D 23H 47M 16S 854775F',
+    Type\Duration::toDateInterval(Type\Duration::fromString('-178956970y8mo306783378w2d2562047h47m16s854ms775us808ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+);*/
+
+$minDuration = [
+    'months' => -2147483648,
+    'days' => -2147483648,
+    'nanoseconds' => PHP_INT_MIN,
+];
+
+var_dump(
+    $minDuration,
+    Type\Duration::fromDateInterval(Type\Duration::toDateInterval($minDuration))->getValue()
+);
+
