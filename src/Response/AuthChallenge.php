@@ -9,8 +9,8 @@ class AuthChallenge extends Response {
      * @throws \Cassandra\Response\Exception
      */
     public function getData(): ?string {
-        $this->_stream->offset(0);
+        $this->stream->offset(0);
 
-        return $this->_stream->readBytes();
+        return $this->stream->readBytes();
     }
 }

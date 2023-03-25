@@ -10,30 +10,30 @@ use Cassandra\Value;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
-    public const CONSISTENCY_ANY = 0x0000;
-    public const CONSISTENCY_ONE = 0x0001;
-    public const CONSISTENCY_TWO = 0x0002;
-    public const CONSISTENCY_THREE = 0x0003;
-    public const CONSISTENCY_QUORUM = 0x0004;
     public const CONSISTENCY_ALL = 0x0005;
-    public const CONSISTENCY_LOCAL_QUORUM = 0x0006;
+    public const CONSISTENCY_ANY = 0x0000;
     public const CONSISTENCY_EACH_QUORUM = 0x0007;
-    public const CONSISTENCY_SERIAL = 0x0008;
-    public const CONSISTENCY_LOCAL_SERIAL = 0x0009;
     public const CONSISTENCY_LOCAL_ONE = 0x000A;
-
-    protected int $version = 3;
-
-    protected int $opcode;
-
-    protected int $stream = 0;
+    public const CONSISTENCY_LOCAL_QUORUM = 0x0006;
+    public const CONSISTENCY_LOCAL_SERIAL = 0x0009;
+    public const CONSISTENCY_ONE = 0x0001;
+    public const CONSISTENCY_QUORUM = 0x0004;
+    public const CONSISTENCY_SERIAL = 0x0008;
+    public const CONSISTENCY_THREE = 0x0003;
+    public const CONSISTENCY_TWO = 0x0002;
 
     protected int $flags = 0;
+
+    protected int $opcode;
 
     /**
      * @var ?array<string,string> $payload
      */
     protected ?array $payload = null;
+
+    protected int $stream = 0;
+
+    protected int $version = 3;
 
     /**
      * @param ?array<string,string> $payload
@@ -74,16 +74,20 @@ abstract class Request implements Frame, Stringable {
         ) . $body;
     }
 
-    public function getOpcode(): int {
-        return $this->opcode;
+    public function enableTracing(): void {
+        $this->flags |= self::FLAG_TRACING;
     }
 
-    public function getStream(): int {
-        return $this->stream;
+    public function getBody(): string {
+        return '';
     }
 
     public function getFlags(): int {
         return $this->flags;
+    }
+
+    public function getOpcode(): int {
+        return $this->opcode;
     }
 
     /**
@@ -93,124 +97,12 @@ abstract class Request implements Frame, Stringable {
         return $this->payload;
     }
 
+    public function getStream(): int {
+        return $this->stream;
+    }
+
     public function getVersion(): int {
         return $this->version;
-    }
-
-    public function getBody(): string {
-        return '';
-    }
-
-    public function setStream(int $stream): void {
-        $this->stream = $stream;
-    }
-
-    public function setFlags(int $flags): void {
-        $this->flags = $flags;
-    }
-
-    public function enableTracing(): void {
-        $this->flags |= self::FLAG_TRACING;
-    }
-
-    /**
-     * @param array<string,string> $payload
-     */
-    public function setPayload(array $payload): void {
-        $this->payload = $payload;
-        $this->flags |= self::FLAG_CUSTOM_PAYLOAD;
-    }
-
-    public function setVersion(int $version): void {
-        $this->version = $version;
-    }
-
-    /**
-     * @param array<mixed> $values
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function valuesBinary(array $values, bool $namesForValues = false): string {
-        $valuesBinary = pack('n', count($values));
-
-        /** @var mixed $value */
-        foreach ($values as $name => $value) {
-            switch (true) {
-                case $value instanceof Type\Base:
-                    $binary = $value->getBinary();
-
-                    break;
-                case $value instanceof Value\NotSet:
-                    $binary = $value;
-
-                    break;
-                case $value === null:
-                    $binary = null;
-
-                    break;
-                case is_int($value):
-                    $binary = pack('N', $value);
-
-                    break;
-                case is_string($value):
-                    $binary = $value;
-
-                    break;
-                case is_bool($value):
-                    $binary = $value ? chr(1) : chr(0);
-
-                    break;
-                default:
-                    throw new Type\Exception('Unknown type.');
-            }
-
-            if ($namesForValues) {
-                if (is_string($name)) {
-                    $valuesBinary .= pack('n', strlen($name)) . strtolower($name);
-                } else {
-                    throw new Type\Exception('$values should be an associative array given, sequential array given. Or you can set "names_for_values" option to false.');
-                }
-            } elseif (is_string($name)) {
-                /**
-                * @see https://github.com/duoshuo/php-cassandra/issues/29
-                */
-                throw new Type\Exception('$values should be an sequential array, associative array given. Or you can set "names_for_values" option to true.');
-            }
-
-            if ($binary === null) {
-                $valuesBinary .= "\xff\xff\xff\xff";
-            } elseif ($binary instanceof Value\NotSet) {
-                $valuesBinary .= "\xff\xff\xff\xfe";
-            } else {
-                $valuesBinary .= pack('N', strlen($binary)) . $binary;
-            }
-        }
-
-        return $valuesBinary;
-    }
-
-    /**
-     * @param array<mixed> $values
-     * @param array<array{name: string, type: int|array<mixed>}> $columns
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function strictTypeValues(array $values, array $columns): array {
-        $strictTypeValues = [];
-        foreach ($columns as $index => $column) {
-            $key = array_key_exists($column['name'], $values) ? $column['name'] : $index;
-
-            if (!isset($values[$key])) {
-                $strictTypeValues[$key] = null;
-            } elseif ($values[$key] instanceof Type\Base) {
-                $strictTypeValues[$key] = $values[$key];
-            } else {
-                $strictTypeValues[$key] = Type\Base::getTypeObject($column['type'], $values[$key]);
-            }
-        }
-
-        return $strictTypeValues;
     }
 
     /**
@@ -259,7 +151,7 @@ abstract class Request implements Frame, Stringable {
 
         if (isset($options['default_timestamp'])) {
             $flags |= Query::FLAG_WITH_DEFAULT_TIMESTAMP;
-            $optional .= Type\Bigint::binary($options['default_timestamp']);
+            $optional .= (new Type\Bigint($options['default_timestamp']))->getBinary();
         }
 
         if (isset($options['keyspace'])) {
@@ -289,5 +181,117 @@ abstract class Request implements Frame, Stringable {
         } else {
             return pack('n', $consistency) . pack('N', $flags) . $optional;
         }
+    }
+
+    public function setFlags(int $flags): void {
+        $this->flags = $flags;
+    }
+
+    /**
+     * @param array<string,string> $payload
+     */
+    public function setPayload(array $payload): void {
+        $this->payload = $payload;
+        $this->flags |= self::FLAG_CUSTOM_PAYLOAD;
+    }
+
+    public function setStream(int $stream): void {
+        $this->stream = $stream;
+    }
+
+    public function setVersion(int $version): void {
+        $this->version = $version;
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @param array<array{name: string, type: int|array<mixed>}> $columns
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function strictTypeValues(array $values, array $columns): array {
+        $strictTypeValues = [];
+        foreach ($columns as $index => $column) {
+            $key = array_key_exists($column['name'], $values) ? $column['name'] : $index;
+
+            if (!isset($values[$key])) {
+                $strictTypeValues[$key] = null;
+            } elseif ($values[$key] instanceof Type\TypeBase) {
+                $strictTypeValues[$key] = $values[$key];
+            } else {
+                $strictTypeValues[$key] = Type::getTypeObjectForValue($column['type'], $values[$key]);
+            }
+        }
+
+        return $strictTypeValues;
+    }
+
+    /**
+     * @param array<mixed> $values
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function valuesBinary(array $values, bool $namesForValues = false): string {
+        $valuesBinary = pack('n', count($values));
+
+        /** @var mixed $value */
+        foreach ($values as $name => $value) {
+            switch (true) {
+                case $value instanceof Type\TypeBase:
+                    $binary = $value->getBinary();
+                    break;
+
+                case $value instanceof Value\NotSet:
+                    $binary = $value;
+                    break;
+
+                case $value === null:
+                    $binary = null;
+                    break;
+
+                case is_int($value):
+                    $binary = pack('N', $value);
+                    break;
+
+                case is_string($value):
+                    $binary = $value;
+                    break;
+
+                case is_bool($value):
+                    $binary = $value ? chr(1) : chr(0);
+                    break;
+
+                case is_float($value):
+                    $binary = pack('E', $value);
+                    break;
+
+                default:
+                    throw new Type\Exception('Unknown type.');
+            }
+
+            if ($namesForValues) {
+                if (is_string($name)) {
+                    $valuesBinary .= pack('n', strlen($name)) . strtolower($name);
+                } else {
+                    throw new Type\Exception('$values should be an associative array given, sequential array given. Or you can set "names_for_values" option to false.');
+                }
+            } elseif (is_string($name)) {
+                /**
+                * @see https://github.com/duoshuo/php-cassandra/issues/29
+                */
+                throw new Type\Exception('$values should be an sequential array, associative array given. Or you can set "names_for_values" option to true.');
+            }
+
+            if ($binary === null) {
+                $valuesBinary .= "\xff\xff\xff\xff";
+            } elseif ($binary instanceof Value\NotSet) {
+                $valuesBinary .= "\xff\xff\xff\xfe";
+            } else {
+                $valuesBinary .= pack('N', strlen($binary)) . $binary;
+            }
+        }
+
+        return $valuesBinary;
     }
 }

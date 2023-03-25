@@ -4,19 +4,11 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Double extends Base {
-    use CommonResetValue;
-    use CommonBinaryOfValue;
-    use CommonToString;
+class Double extends TypeBase {
+    protected float $value;
 
-    protected ?float $_value = null;
-
-    public function __construct(?float $value = null) {
-        $this->_value = $value;
-    }
-
-    public static function binary(float $value): string {
-        return strrev(pack('e', $value));
+    public final function __construct(float $value) {
+        $this->value = $value;
     }
 
     /**
@@ -24,17 +16,17 @@ class Double extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): float {
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
         /**
          * @var false|array<float> $unpacked
          */
-        $unpacked = unpack('e', strrev($binary));
+        $unpacked = unpack('E', $binary);
 
         if ($unpacked === false) {
             throw new Exception('Cannot unpack binary');
         }
 
-        return $unpacked[1];
+        return new static($unpacked[1]);
     }
 
     /**
@@ -43,22 +35,19 @@ class Double extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_float($value)) {
-            throw new Exception('Invalid value type');
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        if (!is_float($value)) {
+            throw new Exception('Invalid value');
         }
 
-        return new self($value);
+        return new static($value);
     }
 
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function parseValue(): ?float {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
-        }
+    public function getBinary(): string {
+        return pack('E', $this->value);
+    }
 
-        return $this->_value;
+    public function getValue(): float {
+        return $this->value;
     }
 }

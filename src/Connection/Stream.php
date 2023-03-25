@@ -11,11 +11,6 @@ use Cassandra\Request\Request;
  */
 class Stream implements NodeImplementation {
     /**
-     * @var ?resource $_stream
-     */
-    protected $_stream;
-
-    /**
      * @var array{
      *  class: string,
      *  host: ?string,
@@ -26,9 +21,9 @@ class Stream implements NodeImplementation {
      *  connectTimeout: int,
      *  persistent: bool,
      *  ssl: array<string, mixed>,
-     * } & array<string, mixed> $_options
+     * } & array<string, mixed> $options
      */
-    protected array $_options = [
+    protected array $options = [
         'class'       => self::class,
         'host'        => null,
         'port'        => 9042,
@@ -43,6 +38,11 @@ class Stream implements NodeImplementation {
             'allow_self_signed' => false,
         ],
     ];
+
+    /**
+     * @var ?resource $stream
+     */
+    protected $stream;
 
     /**
      * @param array{
@@ -79,7 +79,7 @@ class Stream implements NodeImplementation {
             }
         }
 
-        $options['ssl'] += $this->_options['ssl'];
+        $options['ssl'] += $this->options['ssl'];
 
         /**
          * @var array{
@@ -94,10 +94,18 @@ class Stream implements NodeImplementation {
          *  ssl: array<string, mixed>,
          * } & array<string, mixed> $mergedOptions
          */
-        $mergedOptions = array_merge($this->_options, $options);
-        $this->_options = $mergedOptions;
+        $mergedOptions = array_merge($this->options, $options);
+        $this->options = $mergedOptions;
 
-        $this->_connect();
+        $this->connect();
+    }
+
+    public function close(): void {
+        if ($this->stream) {
+            $stream = $this->stream;
+            $this->stream = null;
+            fclose($stream);
+        }
     }
 
     /**
@@ -114,14 +122,14 @@ class Stream implements NodeImplementation {
      * } & array<string, mixed>
      */
     public function getOptions(): array {
-        return $this->_options;
+        return $this->options;
     }
 
     /**
      * @throws \Cassandra\Connection\StreamException
      */
     public function read(int $length): string {
-        if ($this->_stream === null) {
+        if ($this->stream === null) {
             throw new StreamException('not connected');
         }
 
@@ -131,13 +139,13 @@ class Stream implements NodeImplementation {
 
         $data = '';
         do {
-            $readData = fread($this->_stream, $length);
+            $readData = fread($this->stream, $length);
 
-            if (feof($this->_stream)) {
+            if (feof($this->stream)) {
                 throw new StreamException('Connection reset by peer');
             }
 
-            if (stream_get_meta_data($this->_stream)['timed_out']) {
+            if (stream_get_meta_data($this->stream)['timed_out']) {
                 throw new StreamException('Connection timed out');
             }
 
@@ -156,7 +164,7 @@ class Stream implements NodeImplementation {
      * @throws \Cassandra\Connection\StreamException
      */
     public function readOnce(int $length): string {
-        if ($this->_stream === null) {
+        if ($this->stream === null) {
             throw new StreamException('not connected');
         }
 
@@ -164,13 +172,13 @@ class Stream implements NodeImplementation {
             return '';
         }
 
-        $readData = fread($this->_stream, $length);
+        $readData = fread($this->stream, $length);
 
-        if (feof($this->_stream)) {
+        if (feof($this->stream)) {
             throw new StreamException('Connection reset by peer');
         }
 
-        if (stream_get_meta_data($this->_stream)['timed_out']) {
+        if (stream_get_meta_data($this->stream)['timed_out']) {
             throw new StreamException('Connection timed out');
         }
 
@@ -185,7 +193,7 @@ class Stream implements NodeImplementation {
      * @throws \Cassandra\Connection\StreamException
      */
     public function write(string $binary): void {
-        if ($this->_stream === null) {
+        if ($this->stream === null) {
             throw new StreamException('not connected');
         }
 
@@ -194,13 +202,13 @@ class Stream implements NodeImplementation {
         }
 
         do {
-            $sentBytes = fwrite($this->_stream, $binary);
+            $sentBytes = fwrite($this->stream, $binary);
 
-            if (feof($this->_stream)) {
+            if (feof($this->stream)) {
                 throw new StreamException('Connection reset by peer');
             }
 
-            if (stream_get_meta_data($this->_stream)['timed_out']) {
+            if (stream_get_meta_data($this->stream)['timed_out']) {
                 throw new StreamException('Connection timed out');
             }
 
@@ -219,42 +227,34 @@ class Stream implements NodeImplementation {
         $this->write($request->__toString());
     }
 
-    public function close(): void {
-        if ($this->_stream) {
-            $stream = $this->_stream;
-            $this->_stream = null;
-            fclose($stream);
-        }
-    }
-
     /**
      * @return resource
      * @throws \Cassandra\Connection\StreamException
      */
-    protected function _connect() {
-        if ($this->_stream) {
-            return $this->_stream;
+    protected function connect() {
+        if ($this->stream) {
+            return $this->stream;
         }
 
-        $host = $this->_options['host'] ??  'localhost';
+        $host = $this->options['host'] ??  'localhost';
 
         $context = stream_context_create();
 
         /** @var mixed $optval */
-        foreach ($this->_options['ssl'] as $optname => $optval) {
+        foreach ($this->options['ssl'] as $optname => $optval) {
             stream_context_set_option($context, 'ssl', $optname, $optval);
         }
 
-        $connFlag = $this->_options['persistent'] ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
-        $stream = stream_socket_client($host . ':' . $this->_options['port'], $errorCode, $errorMessage, $this->_options['connectTimeout'], $connFlag, $context);
+        $connFlag = $this->options['persistent'] ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
+        $stream = stream_socket_client($host . ':' . $this->options['port'], $errorCode, $errorMessage, $this->options['connectTimeout'], $connFlag, $context);
         if ($stream === false) {
             throw new StreamException($errorMessage, $errorCode);
         }
 
-        $this->_stream = $stream;
+        $this->stream = $stream;
 
-        stream_set_timeout($this->_stream, $this->_options['timeout']);
+        stream_set_timeout($this->stream, $this->options['timeout']);
 
-        return $this->_stream;
+        return $this->stream;
     }
 }

@@ -6,37 +6,18 @@ namespace Cassandra\Type;
 
 use ReflectionClass;
 
-class Bigint extends Base {
-    use CommonResetValue;
-    use CommonBinaryOfValue;
-    use CommonToString;
-
-    protected ?int $_value = null;
+class Bigint extends TypeBase {
+    protected int $value;
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function __construct(?int $value = null) {
-        if (PHP_INT_SIZE < 8) {
-            $className = (new ReflectionClass(static::class))->getShortName();
+    public final function __construct(int $value) {
+        self::require64Bit();
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
-        }
+        $this->value = $value;
 
-        $this->_value = $value;
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function binary(int $value): string {
-        if (PHP_INT_SIZE < 8) {
-            $className = (new ReflectionClass(static::class))->getShortName();
-
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
-        }
-
-        return pack('J', $value);
+        $this->validateValue();
     }
 
     /**
@@ -44,12 +25,8 @@ class Bigint extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): int {
-        if (PHP_INT_SIZE < 8) {
-            $className = (new ReflectionClass(static::class))->getShortName();
-
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
-        }
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+        self::require64Bit();
 
         /**
          * @var false|array<int> $unpacked
@@ -59,7 +36,7 @@ class Bigint extends Base {
             throw new Exception('Cannot unpack binary.');
         }
 
-        return $unpacked[1];
+        return new static($unpacked[1]);
     }
 
     /**
@@ -68,22 +45,34 @@ class Bigint extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_int($value)) {
-            throw new Exception('Invalid value type');
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        self::require64Bit();
+
+        if (!is_int($value)) {
+            throw new Exception('Invalid value');
         }
 
-        return new self($value);
+        return new static($value);
+    }
+
+    public function getBinary(): string {
+        return pack('J', $this->value);
+    }
+
+    public function getValue(): int {
+        return $this->value;
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected function parseValue(): ?int {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
+    protected static function require64Bit() : void {
+        if (PHP_INT_SIZE < 8) {
+            $className = (new ReflectionClass(static::class))->getShortName();
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
         }
+    }
 
-        return $this->_value;
+    protected function validateValue() : void {
     }
 }

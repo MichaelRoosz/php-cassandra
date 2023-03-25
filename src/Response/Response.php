@@ -15,23 +15,23 @@ abstract class Response implements Frame, Stringable {
      *  flags: int,
      *  stream: int,
      *  opcode: int,
-     * } $_header
+     * } $header
      */
-    protected array $_header;
-
-    protected ?string $_tracingUuid = null;
+    protected array $header;
 
     /**
-     * @var ?array<string> $_warnings
+     * @var ?array<string,?string> $payload
      */
-    protected ?array $_warnings = null;
+    protected ?array $payload = null;
+
+    protected StreamReader $stream;
+
+    protected ?string $tracingUuid = null;
 
     /**
-     * @var ?array<string,?string> $_payload
+     * @var ?array<string> $warnings
      */
-    protected ?array $_payload = null;
-
-    protected StreamReader $_stream;
+    protected ?array $warnings = null;
 
     /**
      * @param array{
@@ -44,9 +44,9 @@ abstract class Response implements Frame, Stringable {
      * @throws \Cassandra\Response\Exception
      */
     final public function __construct(array $header, StreamReader $stream) {
-        $this->_header = $header;
+        $this->header = $header;
 
-        $this->_stream = $stream;
+        $this->stream = $stream;
 
         $this->readExtraData();
     }
@@ -56,74 +56,74 @@ abstract class Response implements Frame, Stringable {
 
         return pack(
             'CCnCN',
-            $this->_header['version'],
-            $this->_header['flags'],
-            $this->_header['stream'],
-            $this->_header['opcode'],
+            $this->header['version'],
+            $this->header['flags'],
+            $this->header['stream'],
+            $this->header['opcode'],
             strlen($body)
         ) . $body;
     }
 
-    public function getVersion(): int {
-        return $this->_header['version'];
-    }
-
-    public function getFlags(): int {
-        return $this->_header['flags'];
-    }
-
-    public function getStream(): int {
-        return $this->_header['stream'];
-    }
-
-    public function getOpcode(): int {
-        return $this->_header['opcode'];
-    }
-
     public function getBody(): string {
-        return $this->_stream->getData();
+        return $this->stream->getData();
     }
 
     public function getBodyStreamReader(): StreamReader {
-        return $this->_stream;
+        return $this->stream;
     }
 
-    public function getTracingUuid(): ?string {
-        return $this->_tracingUuid;
+    public function getFlags(): int {
+        return $this->header['flags'];
     }
 
-    /**
-     * @return ?array<string>
-     */
-    public function getWarnings(): ?array {
-        return $this->_warnings;
+    public function getOpcode(): int {
+        return $this->header['opcode'];
     }
 
     /**
      * @return ?array<string,?string>
      */
     public function getPayload(): ?array {
-        return $this->_payload;
+        return $this->payload;
+    }
+
+    public function getStream(): int {
+        return $this->header['stream'];
+    }
+
+    public function getTracingUuid(): ?string {
+        return $this->tracingUuid;
+    }
+
+    public function getVersion(): int {
+        return $this->header['version'];
+    }
+
+    /**
+     * @return ?array<string>
+     */
+    public function getWarnings(): ?array {
+        return $this->warnings;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
     protected function readExtraData(): void {
-        $flags = $this->_header['flags'];
+        $flags = $this->header['flags'];
 
         if ($flags & self::FLAG_TRACING) {
-            $this->_tracingUuid = $this->_stream->readUuid();
+            $this->tracingUuid = $this->stream->readUuid();
         }
 
         if ($flags & self::FLAG_WARNING) {
-            $this->_warnings = $this->_stream->readStringList();
+            $this->warnings = $this->stream->readStringList();
         }
 
         if ($flags & self::FLAG_CUSTOM_PAYLOAD) {
-            $this->_payload = $this->_stream->readBytesMap();
+            $this->payload = $this->stream->readBytesMap();
         }
 
-        $this->_stream->extraDataOffset($this->_stream->pos());
+        $this->stream->extraDataOffset($this->stream->pos());
     }
 }

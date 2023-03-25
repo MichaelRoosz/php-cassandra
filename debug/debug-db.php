@@ -118,5 +118,5 @@ $minDuration = [
 
 var_dump(
     $minDuration,
-    Type\Duration::fromDateInterval(Type\Duration::toDateInterval($minDuration))->getValue()
+    Type\Duration::fromDateInterval(Type\Duration::fromValue($minDuration)->toDateInterval())->getValue()
 );

@@ -228,10 +228,10 @@ All types are supported.
     \Cassandra\Type\Date::fromString('2011-02-03');
     \Cassandra\Type\Date::fromDateTime(new DateTimeImmutable('1970-01-01'));
 
-    new \Cassandra\Type\Date(19435);
+    $date = new \Cassandra\Type\Date(19435);
 
-    $dateAsString = \Cassandra\Type\Date::toString($dateValue);
-    $dateTime = \Cassandra\Type\Date::toDateTime($dateValue);
+    $dateAsString = $date->toString();
+    $dateTime = $date->toDateTime();
 
 //  Decimal
     new \Cassandra\Type\Decimal('0.0123');
@@ -241,14 +241,14 @@ All types are supported.
 
 //  Duration
     \Cassandra\Type\Duration::fromString('89h4m48s');
-    \Cassandra\Type\Duration::fromDateInterval(new DateInterval('P10Y11M12DT89H4M48S'));
+    \Cassandra\Type\Duration::fromDateInterval(new DateInterval('P6YT5M'));
 
-    new \Cassandra\Type\Duration(['months' => 1, 'days' => 2, 'nanoseconds'=> 3]);
+    $duration = new \Cassandra\Type\Duration(['months' => 1, 'days' => 2, 'nanoseconds'=> 3]);
 
-    $durationAsString = \Cassandra\Type\Duration::toString($durationValue);
+    $durationAsString = $duration->toString();
 
     // warning: loses nanosecond precision, DateInterval only supports microseconds
-    $dateInterval = \Cassandra\Type\Duration::toDateInterval($durationValue);
+    $dateInterval = $duration->toDateInterval();
 
 //  Float
     new \Cassandra\Type\PhpFloat(2.718);
@@ -266,35 +266,35 @@ All types are supported.
     new \Cassandra\Type\Tinyint(122);
 
 //  CollectionList
-    new \Cassandra\Type\CollectionList([1, 1, 1], [\Cassandra\Type\Base::INT]);
+    new \Cassandra\Type\CollectionList([1, 1, 1], [\Cassandra\Type::INT]);
 
 //  CollectionMap
-    new \Cassandra\Type\CollectionMap(['a' => 1, 'b' => 2], [\Cassandra\Type\Base::ASCII, \Cassandra\Type\Base::INT]);
+    new \Cassandra\Type\CollectionMap(['a' => 1, 'b' => 2], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
 
 //  CollectionSet
-    new \Cassandra\Type\CollectionSet([1, 2, 3], [\Cassandra\Type\Base::INT]);
+    new \Cassandra\Type\CollectionSet([1, 2, 3], [\Cassandra\Type::INT]);
 
 //  Time (nanoseconds since midnight)
     \Cassandra\Type\Time::fromString('08:12:54.123456789');
     \Cassandra\Type\Time::fromDateTime(new DateTimeImmutable('08:12:54.123456789'));
     \Cassandra\Type\Time::fromDateInterval(new DateInterval('PT10H9M20S'));
 
-    new \Cassandra\Type\Time(18000000000000);
+    $time = new \Cassandra\Type\Time(18000000000000);
 
-    $timeAsString = \Cassandra\Type\Time::toString($timeValue);
+    $timeAsString = $time->toString();
 
     // warning: loses nanosecond precision, DateInterval only supports microseconds
-    $dateInterval = \Cassandra\Type\Time::toDateInterval($timeValue);
+    $dateInterval = $time->toDateInterval();
 
 //  Timestamp
     \Cassandra\Type\Timestamp::fromString('2011-02-03T04:05:00.000+0000');
     \Cassandra\Type\Timestamp::fromDateTime(new DateTimeImmutable('2011-02-03T04:05:00.000+0000'))
 
-    new \Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
-    new \Cassandra\Type\Timestamp(1409830696263);
+    $timestamp1 = new \Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
+    $timestamp2 = new \Cassandra\Type\Timestamp(1409830696263);
 
-    $timestampAsString = \Cassandra\Type\Timestamp::toString($timestampValue);
-    $dateTime = \Cassandra\Type\Timestamp::toDateTime($timestampValue);
+    $timestampAsString = $timestamp1->toString();
+    $dateTime = $timestamp2->toDateTime();
 
 //  Uuid
     new \Cassandra\Type\Uuid('62c36092-82a1-3a00-93d1-46196ee77204');
@@ -312,15 +312,15 @@ All types are supported.
     new \Cassandra\Type\Custom('string', 'var_name');
 
 //  Tuple
-    new \Cassandra\Type\Tuple([1, '2'], [\Cassandra\Type\Base::INT, \Cassandra\Type\Base::VARCHAR]);
+    new \Cassandra\Type\Tuple([1, '2'], [\Cassandra\Type::INT, \Cassandra\Type::VARCHAR]);
 
 //  UDT
     new \Cassandra\Type\UDT([
         'intField' => 1, 
         'textField' => '2'
     ], [
-        'intField' => \Cassandra\Type\Base::INT,
-        'textField' => \Cassandra\Type\Base::VARCHAR
+        'intField' => \Cassandra\Type::INT,
+        'textField' => \Cassandra\Type::VARCHAR
     ]); // in the order defined by the type
 ```
 
@@ -344,22 +344,22 @@ new \Cassandra\Type\CollectionSet([
     ]
 ], [
     [
-        'type' => \Cassandra\Type\Base::UDT,
+        'type' => \Cassandra\Type::UDT,
         'definition' => [
-            'id' => \Cassandra\Type\Base::INT,
-            'name' => \Cassandra\Type\Base::VARCHAR,
-            'active' => \Cassandra\Type\Base::BOOLEAN,
+            'id' => \Cassandra\Type::INT,
+            'name' => \Cassandra\Type::VARCHAR,
+            'active' => \Cassandra\Type::BOOLEAN,
             'friends' => [
-                'type' => \Cassandra\Type\Base::COLLECTION_LIST,
-                'value' => \Cassandra\Type\Base::VARCHAR
+                'type' => \Cassandra\Type::COLLECTION_LIST,
+                'value' => \Cassandra\Type::VARCHAR
             ],
             'drinks' => [
-                'type' => \Cassandra\Type\Base::COLLECTION_LIST,
+                'type' => \Cassandra\Type::COLLECTION_LIST,
                 'value' => [
-                    'type' => \Cassandra\Type\Base::UDT,
+                    'type' => \Cassandra\Type::UDT,
                     'typeMap' => [
-                        'qty' => \Cassandra\Type\Base::INT,
-                        'brand' => \Cassandra\Type\Base::VARCHAR
+                        'qty' => \Cassandra\Type::INT,
+                        'brand' => \Cassandra\Type::VARCHAR
                     ]
                 ]
             ]

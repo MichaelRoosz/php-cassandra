@@ -9,16 +9,16 @@ use Cassandra\Protocol\Frame;
 class Prepare extends Request {
     public const FLAG_WITH_KEYSPACE = 0x01;
 
-    protected int $opcode = Frame::OPCODE_PREPARE;
+    protected string $cql;
 
-    protected string $_cql;
+    protected int $opcode = Frame::OPCODE_PREPARE;
 
     /**
      * @var array{
      *  keyspace?: string,
-     * } $_options
+     * } $options
      */
-    protected array $_options;
+    protected array $options;
 
     /**
      * @param array{
@@ -26,8 +26,8 @@ class Prepare extends Request {
      * } $options
      */
     public function __construct(string $cql, array $options = []) {
-        $this->_cql = $cql;
-        $this->_options = $options;
+        $this->cql = $cql;
+        $this->options = $options;
     }
 
     /**
@@ -37,12 +37,12 @@ class Prepare extends Request {
         $flags = 0;
         $optional = '';
 
-        $body = pack('N', strlen($this->_cql)) . $this->_cql;
+        $body = pack('N', strlen($this->cql)) . $this->cql;
 
-        if (isset($this->_options['keyspace'])) {
+        if (isset($this->options['keyspace'])) {
             if ($this->version >= 5) {
                 $flags |= Query::FLAG_WITH_KEYSPACE;
-                $optional .= pack('n', strlen($this->_options['keyspace'])) . $this->_options['keyspace'];
+                $optional .= pack('n', strlen($this->options['keyspace'])) . $this->options['keyspace'];
             } else {
                 throw new Exception('Option "keyspace" not supported by server');
             }

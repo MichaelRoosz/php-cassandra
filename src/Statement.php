@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Cassandra;
 
 class Statement {
-    protected Connection $_connection;
+    protected Connection $connection;
 
-    protected int $_streamId;
+    protected ?Response\Response $response = null;
 
-    protected ?Response\Response $_response = null;
+    protected int $streamId;
 
     public function __construct(Connection $connection, int $streamId) {
-        $this->_connection = $connection;
-        $this->_streamId = $streamId;
+        $this->connection = $connection;
+        $this->streamId = $streamId;
     }
 
     /**
@@ -21,15 +21,15 @@ class Statement {
      * @throws \Cassandra\Response\Exception
      */
     public function getResponse(): Response\Response {
-        if ($this->_response === null) {
-            $this->_response = $this->_connection->getResponse($this->_streamId);
+        if ($this->response === null) {
+            $this->response = $this->connection->getResponse($this->streamId);
         }
 
-        if ($this->_response instanceof Response\Error) {
-            throw $this->_response->getException();
+        if ($this->response instanceof Response\Error) {
+            throw $this->response->getException();
         }
 
-        return $this->_response;
+        return $this->response;
     }
 
     /**
@@ -47,6 +47,6 @@ class Statement {
     }
 
     public function setResponse(Response\Response $response): void {
-        $this->_response = $response;
+        $this->response = $response;
     }
 }

@@ -7,23 +7,11 @@ namespace Cassandra\Response;
 use Cassandra\Type;
 
 class Event extends Response {
-    public const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
-    public const STATUS_CHANGE = 'STATUS_CHANGE';
     public const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
+    public const STATUS_CHANGE = 'STATUS_CHANGE';
+    public const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
 
-    protected ?string $_type = null;
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function getType(): string {
-        if ($this->_type === null) {
-            $this->_stream->offset(0);
-            $this->_type = $this->_stream->readString();
-        }
-
-        return $this->_type;
-    }
+    protected ?string $type = null;
 
     /**
      * @return array{
@@ -43,39 +31,39 @@ class Event extends Response {
      * @throws \Cassandra\Type\Exception
      */
     public function getData(): array {
-        $this->_stream->offset(0);
-        $type = $this->_type = $this->_stream->readString();
+        $this->stream->offset(0);
+        $type = $this->type = $this->stream->readString();
 
         switch($type) {
             case self::TOPOLOGY_CHANGE:
             case self::STATUS_CHANGE:
                 return [
                     'event_type' => $type,
-                    'change_type' => $this->_stream->readString(),
-                    'address' => $this->_stream->readInet(),
+                    'change_type' => $this->stream->readString(),
+                    'address' => $this->stream->readInet(),
                 ];
 
             case self::SCHEMA_CHANGE:
                 $data = [
                     'event_type' => $type,
-                    'change_type' => $this->_stream->readString(),
-                    'target' => $this->_stream->readString(),
-                    'keyspace' => $this->_stream->readString(),
+                    'change_type' => $this->stream->readString(),
+                    'target' => $this->stream->readString(),
+                    'keyspace' => $this->stream->readString(),
                 ];
 
                 switch ($data['target']) {
                     case 'TABLE':
                     case 'TYPE':
-                        $data['name'] = $this->_stream->readString();
+                        $data['name'] = $this->stream->readString();
 
                         break;
 
                     case 'FUNCTION':
                     case 'AGGREGATE':
-                        $data['name'] = $this->_stream->readString();
+                        $data['name'] = $this->stream->readString();
 
                         /** @var string[] $argument_types */
-                        $argument_types = $this->_stream->readList([Type\Base::TEXT]);
+                        $argument_types = $this->stream->readList([Type::TEXT]);
                         $data['argument_types'] = $argument_types;
 
                         break;
@@ -86,5 +74,17 @@ class Event extends Response {
             default:
                 throw new Exception('Invalid event type: ' . $type);
         }
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getType(): string {
+        if ($this->type === null) {
+            $this->stream->offset(0);
+            $this->type = $this->stream->readString();
+        }
+
+        return $this->type;
     }
 }

@@ -9,9 +9,9 @@ use Cassandra\Type;
 class StreamReader {
     protected string $data;
     protected int $dataLength;
+    protected int $extraDataOffset = 0;
 
     protected int $offset = 0;
-    protected int $extraDataOffset = 0;
 
     public function __construct(string $data) {
         $this->data = $data;
@@ -25,89 +25,23 @@ class StreamReader {
         $this->extraDataOffset = $extraDataOffset;
     }
 
-    public function offset(int $offset): void {
-        $this->offset = $this->extraDataOffset + $offset;
+    public function getData(): string {
+        return $this->data;
     }
 
-    public function reset(): void {
-        $this->offset = $this->extraDataOffset;
+    public function offset(int $offset): void {
+        $this->offset = $this->extraDataOffset + $offset;
     }
 
     public function pos(): int {
         return $this->offset - $this->extraDataOffset;
     }
 
-    public function getData(): string {
-        return $this->data;
-    }
-
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readChar(): int {
-        return ord($this->read(1));
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readShort(): int {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('n', $this->read(2));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-
-        return $unpacked[1];
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readInt(): int {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('N', $this->read(4));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-
-        return $unpacked[1];
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readString(): string {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('n', $this->read(2));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-        $length = $unpacked[1];
-
-        return $length === 0 ? '' : $this->read($length);
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readLongString(): string {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('N', $this->read(4));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-        $length = $unpacked[1];
-
-        return $length === 0 ? '' : $this->read($length);
+    public function readBoolean(): bool {
+        return (bool) ord($this->read(1));
     }
 
     /**
@@ -132,18 +66,102 @@ class StreamReader {
     }
 
     /**
+     * @deprecated readValue() should be used instead
+     *
+     * @param int|array<mixed> $dataType
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function readBytesAndConvertToType($dataType): mixed {
+        return $this->readValue($dataType);
+    }
+
+    /**
+     * @return array<string,?string>
+     *
      * @throws \Cassandra\Response\Exception
      */
-    public function readUuid(): string {
+    public function readBytesMap(): array {
+        $map = [];
+        $count = $this->readShort();
+        for ($i = 0; $i < $count; $i++) {
+            $key = $this->readString();
+            $value = $this->readBytes();
+            $map[$key] = $value;
+        }
+
+        return $map;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readChar(): int {
+        return ord($this->read(1));
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readDouble(): float {
         /**
-         * @var false|array<int> $data
+         * @var false|array<float> $unpacked
          */
-        $data = unpack('n8', $this->read(16));
-        if ($data === false) {
+        $unpacked = unpack('E', $this->read(8));
+        if ($unpacked === false) {
             throw new Exception('Cannot unpack data');
         }
 
-        return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', $data[1], $data[2], $data[3], $data[4], $data[5], $data[6], $data[7], $data[8]);
+        return $unpacked[1];
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readFloat(): float {
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('G', $this->read(4));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+
+        return $unpacked[1];
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readInet(): string {
+        $addressLength = ord($this->read(1));
+
+        if ($addressLength !== 4 && $addressLength !== 16) {
+            throw new Exception('Invalid read inet length');
+        }
+
+        $inet = inet_ntop(chr($addressLength) . $this->read($addressLength));
+        if ($inet === false) {
+            throw new Exception('Cannot read inet');
+        }
+
+        return $inet;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readInt(): int {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $this->read(4));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+
+        return $unpacked[1];
     }
 
     /**
@@ -157,9 +175,12 @@ class StreamReader {
      */
     public function readList(int|array $definition): array {
         if (is_array($definition)) {
-            if (count($definition) < 1) {
+            $count = count($definition);
+
+            if ($count < 1) {
                 throw new Exception('invalid type definition');
-            } elseif (count($definition) === 1) {
+            } elseif ($count === 1) {
+                /** @psalm-suppress PossiblyUndefinedArrayOffset */
                 [$valueType] = array_values($definition);
             } else {
                 $valueType = $definition;
@@ -179,6 +200,22 @@ class StreamReader {
     }
 
     /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readLongString(): string {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $this->read(4));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        $length = $unpacked[1];
+
+        return $length === 0 ? '' : $this->read($length);
+    }
+
+    /**
      * Read map.
      *
      * @param array<int|array<mixed>> $definition [$keyType, $valueType]
@@ -195,6 +232,7 @@ class StreamReader {
         [$keyType, $valueType] = array_values($definition);
         $map = [];
         $count = $this->readInt();
+
         /** @psalm-suppress MixedAssignment */
         for ($i = 0; $i < $count; ++$i) {
             $key = $this->readValue($keyType);
@@ -208,93 +246,51 @@ class StreamReader {
     }
 
     /**
-     *
-     * @param array<int|array<mixed>> $definition ['key1'=>$valueType1, 'key2'=>$valueType2, ...]
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readTuple(array $definition): array {
-        $tuple = [];
-        foreach ($definition as $key => $type) {
-            /** @psalm-suppress MixedAssignment */
-            $tuple[$key] = $this->readValue($type);
-        }
-
-        return $tuple;
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readFloat(): float {
-        /**
-         * @var false|array<float> $unpacked
-         */
-        $unpacked = unpack('g', strrev($this->read(4)));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-
-        return $unpacked[1];
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readDouble(): float {
-        /**
-         * @var false|array<float> $unpacked
-         */
-        $unpacked = unpack('e', strrev($this->read(8)));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-
-        return $unpacked[1];
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readBoolean(): bool {
-        return (bool) $this->readChar();
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readInet(): string {
-        $addressLength = $this->readChar();
-
-        if ($addressLength !== 4 && $addressLength !== 16) {
-            throw new Exception('Invalid read inet length');
-        }
-
-        $inet = inet_ntop(chr($addressLength) . $this->read($addressLength));
-        if ($inet === false) {
-            throw new Exception('Cannot read inet');
-        }
-
-        return $inet;
-    }
-
-    /**
-     * @return array<string,?string>
+     * @return array<string,int>
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readBytesMap(): array {
+    public function readReasonMap(): array {
         $map = [];
-        $count = $this->readShort();
+        $count = $this->readInt();
         for ($i = 0; $i < $count; $i++) {
-            $key = $this->readString();
-            $value = $this->readBytes();
+            $key = $this->readInet();
+            $value = $this->readShort();
             $map[$key] = $value;
         }
 
         return $map;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readShort(): int {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('n', $this->read(2));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+
+        return $unpacked[1];
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readString(): string {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('n', $this->read(2));
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        $length = $unpacked[1];
+
+        return $length === 0 ? '' : $this->read($length);
     }
 
     /**
@@ -353,104 +349,21 @@ class StreamReader {
     }
 
     /**
-     * @return array<string,int>
      *
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readReasonMap(): array {
-        $map = [];
-        $count = $this->readInt();
-        for ($i = 0; $i < $count; $i++) {
-            $key = $this->readInet();
-            $value = $this->readShort();
-            $map[$key] = $value;
-        }
-
-        return $map;
-    }
-
-    /**
-     * @deprecated readValue() should be used instead
-     *
-     * @param int|array<mixed> $dataType
+     * @param array<int|array<mixed>> $definition ['key1'=>$valueType1, 'key2'=>$valueType2, ...]
+     * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readBytesAndConvertToType($dataType): mixed {
-        return $this->readValue($dataType);
-    }
-
-    /**
-     * @param int|array<mixed> $dataType
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readValue($dataType): mixed {
-        $binaryLength = $this->read(4);
-        if ($binaryLength === "\xff\xff\xff\xff") {
-            return null;
-        }
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('N', $binaryLength);
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
-        }
-        $length = $unpacked[1];
-
-        $data = $this->read($length);
-
-        if (is_int($dataType)) {
-            $type = $dataType;
-            $definition = null;
-        } else {
-            $didShift = false;
-
-            if (isset($dataType['type'])) {
-                /** @var int|array<mixed> $type */
-                $type = $dataType['type'];
-            } else {
-                /** @var int|array<mixed> $type */
-                $type = array_shift($dataType);
-                $didShift = true;
-            }
-
-            if (isset($dataType['definition'])) {
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = $dataType['definition'];
-            } elseif (isset($dataType['value'])) {
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = $dataType['value'];
-            } elseif (isset($dataType['typeMap'])) {
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = $dataType['typeMap'];
-            } else {
-                if (!$didShift) {
-                    array_shift($dataType);
-                }
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = array_shift($dataType);
-            }
+    public function readTuple(array $definition): array {
+        $tuple = [];
+        foreach ($definition as $key => $type) {
+            /** @psalm-suppress MixedAssignment */
+            $tuple[$key] = $this->readValue($type);
         }
 
-        if ($definition === null && in_array($type, Type\Base::$typesWithDefinition)) {
-            throw new Exception('type is missing its definition');
-        }
-
-        if (!is_int($type)) {
-            throw new Exception('invalid data type');
-        }
-
-        if (!isset(Type\Base::$typeClassMap[$type])) {
-            throw new Exception('invalid data type');
-        }
-
-        $class = Type\Base::$typeClassMap[$type];
-
-        return $class::parse($data, $definition);
+        return $tuple;
     }
 
     /**
@@ -461,24 +374,25 @@ class StreamReader {
      */
     public function readType() {
         $type = $this->readShort();
+
         switch ($type) {
-            case Type\Base::CUSTOM:
+            case Type::CUSTOM:
                 return [
                     'type' => $type,
                     'definition'=> [$this->readString()],
                 ];
-            case Type\Base::COLLECTION_LIST:
-            case Type\Base::COLLECTION_SET:
+            case Type::COLLECTION_LIST:
+            case Type::COLLECTION_SET:
                 return [
                     'type' => $type,
                     'definition' => [$this->readType()],
                 ];
-            case Type\Base::COLLECTION_MAP:
+            case Type::COLLECTION_MAP:
                 return [
                     'type' => $type,
                     'definition'=> [$this->readType(), $this->readType()],
                 ];
-            case Type\Base::UDT:
+            case Type::UDT:
                 $data = [
                     'type' => $type,
                     'definition' => [],
@@ -492,7 +406,7 @@ class StreamReader {
                 }
 
                 return $data;
-            case Type\Base::TUPLE:
+            case Type::TUPLE:
                 $data = [
                     'type' => $type,
                     'definition' => [],
@@ -503,9 +417,56 @@ class StreamReader {
                 }
 
                 return $data;
+
             default:
                 return $type;
         }
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function readUuid(): string {
+        /**
+         * @var false|array<int> $data
+         */
+        $data = unpack('n8', $this->read(16));
+        if ($data === false) {
+            throw new Exception('Cannot unpack data');
+        }
+
+        return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', $data[1], $data[2], $data[3], $data[4], $data[5], $data[6], $data[7], $data[8]);
+    }
+
+    /**
+     * @param int|array<mixed> $dataType
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function readValue($dataType): mixed {
+        $binaryLength = $this->read(4);
+        if ($binaryLength === "\xff\xff\xff\xff") {
+            return null;
+        }
+
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $binaryLength);
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack data');
+        }
+        $length = $unpacked[1];
+
+        $binary = $this->read($length);
+        $typeObject = Type::getTypeObjectForBinary($dataType, $binary);
+
+        return $typeObject->getValue();
+    }
+
+    public function reset(): void {
+        $this->offset = $this->extraDataOffset;
     }
 
     /**

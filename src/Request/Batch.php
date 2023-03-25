@@ -9,20 +9,15 @@ use Cassandra\Type;
 use Cassandra\Exception;
 
 class Batch extends Request {
+    public const TYPE_COUNTER = 2;
     public const TYPE_LOGGED = 0;
     public const TYPE_UNLOGGED = 1;
-    public const TYPE_COUNTER = 2;
+
+    protected int $batchType;
+
+    protected int $consistency;
 
     protected int $opcode = Frame::OPCODE_BATCH;
-
-    /**
-     * @var array<string> $_queryArray
-     */
-    protected array $_queryArray = [];
-
-    protected int $_batchType;
-
-    protected int $_consistency;
 
     /**
      * @var array{
@@ -34,9 +29,14 @@ class Batch extends Request {
      *  default_timestamp?: int,
      *  keyspace?: string,
      *  now_in_seconds?: int,
-     * } $_options
+     * } $options
      */
-    protected array $_options;
+    protected array $options;
+
+    /**
+     * @var array<string> $queryArray
+     */
+    protected array $queryArray = [];
 
     /**
      * @param array{
@@ -51,18 +51,9 @@ class Batch extends Request {
      * } $options
      */
     public function __construct(?int $type = null, ?int $consistency = null, array $options = []) {
-        $this->_batchType = $type === null ? Batch::TYPE_LOGGED : $type;
-        $this->_consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
-        $this->_options = $options;
-    }
-
-    /**
-     * @throws \Cassandra\Exception
-     */
-    public function getBody(): string {
-        return chr($this->_batchType)
-            . pack('n', count($this->_queryArray)) . implode('', $this->_queryArray)
-            . self::batchQueryParameters($this->_consistency, $this->_options, $this->version);
+        $this->batchType = $type === null ? Batch::TYPE_LOGGED : $type;
+        $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
+        $this->options = $options;
     }
 
     /**
@@ -74,9 +65,9 @@ class Batch extends Request {
         $binary = chr(0);
 
         $binary .= pack('N', strlen($cql)) . $cql;
-        $binary .= Request::valuesBinary($values, !empty($this->_options['names_for_values']));
+        $binary .= Request::valuesBinary($values, !empty($this->options['names_for_values']));
 
-        $this->_queryArray[] = $binary;
+        $this->queryArray[] = $binary;
 
         return $this;
     }
@@ -90,32 +81,11 @@ class Batch extends Request {
         $binary = chr(1);
 
         $binary .= pack('n', strlen($queryId)) . $queryId;
-        $binary .= Request::valuesBinary($values, !empty($this->_options['names_for_values']));
+        $binary .= Request::valuesBinary($values, !empty($this->options['names_for_values']));
 
-        $this->_queryArray[] = $binary;
+        $this->queryArray[] = $binary;
 
         return $this;
-    }
-
-    /**
-     * @deprecated batchQueryParameters() should be used instead
-     *
-     * @param array<mixed> $values - always empty
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     *  keyspace?: string,
-     *  now_in_seconds?: int,
-     * } $options
-     *
-     * @throws \Cassandra\Exception
-     */
-    public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string {
-        return self::batchQueryParameters($consistency, $options, $version);
     }
 
     /**
@@ -143,7 +113,7 @@ class Batch extends Request {
 
         if (isset($options['default_timestamp'])) {
             $flags |= Query::FLAG_WITH_DEFAULT_TIMESTAMP;
-            $optional .= Type\Bigint::binary($options['default_timestamp']);
+            $optional .= (new Type\Bigint($options['default_timestamp']))->getBinary();
         }
 
         if (!empty($options['names_for_values'])) {
@@ -177,5 +147,35 @@ class Batch extends Request {
         } else {
             return pack('n', $consistency) . pack('N', $flags) . $optional;
         }
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    public function getBody(): string {
+        return chr($this->batchType)
+            . pack('n', count($this->queryArray)) . implode('', $this->queryArray)
+            . self::batchQueryParameters($this->consistency, $this->options, $this->version);
+    }
+
+    /**
+     * @deprecated batchQueryParameters() should be used instead
+     *
+     * @param array<mixed> $values - always empty
+     * @param array{
+     *  names_for_values?: bool,
+     *  skip_metadata?: bool,
+     *  page_size?: int,
+     *  paging_state?: string,
+     *  serial_consistency?: int,
+     *  default_timestamp?: int,
+     *  keyspace?: string,
+     *  now_in_seconds?: int,
+     * } $options
+     *
+     * @throws \Cassandra\Exception
+     */
+    public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string {
+        return self::batchQueryParameters($consistency, $options, $version);
     }
 }

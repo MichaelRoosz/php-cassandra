@@ -5,87 +5,40 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\Response\StreamReader;
+use Cassandra\Type;
 
-class CollectionList extends Base {
-    use CommonResetValue;
-    use CommonToString;
+class CollectionList extends TypeBase {
+    /**
+     * @var int|array<int|array<mixed>> $definition
+     */
+    protected int|array $definition;
 
     /**
-     * @var int|array<int|array<mixed>> $_definition
+     * @var array<mixed> $value
      */
-    protected int|array $_definition;
-
-    /**
-     * @var ?array<mixed> $_value
-     */
-    protected ?array $_value = null;
-
-    /**
-     * @param ?array<mixed> $value
-     * @param int|array<int|array<mixed>> $definition
-     */
-    public function __construct(?array $value, int|array $definition) {
-        $this->_definition = $definition;
-        $this->_value = $value;
-    }
-
-    /**
-     * @return ?array<mixed> $_value
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function parseValue(): ?array {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary, $this->_definition);
-        }
-
-        return $this->_value;
-    }
+    protected array $value;
 
     /**
      * @param array<mixed> $value
      * @param int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
      */
-    public static function binary(array $value, int|array $definition): string {
-        $binary = pack('N', count($value));
-
-        if (is_array($definition)) {
-            if (count($definition) < 1) {
-                throw new Exception('invalid type definition');
-            } elseif (count($definition) === 1) {
-                [$valueType] = array_values($definition);
-            } else {
-                $valueType = $definition;
-            }
-        } else {
-            $valueType = $definition;
-        }
-
-        /** @var mixed $val */
-        foreach ($value as $val) {
-            $itemPacked = Base::getBinaryByType($valueType, $val);
-            $binary .= pack('N', strlen($itemPacked)) . $itemPacked;
-        }
-
-        return $binary;
+    public final function __construct(array $value, int|array $definition) {
+        $this->definition = $definition;
+        $this->value = $value;
     }
 
     /**
      * @param null|int|array<int|array<mixed>> $definition
-     * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): array {
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
         if ($definition === null) {
-            throw new Exception('invalid CollectionList definition');
+            throw new Exception('Invalid definition');
         }
 
-        return (new StreamReader($binary))->readList($definition);
+        return new static((new StreamReader($binary))->readList($definition), $definition);
     }
 
     /**
@@ -94,8 +47,8 @@ class CollectionList extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_array($value)) {
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        if (!is_array($value)) {
             throw new Exception('Invalid value type');
         }
 
@@ -103,17 +56,43 @@ class CollectionList extends Base {
             throw new Exception('Invalid definition');
         }
 
-        return new self($value, $definition);
+        return new static($value, $definition);
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected function binaryOfValue(): string {
-        if ($this->_value === null) {
-            throw new Exception('value is null');
+    public function getBinary(): string {
+        $binary = pack('N', count($this->value));
+
+        if (is_array($this->definition)) {
+            $count = count($this->definition);
+
+            if ($count < 1) {
+                throw new Exception('invalid type definition');
+            } elseif ($count === 1) {
+                /** @psalm-suppress PossiblyUndefinedArrayOffset */
+                [$valueType] = array_values($this->definition);
+            } else {
+                $valueType = $this->definition;
+            }
+        } else {
+            $valueType = $this->definition;
         }
 
-        return static::binary($this->_value, $this->_definition);
+        /** @var mixed $val */
+        foreach ($this->value as $val) {
+            $itemPacked = Type::getBinaryByType($valueType, $val);
+            $binary .= pack('N', strlen($itemPacked)) . $itemPacked;
+        }
+
+        return $binary;
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    public function getValue(): array {
+        return $this->value;
     }
 }

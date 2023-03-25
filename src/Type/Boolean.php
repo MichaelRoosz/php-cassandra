@@ -4,29 +4,18 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Boolean extends Base {
-    use CommonResetValue;
-    use CommonBinaryOfValue;
-    use CommonToString;
+class Boolean extends TypeBase {
+    protected bool $value;
 
-    protected ?bool $_value = null;
-
-    public function __construct(?bool $value = null) {
-        $this->_value = $value;
-    }
-
-    public static function binary(bool $value): string {
-        return $value ? "\1" : "\0";
+    public final function __construct(bool $value) {
+        $this->value = $value;
     }
 
     /**
      * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @psalm-suppress ReservedWord
-     * @throws void
      */
-    public static function parse(string $binary, null|int|array $definition = null): bool {
-        return $binary !== "\0";
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+        return new static($binary !== "\0");
     }
 
     /**
@@ -35,19 +24,19 @@ class Boolean extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_bool($value)) {
-            throw new Exception('Invalid value type');
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        if (!is_bool($value)) {
+            throw new Exception('Invalid value');
         }
 
-        return new self($value);
+        return new static($value);
     }
 
-    protected function parseValue(): ?bool {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
-        }
+    public function getBinary(): string {
+        return $this->value ? "\1" : "\0";
+    }
 
-        return $this->_value;
+    public function getValue(): bool {
+        return $this->value;
     }
 }

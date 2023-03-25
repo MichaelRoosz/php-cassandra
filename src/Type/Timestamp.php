@@ -12,30 +12,25 @@ class Timestamp extends Bigint {
      * @throws \Exception
      */
     public function __toString(): string {
-        $value = $this->parseValue();
-
-        if ($value === null) {
-            return 'null';
-        }
-
-        return self::toString($value);
+        return $this->toString();
     }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromDateTime(DateTimeInterface $value): self {
+    public static function fromDateTime(DateTimeInterface $value): static {
         $timestamp = $value->getTimestamp();
         $microseconds = (int) $value->format('u');
         $milliseconds = $timestamp * 1000 + intdiv($microseconds, 1000);
 
-        return new self($milliseconds);
+        return new static($milliseconds);
     }
 
     /**
      * @throws \Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromString(string $value): self {
+    public static function fromString(string $value): static {
         $inputDate = new DateTimeImmutable($value);
 
         return self::fromDateTime($inputDate);
@@ -45,9 +40,9 @@ class Timestamp extends Bigint {
      * @throws \Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function toDateTime(int $value): DateTimeImmutable {
-        $seconds = intdiv($value, 1000);
-        $microseconds = ($value % 1000) * 1000;
+    public function toDateTime(): DateTimeImmutable {
+        $seconds = intdiv($this->value, 1000);
+        $microseconds = ($this->value % 1000) * 1000;
         $datetime = new DateTimeImmutable('@' . $seconds);
         $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
 
@@ -61,7 +56,7 @@ class Timestamp extends Bigint {
     /**
      * @throws \Exception
      */
-    public static function toString(int $value): string {
-        return self::toDateTime($value)->format('Y-m-d H:i:s.uO');
+    public function toString(): string {
+        return $this->toDateTime()->format('Y-m-d H:i:s.uO');
     }
 }

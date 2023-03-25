@@ -13,31 +13,26 @@ class Date extends PhpInt {
      * @throws \Exception
      */
     public function __toString(): string {
-        $value = $this->parseValue();
-
-        if ($value === null) {
-            return 'null';
-        }
-
-        return self::toString($value);
+        return $this->toString();
     }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromDateTime(DateTimeInterface $value): self {
+    public static function fromDateTime(DateTimeInterface $value): static {
         $baseDate = new DateTimeImmutable('1970-01-01');
         $interval = $baseDate->diff($value);
 
         $days = (int) $interval->format('%r%a');
 
-        return new self($days);
+        return new static($days);
     }
 
     /**
      * @throws \Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromString(string $value): self {
+    public static function fromString(string $value): static {
         $inputDate = new DateTimeImmutable($value);
 
         return self::fromDateTime($inputDate);
@@ -46,11 +41,11 @@ class Date extends PhpInt {
     /**
      * @throws \Exception
      */
-    public static function toDateTime(int $value): DateTimeImmutable {
+    public function toDateTime(): DateTimeImmutable {
         $baseDate = new DateTimeImmutable('1970-01-01');
-        $interval = new DateInterval('P' . abs($value) . 'D');
+        $interval = new DateInterval('P' . abs($this->value) . 'D');
 
-        if ($value >= 0) {
+        if ($this->value >= 0) {
             return $baseDate->add($interval);
         } else {
             return $baseDate->sub($interval);
@@ -60,7 +55,7 @@ class Date extends PhpInt {
     /**
      * @throws \Exception
      */
-    public static function toString(int $value): string {
-        return self::toDateTime($value)->format('Y-m-d');
+    public function toString(): string {
+        return $this->toDateTime()->format('Y-m-d');
     }
 }

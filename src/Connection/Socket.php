@@ -11,8 +11,6 @@ use Cassandra\Request\Request;
  * @psalm-consistent-constructor
  */
 class Socket implements NodeImplementation {
-    protected ?PhpSocket $_socket = null;
-
     /**
      * @var array{
      *  class: string,
@@ -21,9 +19,9 @@ class Socket implements NodeImplementation {
      *  username: ?string,
      *  password: ?string,
      *  socket: array<int, array<mixed>|int|string>,
-     * } & array<string, mixed> $_options
+     * } & array<string, mixed> $options
      */
-    protected array $_options = [
+    protected array $options = [
         'class'       => self::class,
         'host'        => null,
         'port'        => 9042,
@@ -34,6 +32,7 @@ class Socket implements NodeImplementation {
             SO_SNDTIMEO => ['sec' => 5, 'usec' => 0],
         ],
     ];
+    protected ?PhpSocket $socket = null;
 
     /**
      * @param array{
@@ -57,7 +56,7 @@ class Socket implements NodeImplementation {
             }
         }
 
-        $options['socket'] += $this->_options['socket'];
+        $options['socket'] += $this->options['socket'];
 
         /**
          * @var array{
@@ -69,10 +68,25 @@ class Socket implements NodeImplementation {
          *  socket: array<int, array<mixed>|int|string>,
          * } & array<string, mixed> $mergedOptions
          */
-        $mergedOptions = array_merge($this->_options, $options);
-        $this->_options = $mergedOptions;
+        $mergedOptions = array_merge($this->options, $options);
+        $this->options = $mergedOptions;
 
-        $this->_connect();
+        $this->connect();
+    }
+
+    public function close(): void {
+        if ($this->socket) {
+            $socket = $this->socket;
+            $this->socket = null;
+
+            socket_set_block($socket);
+            socket_set_option($socket, SOL_SOCKET, SO_LINGER, ['l_onoff' => 1, 'l_linger' => 1]);
+
+            /** @psalm-suppress UnusedFunctionCall */
+            socket_shutdown($socket);
+
+            socket_close($socket);
+        }
     }
 
     /**
@@ -83,23 +97,23 @@ class Socket implements NodeImplementation {
      *  username: ?string,
      *  password: ?string,
      *  socket: array<int, array<mixed>|int|string>,
-     * } & array<string, mixed> $_options
+     * } & array<string, mixed> $options
      */
     public function getOptions(): array {
-        return $this->_options;
+        return $this->options;
     }
 
     /**
      * @throws \Cassandra\Connection\SocketException
      */
     public function read(int $length): string {
-        if ($this->_socket === null) {
+        if ($this->socket === null) {
             throw new SocketException('not connected');
         }
 
-        $data = socket_read($this->_socket, $length);
+        $data = socket_read($this->socket, $length);
         if ($data === false) {
-            $errorCode = socket_last_error($this->_socket);
+            $errorCode = socket_last_error($this->socket);
 
             throw new SocketException(socket_strerror($errorCode), $errorCode);
         }
@@ -111,10 +125,10 @@ class Socket implements NodeImplementation {
         $remainder = $length - strlen($data);
 
         while ($remainder > 0) {
-            $readData = socket_read($this->_socket, $remainder);
+            $readData = socket_read($this->socket, $remainder);
 
             if ($readData === false) {
-                $errorCode = socket_last_error($this->_socket);
+                $errorCode = socket_last_error($this->socket);
 
                 throw new SocketException(socket_strerror($errorCode), $errorCode);
             }
@@ -134,13 +148,13 @@ class Socket implements NodeImplementation {
      * @throws \Cassandra\Connection\SocketException
      */
     public function readOnce(int $length): string {
-        if ($this->_socket === null) {
+        if ($this->socket === null) {
             throw new SocketException('not connected');
         }
 
-        $data = socket_read($this->_socket, $length);
+        $data = socket_read($this->socket, $length);
         if ($data === false) {
-            $errorCode = socket_last_error($this->_socket);
+            $errorCode = socket_last_error($this->socket);
 
             throw new SocketException(socket_strerror($errorCode), $errorCode);
         }
@@ -156,15 +170,15 @@ class Socket implements NodeImplementation {
      * @throws \Cassandra\Connection\SocketException
      */
     public function write(string $binary): void {
-        if ($this->_socket === null) {
+        if ($this->socket === null) {
             throw new SocketException('not connected');
         }
 
         do {
-            $sentBytes = socket_write($this->_socket, $binary);
+            $sentBytes = socket_write($this->socket, $binary);
 
             if ($sentBytes === false) {
-                $errorCode = socket_last_error($this->_socket);
+                $errorCode = socket_last_error($this->socket);
 
                 throw new SocketException(socket_strerror($errorCode), $errorCode);
             }
@@ -179,27 +193,12 @@ class Socket implements NodeImplementation {
         $this->write($request->__toString());
     }
 
-    public function close(): void {
-        if ($this->_socket) {
-            $socket = $this->_socket;
-            $this->_socket = null;
-
-            socket_set_block($socket);
-            socket_set_option($socket, SOL_SOCKET, SO_LINGER, ['l_onoff' => 1, 'l_linger' => 1]);
-
-            /** @psalm-suppress UnusedFunctionCall */
-            socket_shutdown($socket);
-
-            socket_close($socket);
-        }
-    }
-
     /**
      * @throws \Cassandra\Connection\SocketException
      */
-    protected function _connect(): PhpSocket {
-        if ($this->_socket) {
-            return $this->_socket;
+    protected function connect(): PhpSocket {
+        if ($this->socket) {
+            return $this->socket;
         }
 
         $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -209,21 +208,21 @@ class Socket implements NodeImplementation {
             throw new SocketException(socket_strerror($errorCode), $errorCode);
         }
 
-        $this->_socket = $socket;
+        $this->socket = $socket;
 
-        socket_set_option($this->_socket, SOL_TCP, TCP_NODELAY, 1);
+        socket_set_option($this->socket, SOL_TCP, TCP_NODELAY, 1);
 
-        foreach ($this->_options['socket'] as $optname => $optval) {
-            socket_set_option($this->_socket, SOL_SOCKET, $optname, $optval);
+        foreach ($this->options['socket'] as $optname => $optval) {
+            socket_set_option($this->socket, SOL_SOCKET, $optname, $optval);
         }
 
-        $result = socket_connect($this->_socket, $this->_options['host'] ?? 'localhost', $this->_options['port']);
+        $result = socket_connect($this->socket, $this->options['host'] ?? 'localhost', $this->options['port']);
         if ($result === false) {
-            $errorCode = socket_last_error($this->_socket);
-            //Unable to connect to Cassandra node: {$this->_options['host']}:{$this->_options['port']}
+            $errorCode = socket_last_error($this->socket);
+            //Unable to connect to Cassandra node: {$this->options['host']}:{$this->options['port']}
             throw new SocketException(socket_strerror($errorCode), $errorCode);
         }
 
-        return $this->_socket;
+        return $this->socket;
     }
 }

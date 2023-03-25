@@ -4,36 +4,18 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Decimal extends Base {
-    use CommonResetValue;
-    use CommonBinaryOfValue;
-    use CommonToString;
-
-    protected ?string $_value = null;
+class Decimal extends TypeBase {
+    protected string $value;
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public function __construct(?string $value = null) {
+    public final function __construct(string $value) {
         if (!is_numeric($value)) {
             throw new Exception('Value must be a numeric string');
         }
 
-        $this->_value = $value;
-    }
-
-    public static function binary(string $value): string {
-        $pos = strpos($value, '.');
-        $scaleLen = $pos === false ? 0 : strlen($value) - $pos - 1;
-        if ($scaleLen) {
-            $numericValue = (int) (((float) $value) * pow(10, $scaleLen));
-        } else {
-            $numericValue = (int) $value;
-        }
-
-        $binary = pack('N', $scaleLen) . Varint::binary($numericValue);
-
-        return $binary;
+        $this->value = $value;
     }
 
     /**
@@ -41,7 +23,7 @@ class Decimal extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): string {
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
         $length = strlen($binary);
 
         /**
@@ -52,22 +34,24 @@ class Decimal extends Base {
             throw new Exception('Cannot unpack binary');
         }
 
-        $valueByteLen = $length - 4;
-        $value = 0;
-        for ($i = 1; $i <= $valueByteLen; ++$i) {
-            $value |= $unpacked[$i] << (($valueByteLen - $i) * 8);
+        $varintLen = $length - 4;
+        $varint = 0;
+        for ($i = 1; $i <= $varintLen; ++$i) {
+            $varint |= $unpacked[$i] << (($varintLen - $i) * 8);
         }
 
-        $shift = (PHP_INT_SIZE - $valueByteLen) * 8;
-        $value = (string) ($value << $shift >> $shift);
+        $shift = (PHP_INT_SIZE - $varintLen) * 8;
+        $varint = (string) ($varint << $shift >> $shift);
 
         if ($unpacked['scale'] === 0) {
-            return $value;
-        } elseif (strlen($value) > $unpacked['scale']) {
-            return substr($value, 0, -$unpacked['scale']) . '.' . substr($value, -$unpacked['scale']);
+            $value = $varint;
+        } elseif (strlen($varint) > $unpacked['scale']) {
+            $value = substr($varint, 0, -$unpacked['scale']) . '.' . substr($varint, -$unpacked['scale']);
         } else {
-            return $value >= 0 ? sprintf("0.%0$unpacked[scale]d", $value) : sprintf("-0.%0$unpacked[scale]d", -$value);
+            $value = $varint >= 0 ? sprintf("0.%0$unpacked[scale]d", $varint) : sprintf("-0.%0$unpacked[scale]d", -$varint);
         }
+
+        return new static($value);
     }
 
     /**
@@ -76,22 +60,29 @@ class Decimal extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_string($value)) {
-            throw new Exception('Invalid value type');
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        if (!is_string($value)) {
+            throw new Exception('Invalid value');
         }
 
-        return new self($value);
+        return new static($value);
     }
 
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function parseValue(): ?string {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
+    public function getBinary(): string {
+        $pos = strpos($this->value, '.');
+        $scaleLen = $pos === false ? 0 : strlen($this->value) - $pos - 1;
+        if ($scaleLen) {
+            $numericValue = (int) (((float) $this->value) * pow(10, $scaleLen));
+        } else {
+            $numericValue = (int) $this->value;
         }
 
-        return $this->_value;
+        $binary = pack('N', $scaleLen) . (new Varint($numericValue))->getBinary();
+
+        return $binary;
+    }
+
+    public function getValue(): string {
+        return $this->value;
     }
 }

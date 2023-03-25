@@ -6,55 +6,70 @@ namespace Cassandra\Type;
 
 use DateInterval;
 
-class Duration extends Base {
-    use CommonResetValue;
-    use CommonBinaryOfValue;
-
-    protected const INT32_MIN = -2147483648;
+class Duration extends TypeBase {
     protected const INT32_MAX = 2147483647;
 
-    /**
-     * @var ?array{ months: int, days: int, nanoseconds: int } $_value
-     */
-    protected ?array $_value = null;
+    protected const INT32_MIN = -2147483648;
 
     /**
-     * @param ?array{ months: int, days: int, nanoseconds: int } $value
+     * @var array{ months: int, days: int, nanoseconds: int } $value
+     */
+    protected array $value;
+
+    /**
+     * @param array{ months: int, days: int, nanoseconds: int } $value
      *
      * @throws \Cassandra\Type\Exception
      */
-    public function __construct(?array $value = null) {
-        if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
-        }
+    public final function __construct(array $value) {
+        self::require64Bit();
+        self::validateValue($value);
 
-        if ($value !== null) {
-            self::validateValue($value);
-        }
-
-        $this->_value = $value;
+        $this->value = $value;
     }
 
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
     public function __toString(): string {
-        $value = $this->parseValue();
+        return $this->toString();
+    }
 
-        if ($value === null) {
-            return 'null';
+    /**
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+        self::require64Bit();
+
+        /**
+         * @var false|array<int> $values
+         */
+        $values = unpack('C*', $binary);
+        if ($values === false) {
+            throw new Exception('Cannot unpack duration.');
         }
 
-        return self::toString($value);
+        $values = array_values($values);
+
+        $pos = 0;
+
+        $monthsEncoded = self::decodeVint($values, $pos);
+        $daysEncoded = self::decodeVint($values, $pos);
+        $nanosecondsEncoded = self::decodeVint($values, $pos);
+
+        $value = [
+            'months' => ($monthsEncoded >> 1) ^ -($monthsEncoded & 1),
+            'days' => ($daysEncoded >> 1) ^ -($daysEncoded & 1),
+            'nanoseconds' => (($nanosecondsEncoded >> 1) & 0x7FFFFFFFFFFFFFFF) ^ -($nanosecondsEncoded & 1),
+        ];
+
+        return new static($value);
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromDateInterval(DateInterval $value): self {
-        if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
-        }
+    public static function fromDateInterval(DateInterval $value): static {
+        self::require64Bit();
 
         $months = ((int) $value->format('%r%y') * 12) + (int) $value->format('%r%m');
         if (!is_int($months)) {
@@ -73,7 +88,7 @@ class Duration extends Base {
             throw new Exception('Cannot create Duration from DateInterval - nanoseconds value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
         }
 
-        return new self([
+        return new static([
             'months' => $months,
             'days' => $days,
             'nanoseconds' => $totalNanoseconds,
@@ -83,10 +98,8 @@ class Duration extends Base {
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromString(string $value): self {
-        if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
-        }
+    public static function fromString(string $value): static {
+        self::require64Bit();
 
         $pattern = '/(?<sign>[+-])?';
         foreach ([
@@ -166,7 +179,7 @@ class Duration extends Base {
             throw new Exception('Cannot create Duration from String - nanoseconds value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
         }
 
-        return new self([
+        return new static([
             'months' => $months,
             'days' => $days,
             'nanoseconds' => $nanoseconds,
@@ -174,15 +187,60 @@ class Duration extends Base {
     }
 
     /**
-     * @param array{ months: int, days: int, nanoseconds: int } $value
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
      *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        self::require64Bit();
+
+        if (!is_array($value)) {
+            throw new Exception('Invalid duration value');
+        }
+
+        if (!isset($value['months']) || !is_int($value['months'])) {
+            throw new Exception('Invalid duration value - value "months" is not set or has an invalid data type (must be int)');
+        }
+
+        if (!isset($value['days']) || !is_int($value['days'])) {
+            throw new Exception('Invalid duration value - value "days" is not set or has an invalid data type (must be int)');
+        }
+
+        if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
+            throw new Exception('Invalid duration value - value "nanoseconds" is not set or has an invalid data type (must be int)');
+        }
+
+        return new static([
+            'months' => $value['months'],
+            'days' => $value['days'],
+            'nanoseconds' => $value['nanoseconds'],
+        ]);
+    }
+
+    public function getBinary(): string {
+        $monthsEncoded = ($this->value['months'] >> 31) ^ ($this->value['months'] << 1);
+        $daysEncoded = ($this->value['days'] >> 31) ^ ($this->value['days'] << 1);
+        $nanosecondsEncoded = ($this->value['nanoseconds'] >> 63) ^ ($this->value['nanoseconds'] << 1);
+
+        return self::encodeVint($monthsEncoded)
+                . self::encodeVint($daysEncoded)
+                . self::encodeVint($nanosecondsEncoded);
+    }
+
+    /**
+     * @return array{ months: int, days: int, nanoseconds: int }
+     */
+    public function getValue(): array {
+        return $this->value;
+    }
+
+    /**
      * @throws \Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function toDateInterval(array $value): DateInterval {
-        if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
-        }
+    public function toDateInterval(): DateInterval {
+        $value = $this->value;
 
         $isNegative = $value['months'] < 0 || $value['days'] < 0 || $value['nanoseconds'] < 0;
         $sign = $isNegative ? '' : '+';
@@ -248,13 +306,8 @@ class Duration extends Base {
         return $interval;
     }
 
-    /**
-     * @param array{ months: int, days: int, nanoseconds: int } $value
-     */
-    public static function toString(array $value): string {
-        if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
-        }
+    public function toString(): string {
+        $value = $this->value;
 
         $isNegative = $value['months'] < 0 || $value['days'] < 0 || $value['nanoseconds'] < 0;
         if ($isNegative) {
@@ -345,130 +398,34 @@ class Duration extends Base {
     }
 
     /**
-     * @param array{ months: int, days: int, nanoseconds: int } $value
-     *
+     * @param array<int> $vint
      * @throws \Cassandra\Type\Exception
      */
-    public static function binary(array $value): string {
-        if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
+    protected static function decodeVint(array $vint, int &$pos = 0): int {
+        $byte = $vint[$pos];
+        $extraBytes = 0;
+
+        while (($byte & 0x80) !== 0) {
+            $extraBytes++;
+            $byte <<= 1;
         }
 
-        $monthsEncoded = ($value['months'] >> 31) ^ ($value['months'] << 1);
-        $daysEncoded = ($value['days'] >> 31) ^ ($value['days'] << 1);
-        $nanosecondsEncoded = ($value['nanoseconds'] >> 63) ^ ($value['nanoseconds'] << 1);
+        $totalBytes = $extraBytes + 1;
 
-        return self::encodeVint($monthsEncoded)
-                . self::encodeVint($daysEncoded)
-                . self::encodeVint($nanosecondsEncoded);
-    }
-
-    /**
-     * @param null|int|array<int|array<mixed>> $definition
-     * @return array{ months: int, days: int, nanoseconds: int }
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function parse(string $binary, null|int|array $definition = null): array {
-        if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
+        if ($pos + $totalBytes > count($vint)) {
+            throw new Exception('Invalid data value');
         }
 
-        /**
-         * @var false|array<int> $values
-         */
-        $values = unpack('C*', $binary);
-        if ($values === false) {
-            throw new Exception('Cannot unpack duration.');
+        $decodedValue = ($byte & 0x7F) >> $extraBytes;
+
+        for ($i = $pos + 1; $i < $pos + $totalBytes; $i++) {
+            $decodedValue <<= 8;
+            $decodedValue |= $vint[$i];
         }
 
-        $values = array_values($values);
+        $pos += $totalBytes;
 
-        $pos = 0;
-
-        $monthsEncoded = self::decodeVint($values, $pos);
-        $daysEncoded = self::decodeVint($values, $pos);
-        $nanosecondsEncoded = self::decodeVint($values, $pos);
-
-        $value = [
-            'months' => ($monthsEncoded >> 1) ^ -($monthsEncoded & 1),
-            'days' => ($daysEncoded >> 1) ^ -($daysEncoded & 1),
-            'nanoseconds' => (($nanosecondsEncoded >> 1) & 0x7FFFFFFFFFFFFFFF) ^ -($nanosecondsEncoded & 1),
-        ];
-
-        self::validateValue($value);
-
-        return $value;
-    }
-
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_array($value)) {
-            throw new Exception('Invalid duration value');
-        }
-
-        if (!isset($value['months']) || !is_int($value['months'])) {
-            throw new Exception('Invalid duration value - value "months" is not set or has an invalid data type (must be int)');
-        }
-
-        if (!isset($value['days']) || !is_int($value['days'])) {
-            throw new Exception('Invalid duration value - value "days" is not set or has an invalid data type (must be int)');
-        }
-
-        if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
-            throw new Exception('Invalid duration value - value "nanoseconds" is not set or has an invalid data type (must be int)');
-        }
-
-        return new self([
-            'months' => $value['months'],
-            'days' => $value['days'],
-            'nanoseconds' => $value['nanoseconds'],
-        ]);
-    }
-
-    /**
-     * @param array<mixed> $value
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function validateValue(array $value): void {
-        foreach (['months', 'days', 'nanoseconds'] as $key) {
-            if (!isset($value[$key]) || !is_int($value[$key])) {
-                throw new Exception('Invalid duration value - value "' . $key . '"  is not set or has an invalid data type (must be int)');
-            }
-        }
-
-        if ($value['months'] < self::INT32_MIN || $value['months'] > self::INT32_MAX) {
-            throw new Exception('Invalid duration value - value "months" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
-        }
-
-        if ($value['days'] < self::INT32_MIN || $value['days'] > self::INT32_MAX) {
-            throw new Exception('Invalid duration value - value "days" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
-        }
-
-        if (!($value['months'] <= 0 && $value['days'] <= 0 && $value['nanoseconds'] <= 0)
-            && !($value['months'] >= 0 && $value['days'] >= 0 && $value['nanoseconds'] >= 0)
-        ) {
-            throw new Exception('Invalid duration value - days, months and nanoseconds must be either all positive or all negative');
-        }
-    }
-
-    /**
-     * @return ?array{ months: int, days: int, nanoseconds: int }
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function parseValue(): ?array {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
-        }
-
-        return $this->_value;
+        return $decodedValue;
     }
 
     protected static function encodeVint(int $number): string {
@@ -507,33 +464,38 @@ class Duration extends Base {
     }
 
     /**
-     * @param array<int> $vint
      * @throws \Cassandra\Type\Exception
      */
-    protected static function decodeVint(array $vint, int &$pos = 0): int {
-        $byte = $vint[$pos];
-        $extraBytes = 0;
+    protected static function require64Bit() : void {
+        if (PHP_INT_SIZE < 8) {
+            throw new Exception('The Duration data type requires a 64-bit system');
+        }
+    }
 
-        while (($byte & 0x80) !== 0) {
-            $extraBytes++;
-            $byte <<= 1;
+    /**
+     * @param array<mixed> $value
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    protected static function validateValue(array $value): void {
+        foreach (['months', 'days', 'nanoseconds'] as $key) {
+            if (!isset($value[$key]) || !is_int($value[$key])) {
+                throw new Exception('Invalid duration value - value "' . $key . '"  is not set or has an invalid data type (must be int)');
+            }
         }
 
-        $totalBytes = $extraBytes + 1;
-
-        if ($pos + $totalBytes > count($vint)) {
-            throw new Exception('Invalid data value');
+        if ($value['months'] < self::INT32_MIN || $value['months'] > self::INT32_MAX) {
+            throw new Exception('Invalid duration value - value "months" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
         }
 
-        $decodedValue = ($byte & 0x7F) >> $extraBytes;
-
-        for ($i = $pos + 1; $i < $pos + $totalBytes; $i++) {
-            $decodedValue <<= 8;
-            $decodedValue |= $vint[$i];
+        if ($value['days'] < self::INT32_MIN || $value['days'] > self::INT32_MAX) {
+            throw new Exception('Invalid duration value - value "days" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
         }
 
-        $pos += $totalBytes;
-
-        return $decodedValue;
+        if (!($value['months'] <= 0 && $value['days'] <= 0 && $value['nanoseconds'] <= 0)
+            && !($value['months'] >= 0 && $value['days'] >= 0 && $value['nanoseconds'] >= 0)
+        ) {
+            throw new Exception('Invalid duration value - days, months and nanoseconds must be either all positive or all negative');
+        }
     }
 }

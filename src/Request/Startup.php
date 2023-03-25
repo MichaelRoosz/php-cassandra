@@ -10,9 +10,9 @@ class Startup extends Request {
     protected int $opcode = Frame::OPCODE_STARTUP;
 
     /**
-     * @var array<string, string> $_options
+     * @var array<string, string> $options
      */
-    protected $_options = [];
+    protected $options = [];
 
     /**
      * STARTUP
@@ -36,12 +36,12 @@ class Startup extends Request {
      * @param array<string, string> $options
      */
     public function __construct(array $options = []) {
-        $this->_options = $options;
+        $this->options = $options;
     }
 
     public function getBody(): string {
-        $body = pack('n', count($this->_options));
-        foreach ($this->_options as $name => $value) {
+        $body = pack('n', count($this->options));
+        foreach ($this->options as $name => $value) {
             $body .= pack('n', strlen($name)) . $name;
             $body .= pack('n', strlen($value)) . $value;
         }

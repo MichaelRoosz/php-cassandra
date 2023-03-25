@@ -10,22 +10,22 @@ use Cassandra\Type;
 final class TypeSerializationTest extends TestCase {
     public function testAscii(): void {
         $ascii = 'abcABC123!#_';
-        $this->assertSame($ascii, Type\Ascii::parse(Type\Ascii::binary($ascii)));
+        $this->assertSame($ascii, Type\Ascii::fromBinary((new Type\Ascii($ascii))->getBinary())->getValue());
     }
 
     public function testBigint(): void {
         $int64Max = 9223372036854775807;
-        $this->assertSame($int64Max, Type\Bigint::parse(Type\Bigint::binary($int64Max)));
+        $this->assertSame($int64Max, Type\Bigint::fromBinary((new Type\Bigint($int64Max))->getBinary())->getValue());
     }
 
     public function testBlob(): void {
         $blob = 'abcABC123!#_' . hex2bin('FFAA22');
-        $this->assertSame($blob, Type\Blob::parse(Type\Blob::binary($blob)));
+        $this->assertSame($blob, Type\Blob::fromBinary((new Type\Blob($blob))->getBinary())->getValue());
     }
 
     public function testBoolean(): void {
-        $this->assertSame(false, Type\Boolean::parse(Type\Boolean::binary(false)));
-        $this->assertSame(true, Type\Boolean::parse(Type\Boolean::binary(true)));
+        $this->assertSame(false, Type\Boolean::fromBinary((new Type\Boolean(false))->getBinary())->getValue());
+        $this->assertSame(true, Type\Boolean::fromBinary((new Type\Boolean(true))->getBinary())->getValue());
     }
 
     public function testCollectionList(): void {
@@ -37,10 +37,10 @@ final class TypeSerializationTest extends TestCase {
         ];
 
         $definition = [
-            Type\Base::INT,
+            Type::INT,
         ];
 
-        $this->assertSame($value, Type\CollectionList::parse(Type\CollectionList::binary($value, $definition), $definition));
+        $this->assertSame($value, Type\CollectionList::fromBinary((new Type\CollectionList($value, $definition))->getBinary(), $definition)->getValue());
     }
 
     public function testCollectionMap(): void {
@@ -50,11 +50,11 @@ final class TypeSerializationTest extends TestCase {
         ];
 
         $definition = [
-            Type\Base::ASCII,
-            Type\Base::INT,
+            Type::ASCII,
+            Type::INT,
         ];
 
-        $this->assertSame($value, Type\CollectionMap::parse(Type\CollectionMap::binary($value, $definition), $definition));
+        $this->assertSame($value, Type\CollectionMap::fromBinary((new Type\CollectionMap($value, $definition))->getBinary(), $definition)->getValue());
     }
 
     public function testCollectionSet(): void {
@@ -65,38 +65,38 @@ final class TypeSerializationTest extends TestCase {
         ];
 
         $definition =[
-            Type\Base::INT,
+            Type::INT,
         ];
 
-        $this->assertSame($value, Type\CollectionSet::parse(Type\CollectionSet::binary($value, $definition), $definition));
+        $this->assertSame($value, Type\CollectionSet::fromBinary((new Type\CollectionSet($value, $definition))->getBinary(), $definition)->getValue());
     }
 
     public function testCounter(): void {
         $counter = 12345678901234;
-        $this->assertSame($counter, Type\Counter::parse(Type\Counter::binary($counter)));
+        $this->assertSame($counter, Type\Counter::fromBinary((new Type\Counter($counter))->getBinary())->getValue());
     }
 
     public function testCustom(): void {
         $custom = 'abcABC123!#_' . hex2bin('FFAA22');
-        $this->assertSame($custom, Type\Custom::parse(Type\Custom::binary($custom, []), []));
+        $this->assertSame($custom, Type\Custom::fromBinary((new Type\Custom($custom))->getBinary(), [])->getValue());
     }
 
     public function testDate(): void {
         $days = 19434;
-        $this->assertSame($days, Type\Date::parse(Type\Date::binary($days)));
+        $this->assertSame($days, Type\Date::fromBinary((new Type\Date($days))->getBinary())->getValue());
     }
 
     public function testDecimal(): void {
         $decimal = '34345454545.120';
-        $this->assertSame($decimal, Type\Decimal::parse(Type\Decimal::binary($decimal)));
+        $this->assertSame($decimal, Type\Decimal::fromBinary((new Type\Decimal($decimal))->getBinary())->getValue());
 
         $decimal = '34345454545';
-        $this->assertSame($decimal, Type\Decimal::parse(Type\Decimal::binary($decimal)));
+        $this->assertSame($decimal, Type\Decimal::fromBinary((new Type\Decimal($decimal))->getBinary())->getValue());
     }
 
     public function testDouble(): void {
         $double = 12345678901234.4545435;
-        $this->assertSame($double, Type\Double::parse(Type\Double::binary($double)));
+        $this->assertSame($double, Type\Double::fromBinary((new Type\Double($double))->getBinary())->getValue());
     }
 
     public function testDuration(): void {
@@ -126,7 +126,7 @@ final class TypeSerializationTest extends TestCase {
 
         $this->assertSame(
             $maxDuration,
-            Type\Duration::parse(Type\Duration::binary($maxDuration))
+            Type\Duration::fromBinary((new Type\Duration($maxDuration))->getBinary())->getValue()
         );
 
         $this->assertSame(
@@ -156,42 +156,42 @@ final class TypeSerializationTest extends TestCase {
 
         $this->assertSame(
             '+ 0Y 1M 2D 0H 0M 0S 3F',
-            Type\Duration::toDateInterval($exampleDuration)->format('%R %yY %mM %dD %hH %iM %sS %fF')
+            (new Type\Duration($exampleDuration))->toDateInterval()->format('%R %yY %mM %dD %hH %iM %sS %fF')
         );
 
         $this->assertSame(
             '+ 3000Y 11M 20D 23H 59M 59S 123456F',
-            Type\Duration::toDateInterval(Type\Duration::fromString($saneDurationString)->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+            (new Type\Duration(Type\Duration::fromString($saneDurationString)->getValue()))->toDateInterval()->format('%R %yY %mM %dD %hH %iM %sS %fF')
         );
 
         $this->assertSame(
             '+ -3000Y -11M -20D -23H -59M -59S -123456F',
-            Type\Duration::toDateInterval(Type\Duration::fromString('-' . $saneDurationString)->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+            (new Type\Duration(Type\Duration::fromString('-' . $saneDurationString)->getValue()))->toDateInterval()->format('%R %yY %mM %dD %hH %iM %sS %fF')
         );
 
         $this->assertSame(
             '+ -178956970Y -8M -2147483648D -2562047H -47M -16S -854775F',
-            Type\Duration::toDateInterval($minDuration)->format('%R %yY %mM %dD %hH %iM %sS %fF')
+            (new Type\Duration($minDuration))->toDateInterval()->format('%R %yY %mM %dD %hH %iM %sS %fF')
         );
 
         $this->assertSame(
             '+ 178956970Y 7M 2147483647D 2562047H 47M 16S 854775F',
-            Type\Duration::toDateInterval($maxDuration)->format('%R %yY %mM %dD %hH %iM %sS %fF')
+            (new Type\Duration($maxDuration))->toDateInterval()->format('%R %yY %mM %dD %hH %iM %sS %fF')
         );
 
         $this->assertSame(
             $exampleDuration,
-            Type\Duration::fromDateInterval(Type\Duration::toDateInterval($exampleDuration))->getValue()
+            Type\Duration::fromDateInterval((new Type\Duration($exampleDuration))->toDateInterval())->getValue()
         );
 
         $this->assertSame(
             '3000y11mo2w6d23h59m59s123ms456us',
-            (string) Type\Duration::fromDateInterval(Type\Duration::toDateInterval(Type\Duration::fromString($saneDurationString)->getValue()))
+            (string) Type\Duration::fromDateInterval((new Type\Duration(Type\Duration::fromString($saneDurationString)->getValue()))->toDateInterval())
         );
 
         $this->assertSame(
             '-3000y11mo2w6d23h59m59s123ms456us',
-            (string) Type\Duration::fromDateInterval(Type\Duration::toDateInterval(Type\Duration::fromString('-' . $saneDurationString)->getValue()))
+            (string) Type\Duration::fromDateInterval((new Type\Duration(Type\Duration::fromString('-' . $saneDurationString)->getValue()))->toDateInterval())
         );
 
         $this->assertSame(
@@ -200,7 +200,7 @@ final class TypeSerializationTest extends TestCase {
                 'days' => -2147483648,
                 'nanoseconds' => PHP_INT_MIN + 808,
             ],
-            Type\Duration::fromDateInterval(Type\Duration::toDateInterval($minDuration))->getValue()
+            Type\Duration::fromDateInterval((new Type\Duration($minDuration))->toDateInterval())->getValue()
         );
 
         $this->assertSame(
@@ -209,18 +209,18 @@ final class TypeSerializationTest extends TestCase {
                 'days' => 2147483647,
                 'nanoseconds' => PHP_INT_MAX - 807,
             ],
-            Type\Duration::fromDateInterval(Type\Duration::toDateInterval($maxDuration))->getValue()
+            Type\Duration::fromDateInterval((new Type\Duration($maxDuration))->toDateInterval())->getValue()
         );
 
         /*
                 $this->assertSame(
                     '- 0Y 0M 1D 2H 10M 0S 0F',
-                    Type\Duration::toDateInterval(Type\Duration::fromString('-1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+                    (new Type\Duration(Type\Duration::fromString('-1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
                 );
 
                 $this->assertSame(
                     '+ 0Y 0M 1D 2H 10M 0S 0F',
-                    Type\Duration::toDateInterval(Type\Duration::fromString('1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+                    (new Type\Duration(Type\Duration::fromString('1d2h10m')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
                 );
 
                 $this->assertSame(
@@ -235,130 +235,22 @@ final class TypeSerializationTest extends TestCase {
 
                 $this->assertSame(
                     '- 292Y 3M 11D 0H 47M 16S 854775F',
-                    Type\Duration::toDateInterval(Type\Duration::fromString('-1d' . substr((string)PHP_INT_MIN, 1) . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+                    (new Type\Duration(Type\Duration::fromString('-1d' . substr((string)PHP_INT_MIN, 1) . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
                 );
 
                 $this->assertSame(
                     '+ 292Y 3M 11D 0H 47M 16S 854775F',
-                    Type\Duration::toDateInterval(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
+                    (new Type\Duration(Type\Duration::fromString('1d' . PHP_INT_MAX . 'ns')->getValue())->format('%R %yY %mM %dD %hH %iM %sS %fF')
                 );
         */
     }
 
     public function testInet(): void {
         $ipv4 = '192.168.22.1';
-        $this->assertSame($ipv4, Type\Inet::parse(Type\Inet::binary($ipv4)));
+        $this->assertSame($ipv4, Type\Inet::fromBinary((new Type\Inet($ipv4))->getBinary())->getValue());
 
         $ipv6 = '2001:db8:3333:4444:5555:6666:7777:8888';
-        $this->assertSame($ipv6, Type\Inet::parse(Type\Inet::binary($ipv6)));
-    }
-
-    public function testPhpFloat(): void {
-        $float = 1024.5;
-        $this->assertSame($float, Type\PhpFloat::parse(Type\PhpFloat::binary($float)));
-    }
-
-    public function testPhpInt(): void {
-        $int1 = 234355434;
-        $this->assertSame($int1, Type\PhpInt::parse(Type\PhpInt::binary($int1)));
-
-        $int2 = -234355434;
-        $this->assertSame($int2, Type\PhpInt::parse(Type\PhpInt::binary($int2)));
-    }
-
-    public function testSmallint(): void {
-        $int1 = 32123;
-        $this->assertSame($int1, Type\Smallint::parse(Type\Smallint::binary($int1)));
-
-        $int2 = -32124;
-        $this->assertSame($int2, Type\Smallint::parse(Type\Smallint::binary($int2)));
-    }
-
-    public function testTime(): void {
-        $timeInNs = 1674341495053123456;
-        $this->assertSame($timeInNs, Type\Time::parse(Type\Time::binary($timeInNs)));
-    }
-
-    public function testTimestamp(): void {
-        $timeInMs = 1674341495053;
-        $this->assertSame($timeInMs, Type\Timestamp::parse(Type\Timestamp::binary($timeInMs)));
-    }
-
-    public function testTimeuuid(): void {
-        $timeUuid = 'bd23b48a-99de-11ed-a8fc-0242ac120002';
-        $this->assertSame($timeUuid, Type\Timeuuid::parse(Type\Timeuuid::binary($timeUuid)));
-    }
-
-    public function testTinyint(): void {
-        $int1 = 127;
-        $this->assertSame($int1, Type\Tinyint::parse(Type\Tinyint::binary($int1)));
-
-        $int2 = -127;
-        $this->assertSame($int2, Type\Tinyint::parse(Type\Tinyint::binary($int2)));
-    }
-
-    public function testTuple(): void {
-        $value = [
-            1,
-            '2',
-        ];
-
-        $definition = [
-            Type\Base::INT,
-            Type\Base::VARCHAR,
-        ];
-
-        $this->assertSame($value, Type\Tuple::parse(Type\Tuple::binary($value, $definition), $definition));
-    }
-
-    public function testUDT(): void {
-        $value = [
-            'intField' => 1,
-            'textField' => '2',
-        ];
-
-        $definition =[
-            'intField' => Type\Base::INT,
-            'textField' => Type\Base::VARCHAR,
-        ];
-
-        $this->assertSame($value, Type\UDT::parse(Type\UDT::binary($value, $definition), $definition));
-    }
-
-    public function testUuid(): void {
-        $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
-        $this->assertSame($uuid, Type\Uuid::parse(Type\Uuid::binary($uuid)));
-    }
-
-    public function testVarchar(): void {
-        $varchar = 'abcABC123!#_';
-        $this->assertSame($varchar, Type\Varchar::parse(Type\Varchar::binary($varchar)));
-    }
-
-    public function testVarint(): void {
-        $varint = 922337203685477580;
-        $this->assertSame($varint, Type\Varint::parse(Type\Varint::binary($varint)));
-
-        $varint = -922337203685477580;
-        $this->assertSame($varint, Type\Varint::parse(Type\Varint::binary($varint)));
-
-        $this->assertSame(0, Type\Varint::parse("\x00"));
-        $this->assertSame(1, Type\Varint::parse("\x01"));
-        $this->assertSame(127, Type\Varint::parse("\x7F"));
-        $this->assertSame(128, Type\Varint::parse("\x00\x80"));
-        $this->assertSame(129, Type\Varint::parse("\x00\x81"));
-        $this->assertSame(-1, Type\Varint::parse("\xFF"));
-        $this->assertSame(-128, Type\Varint::parse("\x80"));
-        $this->assertSame(-129, Type\Varint::parse("\xFF\x7F"));
-
-        $this->assertSame("\x00", Type\Varint::binary(0));
-        $this->assertSame("\x01", Type\Varint::binary(1));
-        $this->assertSame("\x7F", Type\Varint::binary(127));
-        $this->assertSame("\x00\x80", Type\Varint::binary(128));
-        $this->assertSame("\x00\x81", Type\Varint::binary(129));
-        $this->assertSame("\xFF", Type\Varint::binary(-1));
-        $this->assertSame("\x80", Type\Varint::binary(-128));
-        $this->assertSame("\xFF\x7F", Type\Varint::binary(-129));
+        $this->assertSame($ipv6, Type\Inet::fromBinary((new Type\Inet($ipv6))->getBinary())->getValue());
     }
 
     public function testNested(): void {
@@ -397,28 +289,136 @@ final class TypeSerializationTest extends TestCase {
 
         $definition = [
             [
-                'type' => Type\Base::UDT,
+                'type' => Type::UDT,
                 'definition' => [
-                    'id' => Type\Base::INT,
-                    'name' => Type\Base::VARCHAR,
-                    'active' => Type\Base::BOOLEAN,
+                    'id' => Type::INT,
+                    'name' => Type::VARCHAR,
+                    'active' => Type::BOOLEAN,
                     'friends' => [
-                        'type' => Type\Base::COLLECTION_LIST,
-                        'value' => Type\Base::VARCHAR,
+                        'type' => Type::COLLECTION_LIST,
+                        'value' => Type::VARCHAR,
                     ],
                     'drinks' => [
-                        'type' => Type\Base::COLLECTION_LIST,
+                        'type' => Type::COLLECTION_LIST,
                         'value' => [
-                            'type' => Type\Base::UDT,
+                            'type' => Type::UDT,
                             'typeMap' => [
-                                'qty' => Type\Base::INT,
-                                'brand' => Type\Base::VARCHAR,
+                                'qty' => Type::INT,
+                                'brand' => Type::VARCHAR,
                             ],
                         ],
                     ],
                 ],
             ],
         ];
-        $this->assertSame($value, Type\CollectionSet::parse(Type\CollectionSet::binary($value, $definition), $definition));
+        $this->assertSame($value, Type\CollectionSet::fromBinary((new Type\CollectionSet($value, $definition))->getBinary(), $definition)->getValue());
+    }
+
+    public function testPhpFloat(): void {
+        $float = 1024.5;
+        $this->assertSame($float, Type\PhpFloat::fromBinary((new Type\PhpFloat($float))->getBinary())->getValue());
+    }
+
+    public function testPhpInt(): void {
+        $int1 = 234355434;
+        $this->assertSame($int1, Type\PhpInt::fromBinary((new Type\PhpInt($int1))->getBinary())->getValue());
+
+        $int2 = -234355434;
+        $this->assertSame($int2, Type\PhpInt::fromBinary((new Type\PhpInt($int2))->getBinary())->getValue());
+    }
+
+    public function testSmallint(): void {
+        $int1 = 32123;
+        $this->assertSame($int1, Type\Smallint::fromBinary((new Type\Smallint($int1))->getBinary())->getValue());
+
+        $int2 = -32124;
+        $this->assertSame($int2, Type\Smallint::fromBinary((new Type\Smallint($int2))->getBinary())->getValue());
+    }
+
+    public function testTime(): void {
+        $timeInNs = 86399999999999;
+        $this->assertSame($timeInNs, Type\Time::fromBinary((new Type\Time($timeInNs))->getBinary())->getValue());
+    }
+
+    public function testTimestamp(): void {
+        $timeInMs = 1674341495053;
+        $this->assertSame($timeInMs, Type\Timestamp::fromBinary((new Type\Timestamp($timeInMs))->getBinary())->getValue());
+    }
+
+    public function testTimeuuid(): void {
+        $timeUuid = 'bd23b48a-99de-11ed-a8fc-0242ac120002';
+        $this->assertSame($timeUuid, Type\Timeuuid::fromBinary((new Type\Timeuuid($timeUuid))->getBinary())->getValue());
+    }
+
+    public function testTinyint(): void {
+        $int1 = 127;
+        $this->assertSame($int1, Type\Tinyint::fromBinary((new Type\Tinyint($int1))->getBinary())->getValue());
+
+        $int2 = -127;
+        $this->assertSame($int2, Type\Tinyint::fromBinary((new Type\Tinyint($int2))->getBinary())->getValue());
+    }
+
+    public function testTuple(): void {
+        $value = [
+            1,
+            '2',
+        ];
+
+        $definition = [
+            Type::INT,
+            Type::VARCHAR,
+        ];
+
+        $this->assertSame($value, Type\Tuple::fromBinary((new Type\Tuple($value, $definition))->getBinary(), $definition)->getValue());
+    }
+
+    public function testUDT(): void {
+        $value = [
+            'intField' => 1,
+            'textField' => '2',
+        ];
+
+        $definition =[
+            'intField' => Type::INT,
+            'textField' => Type::VARCHAR,
+        ];
+
+        $this->assertSame($value, Type\UDT::fromBinary((new Type\UDT($value, $definition))->getBinary(), $definition)->getValue());
+    }
+
+    public function testUuid(): void {
+        $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
+        $this->assertSame($uuid, Type\Uuid::fromBinary((new Type\Uuid($uuid))->getBinary())->getValue());
+    }
+
+    public function testVarchar(): void {
+        $varchar = 'abcABC123!#_';
+        $this->assertSame($varchar, Type\Varchar::fromBinary((new Type\Varchar($varchar))->getBinary())->getValue());
+    }
+
+    public function testVarint(): void {
+        $varint = 922337203685477580;
+        $this->assertSame($varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValue());
+
+        $varint = -922337203685477580;
+        $this->assertSame($varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValue());
+
+        $this->assertSame(0, Type\Varint::fromBinary("\x00")->getValue());
+        $this->assertSame(1, Type\Varint::fromBinary("\x01")->getValue());
+        $this->assertSame(127, Type\Varint::fromBinary("\x7F")->getValue());
+        $this->assertSame(128, Type\Varint::fromBinary("\x00\x80")->getValue());
+        $this->assertSame(129, Type\Varint::fromBinary("\x00\x81")->getValue());
+        $this->assertSame(-1, Type\Varint::fromBinary("\xFF")->getValue());
+        $this->assertSame(-128, Type\Varint::fromBinary("\x80")->getValue());
+        $this->assertSame(-129, Type\Varint::fromBinary("\xFF\x7F")->getValue());
+
+        $this->assertSame("\x00", (new Type\Varint(0))->getBinary());
+        $this->assertSame("\x01", (new Type\Varint(1))->getBinary());
+        $this->assertSame("\x7F", (new Type\Varint(127))->getBinary());
+        $this->assertSame("\x00\x80", (new Type\Varint(128))->getBinary());
+        $this->assertSame("\x00\x81", (new Type\Varint(129))->getBinary());
+        $this->assertSame("\xFF", (new Type\Varint(-1))->getBinary());
+        $this->assertSame("\x80", (new Type\Varint(-128))->getBinary());
+        $this->assertSame("\xFF\x7F", (new Type\Varint(-129))->getBinary());
     }
 }

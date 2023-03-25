@@ -7,16 +7,8 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Frame;
 
 class Execute extends Request {
+    protected int $consistency;
     protected int $opcode = Frame::OPCODE_EXECUTE;
-
-    protected string $_queryId;
-
-    protected int $_consistency;
-
-    /**
-     * @var array<mixed> $_values
-     */
-    protected $_values;
 
     /**
      * @var array{
@@ -27,9 +19,16 @@ class Execute extends Request {
      *  serial_consistency?: int,
      *  default_timestamp?: int,
      *  now_in_seconds?: int,
-     * } $_options
+     * } $options
      */
-    protected $_options;
+    protected $options;
+
+    protected string $queryId;
+
+    /**
+     * @var array<mixed> $values
+     */
+    protected $values;
 
     /**
      * EXECUTE
@@ -59,17 +58,17 @@ class Execute extends Request {
      * } $options
      */
     public function __construct(string $queryId, array $values, ?int $consistency = null, array $options = []) {
-        $this->_queryId = $queryId;
-        $this->_values = $values;
+        $this->queryId = $queryId;
+        $this->values = $values;
 
-        $this->_consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
-        $this->_options = $options;
+        $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
+        $this->options = $options;
 
         /**
          * @psalm-suppress InvalidArrayOffset
          * @phpstan-ignore-next-line
          */
-        unset($this->_options['keyspace']);
+        unset($this->options['keyspace']);
     }
 
     /**
@@ -77,9 +76,9 @@ class Execute extends Request {
      * @throws \Cassandra\Request\Exception
      */
     public function getBody(): string {
-        $body = pack('n', strlen($this->_queryId)) . $this->_queryId;
+        $body = pack('n', strlen($this->queryId)) . $this->queryId;
 
-        $body .= Request::queryParameters($this->_consistency, $this->_values, $this->_options, $this->version);
+        $body .= Request::queryParameters($this->consistency, $this->values, $this->options, $this->version);
 
         return $body;
     }

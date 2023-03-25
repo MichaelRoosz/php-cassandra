@@ -9,9 +9,9 @@ use Cassandra\Protocol\Frame;
 class AuthResponse extends Request {
     protected int $opcode = Frame::OPCODE_AUTH_RESPONSE;
 
-    protected string $_username;
+    protected string $password;
 
-    protected string $_password;
+    protected string $username;
 
     /**
      * CREDENTIALS
@@ -30,15 +30,15 @@ class AuthResponse extends Request {
      *
      */
     public function __construct(string $username, string $password) {
-        $this->_username = $username;
-        $this->_password = $password;
+        $this->username = $username;
+        $this->password = $password;
     }
 
     public function getBody(): string {
         $body = chr(0);
-        $body .= $this->_username;
+        $body .= $this->username;
         $body .= chr(0);
-        $body .= $this->_password;
+        $body .= $this->password;
 
         return pack('N', strlen($body)) . $body;
     }

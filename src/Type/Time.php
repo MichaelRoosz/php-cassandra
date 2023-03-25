@@ -11,32 +11,41 @@ use DateTimeInterface;
 class Time extends Bigint {
     public const VALUE_MAX = 86399999999999;
 
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function __construct(?int $value = null) {
-        if ($value !== null
-            && ($value > self::VALUE_MAX || $value < 0)) {
-            throw new Exception('Value "' . $value . '" is outside of possible range');
-        }
-
-        $this->_value = $value;
-    }
-
     public function __toString(): string {
-        $value = $this->parseValue();
-
-        if ($value === null) {
-            return 'null';
-        }
-
-        return self::toString($value);
+        return $this->toString();
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromString(string $value): self {
+    public static function fromDateInterval(DateInterval $value): static {
+        $hoursInNanoseconds = (int) $value->format('%h') * 3600000000000;
+        $minutesInNanoseconds = (int) $value->format('%i') * 60000000000;
+        $secondsInNanoseconds = (int) $value->format('%s') * 1000000000;
+
+        $microsecondsInNanoseconds = (int) $value->format('%f') * 1000;
+
+        $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
+
+        return new static($totalNanoseconds);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromDateTime(DateTimeInterface $value): static {
+        $copy = DateTimeImmutable::createFromInterface($value);
+        $midnight = $copy->setTime(0, 0, 0, 0);
+
+        $interval = $value->diff($midnight);
+
+        return self::fromDateInterval($interval);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromString(string $value): static {
         if (preg_match('/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/', $value, $matches)) {
             $hours = (int) $matches[1];
             $minutes = (int) $matches[2];
@@ -51,7 +60,7 @@ class Time extends Bigint {
                     $nanoseconds
                 );
 
-                return new self($totalNanoseconds);
+                return new static($totalNanoseconds);
             } else {
                 throw new Exception('Invalid time format');
             }
@@ -61,56 +70,10 @@ class Time extends Bigint {
     }
 
     /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function fromDateTime(DateTimeInterface $value): self {
-        $copy = DateTimeImmutable::createFromInterface($value);
-        $midnight = $copy->setTime(0, 0, 0, 0);
-
-        $interval = $value->diff($midnight);
-
-        return self::fromDateInterval($interval);
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function fromDateInterval(DateInterval $value): self {
-        $hoursInNanoseconds = (int) $value->format('%h') * 3600000000000;
-        $minutesInNanoseconds = (int) $value->format('%i') * 60000000000;
-        $secondsInNanoseconds = (int) $value->format('%s') * 1000000000;
-
-        $microsecondsInNanoseconds = (int) $value->format('%f') * 1000;
-
-        $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
-
-        return new self($totalNanoseconds);
-    }
-
-    public static function toString(int $value): string {
-        $seconds = intdiv($value, 1000000000);
-        $remaining_nanoseconds = $value % 1000000000;
-
-        $hours = intdiv($seconds, 3600);
-        $remaining_seconds = $seconds % 3600;
-
-        $minutes = intdiv($remaining_seconds, 60);
-        $remaining_seconds %= 60;
-
-        $formatted_time = sprintf('%02d:%02d:%02d', $hours, $minutes, $remaining_seconds);
-
-        if ($remaining_nanoseconds > 0) {
-            $formatted_nanoseconds = sprintf('.%09d', $remaining_nanoseconds);
-            $formatted_time .= $formatted_nanoseconds;
-        }
-
-        return $formatted_time;
-    }
-
-    /**
      * @throws \Exception
      */
-    public static function toDateInterval(int $value): DateInterval {
+    public function toDateInterval(): DateInterval {
+        $value = $this->value;
         $isNegative = $value < 0;
         $sign = $isNegative ? '' : '+';
 
@@ -149,5 +112,34 @@ class Time extends Bigint {
         }
 
         return $interval;
+    }
+
+    public function toString(): string {
+        $seconds = intdiv($this->value, 1000000000);
+        $remaining_nanoseconds = $this->value % 1000000000;
+
+        $hours = intdiv($seconds, 3600);
+        $remaining_seconds = $seconds % 3600;
+
+        $minutes = intdiv($remaining_seconds, 60);
+        $remaining_seconds %= 60;
+
+        $formatted_time = sprintf('%02d:%02d:%02d', $hours, $minutes, $remaining_seconds);
+
+        if ($remaining_nanoseconds > 0) {
+            $formatted_nanoseconds = sprintf('.%09d', $remaining_nanoseconds);
+            $formatted_time .= $formatted_nanoseconds;
+        }
+
+        return $formatted_time;
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    protected function validateValue() : void {
+        if ($this->value > self::VALUE_MAX || $this->value < 0) {
+            throw new Exception('Value "' . $this->value . '" is outside of possible range');
+        }
     }
 }

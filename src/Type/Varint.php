@@ -4,18 +4,59 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Varint extends Base {
-    use CommonResetValue;
-    use CommonBinaryOfValue;
-    use CommonToString;
+class Varint extends TypeBase {
+    protected int $value;
 
-    protected ?int $_value = null;
-
-    public function __construct(?int $value = null) {
-        $this->_value = $value;
+    public final function __construct(int $value) {
+        $this->value = $value;
     }
 
-    public static function binary(int $value): string {
+    /**
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+        $value = 0;
+        $length = strlen($binary);
+
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('C*', $binary);
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack binary.');
+        }
+
+        if (count($unpacked) > PHP_INT_SIZE) {
+            throw new Exception('Value of Varint is outside of possible range (this system only supports signed ' . (PHP_INT_SIZE*8) . '-bit integers).');
+        }
+
+        foreach ($unpacked as $i => $byte) {
+            $value |= $byte << (($length - (int) $i) * 8);
+        }
+
+        $shift = (PHP_INT_SIZE - $length) * 8;
+
+        return new static($value << $shift >> $shift);
+    }
+
+    /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        if (!is_int($value)) {
+            throw new Exception('Invalid value type');
+        }
+
+        return new static($value);
+    }
+
+    public function getBinary(): string {
+        $value = $this->value;
         $isNegative = $value < 0;
         $breakValue = $isNegative ? -1 : 0;
 
@@ -41,58 +82,7 @@ class Varint extends Base {
         return pack('C*', ...array_reverse($result));
     }
 
-    /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function parse(string $binary, null|int|array $definition = null): int {
-        $value = 0;
-        $length = strlen($binary);
-
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('C*', $binary);
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
-        }
-
-        if (count($unpacked) > PHP_INT_SIZE) {
-            throw new Exception('Value of Varint ist outside of possible range (this system only supports signed ' . (PHP_INT_SIZE*8) . '-bit integers).');
-        }
-
-        foreach ($unpacked as $i => $byte) {
-            $value |= $byte << (($length - (int) $i) * 8);
-        }
-
-        $shift = (PHP_INT_SIZE - $length) * 8;
-
-        return $value << $shift >> $shift;
-    }
-
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_int($value)) {
-            throw new Exception('Invalid value type');
-        }
-
-        return new self($value);
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function parseValue(): ?int {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
-        }
-
-        return $this->_value;
+    public function getValue(): int {
+        return $this->value;
     }
 }

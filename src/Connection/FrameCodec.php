@@ -8,20 +8,20 @@ use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Request\Request;
 
 class FrameCodec implements Node {
-    public const PAYLOAD_MAX_SIZE = 131071;
     public const CRC24_INIT = 0x875060;
     public const CRC24_POLYNOMIAL = 0x1974F0B;
+    public const PAYLOAD_MAX_SIZE = 131071;
+    protected ?string $compression;
 
     protected string $crc32Prefix;
 
-    protected NodeImplementation $node;
-    protected ?string $compression;
-
     protected string $inputData;
-    protected int $inputDataOffset;
     protected int $inputDataLength;
+    protected int $inputDataOffset;
 
     protected ?Lz4Decompressor $lz4Decompressor;
+
+    protected NodeImplementation $node;
 
     /**
      * @throws \Cassandra\Connection\NodeException
@@ -47,6 +47,10 @@ class FrameCodec implements Node {
         $this->inputDataLength = 0;
     }
 
+    public function close(): void {
+        $this->node->close();
+    }
+
     /**
      * @return array{
      *  class: string,
@@ -54,7 +58,7 @@ class FrameCodec implements Node {
      *  port: int,
      *  username: ?string,
      *  password: ?string,
-     * } & array<string, mixed> $_options
+     * } & array<string, mixed> $options
      */
     public function getOptions(): array {
         return $this->node->getOptions();
@@ -114,8 +118,20 @@ class FrameCodec implements Node {
         }
     }
 
-    public function close(): void {
-        $this->node->close();
+    protected function crc24(string $data, int $length = 0): int {
+        $crc = self::CRC24_INIT;
+        $len = $length > 0 ? $length : strlen($data);
+        for ($i = 0; $i < $len; $i++) {
+            $crc ^= ord($data[$i]) << 16;
+            for ($j = 0; $j < 8; $j++) {
+                $crc <<= 1;
+                if ($crc & 0x1000000) {
+                    $crc ^= self::CRC24_POLYNOMIAL;
+                }
+            }
+        }
+
+        return $crc & 0xFFFFFF;
     }
 
     /**
@@ -243,21 +259,5 @@ class FrameCodec implements Node {
         $payloadCrc32 = pack('V', $unpacked[1]);
 
         $this->node->write($header . $payload . $payloadCrc32);
-    }
-
-    protected function crc24(string $data, int $length = 0): int {
-        $crc = self::CRC24_INIT;
-        $len = $length > 0 ? $length : strlen($data);
-        for ($i = 0; $i < $len; $i++) {
-            $crc ^= ord($data[$i]) << 16;
-            for ($j = 0; $j < 8; $j++) {
-                $crc <<= 1;
-                if ($crc & 0x1000000) {
-                    $crc ^= self::CRC24_POLYNOMIAL;
-                }
-            }
-        }
-
-        return $crc & 0xFFFFFF;
     }
 }

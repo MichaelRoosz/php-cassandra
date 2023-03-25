@@ -4,28 +4,11 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Inet extends Base {
-    use CommonResetValue;
-    use CommonBinaryOfValue;
-    use CommonToString;
+class Inet extends TypeBase {
+    protected string $value;
 
-    protected ?string $_value = null;
-
-    public function __construct(?string $value = null) {
-        $this->_value = $value;
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function binary(string $value): string {
-        $binary = inet_pton($value);
-
-        if ($binary === false) {
-            throw new Exception('Cannot convert value to binary.');
-        }
-
-        return $binary;
+    public final function __construct(string $value) {
+        $this->value = $value;
     }
 
     /**
@@ -33,14 +16,14 @@ class Inet extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function parse(string $binary, null|int|array $definition = null): string {
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
         $inet = inet_ntop($binary);
 
         if ($inet === false) {
             throw new Exception('Cannot convert value to string.');
         }
 
-        return $inet;
+        return new static($inet);
     }
 
     /**
@@ -49,22 +32,28 @@ class Inet extends Base {
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_string($value)) {
-            throw new Exception('Invalid value type');
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        if (!is_string($value)) {
+            throw new Exception('Invalid value');
         }
 
-        return new self($value);
+        return new static($value);
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected function parseValue(): ?string {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary);
+    public function getBinary(): string {
+        $binary = inet_pton($this->value);
+
+        if ($binary === false) {
+            throw new Exception('Cannot convert value to binary.');
         }
 
-        return $this->_value;
+        return $binary;
+    }
+
+    public function getValue(): string {
+        return $this->value;
     }
 }

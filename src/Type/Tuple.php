@@ -5,70 +5,74 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\Response\StreamReader;
+use Cassandra\Type;
 
-class Tuple extends Base {
-    use CommonResetValue;
-    use CommonToString;
+class Tuple extends TypeBase {
+    /**
+     * @var array<int|array<mixed>> $definition
+     */
+    protected array $definition;
 
     /**
-     * @var array<int|array<mixed>> $_definition
+     * @var array<mixed> $value
      */
-    protected array $_definition;
-
-    /**
-     * @var ?array<mixed> $_value
-     */
-    protected ?array $_value = null;
-
-    /**
-     * @param ?array<mixed> $value
-     * @param array<int|array<mixed>> $definition
-     */
-    public function __construct(?array $value, array $definition) {
-        $this->_definition = $definition;
-        $this->_value = $value;
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function binaryOfValue(): string {
-        if ($this->_value === null) {
-            throw new Exception('value is null');
-        }
-
-        return static::binary($this->_value, $this->_definition);
-    }
-
-    /**
-     * @return ?array<mixed> $_value
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function parseValue(): ?array {
-        if ($this->_value === null && $this->_binary !== null) {
-            $this->_value = static::parse($this->_binary, $this->_definition);
-        }
-
-        return $this->_value;
-    }
+    protected array $value;
 
     /**
      * @param array<mixed> $value
      * @param array<int|array<mixed>> $definition
+     */
+    public final function __construct(array $value, array $definition) {
+        $this->definition = $definition;
+        $this->value = $value;
+    }
+
+    /**
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+        if (!is_array($definition)) {
+            throw new Exception('invalid Tuple definition');
+        }
+
+        return new static((new StreamReader($binary))->readTuple($definition), $definition);
+    }
+
+    /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function binary(array $value, array $definition): string {
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        if (!is_array($value)) {
+            throw new Exception('Invalid value');
+        }
+
+        if (!is_array($definition)) {
+            throw new Exception('Invalid type definition');
+        }
+
+        return new static($value, $definition);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function getBinary(): string {
         $binary = '';
-        foreach ($definition as $key => $type) {
+        $value = $this->value;
+
+        foreach ($this->definition as $key => $type) {
             if ($value[$key] === null) {
                 $binary .= "\xff\xff\xff\xff";
             } else {
-                $valueBinary = $value[$key] instanceof Base
+                $valueBinary = $value[$key] instanceof TypeBase
                     ? $value[$key]->getBinary()
-                    : Base::getBinaryByType($type, $value[$key]);
+                    : Type::getBinaryByType($type, $value[$key]);
 
                 $binary .= pack('N', strlen($valueBinary)) . $valueBinary;
             }
@@ -78,35 +82,9 @@ class Tuple extends Base {
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @return array<mixed> $value
      */
-    public static function parse(string $binary, null|int|array $definition = null): array {
-        if (!is_array($definition)) {
-            throw new Exception('invalid Tuple definition');
-        }
-
-        return (new StreamReader($binary))->readTuple($definition);
-    }
-
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function create(mixed $value, null|int|array $definition): self {
-        if ($value !== null && !is_array($value)) {
-            throw new Exception('Invalid value type');
-        }
-
-        if (!is_array($definition)) {
-            throw new Exception('Invalid definition');
-        }
-
-        return new self($value, $definition);
+    public function getValue(): array {
+        return $this->value;
     }
 }
