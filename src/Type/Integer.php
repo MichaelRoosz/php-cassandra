@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 class Integer extends TypeBase {
-    public const VALUE_MAX = 2147483647;
-    public const VALUE_MIN = -2147483648;
+    public final const VALUE_MAX = 2147483647;
+    public final const VALUE_MIN = -2147483648;
 
     protected int $value;
 

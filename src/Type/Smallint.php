@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 class Smallint extends TypeBase {
-    public const VALUE_MAX = 32767;
-    public const VALUE_MIN = -32768;
+    public final const VALUE_MAX = 32767;
+    public final const VALUE_MIN = -32768;
 
     protected int $value;
 

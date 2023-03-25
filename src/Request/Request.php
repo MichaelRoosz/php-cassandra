@@ -10,17 +10,17 @@ use Cassandra\Value;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
-    public const CONSISTENCY_ALL = 0x0005;
-    public const CONSISTENCY_ANY = 0x0000;
-    public const CONSISTENCY_EACH_QUORUM = 0x0007;
-    public const CONSISTENCY_LOCAL_ONE = 0x000A;
-    public const CONSISTENCY_LOCAL_QUORUM = 0x0006;
-    public const CONSISTENCY_LOCAL_SERIAL = 0x0009;
-    public const CONSISTENCY_ONE = 0x0001;
-    public const CONSISTENCY_QUORUM = 0x0004;
-    public const CONSISTENCY_SERIAL = 0x0008;
-    public const CONSISTENCY_THREE = 0x0003;
-    public const CONSISTENCY_TWO = 0x0002;
+    public final const CONSISTENCY_ALL = 0x0005;
+    public final const CONSISTENCY_ANY = 0x0000;
+    public final const CONSISTENCY_EACH_QUORUM = 0x0007;
+    public final const CONSISTENCY_LOCAL_ONE = 0x000A;
+    public final const CONSISTENCY_LOCAL_QUORUM = 0x0006;
+    public final const CONSISTENCY_LOCAL_SERIAL = 0x0009;
+    public final const CONSISTENCY_ONE = 0x0001;
+    public final const CONSISTENCY_QUORUM = 0x0004;
+    public final const CONSISTENCY_SERIAL = 0x0008;
+    public final const CONSISTENCY_THREE = 0x0003;
+    public final const CONSISTENCY_TWO = 0x0002;
 
     protected int $flags = 0;
 

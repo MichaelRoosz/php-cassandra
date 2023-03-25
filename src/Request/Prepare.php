@@ -7,7 +7,7 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Frame;
 
 class Prepare extends Request {
-    public const FLAG_WITH_KEYSPACE = 0x01;
+    public final const FLAG_WITH_KEYSPACE = 0x01;
 
     protected string $cql;
 

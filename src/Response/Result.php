@@ -14,16 +14,16 @@ use Cassandra\Type;
  * @implements IteratorAggregate<ArrayObject<string, mixed>|array<string, mixed>|null>
  */
 class Result extends Response implements IteratorAggregate {
-    public const PREPARED = 0x0004;
-    public const ROWS = 0x0002;
+    public final const PREPARED = 0x0004;
+    public final const ROWS = 0x0002;
 
-    public const ROWS_FLAG_GLOBAL_TABLES_SPEC = 0x0001;
-    public const ROWS_FLAG_HAS_MORE_PAGES = 0x0002;
-    public const ROWS_FLAG_NO_METADATA = 0x0004;
-    public const ROWS_METADATA_CHANGED = 0x0008;
-    public const SCHEMA_CHANGE = 0x0005;
-    public const SET_KEYSPACE = 0x0003;
-    public const VOID = 0x0001;
+    public final const ROWS_FLAG_GLOBAL_TABLES_SPEC = 0x0001;
+    public final const ROWS_FLAG_HAS_MORE_PAGES = 0x0002;
+    public final const ROWS_FLAG_NO_METADATA = 0x0004;
+    public final const ROWS_METADATA_CHANGED = 0x0008;
+    public final const SCHEMA_CHANGE = 0x0005;
+    public final const SET_KEYSPACE = 0x0003;
+    public final const VOID = 0x0001;
 
     protected ?int $kind = null;
 

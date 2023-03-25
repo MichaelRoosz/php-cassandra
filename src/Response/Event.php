@@ -7,9 +7,9 @@ namespace Cassandra\Response;
 use Cassandra\Type;
 
 class Event extends Response {
-    public const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
-    public const STATUS_CHANGE = 'STATUS_CHANGE';
-    public const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
+    public final const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
+    public final const STATUS_CHANGE = 'STATUS_CHANGE';
+    public final const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
 
     protected ?string $type = null;
 

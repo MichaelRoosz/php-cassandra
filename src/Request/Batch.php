@@ -9,9 +9,9 @@ use Cassandra\Type;
 use Cassandra\Exception;
 
 class Batch extends Request {
-    public const TYPE_COUNTER = 2;
-    public const TYPE_LOGGED = 0;
-    public const TYPE_UNLOGGED = 1;
+    public final const TYPE_COUNTER = 2;
+    public final const TYPE_LOGGED = 0;
+    public final const TYPE_UNLOGGED = 1;
 
     protected int $batchType;
 

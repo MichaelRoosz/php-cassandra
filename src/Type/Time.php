@@ -9,7 +9,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 
 class Time extends Bigint {
-    public const VALUE_MAX = 86399999999999;
+    public final const VALUE_MAX = 86399999999999;
 
     public function __toString(): string {
         return $this->toString();
