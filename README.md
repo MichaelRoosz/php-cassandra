@@ -11,13 +11,12 @@ https://packagist.org/packages/mroosz/php-cassandra
 * Supports asynchronous and synchronous requests
 * Support for logged, unlogged and counter batches
 * The ability to specify the consistency, "serial consistency" and all flags defined in the protocol
-* Supports Query preparation and execute
-* Supports all data types, including collection types, tuple and UDT
+* Supports query preparation
+* Supports all data types, including collection types, tuples and UDTs
 * Supports conditional update/insert
 * 5 fetch methods (fetchAll, fetchRow, fetchPairs, fetchCol, fetchOne)
 * Two transport layers - socket and stream.
 * Uses exceptions to report errors
-* 800% performance improvement(async mode) than other php cassandra client libraries
 
 ## Installation
 
