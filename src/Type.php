@@ -91,7 +91,7 @@ class Type {
      * @throws \Cassandra\Type\Exception
      */
     public static function getBinaryByType(int|array $dataType, mixed $value): string {
-        $type = static::getTypeObjectForValue($dataType, $value);
+        $type = self::getTypeObjectForValue($dataType, $value);
         if ($type === null) {
             throw new Exception('Cannot get type object');
         }
