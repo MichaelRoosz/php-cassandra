@@ -236,7 +236,7 @@ All types are supported.
 //  Decimal
     new \Cassandra\Type\Decimal('0.0123');
 
-//  Double
+//  Double (same as a PHP "float", 64-bit precision)
     new \Cassandra\Type\Double(2.718281828459);
 
 //  Duration
@@ -250,7 +250,7 @@ All types are supported.
     // warning: loses nanosecond precision, DateInterval only supports microseconds
     $dateInterval = $duration->toDateInterval();
 
-//  Float
+//  Float (32-bit precsion - use the "Double" type for a PHP-like "float")
     new \Cassandra\Type\Float32(2.718);
 
 //  Inet

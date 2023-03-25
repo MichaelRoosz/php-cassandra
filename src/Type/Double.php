@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+/**
+ * Double-precision floating-point number (same as a PHP "float", 64-bit precision)
+ */
 class Double extends TypeBase {
     protected float $value;
 
