@@ -4,10 +4,20 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class FloatType extends TypeBase {
-    protected float $value;
+class Integer extends TypeBase {
+    public const VALUE_MAX = 2147483647;
+    public const VALUE_MIN = -2147483648;
 
-    public final function __construct(float $value) {
+    protected int $value;
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public final function __construct(int $value) {
+        if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
+            throw new Exception('Value "' . $value . '" is outside of possible range');
+        }
+
         $this->value = $value;
     }
 
@@ -17,16 +27,17 @@ class FloatType extends TypeBase {
      * @throws \Cassandra\Type\Exception
      */
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
-        /**
-         * @var false|array<float> $unpacked
-         */
-        $unpacked = unpack('G', $binary);
+        $bits = PHP_INT_SIZE * 8 - 32;
 
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $binary);
         if ($unpacked === false) {
             throw new Exception('Cannot unpack binary.');
         }
 
-        return new static($unpacked[1]);
+        return new static($unpacked[1] << $bits >> $bits);
     }
 
     /**
@@ -36,7 +47,7 @@ class FloatType extends TypeBase {
      * @throws \Cassandra\Type\Exception
      */
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
-        if (!is_float($value)) {
+        if (!is_int($value)) {
             throw new Exception('Invalid value');
         }
 
@@ -44,10 +55,10 @@ class FloatType extends TypeBase {
     }
 
     public function getBinary(): string {
-        return pack('G', $this->value);
+        return pack('N', $this->value);
     }
 
-    public function getValue(): float {
+    public function getValue(): int {
         return $this->value;
     }
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 /**
- * @deprecated Use \Cassandra\Type\IntType instead
+ * @deprecated Use \Cassandra\Type\Integer instead
  */
-class PhpInt extends IntType {
+class PhpInt extends Integer {
 }

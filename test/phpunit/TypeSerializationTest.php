@@ -245,9 +245,9 @@ final class TypeSerializationTest extends TestCase {
         */
     }
 
-    public function testFloatType(): void {
+    public function testFloat32(): void {
         $float = 1024.5;
-        $this->assertSame($float, Type\FloatType::fromBinary((new Type\FloatType($float))->getBinary())->getValue());
+        $this->assertSame($float, Type\Float32::fromBinary((new Type\Float32($float))->getBinary())->getValue());
     }
 
     public function testInet(): void {
@@ -258,12 +258,12 @@ final class TypeSerializationTest extends TestCase {
         $this->assertSame($ipv6, Type\Inet::fromBinary((new Type\Inet($ipv6))->getBinary())->getValue());
     }
 
-    public function testIntType(): void {
+    public function testInteger(): void {
         $int1 = 234355434;
-        $this->assertSame($int1, Type\IntType::fromBinary((new Type\IntType($int1))->getBinary())->getValue());
+        $this->assertSame($int1, Type\Integer::fromBinary((new Type\Integer($int1))->getBinary())->getValue());
 
         $int2 = -234355434;
-        $this->assertSame($int2, Type\IntType::fromBinary((new Type\IntType($int2))->getBinary())->getValue());
+        $this->assertSame($int2, Type\Integer::fromBinary((new Type\Integer($int2))->getBinary())->getValue());
     }
 
     public function testNested(): void {
