@@ -251,13 +251,13 @@ All types are supported.
     $dateInterval = $duration->toDateInterval();
 
 //  Float
-    new \Cassandra\Type\PhpFloat(2.718);
+    new \Cassandra\Type\FloatType(2.718);
 
 //  Inet
     new \Cassandra\Type\Inet('127.0.0.1');
 
 //  Int
-    new \Cassandra\Type\PhpInt(12345678);
+    new \Cassandra\Type\IntType(12345678);
 
 //  Smallint
     new \Cassandra\Type\Smallint(2048);

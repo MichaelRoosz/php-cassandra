@@ -8,7 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
 
-class Date extends PhpInt {
+class Date extends IntType {
     /**
      * @throws \Exception
      */
