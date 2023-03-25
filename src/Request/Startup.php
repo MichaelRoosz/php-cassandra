@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 
 class Startup extends Request {
-    protected int $opcode = Frame::OPCODE_STARTUP;
+    protected int $opcode = Opcode::REQUEST_STARTUP;
 
     /**
      * @var array<string, string> $options

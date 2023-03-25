@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 
 class Query extends Request {
     public final const FLAG_PAGE_SIZE = 0x04;
@@ -21,7 +21,7 @@ class Query extends Request {
 
     protected string $cql;
 
-    protected int $opcode = Frame::OPCODE_QUERY;
+    protected int $opcode = Opcode::REQUEST_QUERY;
 
     /**
      * @var array{

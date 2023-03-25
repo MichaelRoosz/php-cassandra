@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 
 class Register extends Request {
     /**
      * @var array<string> $events
      */
     protected array $events;
-    protected int $opcode = Frame::OPCODE_REGISTER;
+    protected int $opcode = Opcode::REQUEST_REGISTER;
 
     /**
      * REGISTER

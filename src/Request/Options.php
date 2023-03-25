@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 
 class Options extends Request {
-    protected int $opcode = Frame::OPCODE_OPTIONS;
+    protected int $opcode = Opcode::REQUEST_OPTIONS;
 
     /**
      * OPTIONS

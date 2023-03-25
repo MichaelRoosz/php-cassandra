@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Flag;
 use Cassandra\Response\StreamReader;
 use Stringable;
 
@@ -112,15 +113,15 @@ abstract class Response implements Frame, Stringable {
     protected function readExtraData(): void {
         $flags = $this->header['flags'];
 
-        if ($flags & self::FLAG_TRACING) {
+        if ($flags & Flag::TRACING) {
             $this->tracingUuid = $this->stream->readUuid();
         }
 
-        if ($flags & self::FLAG_WARNING) {
+        if ($flags & Flag::WARNING) {
             $this->warnings = $this->stream->readStringList();
         }
 
-        if ($flags & self::FLAG_CUSTOM_PAYLOAD) {
+        if ($flags & Flag::CUSTOM_PAYLOAD) {
             $this->payload = $this->stream->readBytesMap();
         }
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 use Cassandra\Type;
 use Cassandra\Exception;
 
@@ -17,7 +17,7 @@ class Batch extends Request {
 
     protected int $consistency;
 
-    protected int $opcode = Frame::OPCODE_BATCH;
+    protected int $opcode = Opcode::REQUEST_BATCH;
 
     /**
      * @var array{

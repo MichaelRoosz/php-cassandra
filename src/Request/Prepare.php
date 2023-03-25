@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 
 class Prepare extends Request {
     public final const FLAG_WITH_KEYSPACE = 0x01;
 
     protected string $cql;
 
-    protected int $opcode = Frame::OPCODE_PREPARE;
+    protected int $opcode = Opcode::REQUEST_PREPARE;
 
     /**
      * @var array{

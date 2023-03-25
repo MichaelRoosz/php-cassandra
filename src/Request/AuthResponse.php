@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 
 class AuthResponse extends Request {
-    protected int $opcode = Frame::OPCODE_AUTH_RESPONSE;
+    protected int $opcode = Opcode::REQUEST_AUTH_RESPONSE;
 
     protected string $password;
 

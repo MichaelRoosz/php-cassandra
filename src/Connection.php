@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cassandra;
 
 use Cassandra\Connection\FrameCodec;
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
+use Cassandra\Protocol\Flag;
 use Cassandra\Compression\Lz4Decompressor;
 use SplQueue;
 
@@ -68,14 +69,14 @@ class Connection {
      * @var array<int, class-string<Response\Response>> $responseClassMap
      */
     protected static array $responseClassMap = [
-        Frame::OPCODE_ERROR => Response\Error::class,
-        Frame::OPCODE_READY => Response\Ready::class,
-        Frame::OPCODE_AUTHENTICATE => Response\Authenticate::class,
-        Frame::OPCODE_SUPPORTED => Response\Supported::class,
-        Frame::OPCODE_RESULT => Response\Result::class,
-        Frame::OPCODE_EVENT => Response\Event::class,
-        Frame::OPCODE_AUTH_CHALLENGE => Response\AuthChallenge::class,
-        Frame::OPCODE_AUTH_SUCCESS => Response\AuthSuccess::class,
+        Opcode::RESPONSE_ERROR => Response\Error::class,
+        Opcode::RESPONSE_READY => Response\Ready::class,
+        Opcode::RESPONSE_AUTHENTICATE => Response\Authenticate::class,
+        Opcode::RESPONSE_SUPPORTED => Response\Supported::class,
+        Opcode::RESPONSE_RESULT => Response\Result::class,
+        Opcode::RESPONSE_EVENT => Response\Event::class,
+        Opcode::RESPONSE_AUTH_CHALLENGE => Response\AuthChallenge::class,
+        Opcode::RESPONSE_AUTH_SUCCESS => Response\AuthSuccess::class,
     ];
 
     /**
@@ -613,7 +614,7 @@ class Connection {
             throw new Exception('received invalid response');
         }
 
-        if ($this->version < 5 && $header['length'] > 0 && $header['flags'] & Frame::FLAG_COMPRESSION) {
+        if ($this->version < 5 && $header['length'] > 0 && $header['flags'] & Flag::COMPRESSION) {
             $this->lz4Decompressor->setInput($body);
             $body = $this->lz4Decompressor->decompressBlock();
         }

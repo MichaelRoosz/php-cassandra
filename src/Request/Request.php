@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Flag;
 use Cassandra\Type;
 use Cassandra\Value;
 use Stringable;
@@ -49,9 +50,9 @@ abstract class Request implements Frame, Stringable {
     public function __toString(): string {
         $body = $this->getBody();
 
-        if ($this->flags & self::FLAG_CUSTOM_PAYLOAD) {
+        if ($this->flags & Flag::CUSTOM_PAYLOAD) {
             if ($this->payload === null) {
-                $this->flags &= ~self::FLAG_CUSTOM_PAYLOAD;
+                $this->flags &= ~Flag::CUSTOM_PAYLOAD;
             } else {
                 $payloadData = pack('n', count($this->payload));
 
@@ -75,7 +76,7 @@ abstract class Request implements Frame, Stringable {
     }
 
     public function enableTracing(): void {
-        $this->flags |= self::FLAG_TRACING;
+        $this->flags |= Flag::TRACING;
     }
 
     public function getBody(): string {
@@ -192,7 +193,7 @@ abstract class Request implements Frame, Stringable {
      */
     public function setPayload(array $payload): void {
         $this->payload = $payload;
-        $this->flags |= self::FLAG_CUSTOM_PAYLOAD;
+        $this->flags |= Flag::CUSTOM_PAYLOAD;
     }
 
     public function setStream(int $stream): void {

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Protocol\Frame;
+use Cassandra\Protocol\Opcode;
 
 class Execute extends Request {
     protected int $consistency;
-    protected int $opcode = Frame::OPCODE_EXECUTE;
+    protected int $opcode = Opcode::REQUEST_EXECUTE;
 
     /**
      * @var array{
