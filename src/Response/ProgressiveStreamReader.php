@@ -14,15 +14,15 @@ class ProgressiveStreamReader extends StreamReader {
         $this->dataLength = strlen($data);
     }
 
-    public function setSource(Node $source): void {
-        $this->source = $source;
-    }
-
     /**
      * @throws \Cassandra\Response\Exception
      */
     public function getData(): string {
         throw new Exception('not supported');
+    }
+
+    public function setSource(Node $source): void {
+        $this->source = $source;
     }
 
     /**

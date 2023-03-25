@@ -7,6 +7,8 @@ namespace Cassandra\Connection;
 use Cassandra\Request\Request;
 
 interface Node {
+    public function close(): void;
+
     /**
      * @return array{
      *  class: string,
@@ -23,6 +25,4 @@ interface Node {
     public function readOnce(int $length): string;
 
     public function writeRequest(Request $request): void;
-
-    public function close(): void;
 }
