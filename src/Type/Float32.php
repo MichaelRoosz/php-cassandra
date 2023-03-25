@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 /**
- * Single-precision floating-point number (32-bit precsion - use the "Double" type for a PHP-like "float")
+ * Single-precision floating-point number (32-bit precision - use the "Double" type for a PHP-like "float")
  */
 class Float32 extends TypeBase {
     protected float $value;

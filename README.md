@@ -250,7 +250,7 @@ All types are supported.
     // warning: loses nanosecond precision, DateInterval only supports microseconds
     $dateInterval = $duration->toDateInterval();
 
-//  Float (32-bit precsion - use the "Double" type for a PHP-like "float")
+//  Float (32-bit precision - use the "Double" type for a PHP-like "float")
     new \Cassandra\Type\Float32(2.718);
 
 //  Inet
