@@ -10,7 +10,6 @@ return (new PhpCsFixer\Config())->setRules([
     'blank_line_after_opening_tag' => true,
     'blank_line_before_statement' => [
         'statements' => [
-            'continue',
             'declare',
             'default',
             'exit',

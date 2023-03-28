@@ -398,19 +398,46 @@ final class TypeSerializationTest extends TestCase {
 
     public function testVarint(): void {
         $varint = 922337203685477580;
-        $this->assertSame($varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValue());
+        $this->assertSame((string) $varint, (new Type\Varint($varint))->getValue());
 
         $varint = -922337203685477580;
-        $this->assertSame($varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValue());
+        $this->assertSame((string) $varint, (new Type\Varint($varint))->getValue());
 
-        $this->assertSame(0, Type\Varint::fromBinary("\x00")->getValue());
-        $this->assertSame(1, Type\Varint::fromBinary("\x01")->getValue());
-        $this->assertSame(127, Type\Varint::fromBinary("\x7F")->getValue());
-        $this->assertSame(128, Type\Varint::fromBinary("\x00\x80")->getValue());
-        $this->assertSame(129, Type\Varint::fromBinary("\x00\x81")->getValue());
-        $this->assertSame(-1, Type\Varint::fromBinary("\xFF")->getValue());
-        $this->assertSame(-128, Type\Varint::fromBinary("\x80")->getValue());
-        $this->assertSame(-129, Type\Varint::fromBinary("\xFF\x7F")->getValue());
+        $varint = 922337203685477580;
+        $this->assertSame($varint, (new Type\Varint($varint))->getValueAsInt());
+
+        $varint = -922337203685477580;
+        $this->assertSame($varint, (new Type\Varint($varint))->getValueAsInt());
+
+        $varint = 922337203685477580;
+        $this->assertSame((string) $varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValue());
+
+        $varint = -922337203685477580;
+        $this->assertSame((string) $varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValue());
+
+        $varint = 922337203685477580;
+        $this->assertSame($varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValueAsInt());
+
+        $varint = -922337203685477580;
+        $this->assertSame($varint, Type\Varint::fromBinary((new Type\Varint($varint))->getBinary())->getValueAsInt());
+
+        $this->assertSame('0', Type\Varint::fromBinary("\x00")->getValue());
+        $this->assertSame('1', Type\Varint::fromBinary("\x01")->getValue());
+        $this->assertSame('127', Type\Varint::fromBinary("\x7F")->getValue());
+        $this->assertSame('128', Type\Varint::fromBinary("\x00\x80")->getValue());
+        $this->assertSame('129', Type\Varint::fromBinary("\x00\x81")->getValue());
+        $this->assertSame('-1', Type\Varint::fromBinary("\xFF")->getValue());
+        $this->assertSame('-128', Type\Varint::fromBinary("\x80")->getValue());
+        $this->assertSame('-129', Type\Varint::fromBinary("\xFF\x7F")->getValue());
+
+        $this->assertSame(0, Type\Varint::fromBinary("\x00")->getValueAsInt());
+        $this->assertSame(1, Type\Varint::fromBinary("\x01")->getValueAsInt());
+        $this->assertSame(127, Type\Varint::fromBinary("\x7F")->getValueAsInt());
+        $this->assertSame(128, Type\Varint::fromBinary("\x00\x80")->getValueAsInt());
+        $this->assertSame(129, Type\Varint::fromBinary("\x00\x81")->getValueAsInt());
+        $this->assertSame(-1, Type\Varint::fromBinary("\xFF")->getValueAsInt());
+        $this->assertSame(-128, Type\Varint::fromBinary("\x80")->getValueAsInt());
+        $this->assertSame(-129, Type\Varint::fromBinary("\xFF\x7F")->getValueAsInt());
 
         $this->assertSame("\x00", (new Type\Varint(0))->getBinary());
         $this->assertSame("\x01", (new Type\Varint(1))->getBinary());

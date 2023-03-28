@@ -12,12 +12,18 @@ abstract class TypeBase implements Stringable {
      * @throws \Cassandra\Response\Exception
      */
     public function __toString(): string {
+        $value = $this->getValue();
+
+        if (is_string($value)) {
+            return $value;
+        }
+
         /**
          *  @throws \Cassandra\Type\Exception
          *  @throws \Cassandra\Response\Exception
          * */
         $json = json_encode(
-            $this->getValue(),
+            $value,
             JSON_PRETTY_PRINT
             | JSON_PRESERVE_ZERO_FRACTION
             | JSON_PARTIAL_OUTPUT_ON_ERROR
