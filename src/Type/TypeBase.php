@@ -12,6 +12,7 @@ abstract class TypeBase implements Stringable {
      * @throws \Cassandra\Response\Exception
      */
     public function __toString(): string {
+        /** @var mixed $value */
         $value = $this->getValue();
 
         if (is_string($value)) {

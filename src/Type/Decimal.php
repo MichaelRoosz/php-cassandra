@@ -68,9 +68,6 @@ class Decimal extends TypeBase {
         return new static($value);
     }
 
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
     public function getBinary(): string {
         $pos = strpos($this->value, '.');
         $scaleLen = $pos === false ? 0 : strlen($this->value) - $pos - 1;

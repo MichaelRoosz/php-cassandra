@@ -5,6 +5,7 @@ use Cassandra\Type;
 
 require __DIR__ . '/../php-cassandra.php';
 
+/*
 $nodes = [
     [
         'host' => 'localhost',
@@ -21,6 +22,7 @@ $nodes = [
 $keyspace = '';
 $connection = new Connection($nodes, $keyspace);
 $connection->connect();
+*/
 
 // CREATE KEYSPACE IF NOT EXISTS test1 WITH replication = {'class': 'SimpleStrategy'};
 // CREATE TABLE test1.test1 (id int, d duration, PRIMARY KEY (id));
@@ -159,208 +161,101 @@ var_dump(bin2hex(stringToBinary($varInt)));
 $varInt = (string) PHP_INT_MIN . (string) PHP_INT_MAX;
 
 var_dump(Type\Varint::fromBinary((new Type\Varint($varInt))->getBinary())->__toString());
-var_dump(binaryToString(stringToBinary($varInt)));
+#var_dump(binaryToString(stringToBinary($varInt)));
 
 
 $varInt = (string) PHP_INT_MAX . (string) PHP_INT_MAX;
 
 var_dump(Type\Varint::fromBinary((new Type\Varint($varInt))->getBinary())->__toString());
-var_dump(binaryToString(stringToBinary($varInt)));
+#var_dump(binaryToString(stringToBinary($varInt)));
 
-function binaryToString($binary) : string {
-    $isNegative = (ord($binary[0]) & 0x80) !== 0;
+/*
+        if (self::gmpAvailable()) {
+            $this->nativeValue = 0;
 
-    if ($isNegative) {
-        for ($i = 0; $i < strlen($binary); $i++) {
-            $binary[$i] = ~$binary[$i];
-        }
-    }
+            if ($value instanceof GMP) {
+                $this->gmpValue = $value;
+            } else {
+                $this->gmpValue = gmp_init($value);
+            }
 
-    $hex = bin2hex($binary);
-
-    $string = hexToDecimalString($hex);
-
-    if ($isNegative) {
-        $string = stringAdd1($string);
-
-        return '-' . $string;
-    }
-
-    return $string;
-}
-
-function hexToDecimalString($hexStr) {
-    $hexStr = strtoupper($hexStr);
-    $hexChars = '0123456789ABCDEF';
-    $decimalStr = '0';
-
-    for ($i = 0; $i < strlen($hexStr); $i++) {
-        $currentHexDigit = $hexStr[$i];
-        $decimalValue = strpos($hexChars, $currentHexDigit);
-
-        // Multiply existing decimal number by 16 and add current decimal value
-        $carry = 0;
-        $tempDecimalStr = '';
-        for ($j = strlen($decimalStr) - 1; $j >= 0; $j--) {
-            $product = ((int) $decimalStr[$j] * 16) + $decimalValue + $carry;
-            $carry = (int) ($product / 10);
-            $tempDecimalStr = (string) ($product % 10) . $tempDecimalStr;
-
-            // Update decimal value for next iteration
-            $decimalValue = 0;
+            return;
         }
 
-        // Add carry if there's any
-        if ($carry > 0) {
-            $tempDecimalStr = (string) $carry . $tempDecimalStr;
+
+        if (is_string($value) && (string) $this->nativeValue !== $value) {
+            throw new Exception('Value of Varint is outside of possible range (this system only supports signed ' . (PHP_INT_SIZE*8) . '-bit integers). Install the gmp php extension for support of bigger numbers.');
         }
 
-        $decimalStr = $tempDecimalStr;
-    }
+        public static function fromBinary(string $binary, null|int|array $definition = null): static {
+        if (self::gmpAvailable()) {
+            $isNegative = (ord($binary[0]) & 0x80) !== 0;
 
-    return $decimalStr;
-}
+            if ($isNegative) {
+                for ($i = 0; $i < strlen($binary); $i++) {
+                    $binary[$i] = ~$binary[$i];
+                }
+            }
 
-function stringToBinary($string) : string {
-    $isNegative = str_starts_with($string, '-');
-    if ($isNegative) {
-        $string = substr($string, 1);
-        $string = stringSub1($string);
-    }
+            $value = gmp_import($binary, 1, GMP_MSW_FIRST | GMP_LITTLE_ENDIAN);
 
-    $binary = '';
-    $byte = 0;
-    $bits = 0;
-    while ($string !== '0') {
-        $string = stringDiv2($string, $modulo);
+            if ($isNegative) {
+                //$value = gmp_add($value, 1);
+                //$value = gmp_neg($value);
+                $value = gmp_com($value);
+            }
 
-        if ($modulo) {
-            $byte |= 1 << $bits;
+            return new static($value);
         }
 
-        $bits++;
+        public function getBinary(): string {
+        if ($this->gmpValue !== null) {
+            $isNegative = gmp_sign($this->gmpValue) === -1;
 
-        if ($bits === 8) {
-            $binary = chr($byte) . $binary;
-            $byte = 0;
-            $bits = 0;
-        }
-    }
+            if ($isNegative) {
+                $value = gmp_add($this->gmpValue, 1);
+            } else {
+                $value = $this->gmpValue;
+            }
 
-    if ($bits > 0) {
-        $binary = chr($byte) . $binary;
-    }
+            $binary = gmp_export($value, 1, GMP_MSW_FIRST | GMP_LITTLE_ENDIAN);
 
-    if ($isNegative) {
-        for ($i = 0; $i < strlen($binary); $i++) {
-            $binary[$i] = ~$binary[$i];
-        }
-    }
+            if ($isNegative) {
+                for ($i = 0; $i < strlen($binary); $i++) {
+                    $binary[$i] = ~$binary[$i];
+                }
+            }
 
-    $length = strlen($binary);
+            $length = strlen($binary);
 
-    // Check if the most significant bit is set, which could be interpreted as a negative number
-    if (!$isNegative && ($length === 0 || (ord($binary[0]) & 0x80) !== 0)) {
-        // Add an extra byte with a 0x00 value to keep the number positive
-        $binary = chr(0) . $binary;
-    }
-    // Check if the most significant bit is not set, which could be interpreted as a positive number
-    elseif ($isNegative && ($length === 0 || (ord($binary[0]) & 0x80) === 0)) {
-        // Add an extra byte with a 0xFF value to keep the number negative
-        $binary = chr(0xFF) . $binary;
-    }
+            // Check if the most significant bit is set, which could be interpreted as a negative number
+            if (!$isNegative && ($length === 0 || (ord($binary[0]) & 0x80) !== 0)) {
+                // Add an extra byte with a 0x00 value to keep the number positive
+                $binary = chr(0) . $binary;
+            }
+            // Check if the most significant bit is not set, which could be interpreted as a positive number
+            elseif ($isNegative && ($length === 0 || (ord($binary[0]) & 0x80) === 0)) {
+                // Add an extra byte with a 0xFF value to keep the number negative
+                $binary = chr(0xFF) . $binary;
+            }
+            #var_dump(bin2hex($binary));
 
-    return $binary;
-}
-
-function stringAdd1(string $str) : string {
-    $length = strlen($str);
-    $carry = true;
-    for ($i = $length - 1; $i >= 0; $i--) {
-        if ($str[$i] !== '9') {
-            $str[$i] = (string) ((int) $str[$i] + 1);
-            $carry = false;
-            break;
+            return $binary;
         }
 
-        $str[$i] = '0';
-    }
+        public function getValueAsGmp(): GMP {
+            if ($this->gmpValue === null) {
+                throw new Exception('The php gmp extension is required for GMP values.');
+            }
 
-    if ($carry) {
-        $str = '1' . $str;
-    }
-
-    return $str;
-}
-
-function stringSub1(string $str) : string {
-    $length = strlen($str);
-    for ($i = $length - 1; $i >= 0; $i--) {
-        if ($str[$i] !== '0') {
-            $str[$i] = (string) ((int) $str[$i] - 1);
-            break;
+            return $this->gmpValue;
         }
 
-        $str[$i] = '9';
-    }
+        protected static function gmpAvailable() : bool {
+            if (self::$gmpAvailable === null) {
+                self::$gmpAvailable = extension_loaded('gmp');
+            }
 
-    return $str;
-}
-
-function stringDiv2(string $str, ?bool &$modulo = null) : string {
-    $length = strlen($str);
-    $carry = false;
-    $firstCarry = $length > 0 && $str[0] === '1';
-    for ($i = 0; $i < $length; $i++) {
-        switch ($str[$i]) {
-            case '0':
-                $str[$i] = $carry ? '5' : '0';
-                $carry = false;
-                break;
-            case '1':
-                $str[$i] = $carry ? '5' : '0';
-                $carry = true;
-                break;
-            case '2':
-                $str[$i] = $carry ? '6' : '1';
-                $carry = false;
-                break;
-            case '3':
-                $str[$i] = $carry ? '6' : '1';
-                $carry = true;
-                break;
-            case '4':
-                $str[$i] = $carry ? '7' : '2';
-                $carry = false;
-                break;
-            case '5':
-                $str[$i] = $carry ? '7' : '2';
-                $carry = true;
-                break;
-            case '6':
-                $str[$i] = $carry ? '8' : '3';
-                $carry = false;
-                break;
-            case '7':
-                $str[$i] = $carry ? '8' : '3';
-                $carry = true;
-                break;
-            case '8':
-                $str[$i] = $carry ? '9' : '4';
-                $carry = false;
-                break;
-            case '9':
-                $str[$i] = $carry ? '9' : '4';
-                $carry = true;
-                break;
+            return self::$gmpAvailable;
         }
-    }
-
-    $modulo = $carry;
-
-    if ($firstCarry && $length > 1) {
-        $str = substr($str, 1);
-    }
-
-    return $str;
-}
+*/
