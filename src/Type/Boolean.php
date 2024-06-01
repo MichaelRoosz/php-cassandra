@@ -7,7 +7,7 @@ namespace Cassandra\Type;
 class Boolean extends TypeBase {
     protected bool $value;
 
-    public final function __construct(bool $value) {
+    final public function __construct(bool $value) {
         $this->value = $value;
     }
 

@@ -7,9 +7,9 @@ namespace Cassandra\Response;
 use Cassandra\Type;
 
 class Event extends Response {
-    public final const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
-    public final const STATUS_CHANGE = 'STATUS_CHANGE';
-    public final const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
+    final public const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
+    final public const STATUS_CHANGE = 'STATUS_CHANGE';
+    final public const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
 
     protected ?string $type = null;
 
@@ -34,7 +34,7 @@ class Event extends Response {
         $this->stream->offset(0);
         $type = $this->type = $this->stream->readString();
 
-        switch($type) {
+        switch ($type) {
             case self::TOPOLOGY_CHANGE:
             case self::STATUS_CHANGE:
                 return [

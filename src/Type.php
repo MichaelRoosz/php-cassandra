@@ -8,33 +8,33 @@ use Cassandra\Type\Exception;
 use Cassandra\Type as Types;
 
 class Type {
-    public final const ASCII = 0x0001;
-    public final const BIGINT = 0x0002;
-    public final const BLOB = 0x0003;
-    public final const BOOLEAN = 0x0004;
-    public final const COLLECTION_LIST = 0x0020;
-    public final const COLLECTION_MAP = 0x0021;
-    public final const COLLECTION_SET = 0x0022;
-    public final const COUNTER = 0x0005;
-    public final const CUSTOM = 0x0000;
-    public final const DATE = 0x0011;
-    public final const DECIMAL = 0x0006;
-    public final const DOUBLE = 0x0007;
-    public final const DURATION = 0x0015;
-    public final const FLOAT = 0x0008;
-    public final const INET = 0x0010;
-    public final const INT = 0x0009;
-    public final const SMALLINT = 0x0013;
-    public final const TEXT = 0x000A;        // deprecated in Protocol v3
-    public final const TIME = 0x0012;
-    public final const TIMESTAMP = 0x000B;
-    public final const TIMEUUID = 0x000F;
-    public final const TINYINT = 0x0014;
-    public final const TUPLE = 0x0031;
-    public final const UDT = 0x0030;
-    public final const UUID = 0x000C;
-    public final const VARCHAR = 0x000D;
-    public final const VARINT = 0x000E;
+    final public const ASCII = 0x0001;
+    final public const BIGINT = 0x0002;
+    final public const BLOB = 0x0003;
+    final public const BOOLEAN = 0x0004;
+    final public const COLLECTION_LIST = 0x0020;
+    final public const COLLECTION_MAP = 0x0021;
+    final public const COLLECTION_SET = 0x0022;
+    final public const COUNTER = 0x0005;
+    final public const CUSTOM = 0x0000;
+    final public const DATE = 0x0011;
+    final public const DECIMAL = 0x0006;
+    final public const DOUBLE = 0x0007;
+    final public const DURATION = 0x0015;
+    final public const FLOAT = 0x0008;
+    final public const INET = 0x0010;
+    final public const INT = 0x0009;
+    final public const SMALLINT = 0x0013;
+    final public const TEXT = 0x000A;        // deprecated in Protocol v3
+    final public const TIME = 0x0012;
+    final public const TIMESTAMP = 0x000B;
+    final public const TIMEUUID = 0x000F;
+    final public const TINYINT = 0x0014;
+    final public const TUPLE = 0x0031;
+    final public const UDT = 0x0030;
+    final public const UUID = 0x000C;
+    final public const VARCHAR = 0x000D;
+    final public const VARINT = 0x000E;
 
     /**
      * @var array<int, class-string<Types\TypeBase>> $typeClassMap
@@ -110,11 +110,11 @@ class Type {
         return self::getTypeObjectForValue($dataType, $value);
     }
 
-     /**
-     * @param int|array<mixed> $dataType
-     *
-     * @throws \Cassandra\Type\Exception
-     */
+    /**
+    * @param int|array<mixed> $dataType
+    *
+    * @throws \Cassandra\Type\Exception
+    */
     public static function getTypeObjectForBinary(int|array $dataType, string $binary): Types\TypeBase {
         $dataTypeInfo = self::getTypeAndDefinitionOfDataType($dataType);
 

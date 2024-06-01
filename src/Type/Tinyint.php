@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 class Tinyint extends TypeBase {
-    public final const VALUE_MAX = 127;
-    public final const VALUE_MIN = -128;
+    final public const VALUE_MAX = 127;
+    final public const VALUE_MIN = -128;
 
     protected int $value;
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public final function __construct(int $value) {
+    final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
             throw new Exception('Value "' . $value . '" is outside of possible range');
         }

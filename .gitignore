@@ -5,3 +5,4 @@ composer.lock
 phpunit-report
 phpDocumentor.phar
 .phpdoc
+.php-cs-fixer.cache

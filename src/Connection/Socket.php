@@ -219,6 +219,7 @@ class Socket implements NodeImplementation {
         $result = socket_connect($this->socket, $this->options['host'] ?? 'localhost', $this->options['port']);
         if ($result === false) {
             $errorCode = socket_last_error($this->socket);
+
             //Unable to connect to Cassandra node: {$this->options['host']}:{$this->options['port']}
             throw new SocketException(socket_strerror($errorCode), $errorCode);
         }

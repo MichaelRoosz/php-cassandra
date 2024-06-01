@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Cassandra\Connection;
 use Cassandra\Type;
 
@@ -65,7 +67,6 @@ var_dump((string)new Type\Duration([
 
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 1, 'days' => 2, 'nanoseconds'=> 3])));
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 223231, 'days' => 277756, 'nanoseconds'=> 320688000000000])));
-
 
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => 2147483647, 'days' => 2147483647, 'nanoseconds'=> PHP_INT_MAX])));
 #var_dump(Type\Duration::parse(Type\Duration::binary(['months' => -2147483648, 'days' => -2147483648, 'nanoseconds'=> PHP_INT_MIN])));
@@ -162,7 +163,6 @@ $varInt = (string) PHP_INT_MIN . (string) PHP_INT_MAX;
 
 var_dump(Type\Varint::fromBinary((new Type\Varint($varInt))->getBinary())->__toString());
 #var_dump(binaryToString(stringToBinary($varInt)));
-
 
 $varInt = (string) PHP_INT_MAX . (string) PHP_INT_MAX;
 

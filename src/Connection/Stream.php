@@ -68,7 +68,6 @@ class Stream implements NodeImplementation {
             throw new StreamException('persistent must be a bool value');
         }
 
-
         if (!isset($options['ssl']) || !is_array($options['ssl'])) {
             $options['ssl'] = [];
         } else {

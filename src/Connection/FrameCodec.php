@@ -8,9 +8,9 @@ use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Request\Request;
 
 class FrameCodec implements Node {
-    public final const CRC24_INIT = 0x875060;
-    public final const CRC24_POLYNOMIAL = 0x1974F0B;
-    public final const PAYLOAD_MAX_SIZE = 131071;
+    final public const CRC24_INIT = 0x875060;
+    final public const CRC24_POLYNOMIAL = 0x1974F0B;
+    final public const PAYLOAD_MAX_SIZE = 131071;
 
     protected string $compression;
 

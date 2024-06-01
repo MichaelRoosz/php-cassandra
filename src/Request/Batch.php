@@ -10,9 +10,9 @@ use Cassandra\Exception;
 use Cassandra\Response\Result;
 
 class Batch extends Request {
-    public final const TYPE_COUNTER = 2;
-    public final const TYPE_LOGGED = 0;
-    public final const TYPE_UNLOGGED = 1;
+    final public const TYPE_COUNTER = 2;
+    final public const TYPE_LOGGED = 0;
+    final public const TYPE_UNLOGGED = 1;
 
     protected int $batchType;
 

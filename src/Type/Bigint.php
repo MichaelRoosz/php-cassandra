@@ -12,7 +12,7 @@ class Bigint extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public final function __construct(int $value) {
+    final public function __construct(int $value) {
         self::require64Bit();
 
         $this->value = $value;
@@ -66,13 +66,14 @@ class Bigint extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected static function require64Bit() : void {
+    protected static function require64Bit(): void {
         if (PHP_INT_SIZE < 8) {
             $className = (new ReflectionClass(static::class))->getShortName();
+
             throw new Exception('The ' . $className . ' data type requires a 64-bit system');
         }
     }
 
-    protected function validateValue() : void {
+    protected function validateValue(): void {
     }
 }

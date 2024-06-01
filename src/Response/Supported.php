@@ -12,6 +12,7 @@ class Supported extends Response {
      */
     public function getData(): array {
         $this->stream->offset(0);
+
         /**
          * Indicates which startup options are supported by the server. This message
          * comes as a response to an OPTIONS message.

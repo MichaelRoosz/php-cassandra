@@ -7,7 +7,7 @@ namespace Cassandra\Type;
 class Inet extends TypeBase {
     protected string $value;
 
-    public final function __construct(string $value) {
+    final public function __construct(string $value) {
         $this->value = $value;
     }
 

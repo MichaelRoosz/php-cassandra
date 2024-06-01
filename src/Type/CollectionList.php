@@ -22,7 +22,7 @@ class CollectionList extends TypeBase {
      * @param array<mixed> $value
      * @param int|array<int|array<mixed>> $definition
      */
-    public final function __construct(array $value, int|array $definition) {
+    final public function __construct(array $value, int|array $definition) {
         $this->definition = $definition;
         $this->value = $value;
     }

@@ -7,8 +7,8 @@ namespace Cassandra\Type;
 use DateInterval;
 
 class Duration extends TypeBase {
-    protected final const INT32_MAX = 2147483647;
-    protected final const INT32_MIN = -2147483648;
+    final protected const INT32_MAX = 2147483647;
+    final protected const INT32_MIN = -2147483648;
 
     /**
      * @var array{ months: int, days: int, nanoseconds: int } $value
@@ -20,7 +20,7 @@ class Duration extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public final function __construct(array $value) {
+    final public function __construct(array $value) {
         self::require64Bit();
         self::validateValue($value);
 
@@ -359,7 +359,6 @@ class Duration extends TypeBase {
         $microseconds = intdiv($value['nanoseconds'], 1000);
         $value['nanoseconds'] %= 1000;
 
-
         if ($isNegative) {
             $hours = abs($hours);
             $minutes = abs($minutes);
@@ -465,7 +464,7 @@ class Duration extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected static function require64Bit() : void {
+    protected static function require64Bit(): void {
         if (PHP_INT_SIZE < 8) {
             throw new Exception('The Duration data type requires a 64-bit system');
         }

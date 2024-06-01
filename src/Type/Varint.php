@@ -9,7 +9,7 @@ use Cassandra\StringMath\Calculator;
 class Varint extends TypeBase {
     protected string|int $value;
 
-    public final function __construct(string|int $value) {
+    final public function __construct(string|int $value) {
         $this->value = $value;
     }
 

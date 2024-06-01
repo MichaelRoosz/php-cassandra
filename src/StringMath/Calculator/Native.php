@@ -11,7 +11,7 @@ class Native extends Calculator {
     /**
      * @throws \Cassandra\StringMath\Exception
      */
-    public function binaryToString(string $binary) : string {
+    public function binaryToString(string $binary): string {
         $isNegative = (ord($binary[0]) & 0x80) !== 0;
 
         if ($isNegative) {
@@ -33,7 +33,7 @@ class Native extends Calculator {
         return $string;
     }
 
-    public function stringToBinary(string $string) : string {
+    public function stringToBinary(string $string): string {
         $isNegative = str_starts_with($string, '-');
         if ($isNegative) {
             $string = substr($string, 1);
@@ -85,13 +85,14 @@ class Native extends Calculator {
         return $binary;
     }
 
-    public function stringUnsignedAdd1(string $string) : string {
+    public function stringUnsignedAdd1(string $string): string {
         $length = strlen($string);
         $carry = true;
         for ($i = $length - 1; $i >= 0; $i--) {
             if ($string[$i] !== '9') {
                 $string[$i] = (string) ((int) $string[$i] + 1);
                 $carry = false;
+
                 break;
             }
 
@@ -105,7 +106,7 @@ class Native extends Calculator {
         return $string;
     }
 
-    public function stringUnsignedDiv2(string $string, ?bool &$modulo = null) : string {
+    public function stringUnsignedDiv2(string $string, ?bool &$modulo = null): string {
         $length = strlen($string);
         $carry = false;
         $firstCarry = $length > 0 && $string[0] === '1';
@@ -114,42 +115,52 @@ class Native extends Calculator {
                 case '0':
                     $string[$i] = $carry ? '5' : '0';
                     $carry = false;
+
                     break;
                 case '1':
                     $string[$i] = $carry ? '5' : '0';
                     $carry = true;
+
                     break;
                 case '2':
                     $string[$i] = $carry ? '6' : '1';
                     $carry = false;
+
                     break;
                 case '3':
                     $string[$i] = $carry ? '6' : '1';
                     $carry = true;
+
                     break;
                 case '4':
                     $string[$i] = $carry ? '7' : '2';
                     $carry = false;
+
                     break;
                 case '5':
                     $string[$i] = $carry ? '7' : '2';
                     $carry = true;
+
                     break;
                 case '6':
                     $string[$i] = $carry ? '8' : '3';
                     $carry = false;
+
                     break;
                 case '7':
                     $string[$i] = $carry ? '8' : '3';
                     $carry = true;
+
                     break;
                 case '8':
                     $string[$i] = $carry ? '9' : '4';
                     $carry = false;
+
                     break;
                 case '9':
                     $string[$i] = $carry ? '9' : '4';
                     $carry = true;
+
                     break;
             }
         }
@@ -163,11 +174,12 @@ class Native extends Calculator {
         return $string;
     }
 
-    public function stringUnsignedSub1(string $string) : string {
+    public function stringUnsignedSub1(string $string): string {
         $length = strlen($string);
         for ($i = $length - 1; $i >= 0; $i--) {
             if ($string[$i] !== '0') {
                 $string[$i] = (string) ((int) $string[$i] - 1);
+
                 break;
             }
 
@@ -180,7 +192,7 @@ class Native extends Calculator {
     /**
      * @throws \Cassandra\StringMath\Exception
      */
-    protected function hexToDecimalString(string $hexString) : string {
+    protected function hexToDecimalString(string $hexString): string {
         $hexString = strtoupper($hexString);
         $hexChars = '0123456789ABCDEF';
         $decimalStr = '0';

@@ -10,7 +10,7 @@ class Decimal extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public final function __construct(string $value) {
+    final public function __construct(string $value) {
         if (!is_numeric($value)) {
             throw new Exception('Value must be a numeric string');
         }

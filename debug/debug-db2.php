@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 require __DIR__ . '/../php-cassandra.php';
 
 use Cassandra\Connection;
@@ -103,7 +105,6 @@ bd23b48a-99de-11ed-a8fc-0242ac120002,
 );
 */
 // SELECT * FROM test.test2;
-
 
 $result1 = $connection->querySync('SELECT * FROM test.test1');
 $data1 = $result1->fetchAll();

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 require __DIR__ . '/../php-cassandra.php';
 
 $nodes =[
@@ -18,7 +20,6 @@ $nodes =[
 $keyspace = '';
 $connection = new \Cassandra\Connection($nodes, $keyspace, ['COMPRESSION' => 'lz4']);
 $connection->connect();
-
 
 $connection->addEventListener(new class() implements \Cassandra\EventListener {
     public function onEvent(\Cassandra\Response\Event $event): void {

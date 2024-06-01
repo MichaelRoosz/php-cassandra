@@ -13,7 +13,6 @@ class Exception extends PhpException {
      */
     protected array $context;
 
-
     /**
      * @param array<string, string|int|array<int|string, int|string>> $context
      */

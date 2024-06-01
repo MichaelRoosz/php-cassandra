@@ -8,30 +8,30 @@ use Cassandra\Type;
 
 class Error extends Response {
     /** @deprecated Use ALREADY_EXISTS instead */
-    public final const ALREADY_EXIST = 0x2400;
-    public final const ALREADY_EXISTS = 0x2400;
-    public final const AUTHENTICATION_ERROR = 0x0100;
+    final public const ALREADY_EXIST = 0x2400;
+    final public const ALREADY_EXISTS = 0x2400;
+    final public const AUTHENTICATION_ERROR = 0x0100;
 
     /** @deprecated Use AUTHENTICATION_ERROR instead */
-    public final const BAD_CREDENTIALS = 0x0100;
-    public final const CAS_WRITE_UNKNOWN = 0x1700;
-    public final const CDC_WRITE_FAILURE = 0x1600;
-    public final const CONFIG_ERROR = 0x2300;
-    public final const FUNCTION_FAILURE = 0x1400;
-    public final const INVALID = 0x2200;
-    public final const IS_BOOTSTRAPPING = 0x1002;
-    public final const OVERLOADED = 0x1001;
-    public final const PROTOCOL_ERROR = 0x000A;
-    public final const READ_FAILURE = 0x1300;
-    public final const READ_TIMEOUT = 0x1200;
-    public final const SERVER_ERROR = 0x0000;
-    public final const SYNTAX_ERROR = 0x2000;
-    public final const TRUNCATE_ERROR = 0x1003;
-    public final const UNAUTHORIZED = 0x2100;
-    public final const UNAVAILABLE_EXCEPTION = 0x1000;
-    public final const UNPREPARED = 0x2500;
-    public final const WRITE_FAILURE = 0x1500;
-    public final const WRITE_TIMEOUT = 0x1100;
+    final public const BAD_CREDENTIALS = 0x0100;
+    final public const CAS_WRITE_UNKNOWN = 0x1700;
+    final public const CDC_WRITE_FAILURE = 0x1600;
+    final public const CONFIG_ERROR = 0x2300;
+    final public const FUNCTION_FAILURE = 0x1400;
+    final public const INVALID = 0x2200;
+    final public const IS_BOOTSTRAPPING = 0x1002;
+    final public const OVERLOADED = 0x1001;
+    final public const PROTOCOL_ERROR = 0x000A;
+    final public const READ_FAILURE = 0x1300;
+    final public const READ_TIMEOUT = 0x1200;
+    final public const SERVER_ERROR = 0x0000;
+    final public const SYNTAX_ERROR = 0x2000;
+    final public const TRUNCATE_ERROR = 0x1003;
+    final public const UNAUTHORIZED = 0x2100;
+    final public const UNAVAILABLE_EXCEPTION = 0x1000;
+    final public const UNPREPARED = 0x2500;
+    final public const WRITE_FAILURE = 0x1500;
+    final public const WRITE_TIMEOUT = 0x1100;
 
     /**
      * Indicates an error processing a request. The body of the message will be an
@@ -57,7 +57,7 @@ class Error extends Response {
         $data['code'] = $code;
         $data['context'] = ['message' => $message];
 
-        switch($code) {
+        switch ($code) {
             case self::SERVER_ERROR:
                 $data['message'] = 'Server error: ' . $message;
 

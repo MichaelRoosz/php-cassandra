@@ -9,7 +9,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 
 class Time extends Bigint {
-    public final const VALUE_MAX = 86399999999999;
+    final public const VALUE_MAX = 86399999999999;
 
     public function __toString(): string {
         return $this->toString();
@@ -137,7 +137,7 @@ class Time extends Bigint {
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected function validateValue() : void {
+    protected function validateValue(): void {
         if ($this->value > self::VALUE_MAX || $this->value < 0) {
             throw new Exception('Value "' . $this->value . '" is outside of possible range');
         }

@@ -9,7 +9,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: php-actions/composer@v6
-    
+
+    - name: Lint
+      run: composer run lint
+
     - name: Phpstan
       run: composer run phpstan
     

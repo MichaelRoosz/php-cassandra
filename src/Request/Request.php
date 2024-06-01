@@ -11,17 +11,17 @@ use Cassandra\Value;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
-    public final const CONSISTENCY_ALL = 0x0005;
-    public final const CONSISTENCY_ANY = 0x0000;
-    public final const CONSISTENCY_EACH_QUORUM = 0x0007;
-    public final const CONSISTENCY_LOCAL_ONE = 0x000A;
-    public final const CONSISTENCY_LOCAL_QUORUM = 0x0006;
-    public final const CONSISTENCY_LOCAL_SERIAL = 0x0009;
-    public final const CONSISTENCY_ONE = 0x0001;
-    public final const CONSISTENCY_QUORUM = 0x0004;
-    public final const CONSISTENCY_SERIAL = 0x0008;
-    public final const CONSISTENCY_THREE = 0x0003;
-    public final const CONSISTENCY_TWO = 0x0002;
+    final public const CONSISTENCY_ALL = 0x0005;
+    final public const CONSISTENCY_ANY = 0x0000;
+    final public const CONSISTENCY_EACH_QUORUM = 0x0007;
+    final public const CONSISTENCY_LOCAL_ONE = 0x000A;
+    final public const CONSISTENCY_LOCAL_QUORUM = 0x0006;
+    final public const CONSISTENCY_LOCAL_SERIAL = 0x0009;
+    final public const CONSISTENCY_ONE = 0x0001;
+    final public const CONSISTENCY_QUORUM = 0x0004;
+    final public const CONSISTENCY_SERIAL = 0x0008;
+    final public const CONSISTENCY_THREE = 0x0003;
+    final public const CONSISTENCY_TWO = 0x0002;
 
     protected int $flags = 0;
 
@@ -246,30 +246,37 @@ abstract class Request implements Frame, Stringable {
             switch (true) {
                 case $value instanceof Type\TypeBase:
                     $binary = $value->getBinary();
+
                     break;
 
                 case $value instanceof Value\NotSet:
                     $binary = $value;
+
                     break;
 
                 case $value === null:
                     $binary = null;
+
                     break;
 
                 case is_int($value):
                     $binary = pack('N', $value);
+
                     break;
 
                 case is_string($value):
                     $binary = $value;
+
                     break;
 
                 case is_bool($value):
                     $binary = $value ? chr(1) : chr(0);
+
                     break;
 
                 case is_float($value):
                     $binary = pack('E', $value);
+
                     break;
 
                 default:

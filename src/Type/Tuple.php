@@ -22,7 +22,7 @@ class Tuple extends TypeBase {
      * @param array<mixed> $value
      * @param array<int|array<mixed>> $definition
      */
-    public final function __construct(array $value, array $definition) {
+    final public function __construct(array $value, array $definition) {
         $this->definition = $definition;
         $this->value = $value;
     }

@@ -10,7 +10,7 @@ namespace Cassandra\Type;
 class Double extends TypeBase {
     protected float $value;
 
-    public final function __construct(float $value) {
+    final public function __construct(float $value) {
         $this->value = $value;
     }
 

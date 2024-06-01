@@ -9,7 +9,7 @@ class Custom extends TypeBase {
 
     protected string $value;
 
-    public final function __construct(string $value, string $javaClassName = '') {
+    final public function __construct(string $value, string $javaClassName = '') {
         $this->javaClassName = $javaClassName;
         $this->value = $value;
     }

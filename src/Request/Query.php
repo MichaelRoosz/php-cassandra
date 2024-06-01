@@ -7,15 +7,15 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 
 class Query extends Request {
-    public final const FLAG_PAGE_SIZE = 0x04;
-    public final const FLAG_SKIP_METADATA = 0x02;
-    public final const FLAG_VALUES = 0x01;
-    public final const FLAG_WITH_DEFAULT_TIMESTAMP = 0x20;
-    public final const FLAG_WITH_KEYSPACE = 0x80;
-    public final const FLAG_WITH_NAMES_FOR_VALUES = 0x40;
-    public final const FLAG_WITH_NOW_IN_SECONDS = 0x0100;
-    public final const FLAG_WITH_PAGING_STATE = 0x08;
-    public final const FLAG_WITH_SERIAL_CONSISTENCY = 0x10;
+    final public const FLAG_PAGE_SIZE = 0x04;
+    final public const FLAG_SKIP_METADATA = 0x02;
+    final public const FLAG_VALUES = 0x01;
+    final public const FLAG_WITH_DEFAULT_TIMESTAMP = 0x20;
+    final public const FLAG_WITH_KEYSPACE = 0x80;
+    final public const FLAG_WITH_NAMES_FOR_VALUES = 0x40;
+    final public const FLAG_WITH_NOW_IN_SECONDS = 0x0100;
+    final public const FLAG_WITH_PAGING_STATE = 0x08;
+    final public const FLAG_WITH_SERIAL_CONSISTENCY = 0x10;
 
     protected int $consistency;
 
