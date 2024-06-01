@@ -7,12 +7,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Setup PHP with sockets
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.3'
-        extensions: sockets
-
     - uses: actions/checkout@v3
     - uses: php-actions/composer@v6
     
