@@ -7,6 +7,7 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Type;
 use Cassandra\Exception;
+use Cassandra\Response\Result;
 
 class Batch extends Request {
     public final const TYPE_COUNTER = 2;
@@ -60,11 +61,27 @@ class Batch extends Request {
      * @param array<mixed> $values
      *
      * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception
      */
-    public function appendQuery(string $cql, array $values = []): static {
-        $binary = chr(0);
+    public function appendPreparedQuery(Result $prepareResult, array $values = []): static {
+        if ($prepareResult->getKind() !== Result::PREPARED) {
+            throw new Exception('Invalid prepared statement');
+        }
 
-        $binary .= pack('N', strlen($cql)) . $cql;
+        $prepareData = $prepareResult->getPreparedData();
+
+        $queryId = $prepareData['id'];
+
+        if (!isset($prepareData['metadata']['columns'])) {
+            throw new Exception('missing query metadata');
+        }
+
+        $values = self::strictTypeValues($values, $prepareData['metadata']['columns']);
+
+        $binary = chr(1);
+
+        $binary .= pack('n', strlen($queryId)) . $queryId;
         $binary .= Request::valuesBinary($values, !empty($this->options['names_for_values']));
 
         $this->queryArray[] = $binary;
@@ -77,10 +94,10 @@ class Batch extends Request {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public function appendQueryId(string $queryId, array $values = []): static {
-        $binary = chr(1);
+    public function appendQuery(string $cql, array $values = []): static {
+        $binary = chr(0);
 
-        $binary .= pack('n', strlen($queryId)) . $queryId;
+        $binary .= pack('N', strlen($cql)) . $cql;
         $binary .= Request::valuesBinary($values, !empty($this->options['names_for_values']));
 
         $this->queryArray[] = $binary;

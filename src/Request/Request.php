@@ -206,7 +206,12 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
-     * @param array<array{name: string, type: int|array<mixed>}> $columns
+     * @param array<array{
+     *   keyspace: string,
+     *   tableName: string,
+     *   name: string,
+     *   type: int|array<mixed>,
+     * }> $columns
      * @return array<mixed>
      *
      * @throws \Cassandra\Type\Exception

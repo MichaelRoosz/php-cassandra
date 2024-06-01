@@ -101,11 +101,11 @@ catch (\Cassandra\Exception $e)
 ## Fetch Data
 
 ```php
-// Return a SplFixedArray containing all of the result set.
-$rows = $result->fetchAll();   // SplFixedArray
+// Return an array containing all of the result set.
+$rows = $result->fetchAll();   // array
 
-// Return a SplFixedArray containing a specified index column from the result set.
-$col = $result->fetchCol();    // SplFixedArray
+// Return an array containing a specified index column from the result set.
+$col = $result->fetchCol();    // array
 
 // Return a assoc array with key-value pairs, the key is the first column, the value is the second column. 
 $col = $result->fetchPairs();  // assoc array
@@ -152,27 +152,22 @@ catch (\Cassandra\Exception $e)
 ## Using preparation and data binding
 
 ```php
-$preparedData = $connection->prepare('SELECT * FROM "users" WHERE "id" = :id');
+$prepareResult = $connection->prepare('SELECT * FROM "users" WHERE "id" = :id');
 
-$strictValues = \Cassandra\Request\Request::strictTypeValues(
-    [
-        'id' => 'c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
-    ],
-    $preparedData['metadata']['columns']
-);
+$values = [
+    'id' => 'c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
+];
 
 $result = $connection->executeSync(
-    $preparedData['id'],
-    $strictValues,
+    $prepareResult,
+    $values,
     \Cassandra\Request\Request::CONSISTENCY_QUORUM,
     [
         'page_size' => 100,
         'names_for_values' => true,
-        'skip_metadata' => true,
     ]
 );
 
-$result->setMetadata($preparedData['result_metadata']);
 $rows = $result->fetchAll();
 ```
 
@@ -182,12 +177,14 @@ $rows = $result->fetchAll();
 $batchRequest = new \Cassandra\Request\Batch();
 
 // Append a prepared query
-$preparedData = $connection->prepare('UPDATE "students" SET "age" = :age WHERE "id" = :id');
+$prepareResult = $connection->prepare('UPDATE "students" SET "age" = :age WHERE "id" = :id');
+
 $values = [
     'age' => 21,
     'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
 ];
-$batchRequest->appendQueryId($preparedData['id'], \Cassandra\Request\Request::strictTypeValues($values, $preparedData['metadata']['columns']));
+
+$batchRequest->appendPreparedQuery($prepareResult, $values);
 
 // Append a query string
 $batchRequest->appendQuery(

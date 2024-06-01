@@ -483,6 +483,10 @@ class Duration extends TypeBase {
             }
         }
 
+        /**
+         * @var array{ months: int, days: int, nanoseconds: int } $value
+         */
+
         if ($value['months'] < self::INT32_MIN || $value['months'] > self::INT32_MAX) {
             throw new Exception('Invalid duration value - value "months" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
         }

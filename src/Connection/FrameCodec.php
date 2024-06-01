@@ -11,7 +11,8 @@ class FrameCodec implements Node {
     public final const CRC24_INIT = 0x875060;
     public final const CRC24_POLYNOMIAL = 0x1974F0B;
     public final const PAYLOAD_MAX_SIZE = 131071;
-    protected ?string $compression;
+
+    protected string $compression;
 
     protected string $crc32Prefix;
 
@@ -26,7 +27,7 @@ class FrameCodec implements Node {
     /**
      * @throws \Cassandra\Connection\NodeException
      */
-    public function __construct(NodeImplementation $node, ?string $compression = null) {
+    public function __construct(NodeImplementation $node, string $compression = '') {
         if ($compression && $compression !== 'lz4') {
             throw new NodeException('Unsupported compression');
         }

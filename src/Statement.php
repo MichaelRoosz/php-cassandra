@@ -7,6 +7,8 @@ namespace Cassandra;
 class Statement {
     protected Connection $connection;
 
+    protected ?Response\Result $prevoiousResult = null;
+
     protected ?Response\Response $response = null;
 
     protected int $streamId;
@@ -29,6 +31,11 @@ class Statement {
             throw $this->response->getException();
         }
 
+        if ($this->response instanceof Response\Result && $this->prevoiousResult !== null) {
+            $this->response->setPreviousResult($this->prevoiousResult);
+            $this->prevoiousResult = null;
+        }
+
         return $this->response;
     }
 
@@ -44,6 +51,10 @@ class Statement {
         }
 
         return $response;
+    }
+
+    public function setPreviousResult(Response\Result $prevoiousResult): void {
+        $this->prevoiousResult = $prevoiousResult;
     }
 
     public function setResponse(Response\Response $response): void {

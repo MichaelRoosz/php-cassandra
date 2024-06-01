@@ -6,7 +6,6 @@ namespace Cassandra\Response;
 
 use ArrayObject;
 use IteratorAggregate;
-use SplFixedArray;
 
 use Cassandra\Type;
 
@@ -46,30 +45,87 @@ class Result extends Response implements IteratorAggregate {
     protected ?array $metadata = null;
 
     /**
+     * @var array{
+     *  flags: int,
+     *  columns_count: int,
+     *  page_state?: ?string,
+     *  new_metadata_id?: string,
+     *  pk_count?: int,
+     *  pk_index?: int[],
+     *  columns?: array<array{
+     *   keyspace: string,
+     *   tableName: string,
+     *   name: string,
+     *   type: int|array<mixed>,
+     *  }>,
+     * } $metadataOfPreviousResult
+     */
+    protected ?array $metadataOfPreviousResult = null;
+
+    /**
+     * @var ?array{
+     *   id: string,
+     *   query_metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     new_metadata_id?: string,
+     *     page_state?: ?string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     *   result_metadata_id?: ?string
+     * } $nextExecuteCallInfo
+     */
+    protected ?array $nextExecuteCallInfo = null;
+
+    /**
      * @var class-string<RowClass> $rowClass
      */
     protected ?string $rowClass = null;
 
     /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function calculateMetadata(): void {
+        if ($this->getKind() !== self::ROWS) {
+            throw new Exception('Unexpected Response: ' . $this->getKind());
+        }
+
+        $this->stream->offset(4);
+        $metadata = $this->readMetadata(false);
+
+        if ($this->metadataOfPreviousResult !== null) {
+            $this->metadata = array_merge($this->metadataOfPreviousResult, $metadata);
+        }
+    }
+
+    /**
      * @param class-string<RowClass> $rowClass
-     * @return SplFixedArray<mixed>
+     * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function fetchAll(?string $rowClass = null): SplFixedArray {
+    public function fetchAll(?string $rowClass = null): array {
         if ($this->getKind() !== self::ROWS) {
             throw new Exception('Unexpected Response: ' . $this->getKind());
         }
         $this->stream->offset(4);
-        $this->metadata = $this->metadata ? array_merge($this->metadata, $this->readMetadata()) : $this->readMetadata();
+        $this->calculateMetadata();
 
         if (!isset($this->metadata['columns'])) {
             throw new Exception('Missing Result Metadata');
         }
 
         $rowCount = $this->stream->readInt();
-        $rows = new SplFixedArray($rowCount);
+        $rows = [];
 
         if ($rowClass === null) {
             $rowClass = $this->rowClass;
@@ -98,17 +154,17 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @return SplFixedArray<mixed>
+     * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function fetchCol(int $index = 0): SplFixedArray {
+    public function fetchCol(int $index = 0): array {
         if ($this->getKind() !== self::ROWS) {
             throw new Exception('Unexpected Response: ' . $this->getKind());
         }
         $this->stream->offset(4);
-        $this->metadata = $this->metadata ? array_merge($this->metadata, $this->readMetadata()) : $this->readMetadata();
+        $this->calculateMetadata();
 
         if (!isset($this->metadata['columns'])) {
             throw new Exception('Missing Result Metadata');
@@ -116,7 +172,7 @@ class Result extends Response implements IteratorAggregate {
 
         $rowCount = $this->stream->readInt();
 
-        $array = new SplFixedArray($rowCount);
+        $array = [];
 
         for ($i = 0; $i < $rowCount; ++$i) {
             /** @psalm-suppress MixedAssignment */
@@ -141,7 +197,7 @@ class Result extends Response implements IteratorAggregate {
             throw new Exception('Unexpected Response: ' . $this->getKind());
         }
         $this->stream->offset(4);
-        $this->metadata = $this->metadata ? array_merge($this->metadata, $this->readMetadata()) : $this->readMetadata();
+        $this->calculateMetadata();
 
         if (!isset($this->metadata['columns'])) {
             throw new Exception('Missing Result Metadata');
@@ -171,7 +227,7 @@ class Result extends Response implements IteratorAggregate {
             throw new Exception('Unexpected Response: ' . $this->getKind());
         }
         $this->stream->offset(4);
-        $this->metadata = $this->metadata ? array_merge($this->metadata, $this->readMetadata()) : $this->readMetadata();
+        $this->calculateMetadata();
 
         if (!isset($this->metadata['columns'])) {
             throw new Exception('Missing Result Metadata');
@@ -214,7 +270,7 @@ class Result extends Response implements IteratorAggregate {
             throw new Exception('Unexpected Response: ' . $this->getKind());
         }
         $this->stream->offset(4);
-        $this->metadata = $this->metadata ? array_merge($this->metadata, $this->readMetadata()) : $this->readMetadata();
+        $this->calculateMetadata();
 
         if (!isset($this->metadata['columns'])) {
             throw new Exception('Missing Result Metadata');
@@ -252,7 +308,7 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @return null|SplFixedArray<mixed>|string|array{
+     * @return null|array<mixed>|string|array{
      *   id: string,
      *   result_metadata_id?: string,
      *   metadata: array{
@@ -294,7 +350,7 @@ class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function getData(): null|SplFixedArray|string|array {
+    public function getData(): null|string|array {
         switch($this->getKind()) {
             case self::VOID:
                 return $this->getVoidData();
@@ -313,6 +369,72 @@ class Result extends Response implements IteratorAggregate {
         }
 
         return null;
+    }
+
+    /**
+     * @return array<mixed>|array{
+     *   id: string,
+     *   result_metadata_id?: string,
+     *   metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     new_metadata_id?: string,
+     *     page_state?: ?string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     *   result_metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     new_metadata_id?: string,
+     *     page_state?: ?string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     * }|array{
+     *  change_type: string,
+     *  target: string,
+     *  keyspace: string,
+     *  name?: string,
+     *  argument_types?: string[]
+     * }|array{
+     *   keyspace: string
+     * }|array{}
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function getDataArray(): array {
+        switch($this->getKind()) {
+            case self::VOID:
+                return [];
+
+            case self::ROWS:
+                return $this->getRowsData();
+
+            case self::SET_KEYSPACE:
+                return ['keyspace' => $this->getSetKeyspaceData()];
+
+            case self::PREPARED:
+                return $this->getPreparedData();
+
+            case self::SCHEMA_CHANGE:
+                return $this->getSchemaChangeData();
+        }
+
+        return [];
     }
 
     /**
@@ -363,13 +485,38 @@ class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function getMetadata(bool $isPrepareMetaData = false): array {
+    public function getMetadata(): array {
+        $this->calculateMetadata();
+
         if ($this->metadata === null) {
-            $this->stream->offset(4);
-            $this->metadata = $this->readMetadata($isPrepareMetaData);
+            throw new Exception('Missing Result Metadata');
         }
 
         return $this->metadata;
+    }
+
+    /**
+     * @return ?array{
+     *   id: string,
+     *   query_metadata: array{
+     *     flags: int,
+     *     columns_count: int,
+     *     new_metadata_id?: string,
+     *     page_state?: ?string,
+     *     pk_count?: int,
+     *     pk_index?: int[],
+     *     columns?: array<array{
+     *       keyspace: string,
+     *       tableName: string,
+     *       name: string,
+     *       type: int|array<mixed>,
+     *     }>,
+     *   },
+     *   result_metadata_id?: ?string
+     * }
+     */
+    public function getNextExecuteCallInfo(): ?array {
+        return $this->nextExecuteCallInfo;
     }
 
     /**
@@ -421,13 +568,13 @@ class Result extends Response implements IteratorAggregate {
                 'id' => $this->stream->readString(),
                 'result_metadata_id' => $this->stream->readString(),
                 'metadata' => $this->readMetadata(isPrepareMetaData: true),
-                'result_metadata' => $this->readMetadata(isPrepareMetaData: true),
+                'result_metadata' => $this->readMetadata(isPrepareMetaData: false),
             ];
         } else {
             $data = [
                 'id' => $this->stream->readString(),
                 'metadata' => $this->readMetadata(isPrepareMetaData: true),
-                'result_metadata' => $this->readMetadata(isPrepareMetaData: true),
+                'result_metadata' => $this->readMetadata(isPrepareMetaData: false),
             ];
         }
 
@@ -435,12 +582,35 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @return SplFixedArray<mixed>
+     * @return int
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function getRowsData(): SplFixedArray {
+    public function getRowCount(): int {
+        if ($this->getKind() !== self::ROWS) {
+            return 0;
+        }
+
+        $this->stream->offset(4);
+        $this->calculateMetadata();
+
+        if (!isset($this->metadata['columns'])) {
+            throw new Exception('Missing Result Metadata');
+        }
+
+        $rowCount = $this->stream->readInt();
+
+        return $rowCount;
+    }
+
+    /**
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function getRowsData(): array {
         if ($this->getKind() !== self::ROWS) {
             throw new Exception('Unexpected Response: ' . $this->getKind());
         }
@@ -542,6 +712,45 @@ class Result extends Response implements IteratorAggregate {
      */
     public function setMetadata(array $metadata): static {
         $this->metadata = $metadata;
+
+        return $this;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function setPreviousResult(Result $previousResult): static {
+        $previousKind = $previousResult->getKind();
+
+        if ($previousKind === self::PREPARED) {
+            $prepareData = $previousResult->getPreparedData();
+
+            $this->metadataOfPreviousResult = $prepareData['result_metadata'];
+
+            $this->nextExecuteCallInfo = [
+                'id' => $prepareData['id'],
+                'query_metadata' => $prepareData['metadata'],
+                'result_metadata_id' => $prepareData['result_metadata_id'] ?? null,
+            ];
+        } elseif ($previousKind === self::ROWS) {
+            $this->metadataOfPreviousResult = $previousResult->getMetadata();
+
+            $lastExecuteCallInfo = $previousResult->getNextExecuteCallInfo();
+            if ($lastExecuteCallInfo === null) {
+                throw new Exception('prepared statement not found');
+            }
+
+            $lastMetadata = $previousResult->getMetadata();
+
+            $resultMetadataId = $lastMetadata['new_metadata_id'] ?? $lastExecuteCallInfo['result_metadata_id'] ?? null;
+
+            $this->nextExecuteCallInfo = [
+                'id' => $lastExecuteCallInfo['id'],
+                'query_metadata' => $lastExecuteCallInfo['query_metadata'],
+                'result_metadata_id' => $resultMetadataId,
+            ];
+        }
 
         return $this;
     }

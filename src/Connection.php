@@ -8,6 +8,7 @@ use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\Flag;
 use Cassandra\Compression\Lz4Decompressor;
+use Cassandra\Response\Result;
 use SplQueue;
 
 class Connection {
@@ -202,15 +203,19 @@ class Connection {
         if ($response instanceof Response\Authenticate) {
             $nodeOptions = $node->getOptions();
 
-            if (empty($nodeOptions['username']) || empty($nodeOptions['password'])) {
+            if (!isset($nodeOptions['username']) || !isset($nodeOptions['password'])) {
                 throw new Exception('Username and password are required.');
+            }
+
+            if (!$nodeOptions['username'] || !$nodeOptions['password']) {
+                throw new Exception('Username and password must not be empty required.');
             }
 
             if ($this->version >= 5) {
                 if (!($node instanceof Connection\NodeImplementation)) {
                     throw new Exception('Node class is not extending NodeImplementation');
                 }
-                $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? null);
+                $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeOptions['username'], $nodeOptions['password']));
@@ -222,7 +227,7 @@ class Connection {
                 if (!($node instanceof Connection\NodeImplementation)) {
                     throw new Exception('Node class is not extending NodeImplementation');
                 }
-                $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? null);
+                $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
         } else {
             throw new Exception('Connection startup failed.');
@@ -255,10 +260,13 @@ class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function executeAsync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Statement {
-        $request = new Request\Execute($queryId, $values, $consistency === null ? $this->consistency : $consistency, $options);
+    public function executeAsync(Result $previousResult, array $values = [], ?int $consistency = null, array $options = []): Statement {
+        $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
-        return $this->asyncRequest($request);
+        $statement = $this->asyncRequest($request);
+        $statement->setPreviousResult($previousResult);
+
+        return $statement;
     }
 
     /**
@@ -274,14 +282,16 @@ class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function executeSync(string $queryId, array $values = [], ?int $consistency = null, array $options = []): Response\Result {
-        $request = new Request\Execute($queryId, $values, $consistency === null ? $this->consistency : $consistency, $options);
+    public function executeSync(Result $previousResult, array $values = [], ?int $consistency = null, array $options = []): Response\Result {
+        $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
         $response = $this->syncRequest($request);
 
         if (!($response instanceof Response\Result)) {
             throw new Exception('received invalid response');
         }
+
+        $response->setPreviousResult($previousResult);
 
         return $response;
     }
@@ -312,47 +322,18 @@ class Connection {
         return $response;
     }
 
+    public function getVersion(): int {
+        return $this->version;
+    }
+
     public function isConnected(): bool {
         return $this->node !== null;
     }
 
     /**
-     * @return array{
-     *   id: string,
-     *   result_metadata_id?: string,
-     *   metadata: array{
-     *     flags: int,
-     *     columns_count: int,
-     *     page_state?: ?string,
-     *     new_metadata_id?: string,
-     *     pk_count?: int,
-     *     pk_index?: int[],
-     *     columns?: array<array{
-     *       keyspace: string,
-     *       tableName: string,
-     *       name: string,
-     *       type: int|array<mixed>,
-     *     }>,
-     *   },
-     *   result_metadata: array{
-     *     flags: int,
-     *     columns_count: int,
-     *     page_state?: ?string,
-     *     new_metadata_id?: string,
-     *     pk_count?: int,
-     *     pk_index?: int[],
-     *     columns?: array<array{
-     *       keyspace: string,
-     *       tableName: string,
-     *       name: string,
-     *       type: int|array<mixed>,
-     *     }>,
-     *   },
-     * }
-     *
      * @throws \Cassandra\Exception
      */
-    public function prepare(string $cql): array {
+    public function prepare(string $cql): Response\Result {
         $response = $this->syncRequest(new Request\Prepare($cql));
         if (!($response instanceof Response\Result)) {
             throw new Exception('received invalid response');
@@ -362,7 +343,7 @@ class Connection {
             throw new Exception('received invalid result');
         }
 
-        return $response->getPreparedData();
+        return $response;
     }
 
     /**
@@ -477,7 +458,9 @@ class Connection {
             throw new Exception('Server does not support a compatible protocol version.');
         }
 
-        if (!empty($this->options['COMPRESSION']) && !empty($serverOptions['COMPRESSION'])) {
+        if (isset($this->options['COMPRESSION']) && $this->options['COMPRESSION']
+            && isset($serverOptions['COMPRESSION']) && $serverOptions['COMPRESSION']
+        ) {
             $compressionAlgo = strtolower($this->options['COMPRESSION']);
 
             if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
@@ -490,7 +473,7 @@ class Connection {
         }
 
         if ($this->version >= 4) {
-            if (!empty($this->options['THROW_ON_OVERLOAD'])) {
+            if (isset($this->options['THROW_ON_OVERLOAD']) && $this->options['THROW_ON_OVERLOAD']) {
                 $this->options['THROW_ON_OVERLOAD'] = '1';
             } else {
                 $this->options['THROW_ON_OVERLOAD'] = '0';
@@ -519,13 +502,13 @@ class Connection {
 
                 $options = ['host' => $matches[1]];
 
-                if (!empty($matches[5])) {
+                if (isset($matches[5]) && $matches[5]) {
                     $options['port'] = (int) $matches[5];
                 }
 
                 // Use Connection\Stream when protocol prefix is defined.
                 try {
-                    $this->node = empty($matches[2]) ? new Connection\Socket($options) : new Connection\Stream($options);
+                    $this->node = (!isset($matches[2]) || !$matches[2]) ? new Connection\Socket($options) : new Connection\Stream($options);
                 } catch (Exception $e) {
                     continue;
                 }
@@ -601,7 +584,7 @@ class Connection {
             throw new Exception('cannot read header of response');
         }
 
-        $header['version'] = $version;
+        $header['version'] = $version - 0x80;
 
         $body = $header['length'] === 0 ? '' : $this->node->read($header['length']);
 

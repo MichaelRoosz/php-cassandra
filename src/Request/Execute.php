@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
+use Cassandra\Response\Result;
 
 class Execute extends Request {
     protected int $consistency;
@@ -24,6 +25,8 @@ class Execute extends Request {
     protected $options;
 
     protected string $queryId;
+
+    protected ?string $resultMetadataId;
 
     /**
      * @var array<mixed> $values
@@ -56,10 +59,41 @@ class Execute extends Request {
      *  default_timestamp?: int,
      *  now_in_seconds?: int,
      * } $options
+     * 
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     * 
      */
-    public function __construct(string $queryId, array $values, ?int $consistency = null, array $options = []) {
-        $this->queryId = $queryId;
-        $this->values = $values;
+    public function __construct(Result $previousResult, array $values, ?int $consistency = null, array $options = []) {
+        $previousResultKind = $previousResult->getKind();
+        if ($previousResultKind !== Result::PREPARED && $previousResultKind !== Result::ROWS) {
+            throw new Exception('received invalid previous result');
+        }
+
+        if ($previousResultKind === Result::PREPARED) {
+            $prepareData = $previousResult->getPreparedData();
+
+            $executeCallInfo = [
+                'id' => $prepareData['id'],
+                'query_metadata' => $prepareData['metadata'],
+                'result_metadata_id' => $prepareData['result_metadata_id'] ?? null,
+            ];
+        } else {
+            $executeCallInfo = $previousResult->getNextExecuteCallInfo();
+            if ($executeCallInfo === null) {
+                throw new Exception('prepared statement not found');
+            }
+        }
+
+        $this->queryId = $executeCallInfo['id'];
+        $this->resultMetadataId = $executeCallInfo['result_metadata_id'] ?? null;
+
+        if (!isset($executeCallInfo['query_metadata']['columns'])) {
+            throw new Exception('missing query metadata');
+        }
+
+        $this->values = self::strictTypeValues($values, $executeCallInfo['query_metadata']['columns']);
 
         $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
         $this->options = $options;
@@ -69,6 +103,10 @@ class Execute extends Request {
          * @phpstan-ignore-next-line
          */
         unset($this->options['keyspace']);
+
+        if (!isset($this->options['skip_metadata'])) {
+            $this->options['skip_metadata'] = true;
+        }
     }
 
     /**
@@ -77,6 +115,14 @@ class Execute extends Request {
      */
     public function getBody(): string {
         $body = pack('n', strlen($this->queryId)) . $this->queryId;
+
+        if ($this->version >= 5) {
+            if ($this->resultMetadataId === null) {
+                throw new Exception('missing result metadata id');
+            }
+
+            $body .= pack('n', strlen($this->resultMetadataId)) . $this->resultMetadataId;
+        }
 
         $body .= Request::queryParameters($this->consistency, $this->values, $this->options, $this->version);
 
