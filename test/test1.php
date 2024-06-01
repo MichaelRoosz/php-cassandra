@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 require __DIR__ . '/../vendor/autoload.php';
 /*
  CREATE TABLE api.storage (
@@ -44,7 +46,6 @@ $testItem = json_decode('{
                         "title": "Christmas By The River (CD)",
                         "taxonomy": "Music > Pop > 80\'s artists"
                         }', true);
-
 
 $batch = new Cassandra\Request\Batch(Cassandra\Request\Batch::TYPE_UNLOGGED, Cassandra\Request\Request::CONSISTENCY_ONE);
 
@@ -96,7 +97,6 @@ while (true) {
         $id = 0;
     }
 
-
     if ($i >= 200000) {
         break;
     }
@@ -113,7 +113,6 @@ $taken = round(microtime(true) - $start,2);
 echo "taken: $taken | items: $counter ( total: $i) | partition: $partition | Cass Ops/sec: " .
     round($total_counter / $taken) . ' | ' . 'memory used : ' .
     round((memory_get_usage()/1024)/1024) . "MB\n";
-
 
 // 1
 
@@ -149,7 +148,6 @@ $result = $connection->executeSync(
 
 $state = $result->getMetadata()['paging_state'] ?? false;
 echo json_encode($result->fetchRow()) . "\n" . $state . "\n\n";
-
 
 // 2
 
