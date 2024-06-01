@@ -64,7 +64,7 @@ class Batch extends Request {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Exception
      */
-    public function appendPreparedQuery(Result $prepareResult, array $values = []): static {
+    public function appendPreparedStatement(Result $prepareResult, array $values = []): static {
         if ($prepareResult->getKind() !== Result::PREPARED) {
             throw new Exception('Invalid prepared statement');
         }

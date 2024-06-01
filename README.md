@@ -184,7 +184,7 @@ $values = [
     'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
 ];
 
-$batchRequest->appendPreparedQuery($prepareResult, $values);
+$batchRequest->appendPreparedStatement($prepareResult, $values);
 
 // Append a query string
 $batchRequest->appendQuery(
