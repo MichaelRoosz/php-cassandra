@@ -30,7 +30,7 @@ class Result extends Response implements IteratorAggregate {
      * @var array{
      *  flags: int,
      *  columns_count: int,
-     *  page_state?: ?string,
+     *  paging_state?: ?string,
      *  new_metadata_id?: string,
      *  pk_count?: int,
      *  pk_index?: int[],
@@ -48,7 +48,7 @@ class Result extends Response implements IteratorAggregate {
      * @var array{
      *  flags: int,
      *  columns_count: int,
-     *  page_state?: ?string,
+     *  paging_state?: ?string,
      *  new_metadata_id?: string,
      *  pk_count?: int,
      *  pk_index?: int[],
@@ -69,7 +69,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -103,6 +103,8 @@ class Result extends Response implements IteratorAggregate {
 
         if ($this->metadataOfPreviousResult !== null) {
             $this->metadata = array_merge($this->metadataOfPreviousResult, $metadata);
+        } else {
+            $this->metadata = $metadata;
         }
     }
 
@@ -315,7 +317,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -329,7 +331,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -379,7 +381,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -393,7 +395,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -470,7 +472,7 @@ class Result extends Response implements IteratorAggregate {
      * @return array{
      *  flags: int,
      *  columns_count: int,
-     *  page_state?: ?string,
+     *  paging_state?: ?string,
      *  new_metadata_id?: string,
      *  pk_count?: int,
      *  pk_index?: int[],
@@ -502,7 +504,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -527,7 +529,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -541,7 +543,7 @@ class Result extends Response implements IteratorAggregate {
      *     flags: int,
      *     columns_count: int,
      *     new_metadata_id?: string,
-     *     page_state?: ?string,
+     *     paging_state?: ?string,
      *     pk_count?: int,
      *     pk_index?: int[],
      *     columns?: array<array{
@@ -698,7 +700,7 @@ class Result extends Response implements IteratorAggregate {
      * @param array{
      *  flags: int,
      *  columns_count: int,
-     *  page_state?: ?string,
+     *  paging_state?: ?string,
      *  new_metadata_id?: string,
      *  pk_count?: int,
      *  pk_index?: int[],
@@ -774,7 +776,7 @@ class Result extends Response implements IteratorAggregate {
      * @return array{
      *  flags: int,
      *  columns_count: int,
-     *  page_state?: ?string,
+     *  paging_state?: ?string,
      *  new_metadata_id?: string,
      *  pk_count?: int,
      *  pk_index?: int[],
@@ -797,7 +799,7 @@ class Result extends Response implements IteratorAggregate {
         $flags = $metadata['flags'];
 
         if ($flags & self::ROWS_FLAG_HAS_MORE_PAGES) {
-            $metadata['page_state'] = $this->stream->readBytes();
+            $metadata['paging_state'] = $this->stream->readBytes();
         }
 
         if ($flags & self::ROWS_METADATA_CHANGED) {

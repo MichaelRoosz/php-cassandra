@@ -20,7 +20,7 @@ class ResultIterator implements Iterator {
      * @var array{
      *  flags: int,
      *  columns_count: int,
-     *  page_state?: ?string,
+     *  paging_state?: ?string,
      *  new_metadata_id?: string,
      *  pk_count?: int,
      *  pk_index?: int[],
@@ -60,7 +60,7 @@ class ResultIterator implements Iterator {
      * @param array{
      *  flags: int,
      *  columns_count: int,
-     *  page_state?: ?string,
+     *  paging_state?: ?string,
      *  new_metadata_id?: string,
      *  pk_count?: int,
      *  pk_index?: int[],
