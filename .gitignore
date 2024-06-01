@@ -1,6 +1,7 @@
 vendor
 composer.lock
 .phpunit.result.cache
+.phpunit.cache
 phpunit-report
 phpDocumentor.phar
 .phpdoc
