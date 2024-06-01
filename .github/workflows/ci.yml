@@ -1,0 +1,24 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: php-actions/composer@v6
+    
+    - name: Phpstan
+      uses: php-actions/phpstan@v3
+      with:
+        path: src/
+    
+    - name: Psalm
+      uses: docker://ghcr.io/psalm/psalm-github-actions
+
+    - name: PHPUnit tests
+      uses: graychen/phpunit-action@v1.0.0
+      with:
+        config: phpunit.xml
