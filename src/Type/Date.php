@@ -39,6 +39,26 @@ class Date extends Integer {
     }
 
     /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Exception
+     */
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+
+        if (is_string($value)) {
+            return self::fromString($value);
+        }
+
+        if (!is_int($value)) {
+            throw new Exception('Invalid value');
+        }
+
+        return new static($value);
+    }
+
+    /**
      * @throws \Exception
      */
     public function toDateTime(): DateTimeImmutable {

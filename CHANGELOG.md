@@ -1,3 +1,7 @@
+## v0.8.1
+
+* Allow types Date, Time and Timestamp to be created from string values
+
 
 ## v0.8.0
 

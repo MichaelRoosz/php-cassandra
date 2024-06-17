@@ -70,6 +70,26 @@ class Time extends Bigint {
     }
 
     /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        self::require64Bit();
+
+        if (is_string($value)) {
+            return self::fromString($value);
+        }
+
+        if (!is_int($value)) {
+            throw new Exception('Invalid value');
+        }
+
+        return new static($value);
+    }
+
+    /**
      * @throws \Exception
      */
     public function toDateInterval(): DateInterval {

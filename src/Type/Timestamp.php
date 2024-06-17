@@ -37,6 +37,27 @@ class Timestamp extends Bigint {
     }
 
     /**
+     * @param mixed $value
+     * @param null|int|array<int|array<mixed>> $definition
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Exception
+     */
+    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+        self::require64Bit();
+
+        if (is_string($value)) {
+            return self::fromString($value);
+        }
+
+        if (!is_int($value)) {
+            throw new Exception('Invalid value');
+        }
+
+        return new static($value);
+    }
+
+    /**
      * @throws \Exception
      * @throws \Cassandra\Type\Exception
      */
@@ -59,4 +80,5 @@ class Timestamp extends Bigint {
     public function toString(): string {
         return $this->toDateTime()->format('Y-m-d H:i:s.uO');
     }
+
 }
