@@ -137,22 +137,7 @@ class Connection {
      * @throws \Cassandra\Exception
      */
     public function asyncRequest(Request\Request $request): Statement {
-        if ($this->node === null) {
-            $this->connect();
-        }
-
-        if ($this->node === null) {
-            throw new Exception('not connected');
-        }
-
-        $request->setVersion($this->version);
-
-        $streamId = $this->getNewStreamId();
-        $request->setStream($streamId);
-
-        $this->node->writeRequest($request);
-
-        return $this->statements[$streamId] = new Statement($this, $streamId);
+        return $this->sendAsyncRequest($request);
     }
 
     /**
@@ -169,7 +154,10 @@ class Connection {
         $response = $this->syncRequest($batchRequest);
 
         if (!($response instanceof Response\Result)) {
-            throw new Exception('received invalid response');
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
         }
 
         return $response;
@@ -193,7 +181,10 @@ class Connection {
 
         $response = $this->syncRequest(new Request\Options());
         if (!($response instanceof Response\Supported)) {
-            throw new Exception('Connection options exchange failed.');
+            throw new Exception('Connection options exchange failed, received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Supported::class,
+                'received' => get_class($response),
+            ]);
         }
 
         $this->configureOptions($response);
@@ -264,7 +255,6 @@ class Connection {
         $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
         $statement = $this->asyncRequest($request);
-        $statement->setPreviousResult($previousResult);
 
         return $statement;
     }
@@ -286,12 +276,12 @@ class Connection {
         $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
         $response = $this->syncRequest($request);
-
         if (!($response instanceof Response\Result)) {
-            throw new Exception('received invalid response');
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
         }
-
-        $response->setPreviousResult($previousResult);
 
         return $response;
     }
@@ -314,12 +304,9 @@ class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function getResponse(int $streamId = 0): Response\Response {
-        do {
-            $response = $this->readResponse();
-        } while ($response->getStream() !== $streamId);
+    public function getResponseForStatement(Statement $statement): Response\Response {
 
-        return $response;
+        return $this->getNextResponseForStream($statement->getStreamId());
     }
 
     public function getVersion(): int {
@@ -336,11 +323,17 @@ class Connection {
     public function prepare(string $cql): Response\Result {
         $response = $this->syncRequest(new Request\Prepare($cql));
         if (!($response instanceof Response\Result)) {
-            throw new Exception('received invalid response');
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
         }
 
         if ($response->getKind() !== Response\Result::PREPARED) {
-            throw new Exception('received invalid result');
+            throw new Exception('received unexpected result type: ' . $response->getKind(), 0, [
+                'expected' => Response\Result::PREPARED,
+                'received' => $response->getKind(),
+            ]);
         }
 
         return $response;
@@ -384,7 +377,10 @@ class Connection {
         $response = $this->syncRequest($request);
 
         if (!($response instanceof Response\Result)) {
-            throw new Exception('received invalid response');
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
         }
 
         return $response;
@@ -406,7 +402,10 @@ class Connection {
 
         $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
         if (!($response instanceof Response\Result)) {
-            throw new Exception('received invalid response');
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
         }
 
         return $response;
@@ -425,10 +424,14 @@ class Connection {
         }
 
         $request->setVersion($this->version);
-
         $this->node->writeRequest($request);
 
-        $response = $this->getResponse();
+        $response = $this->getNextResponseForStream(streamId: 0);
+        $response = $this->handleResponse($request, $response);
+
+        if ($response === null) {
+            throw new Exception('received unexpected null response');
+        }
 
         if ($response instanceof Response\Error) {
             throw $response->getException();
@@ -549,6 +552,163 @@ class Connection {
         return $this->recycledStreams->dequeue();
     }
 
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function getNextResponseForStream(int $streamId = 0): Response\Response {
+        do {
+            $response = $this->readResponse();
+        } while ($response !== null && $response->getStream() !== $streamId);
+
+        if ($response === null) {
+            throw new Exception('received unexpected null response');
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
+
+        if ($result->getKind() !== Response\Result::PREPARED) {
+            throw new Exception('received unexpected result type: ' . $result->getKind(), 0, [
+                'expected' => Response\Result::PREPARED,
+                'received' => $result->getKind(),
+            ]);
+        }
+
+        if ($statement !== null) {
+            $originalRequest = $statement->getOriginalRequest();
+        }
+
+        if (!($originalRequest instanceof Request\Execute)) {
+            throw new Exception('original request is not an execute request');
+        }
+
+        $newExecuteRequest = new Request\Execute(
+            $result,
+            $originalRequest->getValues(),
+            $originalRequest->getConsistency(),
+            $originalRequest->getOptions()
+        );
+
+        if ($statement !== null) {
+            $this->sendAsyncRequest($newExecuteRequest, $result->getStream());
+
+            return null;
+        }
+
+        $response = $this->syncRequest($newExecuteRequest);
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null): ?Response\Response {
+
+        return match (true) {
+            $response instanceof Response\Error => $this->handleResponseError($request, $response, $statement),
+            $response instanceof Response\Result => $this->handleResponseResult($request, $response, $statement),
+            default => $response,
+        };
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement): ?Response\Response {
+
+        // re-prepare query if it is unprepared
+        if (
+            ($request instanceof Request\Execute)
+            && ($response->getData()['code'] === Response\Error::UNPREPARED)
+        ) {
+
+            $prevResult = $request->getPreviousResult();
+            if ($prevResult->getKind() !== Result::PREPARED) {
+                throw new Exception('Unexpected previous result kind for unprepared error: ' . $prevResult->getKind(), 0, [
+                    'expected' => Result::PREPARED,
+                    'received' => $prevResult->getKind(),
+                ]);
+            }
+            $prevRequest = $prevResult->getRequest();
+            if ($prevRequest === null) {
+                throw new Exception('request of previous result is null');
+            }
+            if (!($prevRequest instanceof Request\Prepare)) {
+                throw new Exception('previous result is not a prepare request');
+            }
+
+            $newPrepareRequest = new Request\Prepare($prevRequest->getQuery(), $prevRequest->getOptions());
+
+            if ($statement !== null) {
+                $statement->setIsRepreparing(true);
+                $this->sendAsyncRequest($newPrepareRequest, $response->getStream());
+
+                return null;
+            }
+
+            $prepareResponse = $this->syncRequest($newPrepareRequest);
+            if (!($prepareResponse instanceof Response\Result)) {
+                throw new Exception('received unexpected response type: ' . get_class($prepareResponse), 0, [
+                    'expected' => Response\Result::class,
+                    'received' => get_class($prepareResponse),
+                ]);
+            }
+
+            $response = $this->handleReprepareResult($newPrepareRequest, $prepareResponse, originalRequest: $request);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): ?Response\Result {
+
+        $result->setPreviousResult($request->getPreviousResult());
+
+        return $result;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement): ?Response\Result {
+
+        $result->setRequest($request);
+
+        if ($statement !== null && $statement->isRepreparing()) {
+            $statement->setIsRepreparing(false);
+            $this->handleReprepareResult($request, $result, statement: $statement);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function handleResponseResult(Request\Request $request, Response\Result $result, ?Statement $statement): ?Response\Result {
+
+        return match (true) {
+            $request instanceof Request\Prepare => $this->handleResponsePrepareResult($request, $result, $statement),
+            $request instanceof Request\Execute => $this->handleResponseExecuteResult($request, $result, $statement),
+            default => $result,
+        };
+    }
+
     protected function onEvent(Response\Event $event): void {
         $this->trigger($event);
 
@@ -560,7 +720,7 @@ class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    protected function readResponse(): Response\Response {
+    protected function readResponse(): ?Response\Response {
         if ($this->node === null) {
             throw new Exception('not connected');
         }
@@ -594,7 +754,10 @@ class Connection {
 
         $responseClass = self::$responseClassMap[$header['opcode']];
         if (!is_subclass_of($responseClass, Response\Response::class)) {
-            throw new Exception('received invalid response');
+            throw new Exception('received unexpected response type: ' . $responseClass, 0, [
+                'expected' => Response\Response::class,
+                'received' => $responseClass,
+            ]);
         }
 
         if ($this->version < 5 && $header['length'] > 0 && $header['flags'] & Flag::COMPRESSION) {
@@ -604,16 +767,52 @@ class Connection {
 
         $response = new $responseClass($header, new Response\StreamReader($body));
 
-        if ($header['stream'] !== 0) {
-            if (isset($this->statements[$header['stream']])) {
-                $this->statements[$header['stream']]->setResponse($response);
-                unset($this->statements[$header['stream']]);
-                $this->recycledStreams->enqueue($header['stream']);
-            } elseif ($response instanceof Response\Event) {
-                $this->onEvent($response);
+        $streamId = $header['stream'];
+        if ($streamId !== 0 && isset($this->statements[$streamId])) {
+            $statement = $this->statements[$streamId];
+            $response = $this->handleResponse($statement->getRequest(), $response, $statement);
+            if ($response !== null) {
+                $statement->setResponse($response);
+                unset($this->statements[$streamId]);
+                $this->recycledStreams->enqueue($streamId);
             }
         }
 
+        if ($response instanceof Response\Event) {
+            $this->onEvent($response);
+        }
+
         return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function sendAsyncRequest(Request\Request $request, ?int $streamId = null): Statement {
+        if ($this->node === null) {
+            $this->connect();
+        }
+
+        if ($this->node === null) {
+            throw new Exception('not connected');
+        }
+
+        $request->setVersion($this->version);
+
+        $streamId = $streamId ?? $this->getNewStreamId();
+        $request->setStream($streamId);
+
+        $this->node->writeRequest($request);
+
+        if (isset($this->statements[$streamId])) {
+            $statement = $this->statements[$streamId];
+            $statement->setRequest($request);
+            $statement->setResponse(null);
+        } else {
+            $statement = new Statement($this, $streamId, $request);
+            $this->statements[$streamId] = $statement;
+        }
+
+        return $statement;
     }
 }

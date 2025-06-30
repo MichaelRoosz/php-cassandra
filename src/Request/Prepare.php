@@ -9,8 +9,6 @@ use Cassandra\Protocol\Opcode;
 class Prepare extends Request {
     final public const FLAG_WITH_KEYSPACE = 0x01;
 
-    protected string $cql;
-
     protected int $opcode = Opcode::REQUEST_PREPARE;
 
     /**
@@ -20,13 +18,15 @@ class Prepare extends Request {
      */
     protected array $options;
 
+    protected string $query;
+
     /**
      * @param array{
      *  keyspace?: string,
      * } $options
      */
-    public function __construct(string $cql, array $options = []) {
-        $this->cql = $cql;
+    public function __construct(string $query, array $options = []) {
+        $this->query = $query;
         $this->options = $options;
     }
 
@@ -37,7 +37,7 @@ class Prepare extends Request {
         $flags = 0;
         $optional = '';
 
-        $body = pack('N', strlen($this->cql)) . $this->cql;
+        $body = pack('N', strlen($this->query)) . $this->query;
 
         if (isset($this->options['keyspace'])) {
             if ($this->version >= 5) {
@@ -53,5 +53,18 @@ class Prepare extends Request {
         } else {
             return $body . pack('N', $flags) . $optional;
         }
+    }
+
+    /**
+     * @return array{
+     *  keyspace?: string,
+     * } $options
+     */
+    public function getOptions(): array {
+        return $this->options;
+    }
+
+    public function getQuery(): string {
+        return $this->query;
     }
 }

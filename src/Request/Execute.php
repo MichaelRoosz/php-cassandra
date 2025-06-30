@@ -24,6 +24,8 @@ class Execute extends Request {
      */
     protected $options;
 
+    protected Result $previousResult;
+
     protected string $queryId;
 
     protected ?string $resultMetadataId;
@@ -66,6 +68,9 @@ class Execute extends Request {
      * 
      */
     public function __construct(Result $previousResult, array $values, ?int $consistency = null, array $options = []) {
+
+        $this->previousResult = $previousResult;
+
         $previousResultKind = $previousResult->getKind();
         if ($previousResultKind !== Result::PREPARED && $previousResultKind !== Result::ROWS) {
             throw new Exception('received invalid previous result');
@@ -73,7 +78,6 @@ class Execute extends Request {
 
         if ($previousResultKind === Result::PREPARED) {
             $prepareData = $previousResult->getPreparedData();
-
             $executeCallInfo = [
                 'id' => $prepareData['id'],
                 'query_metadata' => $prepareData['metadata'],
@@ -127,5 +131,35 @@ class Execute extends Request {
         $body .= Request::queryParameters($this->consistency, $this->values, $this->options, $this->version);
 
         return $body;
+    }
+
+    public function getConsistency(): int {
+        return $this->consistency;
+    }
+
+    /**
+     * @return array{
+     *  names_for_values?: bool,
+     *  skip_metadata?: bool,
+     *  page_size?: int,
+     *  paging_state?: string,
+     *  serial_consistency?: int,
+     *  default_timestamp?: int,
+     *  now_in_seconds?: int,
+     * } $options
+     */
+    public function getOptions(): array {
+        return $this->options;
+    }
+
+    public function getPreviousResult(): Result {
+        return $this->previousResult;
+    }
+
+    /**
+     * @return array<mixed> $values
+     */
+    public function getValues(): array {
+        return $this->values;
     }
 }

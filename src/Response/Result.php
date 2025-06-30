@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use ArrayObject;
+use Cassandra\Request\Request;
 use IteratorAggregate;
 
 use Cassandra\Type;
@@ -83,6 +84,8 @@ class Result extends Response implements IteratorAggregate {
      * } $nextExecuteCallInfo
      */
     protected ?array $nextExecuteCallInfo = null;
+
+    protected ?Request $request = null;
 
     /**
      * @var class-string<RowClass> $rowClass
@@ -583,6 +586,10 @@ class Result extends Response implements IteratorAggregate {
         return $data;
     }
 
+    public function getRequest(): ?Request {
+        return $this->request;
+    }
+
     /**
      * @return int
      *
@@ -755,6 +762,10 @@ class Result extends Response implements IteratorAggregate {
         }
 
         return $this;
+    }
+
+    public function setRequest(Request $request): void {
+        $this->request = $request;
     }
 
     /**

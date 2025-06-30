@@ -39,7 +39,7 @@ abstract class Request implements Frame, Stringable {
     /**
      * @param ?array<string,string> $payload
      */
-    public function __construct(int $opcode, int $stream = 0, int $flags = 0, array $payload = null, int $version = 3) {
+    public function __construct(int $opcode, int $stream = 0, int $flags = 0, ?array $payload = null, int $version = 3) {
         $this->opcode = $opcode;
         $this->stream = $stream;
         $this->flags = $flags;
