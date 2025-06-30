@@ -43,6 +43,7 @@ class Timestamp extends Bigint {
      * @throws \Cassandra\Type\Exception
      * @throws \Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         self::require64Bit();
 

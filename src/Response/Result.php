@@ -446,6 +446,7 @@ class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public function getIterator(): ResultIterator {
         if ($this->getKind() !== self::ROWS) {
             throw new Exception('Unexpected Response: ' . $this->getKind());

@@ -169,6 +169,7 @@ class Batch extends Request {
     /**
      * @throws \Cassandra\Exception
      */
+    #[\Override]
     public function getBody(): string {
         return chr($this->batchType)
             . pack('n', count($this->queryArray)) . implode('', $this->queryArray)
@@ -192,6 +193,7 @@ class Batch extends Request {
      *
      * @throws \Cassandra\Exception
      */
+    #[\Override]
     public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string {
         return self::batchQueryParameters($consistency, $options, $version);
     }

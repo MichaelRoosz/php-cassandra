@@ -14,6 +14,7 @@ class Blob extends TypeBase {
     /**
      * @param null|int|array<int|array<mixed>> $definition
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         return new static($binary);
     }
@@ -24,6 +25,7 @@ class Blob extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_string($value)) {
             throw new Exception('Invalid value');
@@ -32,10 +34,12 @@ class Blob extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         return $this->value;
     }
 
+    #[\Override]
     public function getValue(): string {
         return $this->value;
     }

@@ -11,6 +11,7 @@ abstract class TypeBase implements Stringable {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Response\Exception
      */
+    #[\Override]
     public function __toString(): string {
         /** @var mixed $value */
         $value = $this->getValue();

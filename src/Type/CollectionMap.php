@@ -34,6 +34,7 @@ class CollectionMap extends TypeBase {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Response\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         if (!is_array($definition)) {
             throw new Exception('invalid CollectionMap definition');
@@ -48,6 +49,7 @@ class CollectionMap extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_array($value)) {
             throw new Exception('Invalid value');
@@ -63,6 +65,7 @@ class CollectionMap extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public function getBinary(): string {
         if (count($this->definition) < 2) {
             throw new Exception('invalid type definition');
@@ -89,6 +92,7 @@ class CollectionMap extends TypeBase {
     /**
      * @return array<mixed> $value
      */
+    #[\Override]
     public function getValue(): ?array {
         return $this->value;
     }

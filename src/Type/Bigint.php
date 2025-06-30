@@ -25,6 +25,7 @@ class Bigint extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         self::require64Bit();
 
@@ -45,6 +46,7 @@ class Bigint extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         self::require64Bit();
 
@@ -55,10 +57,12 @@ class Bigint extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         return pack('J', $this->value);
     }
 
+    #[\Override]
     public function getValue(): int {
         return $this->value;
     }

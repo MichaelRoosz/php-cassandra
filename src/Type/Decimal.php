@@ -23,6 +23,7 @@ class Decimal extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         $length = strlen($binary);
 
@@ -60,6 +61,7 @@ class Decimal extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_string($value)) {
             throw new Exception('Invalid value');
@@ -68,6 +70,7 @@ class Decimal extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         $pos = strpos($this->value, '.');
         $scaleLen = $pos === false ? 0 : strlen($this->value) - $pos - 1;
@@ -82,6 +85,7 @@ class Decimal extends TypeBase {
         return $binary;
     }
 
+    #[\Override]
     public function getValue(): string {
         return $this->value;
     }

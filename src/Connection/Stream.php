@@ -99,6 +99,7 @@ class Stream implements NodeImplementation {
         $this->connect();
     }
 
+    #[\Override]
     public function close(): void {
         if ($this->stream) {
             $stream = $this->stream;
@@ -120,6 +121,7 @@ class Stream implements NodeImplementation {
      *  ssl: array<string, mixed>,
      * } & array<string, mixed>
      */
+    #[\Override]
     public function getOptions(): array {
         return $this->options;
     }
@@ -127,6 +129,7 @@ class Stream implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\StreamException
      */
+    #[\Override]
     public function read(int $length): string {
         if ($this->stream === null) {
             throw new StreamException('not connected');
@@ -162,6 +165,7 @@ class Stream implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\StreamException
      */
+    #[\Override]
     public function readOnce(int $length): string {
         if ($this->stream === null) {
             throw new StreamException('not connected');
@@ -191,6 +195,7 @@ class Stream implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\StreamException
      */
+    #[\Override]
     public function write(string $binary): void {
         if ($this->stream === null) {
             throw new StreamException('not connected');
@@ -222,6 +227,7 @@ class Stream implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\StreamException
      */
+    #[\Override]
     public function writeRequest(Request $request): void {
         $this->write($request->__toString());
     }

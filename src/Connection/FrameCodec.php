@@ -48,6 +48,7 @@ class FrameCodec implements Node {
         $this->inputDataLength = 0;
     }
 
+    #[\Override]
     public function close(): void {
         $this->node->close();
     }
@@ -61,6 +62,7 @@ class FrameCodec implements Node {
      *  password: ?string,
      * } & array<string, mixed> $options
      */
+    #[\Override]
     public function getOptions(): array {
         return $this->node->getOptions();
     }
@@ -69,6 +71,7 @@ class FrameCodec implements Node {
      * @throws \Cassandra\Connection\NodeException
      * @throws \Cassandra\Compression\Exception
      */
+    #[\Override]
     public function read(int $length): string {
         if ($this->inputDataOffset + $length > $this->inputDataLength) {
             $this->readFrame();
@@ -84,6 +87,7 @@ class FrameCodec implements Node {
      * @throws \Cassandra\Connection\NodeException
      * @throws \Cassandra\Compression\Exception
      */
+    #[\Override]
     public function readOnce(int $length): string {
         if ($this->inputDataOffset >= $this->inputDataLength) {
             $this->readFrame();
@@ -99,6 +103,7 @@ class FrameCodec implements Node {
     /**
      * @throws \Cassandra\Connection\NodeException
      */
+    #[\Override]
     public function writeRequest(Request $request): void {
         $data = $request->__toString();
         $dataLength = strlen($data);

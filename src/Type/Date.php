@@ -45,6 +45,7 @@ class Date extends Integer {
      * @throws \Cassandra\Type\Exception
      * @throws \Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
 
         if (is_string($value)) {

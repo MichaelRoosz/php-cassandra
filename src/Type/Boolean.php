@@ -14,6 +14,7 @@ class Boolean extends TypeBase {
     /**
      * @param null|int|array<int|array<mixed>> $definition
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         return new static($binary !== "\0");
     }
@@ -24,6 +25,7 @@ class Boolean extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_bool($value)) {
             throw new Exception('Invalid value');
@@ -32,10 +34,12 @@ class Boolean extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         return $this->value ? "\1" : "\0";
     }
 
+    #[\Override]
     public function getValue(): bool {
         return $this->value;
     }

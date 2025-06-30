@@ -117,6 +117,7 @@ class Execute extends Request {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
+    #[\Override]
     public function getBody(): string {
         $body = pack('n', strlen($this->queryId)) . $this->queryId;
 

@@ -74,6 +74,7 @@ class Socket implements NodeImplementation {
         $this->connect();
     }
 
+    #[\Override]
     public function close(): void {
         if ($this->socket) {
             $socket = $this->socket;
@@ -99,6 +100,7 @@ class Socket implements NodeImplementation {
      *  socket: array<int, array<mixed>|int|string>,
      * } & array<string, mixed> $options
      */
+    #[\Override]
     public function getOptions(): array {
         return $this->options;
     }
@@ -106,6 +108,7 @@ class Socket implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\SocketException
      */
+    #[\Override]
     public function read(int $length): string {
         if ($this->socket === null) {
             throw new SocketException('not connected');
@@ -147,6 +150,7 @@ class Socket implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\SocketException
      */
+    #[\Override]
     public function readOnce(int $length): string {
         if ($this->socket === null) {
             throw new SocketException('not connected');
@@ -169,6 +173,7 @@ class Socket implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\SocketException
      */
+    #[\Override]
     public function write(string $binary): void {
         if ($this->socket === null) {
             throw new SocketException('not connected');
@@ -189,6 +194,7 @@ class Socket implements NodeImplementation {
     /**
      * @throws \Cassandra\Connection\SocketException
      */
+    #[\Override]
     public function writeRequest(Request $request): void {
         $this->write($request->__toString());
     }

@@ -33,6 +33,7 @@ class Prepare extends Request {
     /**
      * @throws \Cassandra\Request\Exception
      */
+    #[\Override]
     public function getBody(): string {
         $flags = 0;
         $optional = '';

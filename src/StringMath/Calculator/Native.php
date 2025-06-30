@@ -11,6 +11,7 @@ class Native extends Calculator {
     /**
      * @throws \Cassandra\StringMath\Exception
      */
+    #[\Override]
     public function binaryToString(string $binary): string {
         $isNegative = (ord($binary[0]) & 0x80) !== 0;
 
@@ -33,6 +34,7 @@ class Native extends Calculator {
         return $string;
     }
 
+    #[\Override]
     public function stringToBinary(string $string): string {
         $isNegative = str_starts_with($string, '-');
         if ($isNegative) {
@@ -85,6 +87,7 @@ class Native extends Calculator {
         return $binary;
     }
 
+    #[\Override]
     public function stringUnsignedAdd1(string $string): string {
         $length = strlen($string);
         $carry = true;
@@ -106,6 +109,7 @@ class Native extends Calculator {
         return $string;
     }
 
+    #[\Override]
     public function stringUnsignedDiv2(string $string, ?bool &$modulo = null): string {
         $length = strlen($string);
         $carry = false;
@@ -174,6 +178,7 @@ class Native extends Calculator {
         return $string;
     }
 
+    #[\Override]
     public function stringUnsignedSub1(string $string): string {
         $length = strlen($string);
         for ($i = $length - 1; $i >= 0; $i--) {

@@ -33,6 +33,7 @@ class Tuple extends TypeBase {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         if (!is_array($definition)) {
             throw new Exception('invalid Tuple definition');
@@ -47,6 +48,7 @@ class Tuple extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_array($value)) {
             throw new Exception('Invalid value');
@@ -62,6 +64,7 @@ class Tuple extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public function getBinary(): string {
         $binary = '';
         $value = $this->value;
@@ -84,6 +87,7 @@ class Tuple extends TypeBase {
     /**
      * @return array<mixed> $value
      */
+    #[\Override]
     public function getValue(): array {
         return $this->value;
     }

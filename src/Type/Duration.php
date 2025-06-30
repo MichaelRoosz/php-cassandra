@@ -36,6 +36,7 @@ class Duration extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         self::require64Bit();
 
@@ -191,6 +192,7 @@ class Duration extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         self::require64Bit();
 
@@ -217,6 +219,7 @@ class Duration extends TypeBase {
         ]);
     }
 
+    #[\Override]
     public function getBinary(): string {
         $monthsEncoded = ($this->value['months'] >> 31) ^ ($this->value['months'] << 1);
         $daysEncoded = ($this->value['days'] >> 31) ^ ($this->value['days'] << 1);
@@ -230,6 +233,7 @@ class Duration extends TypeBase {
     /**
      * @return array{ months: int, days: int, nanoseconds: int }
      */
+    #[\Override]
     public function getValue(): array {
         return $this->value;
     }

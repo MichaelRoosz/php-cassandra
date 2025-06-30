@@ -47,6 +47,7 @@ abstract class Request implements Frame, Stringable {
         $this->version = $version;
     }
 
+    #[\Override]
     public function __toString(): string {
         $body = $this->getBody();
 
@@ -79,14 +80,17 @@ abstract class Request implements Frame, Stringable {
         $this->flags |= Flag::TRACING;
     }
 
+    #[\Override]
     public function getBody(): string {
         return '';
     }
 
+    #[\Override]
     public function getFlags(): int {
         return $this->flags;
     }
 
+    #[\Override]
     public function getOpcode(): int {
         return $this->opcode;
     }
@@ -98,10 +102,12 @@ abstract class Request implements Frame, Stringable {
         return $this->payload;
     }
 
+    #[\Override]
     public function getStream(): int {
         return $this->stream;
     }
 
+    #[\Override]
     public function getVersion(): int {
         return $this->version;
     }

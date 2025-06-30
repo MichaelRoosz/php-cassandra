@@ -52,6 +52,7 @@ abstract class Response implements Frame, Stringable {
         $this->readExtraData();
     }
 
+    #[\Override]
     public function __toString(): string {
         $body = $this->getBody();
 
@@ -65,6 +66,7 @@ abstract class Response implements Frame, Stringable {
         ) . $body;
     }
 
+    #[\Override]
     public function getBody(): string {
         return $this->stream->getData();
     }
@@ -73,10 +75,12 @@ abstract class Response implements Frame, Stringable {
         return $this->stream;
     }
 
+    #[\Override]
     public function getFlags(): int {
         return $this->header['flags'];
     }
 
+    #[\Override]
     public function getOpcode(): int {
         return $this->header['opcode'];
     }
@@ -88,6 +92,7 @@ abstract class Response implements Frame, Stringable {
         return $this->payload;
     }
 
+    #[\Override]
     public function getStream(): int {
         return $this->header['stream'];
     }
@@ -96,6 +101,7 @@ abstract class Response implements Frame, Stringable {
         return $this->tracingUuid;
     }
 
+    #[\Override]
     public function getVersion(): int {
         return $this->header['version'];
     }

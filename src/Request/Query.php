@@ -77,6 +77,7 @@ class Query extends Request {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
+    #[\Override]
     public function getBody(): string {
         $body = pack('N', strlen($this->cql)) . $this->cql;
         $body .= Request::queryParameters($this->consistency, $this->values, $this->options, $this->version);

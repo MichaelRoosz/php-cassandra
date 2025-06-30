@@ -94,6 +94,7 @@ class ResultIterator implements Iterator {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public function current(): ArrayObject|array|null {
         $data = [];
 
@@ -118,6 +119,7 @@ class ResultIterator implements Iterator {
     /**
      * The current position in this result set
      */
+    #[\Override]
     public function key(): int {
         return $this->row;
     }
@@ -125,6 +127,7 @@ class ResultIterator implements Iterator {
     /**
      * Move forward to next element
      */
+    #[\Override]
     public function next(): void {
         $this->row++;
     }
@@ -132,6 +135,7 @@ class ResultIterator implements Iterator {
     /**
      * Reset the result set
      */
+    #[\Override]
     public function rewind(): void {
         $this->row = 0;
         $this->stream->offset($this->offset);
@@ -140,6 +144,7 @@ class ResultIterator implements Iterator {
     /**
      * Checks if current position is valid
      */
+    #[\Override]
     public function valid(): bool {
         return (($this->row >= 0) && ($this->row < $this->count));
     }

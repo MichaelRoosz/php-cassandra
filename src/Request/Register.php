@@ -34,6 +34,7 @@ class Register extends Request {
         $this->events = $events;
     }
 
+    #[\Override]
     public function getBody(): string {
         $body = pack('n', count($this->events));
 

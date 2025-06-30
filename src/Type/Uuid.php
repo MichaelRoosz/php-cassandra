@@ -14,6 +14,7 @@ class Uuid extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         /**
          * @var false|array<int> $unpacked
@@ -43,6 +44,7 @@ class Uuid extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_string($value)) {
             throw new Exception('Invalid value');
@@ -51,10 +53,12 @@ class Uuid extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         return pack('H*', str_replace('-', '', $this->value));
     }
 
+    #[\Override]
     public function getValue(): string {
         return $this->value;
     }

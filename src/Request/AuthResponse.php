@@ -34,6 +34,7 @@ class AuthResponse extends Request {
         $this->password = $password;
     }
 
+    #[\Override]
     public function getBody(): string {
         $body = chr(0);
         $body .= $this->username;

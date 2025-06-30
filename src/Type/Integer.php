@@ -26,6 +26,7 @@ class Integer extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         $bits = PHP_INT_SIZE * 8 - 32;
 
@@ -46,6 +47,7 @@ class Integer extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_int($value)) {
             throw new Exception('Invalid value');
@@ -54,10 +56,12 @@ class Integer extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         return pack('N', $this->value);
     }
 
+    #[\Override]
     public function getValue(): int {
         return $this->value;
     }

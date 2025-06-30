@@ -75,6 +75,7 @@ class Time extends Bigint {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         self::require64Bit();
 
@@ -157,6 +158,7 @@ class Time extends Bigint {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     protected function validateValue(): void {
         if ($this->value > self::VALUE_MAX || $this->value < 0) {
             throw new Exception('Value "' . $this->value . '" is outside of possible range');

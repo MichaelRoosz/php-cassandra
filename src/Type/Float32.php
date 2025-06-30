@@ -19,6 +19,7 @@ class Float32 extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         /**
          * @var false|array<float> $unpacked
@@ -38,6 +39,7 @@ class Float32 extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_float($value)) {
             throw new Exception('Invalid value');
@@ -46,10 +48,12 @@ class Float32 extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         return pack('G', $this->value);
     }
 
+    #[\Override]
     public function getValue(): float {
         return $this->value;
     }

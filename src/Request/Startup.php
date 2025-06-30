@@ -39,6 +39,7 @@ class Startup extends Request {
         $this->options = $options;
     }
 
+    #[\Override]
     public function getBody(): string {
         $body = pack('n', count($this->options));
         foreach ($this->options as $name => $value) {

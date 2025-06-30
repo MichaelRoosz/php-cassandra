@@ -16,6 +16,7 @@ class Inet extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         $inet = inet_ntop($binary);
 
@@ -32,6 +33,7 @@ class Inet extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_string($value)) {
             throw new Exception('Invalid value');
@@ -43,6 +45,7 @@ class Inet extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public function getBinary(): string {
         $binary = inet_pton($this->value);
 
@@ -53,6 +56,7 @@ class Inet extends TypeBase {
         return $binary;
     }
 
+    #[\Override]
     public function getValue(): string {
         return $this->value;
     }

@@ -17,6 +17,7 @@ class ProgressiveStreamReader extends StreamReader {
     /**
      * @throws \Cassandra\Response\Exception
      */
+    #[\Override]
     public function getData(): string {
         throw new Exception('not supported');
     }
@@ -28,6 +29,7 @@ class ProgressiveStreamReader extends StreamReader {
     /**
      * @throws \Cassandra\Response\Exception
      */
+    #[\Override]
     protected function read(int $length): string {
         if ($length < 1) {
             return '';

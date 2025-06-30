@@ -16,6 +16,7 @@ class Varint extends TypeBase {
     /**
      * @param null|int|array<int|array<mixed>> $definition
      */
+    #[\Override]
     public static function fromBinary(string $binary, null|int|array $definition = null): static {
         $length = strlen($binary);
 
@@ -49,6 +50,7 @@ class Varint extends TypeBase {
      *
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
     public static function fromValue(mixed $value, null|int|array $definition = null): static {
         if (!is_string($value) && !is_int($value)) {
             throw new Exception('Invalid value');
@@ -57,6 +59,7 @@ class Varint extends TypeBase {
         return new static($value);
     }
 
+    #[\Override]
     public function getBinary(): string {
         if (is_int($this->value)) {
             return $this->getBinaryFromIntValue($this->value);
@@ -65,6 +68,7 @@ class Varint extends TypeBase {
         return Calculator::get()->stringToBinary($this->value);
     }
 
+    #[\Override]
     public function getValue(): string {
         return (string) $this->value;
     }
