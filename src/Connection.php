@@ -12,10 +12,11 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
+use Cassandra\Response\ResultKind;
 use SplQueue;
 
 final class Connection {
-    protected int $consistency = Request\Request::CONSISTENCY_ONE;
+    protected Consistency $consistency = Consistency::ONE;
 
     /**
      * @var array<EventListener> $eventListeners
@@ -73,14 +74,14 @@ final class Connection {
      * @var array<int, class-string<Response\Response>> $responseClassMap
      */
     protected static array $responseClassMap = [
-        Opcode::RESPONSE_ERROR => Response\Error::class,
-        Opcode::RESPONSE_READY => Response\Ready::class,
-        Opcode::RESPONSE_AUTHENTICATE => Response\Authenticate::class,
-        Opcode::RESPONSE_SUPPORTED => Response\Supported::class,
-        Opcode::RESPONSE_RESULT => Response\Result::class,
-        Opcode::RESPONSE_EVENT => Response\Event::class,
-        Opcode::RESPONSE_AUTH_CHALLENGE => Response\AuthChallenge::class,
-        Opcode::RESPONSE_AUTH_SUCCESS => Response\AuthSuccess::class,
+        Opcode::RESPONSE_ERROR->value => Response\Error::class,
+        Opcode::RESPONSE_READY->value => Response\Ready::class,
+        Opcode::RESPONSE_AUTHENTICATE->value => Response\Authenticate::class,
+        Opcode::RESPONSE_SUPPORTED->value => Response\Supported::class,
+        Opcode::RESPONSE_RESULT->value => Response\Result::class,
+        Opcode::RESPONSE_EVENT->value => Response\Event::class,
+        Opcode::RESPONSE_AUTH_CHALLENGE->value => Response\AuthChallenge::class,
+        Opcode::RESPONSE_AUTH_SUCCESS->value => Response\AuthSuccess::class,
     ];
 
     /**
@@ -246,8 +247,9 @@ final class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function executeAsync(Result $previousResult, array $values = [], ?int $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
-        $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
+    public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
+        $consistency = $consistency ?? $this->consistency;
+        $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
         $statement = $this->asyncRequest($request);
 
@@ -259,8 +261,9 @@ final class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function executeSync(Result $previousResult, array $values = [], ?int $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
-        $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
+    public function executeSync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
+        $consistency = $consistency ?? $this->consistency;
+        $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
         $response = $this->syncRequest($request);
         if (!($response instanceof Response\Result)) {
@@ -307,8 +310,8 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function prepareAsync(string $cql, PrepareOptions $options = new PrepareOptions()): Statement {
-        $request = new Request\Prepare($cql, $options);
+    public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions()): Statement {
+        $request = new Request\Prepare($query, $options);
 
         return $this->asyncRequest($request);
     }
@@ -316,8 +319,8 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function prepareSync(string $cql, PrepareOptions $options = new PrepareOptions()): Response\Result {
-        $response = $this->syncRequest(new Request\Prepare($cql, $options));
+    public function prepareSync(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result {
+        $response = $this->syncRequest(new Request\Prepare($query, $options));
         if (!($response instanceof Response\Result)) {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result::class,
@@ -325,10 +328,10 @@ final class Connection {
             ]);
         }
 
-        if ($response->getKind() !== Response\Result::PREPARED) {
-            throw new Exception('received unexpected result type: ' . $response->getKind(), 0, [
-                'expected' => Response\Result::PREPARED,
-                'received' => $response->getKind(),
+        if ($response->getKind() !== ResultKind::PREPARED) {
+            throw new Exception('received unexpected result type: ' . $response->getKind()->name, 0, [
+                'expected' => ResultKind::PREPARED->name,
+                'received' => $response->getKind()->name,
             ]);
         }
 
@@ -340,8 +343,9 @@ final class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function queryAsync(string $cql, array $values = [], ?int $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
-        $request = new Request\Query($cql, $values, $consistency === null ? $this->consistency : $consistency, $options);
+    public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
+        $consistency = $consistency ?? $this->consistency;
+        $request = new Request\Query($query, $values, $consistency, $options);
 
         return $this->asyncRequest($request);
     }
@@ -351,8 +355,9 @@ final class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function querySync(string $cql, array $values = [], ?int $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
-        $request = new Request\Query($cql, $values, $consistency === null ? $this->consistency : $consistency, $options);
+    public function querySync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
+        $consistency = $consistency ?? $this->consistency;
+        $request = new Request\Query($query, $values, $consistency, $options);
 
         $response = $this->syncRequest($request);
 
@@ -366,7 +371,7 @@ final class Connection {
         return $response;
     }
 
-    public function setConsistency(int $consistency): void {
+    public function setConsistency(Consistency $consistency): void {
         $this->consistency = $consistency;
     }
 
@@ -560,10 +565,10 @@ final class Connection {
      */
     protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
-        if ($result->getKind() !== Response\Result::PREPARED) {
-            throw new Exception('received unexpected result type: ' . $result->getKind(), 0, [
-                'expected' => Response\Result::PREPARED,
-                'received' => $result->getKind(),
+        if ($result->getKind() !== ResultKind::PREPARED) {
+            throw new Exception('received unexpected result type: ' . $result->getKind()->name, 0, [
+                'expected' => ResultKind::PREPARED->name,
+                'received' => $result->getKind()->name,
             ]);
         }
 
@@ -619,14 +624,14 @@ final class Connection {
         // re-prepare query if it is unprepared
         if (
             ($request instanceof Request\Execute)
-            && ($response->getData()['code'] === Response\Error::UNPREPARED)
+            && ($response->getData()['code'] === Response\ErrorType::UNPREPARED->value)
         ) {
 
             $prevResult = $request->getPreviousResult();
-            if ($prevResult->getKind() !== Result::PREPARED) {
-                throw new Exception('Unexpected previous result kind for unprepared error: ' . $prevResult->getKind(), 0, [
-                    'expected' => Result::PREPARED,
-                    'received' => $prevResult->getKind(),
+            if ($prevResult->getKind() !== ResultKind::PREPARED) {
+                throw new Exception('Unexpected previous result kind for unprepared error: ' . $prevResult->getKind()->name, 0, [
+                    'expected' => ResultKind::PREPARED->name,
+                    'received' => $prevResult->getKind()->name,
                 ]);
             }
             $prevRequest = $prevResult->getRequest();
@@ -748,7 +753,7 @@ final class Connection {
             ]);
         }
 
-        if ($this->version < 5 && $header['length'] > 0 && $header['flags'] & Flag::COMPRESSION) {
+        if ($this->version < 5 && $header['length'] > 0 && $header['flags'] & Flag::COMPRESSION->value) {
             $this->lz4Decompressor->setInput($body);
             $body = $this->lz4Decompressor->decompressBlock();
         }

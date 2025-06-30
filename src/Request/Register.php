@@ -8,12 +8,6 @@ use Cassandra\Protocol\Opcode;
 
 final class Register extends Request {
     /**
-     * @var array<string> $events
-     */
-    protected array $events;
-    protected int $opcode = Opcode::REQUEST_REGISTER;
-
-    /**
      * REGISTER
      *
      * Register this connection to receive some type of events. The body of the
@@ -30,8 +24,8 @@ final class Register extends Request {
      *
      * @param array<string> $events
      */
-    public function __construct(array $events) {
-        $this->events = $events;
+    public function __construct(protected array $events) {
+        parent::__construct(Opcode::REQUEST_REGISTER);
     }
 
     #[\Override]

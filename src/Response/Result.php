@@ -5,27 +5,17 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use ArrayObject;
+use Cassandra\Type;
 use Cassandra\Request\Request;
 use IteratorAggregate;
-
-use Cassandra\Type;
+use TypeError;
+use ValueError;
 
 /**
  * @implements IteratorAggregate<ArrayObject<string, mixed>|array<string, mixed>|null>
  */
 final class Result extends Response implements IteratorAggregate {
-    final public const PREPARED = 0x0004;
-    final public const ROWS = 0x0002;
-
-    final public const ROWS_FLAG_GLOBAL_TABLES_SPEC = 0x0001;
-    final public const ROWS_FLAG_HAS_MORE_PAGES = 0x0002;
-    final public const ROWS_FLAG_NO_METADATA = 0x0004;
-    final public const ROWS_METADATA_CHANGED = 0x0008;
-    final public const SCHEMA_CHANGE = 0x0005;
-    final public const SET_KEYSPACE = 0x0003;
-    final public const VOID = 0x0001;
-
-    protected ?int $kind = null;
+    protected ?ResultKind $kind = null;
 
     /**
      * @var array{
@@ -97,8 +87,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function calculateMetadata(): void {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
 
         $this->stream->offset(4);
@@ -119,8 +109,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function fetchAll(?string $rowClass = null): array {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
         $this->stream->offset(4);
         $this->calculateMetadata();
@@ -165,8 +155,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function fetchCol(int $index = 0): array {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
         $this->stream->offset(4);
         $this->calculateMetadata();
@@ -198,8 +188,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function fetchOne(): mixed {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
         $this->stream->offset(4);
         $this->calculateMetadata();
@@ -228,8 +218,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function fetchPairs(): array {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
         $this->stream->offset(4);
         $this->calculateMetadata();
@@ -271,8 +261,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function fetchRow(?string $rowClass = null): ArrayObject|array|null {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
         $this->stream->offset(4);
         $this->calculateMetadata();
@@ -357,23 +347,24 @@ final class Result extends Response implements IteratorAggregate {
      */
     public function getData(): null|string|array {
         switch ($this->getKind()) {
-            case self::VOID:
+            case ResultKind::VOID:
                 return $this->getVoidData();
 
-            case self::ROWS:
+            case ResultKind::ROWS:
                 return $this->getRowsData();
 
-            case self::SET_KEYSPACE:
+            case ResultKind::SET_KEYSPACE:
                 return $this->getSetKeyspaceData();
 
-            case self::PREPARED:
+            case ResultKind::PREPARED:
                 return $this->getPreparedData();
 
-            case self::SCHEMA_CHANGE:
+            case ResultKind::SCHEMA_CHANGE:
                 return $this->getSchemaChangeData();
-        }
 
-        return null;
+            default:
+                return null;
+        }
     }
 
     /**
@@ -423,23 +414,24 @@ final class Result extends Response implements IteratorAggregate {
      */
     public function getDataArray(): array {
         switch ($this->getKind()) {
-            case self::VOID:
+            case ResultKind::VOID:
                 return [];
 
-            case self::ROWS:
+            case ResultKind::ROWS:
                 return $this->getRowsData();
 
-            case self::SET_KEYSPACE:
+            case ResultKind::SET_KEYSPACE:
                 return ['keyspace' => $this->getSetKeyspaceData()];
 
-            case self::PREPARED:
+            case ResultKind::PREPARED:
                 return $this->getPreparedData();
 
-            case self::SCHEMA_CHANGE:
+            case ResultKind::SCHEMA_CHANGE:
                 return $this->getSchemaChangeData();
-        }
 
-        return [];
+            default:
+                return [];
+        }
     }
 
     /**
@@ -448,8 +440,8 @@ final class Result extends Response implements IteratorAggregate {
      */
     #[\Override]
     public function getIterator(): ResultIterator {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
 
         $metadata = $this->getMetadata();
@@ -463,10 +455,18 @@ final class Result extends Response implements IteratorAggregate {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function getKind(): int {
+    public function getKind(): ResultKind {
         if ($this->kind === null) {
             $this->stream->offset(0);
-            $this->kind = $this->stream->readInt();
+            $kindInt = $this->stream->readInt();
+
+            try {
+                $this->kind = ResultKind::from($kindInt);
+            } catch (ValueError|TypeError $e) {
+                throw new Exception('Invalid result kind: ' . $kindInt, 0, [
+                    'result_kind' => $kindInt,
+                ]);
+            }
         }
 
         return $this->kind;
@@ -563,8 +563,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function getPreparedData(): array {
-        if ($this->getKind() !== self::PREPARED) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::PREPARED) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
 
         $this->stream->offset(4);
@@ -598,7 +598,7 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function getRowCount(): int {
-        if ($this->getKind() !== self::ROWS) {
+        if ($this->getKind() !== ResultKind::ROWS) {
             return 0;
         }
 
@@ -621,8 +621,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function getRowsData(): array {
-        if ($this->getKind() !== self::ROWS) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::ROWS) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
 
         return $this->fetchAll();
@@ -641,8 +641,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Type\Exception
      */
     public function getSchemaChangeData(): array {
-        if ($this->getKind() !== self::SCHEMA_CHANGE) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::SCHEMA_CHANGE) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
 
         $this->stream->offset(4);
@@ -665,7 +665,7 @@ final class Result extends Response implements IteratorAggregate {
                 $data['name'] = $this->stream->readString();
 
                 /** @var string[] $argument_types */
-                $argument_types = $this->stream->readList([Type::TEXT]);
+                $argument_types = $this->stream->readList([Type::TEXT->value]);
                 $data['argument_types'] = $argument_types;
 
                 break;
@@ -680,8 +680,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Response\Exception
      */
     public function getSetKeyspaceData(): string {
-        if ($this->getKind() !== self::SET_KEYSPACE) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::SET_KEYSPACE) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
 
         $this->stream->offset(4);
@@ -695,8 +695,8 @@ final class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Response\Exception
      */
     public function getVoidData(): null {
-        if ($this->getKind() !== self::VOID) {
-            throw new Exception('Unexpected Response: ' . $this->getKind());
+        if ($this->getKind() !== ResultKind::VOID) {
+            throw new Exception('Unexpected result kind: ' . $this->getKind()->name);
         }
 
         $this->stream->offset(4);
@@ -733,7 +733,7 @@ final class Result extends Response implements IteratorAggregate {
     public function setPreviousResult(Result $previousResult): static {
         $previousKind = $previousResult->getKind();
 
-        if ($previousKind === self::PREPARED) {
+        if ($previousKind === ResultKind::PREPARED) {
             $prepareData = $previousResult->getPreparedData();
 
             $this->metadataOfPreviousResult = $prepareData['result_metadata'];
@@ -743,7 +743,7 @@ final class Result extends Response implements IteratorAggregate {
                 'query_metadata' => $prepareData['metadata'],
                 'result_metadata_id' => $prepareData['result_metadata_id'] ?? null,
             ];
-        } elseif ($previousKind === self::ROWS) {
+        } elseif ($previousKind === ResultKind::ROWS) {
             $this->metadataOfPreviousResult = $previousResult->getMetadata();
 
             $lastExecuteCallInfo = $previousResult->getNextExecuteCallInfo();
@@ -810,11 +810,11 @@ final class Result extends Response implements IteratorAggregate {
         ];
         $flags = $metadata['flags'];
 
-        if ($flags & self::ROWS_FLAG_HAS_MORE_PAGES) {
+        if ($flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES->value) {
             $metadata['paging_state'] = $this->stream->readBytes();
         }
 
-        if ($flags & self::ROWS_METADATA_CHANGED) {
+        if ($flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED->value) {
             $metadata['new_metadata_id'] = $this->stream->readString();
         }
 
@@ -829,10 +829,10 @@ final class Result extends Response implements IteratorAggregate {
             }
         }
 
-        if (!($flags & self::ROWS_FLAG_NO_METADATA)) {
+        if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA->value)) {
             $metadata['columns'] = [];
 
-            if ($flags & self::ROWS_FLAG_GLOBAL_TABLES_SPEC) {
+            if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC->value) {
                 $keyspace = $this->stream->readString();
                 $tableName = $this->stream->readString();
 

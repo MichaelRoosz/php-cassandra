@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeFactory;
 use Cassandra\Type;
 
 use Cassandra\Response\StreamReader;
@@ -76,11 +77,11 @@ final class CollectionMap extends TypeBase {
 
         /** @var TypeBase|mixed $val */
         foreach ($this->value as $key => $val) {
-            $keyPacked = Type::getBinaryByType($keyType, $key);
+            $keyPacked = TypeFactory::getBinaryByType($keyType, $key);
 
             $valuePacked = $val instanceof TypeBase
                 ? $val->getBinary()
-                : Type::getBinaryByType($valueType, $val);
+                : TypeFactory::getBinaryByType($valueType, $val);
 
             $binary .= pack('N', strlen($keyPacked)) . $keyPacked;
             $binary .= pack('N', strlen($valuePacked)) . $valuePacked;

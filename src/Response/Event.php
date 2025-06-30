@@ -5,21 +5,19 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use Cassandra\Type;
+use TypeError;
+use ValueError;
 
 final class Event extends Response {
-    final public const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
-    final public const STATUS_CHANGE = 'STATUS_CHANGE';
-    final public const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';
-
-    protected ?string $type = null;
+    protected ?EventType $type = null;
 
     /**
      * @return array{
-     *  event_type: string,
+     *  event_type: EventType,
      *  change_type: string,
      *  address: string,
      * }|array{
-     *  event_type: string,
+     *  event_type: EventType,
      *  change_type: string,
      *  target: string,
      *  keyspace: string,
@@ -32,18 +30,29 @@ final class Event extends Response {
      */
     public function getData(): array {
         $this->stream->offset(0);
-        $type = $this->type = $this->stream->readString();
+
+        $typeString = $this->stream->readString();
+
+        try {
+            $type = EventType::from($typeString);
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid event type: ' . $typeString, 0, [
+                'event_type' => $typeString,
+            ]);
+        }
+
+        $this->type = $type;
 
         switch ($type) {
-            case self::TOPOLOGY_CHANGE:
-            case self::STATUS_CHANGE:
+            case EventType::TOPOLOGY_CHANGE:
+            case EventType::STATUS_CHANGE:
                 return [
                     'event_type' => $type,
                     'change_type' => $this->stream->readString(),
                     'address' => $this->stream->readInet(),
                 ];
 
-            case self::SCHEMA_CHANGE:
+            case EventType::SCHEMA_CHANGE:
                 $data = [
                     'event_type' => $type,
                     'change_type' => $this->stream->readString(),
@@ -63,7 +72,7 @@ final class Event extends Response {
                         $data['name'] = $this->stream->readString();
 
                         /** @var string[] $argument_types */
-                        $argument_types = $this->stream->readList([Type::TEXT]);
+                        $argument_types = $this->stream->readList([Type::TEXT->value]);
                         $data['argument_types'] = $argument_types;
 
                         break;
@@ -79,10 +88,18 @@ final class Event extends Response {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function getType(): string {
+    public function getType(): EventType {
         if ($this->type === null) {
             $this->stream->offset(0);
-            $this->type = $this->stream->readString();
+            $typeString = $this->stream->readString();
+
+            try {
+                $this->type = EventType::from($typeString);
+            } catch (ValueError|TypeError $e) {
+                throw new Exception('Invalid event type: ' . $typeString, 0, [
+                    'event_type' => $typeString,
+                ]);
+            }
         }
 
         return $this->type;

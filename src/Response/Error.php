@@ -7,32 +7,6 @@ namespace Cassandra\Response;
 use Cassandra\Type;
 
 final class Error extends Response {
-    /** @deprecated Use ALREADY_EXISTS instead */
-    final public const ALREADY_EXIST = 0x2400;
-    final public const ALREADY_EXISTS = 0x2400;
-    final public const AUTHENTICATION_ERROR = 0x0100;
-
-    /** @deprecated Use AUTHENTICATION_ERROR instead */
-    final public const BAD_CREDENTIALS = 0x0100;
-    final public const CAS_WRITE_UNKNOWN = 0x1700;
-    final public const CDC_WRITE_FAILURE = 0x1600;
-    final public const CONFIG_ERROR = 0x2300;
-    final public const FUNCTION_FAILURE = 0x1400;
-    final public const INVALID = 0x2200;
-    final public const IS_BOOTSTRAPPING = 0x1002;
-    final public const OVERLOADED = 0x1001;
-    final public const PROTOCOL_ERROR = 0x000A;
-    final public const READ_FAILURE = 0x1300;
-    final public const READ_TIMEOUT = 0x1200;
-    final public const SERVER_ERROR = 0x0000;
-    final public const SYNTAX_ERROR = 0x2000;
-    final public const TRUNCATE_ERROR = 0x1003;
-    final public const UNAUTHORIZED = 0x2100;
-    final public const UNAVAILABLE_EXCEPTION = 0x1000;
-    final public const UNPREPARED = 0x2500;
-    final public const WRITE_FAILURE = 0x1500;
-    final public const WRITE_TIMEOUT = 0x1100;
-
     /**
      * Indicates an error processing a request. The body of the message will be an
      * error code ([int]) followed by a [string] error message. Then, depending on
@@ -58,22 +32,22 @@ final class Error extends Response {
         $data['context'] = ['message' => $message];
 
         switch ($code) {
-            case self::SERVER_ERROR:
+            case ErrorType::SERVER_ERROR->value:
                 $data['message'] = 'Server error: ' . $message;
 
                 break;
 
-            case self::PROTOCOL_ERROR:
+            case ErrorType::PROTOCOL_ERROR->value:
                 $data['message'] = 'Protocol error: ' . $message;
 
                 break;
 
-            case self::AUTHENTICATION_ERROR:
+            case ErrorType::AUTHENTICATION_ERROR->value:
                 $data['message'] = 'Authentication error: ' . $message;
 
                 break;
 
-            case self::UNAVAILABLE_EXCEPTION:
+            case ErrorType::UNAVAILABLE_EXCEPTION->value:
                 $data['context'] += [
                     'consistency' => $this->stream->readShort(),
                     'nodes_required' => $this->stream->readInt(),
@@ -83,22 +57,22 @@ final class Error extends Response {
 
                 break;
 
-            case self::OVERLOADED:
+            case ErrorType::OVERLOADED->value:
                 $data['message'] = 'Overloaded: ' . $message;
 
                 break;
 
-            case self::IS_BOOTSTRAPPING:
+            case ErrorType::IS_BOOTSTRAPPING->value:
                 $data['message'] = 'Is_bootstrapping: ' . $message;
 
                 break;
 
-            case self::TRUNCATE_ERROR:
+            case ErrorType::TRUNCATE_ERROR->value:
                 $data['message'] = 'Truncate_error: ' . $message;
 
                 break;
 
-            case self::WRITE_TIMEOUT:
+            case ErrorType::WRITE_TIMEOUT->value:
                 $data['context'] += [
                     'consistency' => $this->stream->readShort(),
                     'nodes_acknowledged' => $this->stream->readInt(),
@@ -114,7 +88,7 @@ final class Error extends Response {
 
                 break;
 
-            case self::READ_TIMEOUT:
+            case ErrorType::READ_TIMEOUT->value:
                 $data['context'] += [
                     'consistency' => $this->stream->readShort(),
                     'nodes_answered' => $this->stream->readInt(),
@@ -126,7 +100,7 @@ final class Error extends Response {
 
                 break;
 
-            case self::READ_FAILURE:
+            case ErrorType::READ_FAILURE->value:
                 $data['context'] += [
                     'consistency' => $this->stream->readShort(),
                     'nodes_answered' => $this->stream->readInt(),
@@ -145,7 +119,7 @@ final class Error extends Response {
 
                 break;
 
-            case self::FUNCTION_FAILURE:
+            case ErrorType::FUNCTION_FAILURE->value:
                 $data['context'] += [
                     'keyspace' => $this->stream->readString(),
                     'function' => $this->stream->readString(),
@@ -156,7 +130,7 @@ final class Error extends Response {
 
                 break;
 
-            case self::WRITE_FAILURE:
+            case ErrorType::WRITE_FAILURE->value:
                 $data['context'] += [
                     'consistency' => $this->stream->readShort(),
                     'nodes_answered' => $this->stream->readInt(),
@@ -175,12 +149,12 @@ final class Error extends Response {
 
                 break;
 
-            case self::CDC_WRITE_FAILURE:
+            case ErrorType::CDC_WRITE_FAILURE->value:
                 $data['message'] = 'CDC_WRITE_FAILURE: ' . $message;
 
                 break;
 
-            case self::CAS_WRITE_UNKNOWN:
+            case ErrorType::CAS_WRITE_UNKNOWN->value:
                 $data['context'] += [
                     'consistency' => $this->stream->readShort(),
                     'nodes_acknowledged' => $this->stream->readInt(),
@@ -191,27 +165,27 @@ final class Error extends Response {
 
                 break;
 
-            case self::SYNTAX_ERROR:
+            case ErrorType::SYNTAX_ERROR->value:
                 $data['message'] = 'Syntax_error: ' . $message;
 
                 break;
 
-            case self::UNAUTHORIZED:
+            case ErrorType::UNAUTHORIZED->value:
                 $data['message'] = 'Unauthorized: ' . $message;
 
                 break;
 
-            case self::INVALID:
+            case ErrorType::INVALID->value:
                 $data['message'] = 'Invalid: ' . $message;
 
                 break;
 
-            case self::CONFIG_ERROR:
+            case ErrorType::CONFIG_ERROR->value:
                 $data['message'] = 'Config_error: ' . $message;
 
                 break;
 
-            case self::ALREADY_EXISTS:
+            case ErrorType::ALREADY_EXISTS->value:
                 $data['context'] += [
                     'keyspace' => $this->stream->readString(),
                     'table' => $this->stream->readString(),
@@ -221,7 +195,7 @@ final class Error extends Response {
 
                 break;
 
-            case self::UNPREPARED:
+            case ErrorType::UNPREPARED->value:
                 $data['context'] += [
                     'unknown_statement_id' => $this->stream->readString(),
                 ];

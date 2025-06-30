@@ -9,7 +9,7 @@ interface Frame {
 
     public function getFlags(): int;
 
-    public function getOpcode(): int;
+    public function getOpcode(): Opcode;
 
     public function getStream(): int;
 

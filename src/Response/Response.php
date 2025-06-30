@@ -6,8 +6,11 @@ namespace Cassandra\Response;
 
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
+use Cassandra\Protocol\Opcode;
 use Cassandra\Response\StreamReader;
 use Stringable;
+use TypeError;
+use ValueError;
 
 abstract class Response implements Frame, Stringable {
     /**
@@ -80,9 +83,21 @@ abstract class Response implements Frame, Stringable {
         return $this->header['flags'];
     }
 
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
     #[\Override]
-    public function getOpcode(): int {
-        return $this->header['opcode'];
+    public function getOpcode(): Opcode {
+
+        $opcodeInt = $this->header['opcode'];
+
+        try {
+            return Opcode::from($opcodeInt);
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid opcode: ' . $opcodeInt, 0, [
+                'opcode' => $opcodeInt,
+            ]);
+        }
     }
 
     /**
@@ -119,15 +134,15 @@ abstract class Response implements Frame, Stringable {
     protected function readExtraData(): void {
         $flags = $this->header['flags'];
 
-        if ($flags & Flag::TRACING) {
+        if ($flags & Flag::TRACING->value) {
             $this->tracingUuid = $this->stream->readUuid();
         }
 
-        if ($flags & Flag::WARNING) {
+        if ($flags & Flag::WARNING->value) {
             $this->warnings = $this->stream->readStringList();
         }
 
-        if ($flags & Flag::CUSTOM_PAYLOAD) {
+        if ($flags & Flag::CUSTOM_PAYLOAD->value) {
             $this->payload = $this->stream->readBytesMap();
         }
 

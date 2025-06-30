@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use Cassandra\Type;
+use Cassandra\TypeFactory;
 
 class StreamReader {
     protected string $data;
@@ -68,13 +69,13 @@ class StreamReader {
     /**
      * @deprecated readValue() should be used instead
      *
-     * @param int|array<mixed> $dataType
+     * @param int|array<mixed> $Type
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readBytesAndConvertToType($dataType): mixed {
-        return $this->readValue($dataType);
+    public function readBytesAndConvertToType($Type): mixed {
+        return $this->readValue($Type);
     }
 
     /**
@@ -375,23 +376,23 @@ class StreamReader {
         $type = $this->readShort();
 
         switch ($type) {
-            case Type::CUSTOM:
+            case Type::CUSTOM->value:
                 return [
                     'type' => $type,
                     'definition'=> [$this->readString()],
                 ];
-            case Type::COLLECTION_LIST:
-            case Type::COLLECTION_SET:
+            case Type::COLLECTION_LIST->value:
+            case Type::COLLECTION_SET->value:
                 return [
                     'type' => $type,
                     'definition' => [$this->readType()],
                 ];
-            case Type::COLLECTION_MAP:
+            case Type::COLLECTION_MAP->value:
                 return [
                     'type' => $type,
                     'definition'=> [$this->readType(), $this->readType()],
                 ];
-            case Type::UDT:
+            case Type::UDT->value:
                 $data = [
                     'type' => $type,
                     'definition' => [],
@@ -405,7 +406,7 @@ class StreamReader {
                 }
 
                 return $data;
-            case Type::TUPLE:
+            case Type::TUPLE->value:
                 $data = [
                     'type' => $type,
                     'definition' => [],
@@ -438,12 +439,12 @@ class StreamReader {
     }
 
     /**
-     * @param int|array<mixed> $dataType
+     * @param int|array<mixed> $Type
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readValue($dataType): mixed {
+    public function readValue($Type): mixed {
         $binaryLength = $this->read(4);
         if ($binaryLength === "\xff\xff\xff\xff") {
             return null;
@@ -459,7 +460,7 @@ class StreamReader {
         $length = $unpacked[1];
 
         $binary = $this->read($length);
-        $typeObject = Type::getTypeObjectForBinary($dataType, $binary);
+        $typeObject = TypeFactory::getTypeObjectForBinary($Type, $binary);
 
         return $typeObject->getValue();
     }

@@ -7,8 +7,6 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 
 final class Options extends Request {
-    protected int $opcode = Opcode::REQUEST_OPTIONS;
-
     /**
      * OPTIONS
      *
@@ -17,5 +15,6 @@ final class Options extends Request {
      * message.
      */
     public function __construct() {
+        parent::__construct(Opcode::REQUEST_OPTIONS);
     }
 }

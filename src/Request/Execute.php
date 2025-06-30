@@ -7,18 +7,12 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result;
 use Cassandra\Request\Options\ExecuteOptions;
+use Cassandra\Consistency;
+use Cassandra\Response\ResultKind;
 
 final class Execute extends Request {
-    protected int $consistency;
-    protected int $opcode = Opcode::REQUEST_EXECUTE;
-
-    protected ExecuteOptions $options;
-
-    protected Result $previousResult;
-
-    protected string $queryId;
-
-    protected ?string $resultMetadataId;
+    protected string $queryId = '';
+    protected ?string $resultMetadataId = null;
 
     /**
      * @var array<mixed> $values
@@ -48,16 +42,20 @@ final class Execute extends Request {
      * @throws \Cassandra\Type\Exception
      * 
      */
-    public function __construct(Result $previousResult, array $values, ?int $consistency = null, ExecuteOptions $options = new ExecuteOptions()) {
-
-        $this->previousResult = $previousResult;
+    public function __construct(
+        protected Result $previousResult,
+        array $values,
+        protected Consistency $consistency = Consistency::ONE,
+        protected ExecuteOptions $options = new ExecuteOptions()
+    ) {
+        parent::__construct(Opcode::REQUEST_EXECUTE);
 
         $previousResultKind = $previousResult->getKind();
-        if ($previousResultKind !== Result::PREPARED && $previousResultKind !== Result::ROWS) {
+        if ($previousResultKind !== ResultKind::PREPARED && $previousResultKind !== ResultKind::ROWS) {
             throw new Exception('received invalid previous result');
         }
 
-        if ($previousResultKind === Result::PREPARED) {
+        if ($previousResultKind === ResultKind::PREPARED) {
             $prepareData = $previousResult->getPreparedData();
             $executeCallInfo = [
                 'id' => $prepareData['id'],
@@ -80,9 +78,6 @@ final class Execute extends Request {
 
         $this->values = self::strictTypeValues($values, $executeCallInfo['query_metadata']['columns']);
 
-        $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
-        $this->options = $options;
-
         if ($this->options->skipMetadata === null) {
             $this->options->skipMetadata = true;
         }
@@ -104,12 +99,12 @@ final class Execute extends Request {
             $body .= pack('n', strlen($this->resultMetadataId)) . $this->resultMetadataId;
         }
 
-        $body .= Request::queryParameters($this->consistency, $this->values, $this->options, $this->version);
+        $body .= Query::queryParameters($this->consistency, $this->values, $this->options, $this->version);
 
         return $body;
     }
 
-    public function getConsistency(): int {
+    public function getConsistency(): Consistency {
         return $this->consistency;
     }
 

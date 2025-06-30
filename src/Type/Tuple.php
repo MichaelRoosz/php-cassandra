@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 
@@ -75,7 +76,7 @@ class Tuple extends TypeBase {
             } else {
                 $valueBinary = $value[$key] instanceof TypeBase
                     ? $value[$key]->getBinary()
-                    : Type::getBinaryByType($type, $value[$key]);
+                    : TypeFactory::getBinaryByType($type, $value[$key]);
 
                 $binary .= pack('N', strlen($valueBinary)) . $valueBinary;
             }

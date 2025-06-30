@@ -6,31 +6,11 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Consistency;
+use Cassandra\Request\Options\RequestOptions;
+use Cassandra\Type;
 
 final class Query extends Request {
-    final public const FLAG_PAGE_SIZE = 0x04;
-    final public const FLAG_SKIP_METADATA = 0x02;
-    final public const FLAG_VALUES = 0x01;
-    final public const FLAG_WITH_DEFAULT_TIMESTAMP = 0x20;
-    final public const FLAG_WITH_KEYSPACE = 0x80;
-    final public const FLAG_WITH_NAMES_FOR_VALUES = 0x40;
-    final public const FLAG_WITH_NOW_IN_SECONDS = 0x0100;
-    final public const FLAG_WITH_PAGING_STATE = 0x08;
-    final public const FLAG_WITH_SERIAL_CONSISTENCY = 0x10;
-
-    protected int $consistency;
-
-    protected string $cql;
-
-    protected int $opcode = Opcode::REQUEST_QUERY;
-
-    protected QueryOptions $options;
-
-    /**
-     * @var array<mixed> $values
-     */
-    protected array $values;
-
     /**
      * QUERY
      *
@@ -45,11 +25,13 @@ final class Query extends Request {
      *
      * @param array<mixed> $values
      */
-    public function __construct(string $cql, array $values = [], ?int $consistency = null, QueryOptions $options = new QueryOptions()) {
-        $this->cql = $cql;
-        $this->values = $values;
-        $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
-        $this->options = $options;
+    public function __construct(
+        protected string $query,
+        protected array $values = [],
+        protected Consistency $consistency = Consistency::ONE,
+        protected QueryOptions $options = new QueryOptions()
+    ) {
+        parent::__construct(Opcode::REQUEST_QUERY);
     }
 
     /**
@@ -58,9 +40,79 @@ final class Query extends Request {
      */
     #[\Override]
     public function getBody(): string {
-        $body = pack('N', strlen($this->cql)) . $this->cql;
-        $body .= Request::queryParameters($this->consistency, $this->values, $this->options, $this->version);
+        $body = pack('N', strlen($this->query)) . $this->query;
+        $body .= self::queryParameters($this->consistency, $this->values, $this->options, $this->version);
 
         return $body;
+    }
+
+    /**
+     * @param array<mixed> $values
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Request\Exception
+     */
+    public static function queryParameters(Consistency $consistency, array $values = [], QueryOptions $options = new QueryOptions(), int $version = 3): string {
+        $flags = 0;
+        $optional = '';
+
+        $opt = $options->toArray();
+
+        if ($values) {
+            $flags |= QueryFlag::VALUES->value;
+            $optional .= Request::valuesBinary($values, !empty($opt['names_for_values']));
+        }
+
+        if (!empty($opt['skip_metadata'])) {
+            $flags |= QueryFlag::SKIP_METADATA->value;
+        }
+
+        if (isset($opt['page_size'])) {
+            $flags |= QueryFlag::PAGE_SIZE->value;
+            $optional .= pack('N', $opt['page_size']);
+        }
+
+        if (isset($opt['paging_state'])) {
+            $flags |= QueryFlag::WITH_PAGING_STATE->value;
+            $optional .= pack('N', strlen($opt['paging_state'])) . $opt['paging_state'];
+        }
+
+        if (isset($opt['serial_consistency'])) {
+            $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY->value;
+            $optional .= pack('n', $opt['serial_consistency']);
+        }
+
+        if (isset($opt['default_timestamp'])) {
+            $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP->value;
+            $optional .= (new Type\Bigint($opt['default_timestamp']))->getBinary();
+        }
+
+        if (!empty($opt['names_for_values'])) {
+            $flags |= QueryFlag::WITH_NAMES_FOR_VALUES->value;
+        }
+
+        if (isset($opt['keyspace'])) {
+            if ($version >= 5) {
+                $flags |= QueryFlag::WITH_KEYSPACE->value;
+                $optional .= pack('n', strlen($opt['keyspace'])) . $opt['keyspace'];
+            } else {
+                throw new Exception('Option "keyspace" not supported by server');
+            }
+        }
+
+        if (isset($opt['now_in_seconds'])) {
+            if ($version >= 5) {
+                $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
+                $optional .= pack('N', $opt['now_in_seconds']);
+            } else {
+                throw new Exception('Option "now_in_seconds" not supported by server');
+            }
+        }
+
+        if ($version < 5) {
+            return pack('n', $consistency->value) . chr($flags) . $optional;
+        } else {
+            return pack('n', $consistency->value) . pack('N', $flags) . $optional;
+        }
     }
 }

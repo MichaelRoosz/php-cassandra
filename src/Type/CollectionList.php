@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 
@@ -84,7 +85,7 @@ class CollectionList extends TypeBase {
 
         /** @var mixed $val */
         foreach ($this->value as $val) {
-            $itemPacked = Type::getBinaryByType($valueType, $val);
+            $itemPacked = TypeFactory::getBinaryByType($valueType, $val);
             $binary .= pack('N', strlen($itemPacked)) . $itemPacked;
         }
 

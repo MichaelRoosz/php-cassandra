@@ -8,29 +8,22 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Exception;
 use Cassandra\Response\Result;
 use Cassandra\Request\Options\BatchOptions;
+use Cassandra\Consistency;
+use Cassandra\Request\BatchType;
+use Cassandra\Response\ResultKind;
 
 final class Batch extends Request {
-    final public const TYPE_COUNTER = 2;
-    final public const TYPE_LOGGED = 0;
-    final public const TYPE_UNLOGGED = 1;
-
-    protected int $batchType;
-
-    protected int $consistency;
-
-    protected int $opcode = Opcode::REQUEST_BATCH;
-
-    protected BatchOptions $options;
-
     /**
      * @var array<string> $queryArray
      */
     protected array $queryArray = [];
 
-    public function __construct(?int $type = null, ?int $consistency = null, BatchOptions $options = new BatchOptions()) {
-        $this->batchType = $type === null ? Batch::TYPE_LOGGED : $type;
-        $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
-        $this->options = $options;
+    public function __construct(
+        protected BatchType $type = BatchType::LOGGED,
+        protected Consistency $consistency = Consistency::ONE,
+        protected BatchOptions $options = new BatchOptions()
+    ) {
+        parent::__construct(Opcode::REQUEST_BATCH);
     }
 
     /**
@@ -42,7 +35,7 @@ final class Batch extends Request {
      */
     public function appendPreparedStatement(Result $prepareResult, array $values = []): static {
 
-        if ($prepareResult->getKind() !== Result::PREPARED) {
+        if ($prepareResult->getKind() !== ResultKind::PREPARED) {
             throw new Exception('Invalid prepared statement');
         }
 
@@ -71,11 +64,11 @@ final class Batch extends Request {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public function appendQuery(string $cql, array $values = []): static {
+    public function appendQuery(string $query, array $values = []): static {
 
         $binary = chr(0);
 
-        $binary .= pack('N', strlen($cql)) . $cql;
+        $binary .= pack('N', strlen($query)) . $query;
         $binary .= Request::valuesBinary($values, namesForValues: false);
 
         $this->queryArray[] = $binary;
@@ -88,8 +81,8 @@ final class Batch extends Request {
      */
     #[\Override]
     public function getBody(): string {
-        return chr($this->batchType)
+        return chr($this->type->value)
             . pack('n', count($this->queryArray)) . implode('', $this->queryArray)
-            . self::queryParameters($this->consistency, [], $this->options, $this->version);
+            . Query::queryParameters($this->consistency, [], $this->options, $this->version);
     }
 }

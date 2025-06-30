@@ -7,12 +7,6 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 
 final class AuthResponse extends Request {
-    protected int $opcode = Opcode::REQUEST_AUTH_RESPONSE;
-
-    protected string $password;
-
-    protected string $username;
-
     /**
      * CREDENTIALS
      *
@@ -29,9 +23,11 @@ final class AuthResponse extends Request {
      * The response to a CREDENTIALS is a READY message (or an ERROR message).
      *
      */
-    public function __construct(string $username, string $password) {
-        $this->username = $username;
-        $this->password = $password;
+    public function __construct(
+        protected string $username,
+        protected string $password
+    ) {
+        parent::__construct(Opcode::REQUEST_AUTH_RESPONSE);
     }
 
     #[\Override]

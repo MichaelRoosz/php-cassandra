@@ -6,55 +6,32 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
-use Cassandra\Request\Options\RequestOptions;
+use Cassandra\TypeFactory;
+use Cassandra\Protocol\Opcode;
 use Cassandra\Type;
 use Cassandra\Value;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
-    final public const CONSISTENCY_ALL = 0x0005;
-    final public const CONSISTENCY_ANY = 0x0000;
-    final public const CONSISTENCY_EACH_QUORUM = 0x0007;
-    final public const CONSISTENCY_LOCAL_ONE = 0x000A;
-    final public const CONSISTENCY_LOCAL_QUORUM = 0x0006;
-    final public const CONSISTENCY_LOCAL_SERIAL = 0x0009;
-    final public const CONSISTENCY_ONE = 0x0001;
-    final public const CONSISTENCY_QUORUM = 0x0004;
-    final public const CONSISTENCY_SERIAL = 0x0008;
-    final public const CONSISTENCY_THREE = 0x0003;
-    final public const CONSISTENCY_TWO = 0x0002;
-
-    protected int $flags = 0;
-
-    protected int $opcode;
-
-    /**
-     * @var ?array<string,string> $payload
-     */
-    protected ?array $payload = null;
-
-    protected int $stream = 0;
-
-    protected int $version = 3;
-
     /**
      * @param ?array<string,string> $payload
      */
-    public function __construct(int $opcode, int $stream = 0, int $flags = 0, ?array $payload = null, int $version = 3) {
-        $this->opcode = $opcode;
-        $this->stream = $stream;
-        $this->flags = $flags;
-        $this->payload = $payload;
-        $this->version = $version;
+    public function __construct(
+        protected Opcode $opcode,
+        protected int $stream = 0,
+        protected int $flags = 0,
+        protected ?array $payload = null,
+        protected int $version = 3
+    ) {
     }
 
     #[\Override]
     public function __toString(): string {
         $body = $this->getBody();
 
-        if ($this->flags & Flag::CUSTOM_PAYLOAD) {
+        if ($this->flags & Flag::CUSTOM_PAYLOAD->value) {
             if ($this->payload === null) {
-                $this->flags &= ~Flag::CUSTOM_PAYLOAD;
+                $this->flags &= ~Flag::CUSTOM_PAYLOAD->value;
             } else {
                 $payloadData = pack('n', count($this->payload));
 
@@ -78,7 +55,7 @@ abstract class Request implements Frame, Stringable {
     }
 
     public function enableTracing(): void {
-        $this->flags |= Flag::TRACING;
+        $this->flags |= Flag::TRACING->value;
     }
 
     #[\Override]
@@ -92,7 +69,7 @@ abstract class Request implements Frame, Stringable {
     }
 
     #[\Override]
-    public function getOpcode(): int {
+    public function getOpcode(): Opcode {
         return $this->opcode;
     }
 
@@ -113,76 +90,6 @@ abstract class Request implements Frame, Stringable {
         return $this->version;
     }
 
-    /**
-     * @param array<mixed> $values
-     *
-     * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\Request\Exception
-     */
-    public static function queryParameters(int $consistency, array $values = [], RequestOptions $options = new RequestOptions(), int $version = 3): string {
-        $flags = 0;
-        $optional = '';
-
-        $opt = $options->toArray();
-
-        if ($values) {
-            $flags |= Query::FLAG_VALUES;
-            $optional .= Request::valuesBinary($values, !empty($opt['names_for_values']));
-        }
-
-        if (!empty($opt['skip_metadata'])) {
-            $flags |= Query::FLAG_SKIP_METADATA;
-        }
-
-        if (isset($opt['page_size'])) {
-            $flags |= Query::FLAG_PAGE_SIZE;
-            $optional .= pack('N', $opt['page_size']);
-        }
-
-        if (isset($opt['paging_state'])) {
-            $flags |= Query::FLAG_WITH_PAGING_STATE;
-            $optional .= pack('N', strlen($opt['paging_state'])) . $opt['paging_state'];
-        }
-
-        if (isset($opt['serial_consistency'])) {
-            $flags |= Query::FLAG_WITH_SERIAL_CONSISTENCY;
-            $optional .= pack('n', $opt['serial_consistency']);
-        }
-
-        if (isset($opt['default_timestamp'])) {
-            $flags |= Query::FLAG_WITH_DEFAULT_TIMESTAMP;
-            $optional .= (new Type\Bigint($opt['default_timestamp']))->getBinary();
-        }
-
-        if (!empty($opt['names_for_values'])) {
-            $flags |= Query::FLAG_WITH_NAMES_FOR_VALUES;
-        }
-
-        if (isset($opt['keyspace'])) {
-            if ($version >= 5) {
-                $flags |= Query::FLAG_WITH_KEYSPACE;
-                $optional .= pack('n', strlen($opt['keyspace'])) . $opt['keyspace'];
-            } else {
-                throw new Exception('Option "keyspace" not supported by server');
-            }
-        }
-
-        if (isset($opt['now_in_seconds'])) {
-            if ($version >= 5) {
-                $flags |= Query::FLAG_WITH_NOW_IN_SECONDS;
-                $optional .= pack('N', $opt['now_in_seconds']);
-            } else {
-                throw new Exception('Option "now_in_seconds" not supported by server');
-            }
-        }
-
-        if ($version < 5) {
-            return pack('n', $consistency) . chr($flags) . $optional;
-        } else {
-            return pack('n', $consistency) . pack('N', $flags) . $optional;
-        }
-    }
-
     public function setFlags(int $flags): void {
         $this->flags = $flags;
     }
@@ -192,7 +99,7 @@ abstract class Request implements Frame, Stringable {
      */
     public function setPayload(array $payload): void {
         $this->payload = $payload;
-        $this->flags |= Flag::CUSTOM_PAYLOAD;
+        $this->flags |= Flag::CUSTOM_PAYLOAD->value;
     }
 
     public function setStream(int $stream): void {
@@ -225,7 +132,7 @@ abstract class Request implements Frame, Stringable {
             } elseif ($values[$key] instanceof Type\TypeBase) {
                 $strictTypeValues[$key] = $values[$key];
             } else {
-                $strictTypeValues[$key] = Type::getTypeObjectForValue($column['type'], $values[$key]);
+                $strictTypeValues[$key] = TypeFactory::getTypeObjectForValue($column['type'], $values[$key]);
             }
         }
 

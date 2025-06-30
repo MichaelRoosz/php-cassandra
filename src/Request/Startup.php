@@ -7,13 +7,6 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 
 final class Startup extends Request {
-    protected int $opcode = Opcode::REQUEST_STARTUP;
-
-    /**
-     * @var array<string, string> $options
-     */
-    protected $options = [];
-
     /**
      * STARTUP
      *
@@ -35,8 +28,8 @@ final class Startup extends Request {
      *
      * @param array<string, string> $options
      */
-    public function __construct(array $options = []) {
-        $this->options = $options;
+    public function __construct(protected array $options = []) {
+        parent::__construct(Opcode::REQUEST_STARTUP);
     }
 
     #[\Override]
