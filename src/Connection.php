@@ -8,6 +8,9 @@ use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\Flag;
 use Cassandra\Compression\Lz4Decompressor;
+use Cassandra\Request\Options\ExecuteOptions;
+use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
 use SplQueue;
 
@@ -240,18 +243,10 @@ final class Connection {
 
     /**
      * @param array<mixed> $values
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     * } $options
      *
      * @throws \Cassandra\Exception
      */
-    public function executeAsync(Result $previousResult, array $values = [], ?int $consistency = null, array $options = []): Statement {
+    public function executeAsync(Result $previousResult, array $values = [], ?int $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
         $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
         $statement = $this->asyncRequest($request);
@@ -261,18 +256,10 @@ final class Connection {
 
     /**
      * @param array<mixed> $values
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     * } $options
      *
      * @throws \Cassandra\Exception
      */
-    public function executeSync(Result $previousResult, array $values = [], ?int $consistency = null, array $options = []): Response\Result {
+    public function executeSync(Result $previousResult, array $values = [], ?int $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
         $request = new Request\Execute($previousResult, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
         $response = $this->syncRequest($request);
@@ -320,8 +307,17 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function prepare(string $cql): Response\Result {
-        $response = $this->syncRequest(new Request\Prepare($cql));
+    public function prepareAsync(string $cql, PrepareOptions $options = new PrepareOptions()): Statement {
+        $request = new Request\Prepare($cql, $options);
+
+        return $this->asyncRequest($request);
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    public function prepareSync(string $cql, PrepareOptions $options = new PrepareOptions()): Response\Result {
+        $response = $this->syncRequest(new Request\Prepare($cql, $options));
         if (!($response instanceof Response\Result)) {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result::class,
@@ -341,18 +337,10 @@ final class Connection {
 
     /**
      * @param array<mixed> $values
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     * } $options
      *
      * @throws \Cassandra\Exception
      */
-    public function queryAsync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Statement {
+    public function queryAsync(string $cql, array $values = [], ?int $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
         $request = new Request\Query($cql, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
         return $this->asyncRequest($request);
@@ -360,18 +348,10 @@ final class Connection {
 
     /**
      * @param array<mixed> $values
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     * } $options
      *
      * @throws \Cassandra\Exception
      */
-    public function querySync(string $cql, array $values = [], ?int $consistency = null, array $options = []): Response\Result {
+    public function querySync(string $cql, array $values = [], ?int $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
         $request = new Request\Query($cql, $values, $consistency === null ? $this->consistency : $consistency, $options);
 
         $response = $this->syncRequest($request);
@@ -409,6 +389,14 @@ final class Connection {
         }
 
         return $response;
+    }
+
+    public function supportsKeyspaceRequestOption(): bool {
+        return $this->version >= 5;
+    }
+
+    public function supportsNowInSecondsRequestOption(): bool {
+        return $this->version >= 5;
     }
 
     /**

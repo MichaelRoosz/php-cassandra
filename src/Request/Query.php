@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
+use Cassandra\Request\Options\QueryOptions;
 
 final class Query extends Request {
     final public const FLAG_PAGE_SIZE = 0x04;
@@ -23,19 +24,7 @@ final class Query extends Request {
 
     protected int $opcode = Opcode::REQUEST_QUERY;
 
-    /**
-     * @var array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     *  keyspace?: string,
-     *  now_in_seconds?: int,
-     * } $options
-     */
-    protected array $options;
+    protected QueryOptions $options;
 
     /**
      * @var array<mixed> $values
@@ -55,18 +44,8 @@ final class Query extends Request {
      * of which depends on the query.
      *
      * @param array<mixed> $values
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     *  keyspace?: string,
-     *  now_in_seconds?: int,
-     * } $options
      */
-    public function __construct(string $cql, array $values = [], ?int $consistency = null, array $options = []) {
+    public function __construct(string $cql, array $values = [], ?int $consistency = null, QueryOptions $options = new QueryOptions()) {
         $this->cql = $cql;
         $this->values = $values;
         $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;

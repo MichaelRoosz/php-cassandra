@@ -6,23 +6,13 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result;
+use Cassandra\Request\Options\ExecuteOptions;
 
 final class Execute extends Request {
     protected int $consistency;
     protected int $opcode = Opcode::REQUEST_EXECUTE;
 
-    /**
-     * @var array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     *  now_in_seconds?: int,
-     * } $options
-     */
-    protected $options;
+    protected ExecuteOptions $options;
 
     protected Result $previousResult;
 
@@ -52,22 +42,13 @@ final class Execute extends Request {
      * The response from the server will be a RESULT message.
      *
      * @param array<mixed> $values
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     *  now_in_seconds?: int,
-     * } $options
      * 
      * @throws \Cassandra\Request\Exception
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      * 
      */
-    public function __construct(Result $previousResult, array $values, ?int $consistency = null, array $options = []) {
+    public function __construct(Result $previousResult, array $values, ?int $consistency = null, ExecuteOptions $options = new ExecuteOptions()) {
 
         $this->previousResult = $previousResult;
 
@@ -102,14 +83,8 @@ final class Execute extends Request {
         $this->consistency = $consistency === null ? Request::CONSISTENCY_ONE : $consistency;
         $this->options = $options;
 
-        /**
-         * @psalm-suppress InvalidArrayOffset
-         * @phpstan-ignore-next-line
-         */
-        unset($this->options['keyspace']);
-
-        if (!isset($this->options['skip_metadata'])) {
-            $this->options['skip_metadata'] = true;
+        if ($this->options->skipMetadata === null) {
+            $this->options->skipMetadata = true;
         }
     }
 
@@ -138,18 +113,7 @@ final class Execute extends Request {
         return $this->consistency;
     }
 
-    /**
-     * @return array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     *  now_in_seconds?: int,
-     * } $options
-     */
-    public function getOptions(): array {
+    public function getOptions(): ExecuteOptions {
         return $this->options;
     }
 

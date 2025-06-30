@@ -6,6 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
+use Cassandra\Request\Options\RequestOptions;
 use Cassandra\Type;
 use Cassandra\Value;
 use Stringable;
@@ -114,73 +115,65 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
-     * @param array{
-     *  names_for_values?: bool,
-     *  skip_metadata?: bool,
-     *  page_size?: int,
-     *  paging_state?: string,
-     *  serial_consistency?: int,
-     *  default_timestamp?: int,
-     *  keyspace?: string,
-     *  now_in_seconds?: int,
-     * } $options
      *
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
-    public static function queryParameters(int $consistency, array $values = [], array $options = [], int $version = 3): string {
+    public static function queryParameters(int $consistency, array $values = [], RequestOptions $options = new RequestOptions(), int $version = 3): string {
         $flags = 0;
         $optional = '';
 
+        $opt = $options->toArray();
+
         if ($values) {
             $flags |= Query::FLAG_VALUES;
-            $optional .= Request::valuesBinary($values, !empty($options['names_for_values']));
+            $optional .= Request::valuesBinary($values, !empty($opt['names_for_values']));
         }
 
-        if (!empty($options['skip_metadata'])) {
+        if (!empty($opt['skip_metadata'])) {
             $flags |= Query::FLAG_SKIP_METADATA;
         }
 
-        if (isset($options['page_size'])) {
+        if (isset($opt['page_size'])) {
             $flags |= Query::FLAG_PAGE_SIZE;
-            $optional .= pack('N', $options['page_size']);
+            $optional .= pack('N', $opt['page_size']);
         }
 
-        if (isset($options['paging_state'])) {
+        if (isset($opt['paging_state'])) {
             $flags |= Query::FLAG_WITH_PAGING_STATE;
-            $optional .= pack('N', strlen($options['paging_state'])) . $options['paging_state'];
+            $optional .= pack('N', strlen($opt['paging_state'])) . $opt['paging_state'];
         }
 
-        if (isset($options['serial_consistency'])) {
+        if (isset($opt['serial_consistency'])) {
             $flags |= Query::FLAG_WITH_SERIAL_CONSISTENCY;
-            $optional .= pack('n', $options['serial_consistency']);
+            $optional .= pack('n', $opt['serial_consistency']);
         }
 
-        if (isset($options['default_timestamp'])) {
+        if (isset($opt['default_timestamp'])) {
             $flags |= Query::FLAG_WITH_DEFAULT_TIMESTAMP;
-            $optional .= (new Type\Bigint($options['default_timestamp']))->getBinary();
+            $optional .= (new Type\Bigint($opt['default_timestamp']))->getBinary();
         }
 
-        if (isset($options['keyspace'])) {
+        if (!empty($opt['names_for_values'])) {
+            $flags |= Query::FLAG_WITH_NAMES_FOR_VALUES;
+        }
+
+        if (isset($opt['keyspace'])) {
             if ($version >= 5) {
                 $flags |= Query::FLAG_WITH_KEYSPACE;
-                $optional .= pack('n', strlen($options['keyspace'])) . $options['keyspace'];
+                $optional .= pack('n', strlen($opt['keyspace'])) . $opt['keyspace'];
             } else {
                 throw new Exception('Option "keyspace" not supported by server');
             }
         }
 
-        if (isset($options['now_in_seconds'])) {
+        if (isset($opt['now_in_seconds'])) {
             if ($version >= 5) {
                 $flags |= Query::FLAG_WITH_NOW_IN_SECONDS;
-                $optional .= pack('N', $options['now_in_seconds']);
+                $optional .= pack('N', $opt['now_in_seconds']);
             } else {
                 throw new Exception('Option "now_in_seconds" not supported by server');
             }
-        }
-
-        if (!empty($options['names_for_values'])) {
-            $flags |= Query::FLAG_WITH_NAMES_FOR_VALUES;
         }
 
         if ($version < 5) {
