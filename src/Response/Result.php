@@ -13,7 +13,7 @@ use Cassandra\Type;
 /**
  * @implements IteratorAggregate<ArrayObject<string, mixed>|array<string, mixed>|null>
  */
-class Result extends Response implements IteratorAggregate {
+final class Result extends Response implements IteratorAggregate {
     final public const PREPARED = 0x0004;
     final public const ROWS = 0x0002;
 
@@ -694,7 +694,7 @@ class Result extends Response implements IteratorAggregate {
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function getVoidData(): ?string {
+    public function getVoidData(): null {
         if ($this->getKind() !== self::VOID) {
             throw new Exception('Unexpected Response: ' . $this->getKind());
         }

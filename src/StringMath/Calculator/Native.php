@@ -7,7 +7,7 @@ namespace Cassandra\StringMath\Calculator;
 use Cassandra\StringMath\Calculator;
 use Cassandra\StringMath\Exception;
 
-class Native extends Calculator {
+final class Native extends Calculator {
     /**
      * @throws \Cassandra\StringMath\Exception
      */
@@ -109,6 +109,9 @@ class Native extends Calculator {
         return $string;
     }
 
+    /**
+     * @param-out bool $modulo
+     */
     #[\Override]
     public function stringUnsignedDiv2(string $string, ?bool &$modulo = null): string {
         $length = strlen($string);

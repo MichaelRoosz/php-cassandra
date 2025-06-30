@@ -11,7 +11,7 @@ use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Response\Result;
 use SplQueue;
 
-class Connection {
+final class Connection {
     protected int $consistency = Request\Request::CONSISTENCY_ONE;
 
     /**
@@ -675,7 +675,7 @@ class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    protected function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): ?Response\Result {
+    protected function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): Response\Result {
 
         $result->setPreviousResult($request->getPreviousResult());
 
@@ -691,7 +691,7 @@ class Connection {
 
         if ($statement !== null && $statement->isRepreparing()) {
             $statement->setIsRepreparing(false);
-            $this->handleReprepareResult($request, $result, statement: $statement);
+            $result = $this->handleReprepareResult($request, $result, statement: $statement);
         }
 
         return $result;

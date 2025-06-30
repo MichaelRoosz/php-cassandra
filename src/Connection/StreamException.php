@@ -4,5 +4,5 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
-class StreamException extends NodeException {
+final class StreamException extends NodeException {
 }

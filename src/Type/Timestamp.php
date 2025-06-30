@@ -7,7 +7,7 @@ namespace Cassandra\Type;
 use DateTimeImmutable;
 use DateTimeInterface;
 
-class Timestamp extends Bigint {
+final class Timestamp extends Bigint {
     /**
      * @throws \Exception
      */

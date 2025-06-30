@@ -6,7 +6,7 @@ namespace Cassandra\Response;
 
 use Cassandra\Type;
 
-class Event extends Response {
+final class Event extends Response {
     final public const SCHEMA_CHANGE = 'SCHEMA_CHANGE';
     final public const STATUS_CHANGE = 'STATUS_CHANGE';
     final public const TOPOLOGY_CHANGE = 'TOPOLOGY_CHANGE';

@@ -7,7 +7,7 @@ namespace Cassandra\Connection;
 use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Request\Request;
 
-class FrameCodec implements Node {
+final class FrameCodec implements Node {
     final public const CRC24_INIT = 0x875060;
     final public const CRC24_POLYNOMIAL = 0x1974F0B;
     final public const PAYLOAD_MAX_SIZE = 131071;

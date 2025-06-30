@@ -7,7 +7,7 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result;
 
-class Execute extends Request {
+final class Execute extends Request {
     protected int $consistency;
     protected int $opcode = Opcode::REQUEST_EXECUTE;
 

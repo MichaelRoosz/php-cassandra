@@ -9,7 +9,7 @@ use Cassandra\Type;
 use Cassandra\Exception;
 use Cassandra\Response\Result;
 
-class Batch extends Request {
+final class Batch extends Request {
     final public const TYPE_COUNTER = 2;
     final public const TYPE_LOGGED = 0;
     final public const TYPE_UNLOGGED = 1;

@@ -6,7 +6,7 @@ namespace Cassandra\Type;
 
 use Cassandra\StringMath\Calculator;
 
-class Varint extends TypeBase {
+final class Varint extends TypeBase {
     protected string|int $value;
 
     final public function __construct(string|int $value) {

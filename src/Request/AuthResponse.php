@@ -6,7 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 
-class AuthResponse extends Request {
+final class AuthResponse extends Request {
     protected int $opcode = Opcode::REQUEST_AUTH_RESPONSE;
 
     protected string $password;

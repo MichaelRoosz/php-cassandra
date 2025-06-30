@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Decimal extends TypeBase {
+final class Decimal extends TypeBase {
     protected string $value;
 
     /**
@@ -75,7 +75,7 @@ class Decimal extends TypeBase {
         $pos = strpos($this->value, '.');
         $scaleLen = $pos === false ? 0 : strlen($this->value) - $pos - 1;
         if ($scaleLen) {
-            $numericValue = (int) (((float) $this->value) * pow(10, $scaleLen));
+            $numericValue = (int) (((float) $this->value) * (float) pow(10, $scaleLen));
         } else {
             $numericValue = (int) $this->value;
         }

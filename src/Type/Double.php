@@ -7,7 +7,7 @@ namespace Cassandra\Type;
 /**
  * Double-precision floating-point number (same as a PHP "float", 64-bit precision)
  */
-class Double extends TypeBase {
+final class Double extends TypeBase {
     protected float $value;
 
     final public function __construct(float $value) {

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Tinyint extends TypeBase {
+final class Tinyint extends TypeBase {
     final public const VALUE_MAX = 127;
     final public const VALUE_MIN = -128;
 

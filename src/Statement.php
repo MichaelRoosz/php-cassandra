@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
-class Statement {
+final class Statement {
     protected Connection $connection;
 
     protected bool $isRepreparing = false;

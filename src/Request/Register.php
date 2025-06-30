@@ -6,7 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 
-class Register extends Request {
+final class Register extends Request {
     /**
      * @var array<string> $events
      */

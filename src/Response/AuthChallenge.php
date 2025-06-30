@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-class AuthChallenge extends Response {
+final class AuthChallenge extends Response {
     /**
      * @throws \Cassandra\Response\Exception
      */

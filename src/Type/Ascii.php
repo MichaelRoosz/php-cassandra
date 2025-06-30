@@ -4,5 +4,5 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Ascii extends Varchar {
+final class Ascii extends Varchar {
 }

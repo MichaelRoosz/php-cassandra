@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+/**
+ * @api
+ */
 class Custom extends TypeBase {
     protected string $javaClassName;
 

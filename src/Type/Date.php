@@ -8,7 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
 
-class Date extends Integer {
+final class Date extends Integer {
     /**
      * @throws \Exception
      */

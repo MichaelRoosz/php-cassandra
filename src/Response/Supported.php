@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-class Supported extends Response {
+final class Supported extends Response {
     /**
      * @return array<string,array<int,string>>
      *

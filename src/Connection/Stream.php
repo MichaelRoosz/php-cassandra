@@ -6,10 +6,7 @@ namespace Cassandra\Connection;
 
 use Cassandra\Request\Request;
 
-/**
- * @psalm-consistent-constructor
- */
-class Stream implements NodeImplementation {
+final class Stream implements NodeImplementation {
     /**
      * @var array{
      *  class: string,
@@ -253,6 +250,17 @@ class Stream implements NodeImplementation {
         $connFlag = $this->options['persistent'] ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
         $stream = stream_socket_client($host . ':' . $this->options['port'], $errorCode, $errorMessage, $this->options['connectTimeout'], $connFlag, $context);
         if ($stream === false) {
+
+            /** @psalm-suppress TypeDoesNotContainType */
+            if (!is_string($errorMessage)) {
+                $errorMessage = 'Unknown error';
+            }
+
+            /** @psalm-suppress TypeDoesNotContainType */
+            if (!is_int($errorCode)) {
+                $errorCode = 0;
+            }
+
             throw new StreamException($errorMessage, $errorCode);
         }
 

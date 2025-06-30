@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Blob extends TypeBase {
+final class Blob extends TypeBase {
     protected string $value;
 
     final public function __construct(string $value) {

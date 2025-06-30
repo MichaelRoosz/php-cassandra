@@ -8,7 +8,7 @@ use Cassandra\Type;
 
 use Cassandra\Response\StreamReader;
 
-class CollectionMap extends TypeBase {
+final class CollectionMap extends TypeBase {
     /**
      * @var array<int|array<mixed>> $definition
      */
@@ -93,7 +93,7 @@ class CollectionMap extends TypeBase {
      * @return array<mixed> $value
      */
     #[\Override]
-    public function getValue(): ?array {
+    public function getValue(): array {
         return $this->value;
     }
 }

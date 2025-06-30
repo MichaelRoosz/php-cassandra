@@ -7,5 +7,5 @@ namespace Cassandra\Type;
 /**
  * @deprecated Use \Cassandra\Type\Float32 instead
  */
-class PhpFloat extends Float32 {
+final class PhpFloat extends Float32 {
 }

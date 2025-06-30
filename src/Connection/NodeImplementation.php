@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
-/**
- * @psalm-consistent-constructor
- */
 interface NodeImplementation extends Node {
     /**
      * @param array{

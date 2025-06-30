@@ -7,5 +7,5 @@ namespace Cassandra\Type;
 /**
  * @deprecated Use \Cassandra\Type\Integer instead
  */
-class PhpInt extends Integer {
+final class PhpInt extends Integer {
 }

@@ -6,7 +6,7 @@ namespace Cassandra\Response;
 
 use Cassandra\Connection\Node;
 
-class ProgressiveStreamReader extends StreamReader {
+final class ProgressiveStreamReader extends StreamReader {
     protected ?Node $source = null;
 
     public function __construct(string $data = '') {

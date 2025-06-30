@@ -6,7 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 
-class Options extends Request {
+final class Options extends Request {
     protected int $opcode = Opcode::REQUEST_OPTIONS;
 
     /**

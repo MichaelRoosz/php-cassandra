@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Smallint extends TypeBase {
+final class Smallint extends TypeBase {
     final public const VALUE_MAX = 32767;
     final public const VALUE_MIN = -32768;
 

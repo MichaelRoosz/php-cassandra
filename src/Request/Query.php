@@ -6,7 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 
-class Query extends Request {
+final class Query extends Request {
     final public const FLAG_PAGE_SIZE = 0x04;
     final public const FLAG_SKIP_METADATA = 0x02;
     final public const FLAG_VALUES = 0x01;

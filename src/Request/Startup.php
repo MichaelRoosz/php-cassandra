@@ -6,7 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 
-class Startup extends Request {
+final class Startup extends Request {
     protected int $opcode = Opcode::REQUEST_STARTUP;
 
     /**

@@ -6,7 +6,7 @@ namespace Cassandra\Type;
 
 use DateInterval;
 
-class Duration extends TypeBase {
+final class Duration extends TypeBase {
     final protected const INT32_MAX = 2147483647;
     final protected const INT32_MIN = -2147483648;
 
@@ -72,10 +72,6 @@ class Duration extends TypeBase {
         self::require64Bit();
 
         $months = ((int) $value->format('%r%y') * 12) + (int) $value->format('%r%m');
-        if (!is_int($months)) {
-            throw new Exception('Cannot create Duration from DateInterval - months value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
-        }
-
         $days = (int) $value->format('%r%d');
 
         $hoursInNanoseconds = (int) $value->format('%r%h') * 3600000000000;
@@ -84,9 +80,6 @@ class Duration extends TypeBase {
         $microsecondsInNanoseconds = (int) $value->format('%r%f') * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds + $secondsInNanoseconds + $microsecondsInNanoseconds;
-        if (!is_int($totalNanoseconds)) {
-            throw new Exception('Cannot create Duration from DateInterval - nanoseconds value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
-        }
 
         return new static([
             'months' => $months,
@@ -136,9 +129,6 @@ class Duration extends TypeBase {
                 }
             }
         }
-        if (!is_int($months)) {
-            throw new Exception('Cannot create Duration from String - months value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
-        }
 
         $days = 0;
         foreach ([
@@ -152,9 +142,6 @@ class Duration extends TypeBase {
                     $days += (int) $matches[$key] * $factor;
                 }
             }
-        }
-        if (!is_int($days)) {
-            throw new Exception('Cannot create Duration from String - days value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
         }
 
         $nanoseconds = 0;
@@ -174,9 +161,6 @@ class Duration extends TypeBase {
                     $nanoseconds += (int) $matches[$key] * $factor;
                 }
             }
-        }
-        if (!is_int($nanoseconds)) {
-            throw new Exception('Cannot create Duration from String - nanoseconds value exceeds range of PHP_INT_MIN and PHP_INT_MAX');
         }
 
         return new static([

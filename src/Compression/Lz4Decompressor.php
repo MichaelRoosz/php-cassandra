@@ -1,4 +1,5 @@
 <?php
+
 /*
  * MIT License
  *
@@ -28,7 +29,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Compression;
 
-class Lz4Decompressor {
+final class Lz4Decompressor {
     protected string $input;
 
     protected int $inputLength;

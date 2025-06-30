@@ -8,7 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
 
-class Time extends Bigint {
+final class Time extends Bigint {
     final public const VALUE_MAX = 86399999999999;
 
     public function __toString(): string {

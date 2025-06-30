@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Inet extends TypeBase {
+final class Inet extends TypeBase {
     protected string $value;
 
     final public function __construct(string $value) {

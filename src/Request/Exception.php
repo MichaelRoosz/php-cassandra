@@ -6,5 +6,5 @@ namespace Cassandra\Request;
 
 use Cassandra\Exception as CassandraException;
 
-class Exception extends CassandraException {
+final class Exception extends CassandraException {
 }

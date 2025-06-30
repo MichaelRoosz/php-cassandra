@@ -7,10 +7,7 @@ namespace Cassandra\Connection;
 use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
-/**
- * @psalm-consistent-constructor
- */
-class Socket implements NodeImplementation {
+final class Socket implements NodeImplementation {
     /**
      * @var array{
      *  class: string,
@@ -83,7 +80,6 @@ class Socket implements NodeImplementation {
             socket_set_block($socket);
             socket_set_option($socket, SOL_SOCKET, SO_LINGER, ['l_onoff' => 1, 'l_linger' => 1]);
 
-            /** @psalm-suppress UnusedFunctionCall */
             socket_shutdown($socket);
 
             socket_close($socket);

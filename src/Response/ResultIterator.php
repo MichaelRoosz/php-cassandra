@@ -10,7 +10,7 @@ use Iterator;
 /**
  * @implements Iterator<ArrayObject<string, mixed>|array<string, mixed>|null>
  */
-class ResultIterator implements Iterator {
+final class ResultIterator implements Iterator {
     /**
      * Number of available rows in the resultset
      */
@@ -89,13 +89,13 @@ class ResultIterator implements Iterator {
     }
 
     /**
-     * @return ArrayObject<string, mixed>|array<string, mixed>|null
+     * @return ArrayObject<string, mixed>|array<string, mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public function current(): ArrayObject|array|null {
+    public function current(): ArrayObject|array {
         $data = [];
 
         if (isset($this->metadata['columns'])) {

@@ -6,7 +6,7 @@ namespace Cassandra\Response;
 
 use Cassandra\Type;
 
-class Error extends Response {
+final class Error extends Response {
     /** @deprecated Use ALREADY_EXISTS instead */
     final public const ALREADY_EXIST = 0x2400;
     final public const ALREADY_EXISTS = 0x2400;

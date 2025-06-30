@@ -6,7 +6,7 @@ namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
 
-class Prepare extends Request {
+final class Prepare extends Request {
     final public const FLAG_WITH_KEYSPACE = 0x01;
 
     protected int $opcode = Opcode::REQUEST_PREPARE;

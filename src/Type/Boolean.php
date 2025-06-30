@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
-class Boolean extends TypeBase {
+final class Boolean extends TypeBase {
     protected bool $value;
 
     final public function __construct(bool $value) {

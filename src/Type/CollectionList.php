@@ -74,8 +74,7 @@ class CollectionList extends TypeBase {
             if ($count < 1) {
                 throw new Exception('invalid type definition');
             } elseif ($count === 1) {
-                /** @psalm-suppress PossiblyUndefinedArrayOffset */
-                [$valueType] = array_values($this->definition);
+                $valueType = array_values($this->definition)[0];
             } else {
                 $valueType = $this->definition;
             }
