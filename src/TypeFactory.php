@@ -53,17 +53,14 @@ final class TypeFactory {
         Type::CUSTOM->value,
     ];
 
-    protected function __construct() {
-    }
-
     /**
-     * @param int|array<mixed> $Type
+     * @param int|array<mixed> $dataType
      * @param mixed $value
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function getBinaryByType(int|array $Type, mixed $value): string {
-        $type = self::getTypeObjectForValue($Type, $value);
+    public static function getBinaryByType(int|array $dataType, mixed $value): string {
+        $type = self::getTypeObjectForValue($dataType, $value);
         if ($type === null) {
             throw new Exception('Cannot get type object');
         }
@@ -72,66 +69,55 @@ final class TypeFactory {
     }
 
     /**
-     * @deprecated Use getTypeObjectForValue() instead
-     * @param int|array<mixed> $Type
-     * @param mixed $value
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function getTypeObject(int|array $Type, mixed $value): ?Types\TypeBase {
-        return self::getTypeObjectForValue($Type, $value);
-    }
-
-    /**
-    * @param int|array<mixed> $Type
+    * @param int|array<mixed> $dataType
     *
     * @throws \Cassandra\Type\Exception
     */
-    public static function getTypeObjectForBinary(int|array $Type, string $binary): Types\TypeBase {
-        $TypeInfo = self::getTypeAndDefinitionOfType($Type);
+    public static function getTypeObjectForBinary(int|array $dataType, string $binary): Types\TypeBase {
+        $dataTypeInfo = self::getTypeAndDefinitionOfDataType($dataType);
 
-        if ($TypeInfo['type'] === Type::CUSTOM->value) {
-            if (!isset($Type['definition']) || !is_array($Type['definition']) || !isset($Type['definition'][0])) {
+        if ($dataTypeInfo['type'] === Type::CUSTOM->value) {
+            if (!isset($dataType['definition']) || !is_array($dataType['definition']) || !isset($dataType['definition'][0])) {
                 throw new Exception('cannot read custom java class name');
             }
 
-            $javaClassName = $Type['definition'][0];
+            $javaClassName = $dataType['definition'][0];
 
             if (!is_string($javaClassName)) {
                 throw new Exception('custom java class name is not a string');
             }
 
-            return Types\Custom::fromBinary($binary, $TypeInfo['definition'], $javaClassName);
+            return Types\Custom::fromBinary($binary, $dataTypeInfo['definition'], $javaClassName);
         }
 
-        $class = self::getClassForType($TypeInfo['type'], $TypeInfo['definition']);
+        $class = self::getClassForDataType($dataTypeInfo['type'], $dataTypeInfo['definition']);
 
-        return $class::fromBinary($binary, $TypeInfo['definition']);
+        return $class::fromBinary($binary, $dataTypeInfo['definition']);
     }
 
     /**
-     * @param int|array<mixed> $Type
+     * @param int|array<mixed> $dataType
      * @param mixed $value
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function getTypeObjectForValue(int|array $Type, mixed $value): ?Types\TypeBase {
+    public static function getTypeObjectForValue(int|array $dataType, mixed $value): ?Types\TypeBase {
         if ($value === null) {
             return null;
         }
 
-        $TypeInfo = self::getTypeAndDefinitionOfType($Type);
+        $dataTypeInfo = self::getTypeAndDefinitionOfDataType($dataType);
 
-        if ($TypeInfo['type'] === Type::CUSTOM->value) {
+        if ($dataTypeInfo['type'] === Type::CUSTOM->value) {
             if (!is_string($value)) {
                 throw new Exception('custom value is not a string');
             }
 
-            if (!isset($Type['definition']) || !is_array($Type['definition']) || !isset($Type['definition'][0])) {
+            if (!isset($dataType['definition']) || !is_array($dataType['definition']) || !isset($dataType['definition'][0])) {
                 throw new Exception('cannot read custom java class name');
             }
 
-            $javaClassName = $Type['definition'][0];
+            $javaClassName = $dataType['definition'][0];
 
             if (!is_string($javaClassName)) {
                 throw new Exception('custom java class name is not a string');
@@ -140,9 +126,9 @@ final class TypeFactory {
             return new Types\Custom($value, $javaClassName);
         }
 
-        $class = self::getClassForType($TypeInfo['type'], $TypeInfo['definition']);
+        $class = self::getClassForDataType($dataTypeInfo['type'], $dataTypeInfo['definition']);
 
-        return $class::fromValue($value, $TypeInfo['definition']);
+        return $class::fromValue($value, $dataTypeInfo['definition']);
     }
 
     /**
@@ -151,7 +137,7 @@ final class TypeFactory {
      * 
      * @throws \Cassandra\Type\Exception
      */
-    protected static function getClassForType(int $type, null|int|array $definition): string {
+    protected static function getClassForDataType(int $type, null|int|array $definition): string {
         if ($definition === null && in_array($type, self::$typesWithDefinition)) {
             throw new Exception('type is missing its definition');
         }
@@ -170,7 +156,7 @@ final class TypeFactory {
     }
 
     /**
-     * @param int|array<mixed> $Type
+     * @param int|array<mixed> $dataType
      * @return array{
      *   type: int,
      *   definition: null|int|array<int|array<mixed>>,
@@ -178,38 +164,38 @@ final class TypeFactory {
      * 
      * @throws \Cassandra\Type\Exception
      */
-    protected static function getTypeAndDefinitionOfType(int|array $Type): array {
-        if (is_int($Type)) {
-            $type = $Type;
+    protected static function getTypeAndDefinitionOfDataType(int|array $dataType): array {
+        if (is_int($dataType)) {
+            $type = $dataType;
             $definition = null;
         } else {
             $didShift = false;
 
-            if (isset($Type['type'])) {
+            if (isset($dataType['type'])) {
                 /** @var mixed $type */
-                $type = $Type['type'];
+                $type = $dataType['type'];
             } else {
                 /** @var mixed $type */
-                $type = array_shift($Type);
+                $type = array_shift($dataType);
                 $didShift = true;
             }
 
-            if (isset($Type['definition'])) {
+            if (isset($dataType['definition'])) {
                 /** @var int|array<int|array<mixed>> $definition */
-                $definition = $Type['definition'];
-            } elseif (isset($Type['value'])) {
+                $definition = $dataType['definition'];
+            } elseif (isset($dataType['value'])) {
                 /** @var int|array<int|array<mixed>> $definition */
-                $definition = $Type['value'];
-            } elseif (isset($Type['typeMap'])) {
+                $definition = $dataType['value'];
+            } elseif (isset($dataType['typeMap'])) {
                 /** @var int|array<int|array<mixed>> $definition */
-                $definition = $Type['typeMap'];
+                $definition = $dataType['typeMap'];
             } else {
                 if (!$didShift) {
-                    array_shift($Type);
+                    array_shift($dataType);
                 }
 
                 /** @var int|array<int|array<mixed>> $definition */
-                $definition = array_shift($Type);
+                $definition = array_shift($dataType);
             }
         }
 

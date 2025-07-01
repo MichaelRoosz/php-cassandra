@@ -69,13 +69,13 @@ class StreamReader {
     /**
      * @deprecated readValue() should be used instead
      *
-     * @param int|array<mixed> $Type
+     * @param int|array<mixed> $dataType
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readBytesAndConvertToType($Type): mixed {
-        return $this->readValue($Type);
+    public function readBytesAndConvertToType($dataType): mixed {
+        return $this->readValue($dataType);
     }
 
     /**
@@ -439,12 +439,12 @@ class StreamReader {
     }
 
     /**
-     * @param int|array<mixed> $Type
+     * @param int|array<mixed> $dataType
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readValue($Type): mixed {
+    public function readValue($dataType): mixed {
         $binaryLength = $this->read(4);
         if ($binaryLength === "\xff\xff\xff\xff") {
             return null;
@@ -460,7 +460,7 @@ class StreamReader {
         $length = $unpacked[1];
 
         $binary = $this->read($length);
-        $typeObject = TypeFactory::getTypeObjectForBinary($Type, $binary);
+        $typeObject = TypeFactory::getTypeObjectForBinary($dataType, $binary);
 
         return $typeObject->getValue();
     }
