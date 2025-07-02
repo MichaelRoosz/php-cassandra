@@ -28,7 +28,7 @@ final class ResultIterator implements Iterator {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      *  }>,
      * } $metadata
      */
@@ -68,7 +68,7 @@ final class ResultIterator implements Iterator {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      *  }>,
      * } $metadata
      * @param class-string<RowClass> $rowClass

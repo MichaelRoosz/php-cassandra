@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\TypeFactory;
-use Cassandra\Type;
-
 use Cassandra\Response\StreamReader;
+use Cassandra\Type;
+use Cassandra\TypeInfo\CollectionMapInfo;
+use Cassandra\TypeInfo\TypeInfo;
 
 final class CollectionMap extends TypeBase {
-    /**
-     * @var array<int|array<mixed>> $definition
-     */
-    protected array $definition;
+    protected CollectionMapInfo $typeInfo;
 
     /**
      * @var array<mixed> $value
@@ -22,45 +20,73 @@ final class CollectionMap extends TypeBase {
 
     /**
      * @param array<mixed> $value
-     * @param array<int|array<mixed>> $definition
+     * @param Type|(array{ type: Type }&array<mixed>)|null $keyDefinition
+     * @param Type|(array{ type: Type }&array<mixed>)|null $valueDefinition
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
      */
-    final public function __construct(array $value, array $definition) {
-        $this->definition = $definition;
+    final public function __construct(
+        array $value,
+        Type|array|null $keyDefinition = null,
+        Type|array|null $valueDefinition = null,
+        ?CollectionMapInfo $typeInfo = null
+    ) {
+
+        if ($typeInfo !== null) {
+            $this->typeInfo = $typeInfo;
+        } elseif ($keyDefinition !== null && $valueDefinition !== null) {
+            $this->typeInfo = CollectionMapInfo::fromTypeDefinition([
+                'type' => Type::COLLECTION_MAP,
+                'keyType' => $keyDefinition,
+                'valueType' => $valueDefinition,
+            ]);
+        } else {
+            throw new Exception('Either keyDefinition and valueDefinition or typeInfo must be provided');
+        }
+
         $this->value = $value;
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, null|int|array $definition = null): static {
-        if (!is_array($definition)) {
-            throw new Exception('invalid CollectionMap definition');
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required');
         }
 
-        return new static((new StreamReader($binary))->readMap($definition), $definition);
+        if (!$typeInfo instanceof CollectionMapInfo) {
+            throw new Exception('Invalid type info, CollectionMapInfo expected');
+        }
+
+        return new static((new StreamReader($binary))->readMap($typeInfo), typeInfo: $typeInfo);
     }
 
     /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
+     * 
      * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
             throw new Exception('Invalid value');
         }
 
-        if (!is_array($definition)) {
-            throw new Exception('Invalid type definition');
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required');
         }
 
-        return new static($value, $definition);
+        if (!$typeInfo instanceof CollectionMapInfo) {
+            throw new Exception('Invalid type info, CollectionMapInfo expected');
+        }
+
+        return new static($value, typeInfo: $typeInfo);
     }
 
     /**
@@ -68,20 +94,16 @@ final class CollectionMap extends TypeBase {
      */
     #[\Override]
     public function getBinary(): string {
-        if (count($this->definition) < 2) {
-            throw new Exception('invalid type definition');
-        }
 
-        [$keyType, $valueType] = array_values($this->definition);
         $binary = pack('N', count($this->value));
 
         /** @var TypeBase|mixed $val */
         foreach ($this->value as $key => $val) {
-            $keyPacked = TypeFactory::getBinaryByType($keyType, $key);
+            $keyPacked = TypeFactory::getBinaryByTypeInfo($this->typeInfo->keyType, $key);
 
             $valuePacked = $val instanceof TypeBase
                 ? $val->getBinary()
-                : TypeFactory::getBinaryByType($valueType, $val);
+                : TypeFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
 
             $binary .= pack('N', strlen($keyPacked)) . $keyPacked;
             $binary .= pack('N', strlen($valuePacked)) . $valuePacked;

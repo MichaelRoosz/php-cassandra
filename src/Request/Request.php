@@ -116,7 +116,7 @@ abstract class Request implements Frame, Stringable {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      * }> $columns
      * @return array<mixed>
      *
@@ -186,7 +186,7 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 default:
-                    throw new Type\Exception('Unknown type.');
+                    throw new Type\Exception('Unsupported type: ' . gettype($value));
             }
 
             if ($namesForValues) {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeInfo\TypeInfo;
+
 /**
  * Single-precision floating-point number (32-bit precision - use the "Double" type for a PHP-like "float")
  */
@@ -15,12 +17,10 @@ class Float32 extends TypeBase {
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         /**
          * @var false|array<float> $unpacked
          */
@@ -35,12 +35,11 @@ class Float32 extends TypeBase {
 
     /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
      *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_float($value)) {
             throw new Exception('Invalid value');
         }

@@ -6,61 +6,68 @@ namespace Cassandra;
 
 use Cassandra\Type\Exception;
 use Cassandra\Type as Types;
+use Cassandra\TypeInfo\CollectionListInfo;
+use Cassandra\TypeInfo\CollectionMapInfo;
+use Cassandra\TypeInfo\CollectionSetInfo;
+use Cassandra\TypeInfo\CustomInfo;
+use Cassandra\TypeInfo\SimpleTypeInfo;
+use Cassandra\TypeInfo\TupleInfo;
+use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\TypeInfo\UDTInfo;
 
 final class TypeFactory {
     /**
      * @var array<int, class-string<Types\TypeBase>> $typeClassMap
      */
     protected static array $typeClassMap = [
-        Type::ASCII->value     => Types\Ascii::class,
-        Type::VARCHAR->value   => Types\Varchar::class,
-        Type::TEXT->value      => Types\Varchar::class,  // deprecated in Protocol v3
-        Type::VARINT->value    => Types\Varint::class,
-        Type::BIGINT->value    => Types\Bigint::class,
-        Type::COUNTER->value   => Types\Counter::class,
+        Type::ASCII->value => Types\Ascii::class,
+        Type::VARCHAR->value => Types\Varchar::class,
+        Type::TEXT->value => Types\Varchar::class,  // deprecated in Protocol v3
+        Type::VARINT->value => Types\Varint::class,
+        Type::BIGINT->value => Types\Bigint::class,
+        Type::COUNTER->value => Types\Counter::class,
         Type::TIMESTAMP->value => Types\Timestamp::class,
-        Type::BLOB->value      => Types\Blob::class,
-        Type::BOOLEAN->value   => Types\Boolean::class,
-        Type::DECIMAL->value   => Types\Decimal::class,
-        Type::DOUBLE->value    => Types\Double::class,
-        Type::FLOAT->value     => Types\Float32::class,
-        Type::INT->value       => Types\Integer::class,
-        Type::UUID->value      => Types\Uuid::class,
-        Type::TIMEUUID->value  => Types\Timeuuid::class,
-        Type::INET->value      => Types\Inet::class,
-        Type::DATE->value      => Types\Date::class,
-        Type::TIME->value      => Types\Time::class,
-        Type::SMALLINT->value  => Types\Smallint::class,
-        Type::TINYINT->value   => Types\Tinyint::class,
-        Type::DURATION->value  => Types\Duration::class,
+        Type::BLOB->value => Types\Blob::class,
+        Type::BOOLEAN->value => Types\Boolean::class,
+        Type::DECIMAL->value => Types\Decimal::class,
+        Type::DOUBLE->value => Types\Double::class,
+        Type::FLOAT->value => Types\Float32::class,
+        Type::INT->value => Types\Integer::class,
+        Type::UUID->value => Types\Uuid::class,
+        Type::TIMEUUID->value => Types\Timeuuid::class,
+        Type::INET->value => Types\Inet::class,
+        Type::DATE->value => Types\Date::class,
+        Type::TIME->value => Types\Time::class,
+        Type::SMALLINT->value => Types\Smallint::class,
+        Type::TINYINT->value => Types\Tinyint::class,
+        Type::DURATION->value => Types\Duration::class,
         Type::COLLECTION_LIST->value => Types\CollectionList::class,
-        Type::COLLECTION_SET->value  => Types\CollectionSet::class,
-        Type::COLLECTION_MAP->value  => Types\CollectionMap::class,
-        Type::UDT->value       => Types\UDT::class,
-        Type::TUPLE->value     => Types\Tuple::class,
-        Type::CUSTOM->value    => Types\Custom::class,
+        Type::COLLECTION_SET->value => Types\CollectionSet::class,
+        Type::COLLECTION_MAP->value => Types\CollectionMap::class,
+        Type::UDT->value => Types\UDT::class,
+        Type::TUPLE->value => Types\Tuple::class,
+        Type::CUSTOM->value => Types\Custom::class,
     ];
 
     /**
-     * @var array<int> $typesWithDefinition
+     * @var array<int, bool> $typesWithDefinition
      */
     protected static array $typesWithDefinition = [
-        Type::COLLECTION_LIST->value,
-        Type::COLLECTION_SET->value,
-        Type::COLLECTION_MAP->value,
-        Type::UDT->value,
-        Type::TUPLE->value,
-        Type::CUSTOM->value,
+        Type::COLLECTION_LIST->value => true,
+        Type::COLLECTION_SET->value => true,
+        Type::COLLECTION_MAP->value => true,
+        Type::UDT->value => true,
+        Type::TUPLE->value => true,
+        Type::CUSTOM->value => true,
     ];
 
     /**
-     * @param int|array<mixed> $dataType
      * @param mixed $value
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function getBinaryByType(int|array $dataType, mixed $value): string {
-        $type = self::getTypeObjectForValue($dataType, $value);
+    public static function getBinaryByTypeInfo(TypeInfo $typeInfo, mixed $value): string {
+        $type = self::getTypeObjectForValue($typeInfo, $value);
         if ($type === null) {
             throw new Exception('Cannot get type object');
         }
@@ -69,143 +76,129 @@ final class TypeFactory {
     }
 
     /**
-    * @param int|array<mixed> $dataType
-    *
-    * @throws \Cassandra\Type\Exception
-    */
-    public static function getTypeObjectForBinary(int|array $dataType, string $binary): Types\TypeBase {
-        $dataTypeInfo = self::getTypeAndDefinitionOfDataType($dataType);
-
-        if ($dataTypeInfo['type'] === Type::CUSTOM->value) {
-            if (!isset($dataType['definition']) || !is_array($dataType['definition']) || !isset($dataType['definition'][0])) {
-                throw new Exception('cannot read custom java class name');
-            }
-
-            $javaClassName = $dataType['definition'][0];
-
-            if (!is_string($javaClassName)) {
-                throw new Exception('custom java class name is not a string');
-            }
-
-            return Types\Custom::fromBinary($binary, $dataTypeInfo['definition'], $javaClassName);
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function getTypeInfoFromType(Type $type): TypeInfo {
+        if (!isset(self::$typeClassMap[$type->value])) {
+            throw new Exception('unknown data type');
         }
 
-        $class = self::getClassForDataType($dataTypeInfo['type'], $dataTypeInfo['definition']);
+        if (!self::isSimpleType($type)) {
+            throw new Exception('Cannot get type info from complex type without definition');
+        }
 
-        return $class::fromBinary($binary, $dataTypeInfo['definition']);
+        return new SimpleTypeInfo($type);
     }
 
     /**
-     * @param int|array<mixed> $dataType
+     * @param array<mixed>|\Cassandra\Type $typeDefinition
+     * 
+     * @throws \Cassandra\TypeInfo\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function getTypeInfoFromTypeDefinition(array|Type $typeDefinition): TypeInfo {
+
+        if ($typeDefinition instanceof Type) {
+            return TypeFactory::getTypeInfoFromType($typeDefinition);
+        }
+
+        if (!isset($typeDefinition['type'])) {
+            throw new Exception('Type definition must have a type property', 0, [
+                'typeDefinition' => $typeDefinition,
+            ]);
+        }
+
+        if (!($typeDefinition['type'] instanceof Type)) {
+            throw new Exception('Type property must be an instance of Type', 0, [
+                'typeDefinition' => $typeDefinition,
+            ]);
+        }
+
+        $type = $typeDefinition['type'];
+
+        switch ($type) {
+            case Type::CUSTOM:
+                /** @psalm-suppress InvalidArgument */
+                /** @phpstan-ignore argument.type */
+                return CustomInfo::fromTypeDefinition($typeDefinition);
+
+            case Type::COLLECTION_LIST:
+                /** @psalm-suppress InvalidArgument */
+                /** @phpstan-ignore argument.type */
+                return CollectionListInfo::fromTypeDefinition($typeDefinition);
+
+            case Type::COLLECTION_SET:
+                /** @psalm-suppress InvalidArgument */
+                /** @phpstan-ignore argument.type */
+                return CollectionSetInfo::fromTypeDefinition($typeDefinition);
+
+            case Type::COLLECTION_MAP:
+                /** @psalm-suppress InvalidArgument */
+                /** @phpstan-ignore argument.type */
+                return CollectionMapInfo::fromTypeDefinition($typeDefinition);
+
+            case Type::UDT:
+                /** @psalm-suppress InvalidArgument */
+                /** @phpstan-ignore argument.type */
+                return UDTInfo::fromTypeDefinition($typeDefinition);
+
+            case Type::TUPLE:
+                /** @psalm-suppress InvalidArgument */
+                /** @phpstan-ignore argument.type */
+                return TupleInfo::fromTypeDefinition($typeDefinition);
+
+            default:
+                /** @psalm-suppress InvalidArgument */
+                return SimpleTypeInfo::fromTypeDefinition($typeDefinition);
+        }
+    }
+
+    /**
+    * @throws \Cassandra\Type\Exception
+    */
+    public static function getTypeObjectForBinary(TypeInfo $typeInfo, string $binary): Types\TypeBase {
+
+        $class = self::getClassForDataType($typeInfo->type);
+
+        return $class::fromBinary($binary, $typeInfo);
+    }
+
+    /**
      * @param mixed $value
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function getTypeObjectForValue(int|array $dataType, mixed $value): ?Types\TypeBase {
+    public static function getTypeObjectForValue(TypeInfo $typeInfo, mixed $value): ?Types\TypeBase {
         if ($value === null) {
             return null;
         }
 
-        $dataTypeInfo = self::getTypeAndDefinitionOfDataType($dataType);
+        $class = self::getClassForDataType($typeInfo->type);
 
-        if ($dataTypeInfo['type'] === Type::CUSTOM->value) {
-            if (!is_string($value)) {
-                throw new Exception('custom value is not a string');
-            }
+        return $class::fromMixedValue($value, $typeInfo);
+    }
 
-            if (!isset($dataType['definition']) || !is_array($dataType['definition']) || !isset($dataType['definition'][0])) {
-                throw new Exception('cannot read custom java class name');
-            }
-
-            $javaClassName = $dataType['definition'][0];
-
-            if (!is_string($javaClassName)) {
-                throw new Exception('custom java class name is not a string');
-            }
-
-            return new Types\Custom($value, $javaClassName);
-        }
-
-        $class = self::getClassForDataType($dataTypeInfo['type'], $dataTypeInfo['definition']);
-
-        return $class::fromValue($value, $dataTypeInfo['definition']);
+    public static function isSimpleType(Type $type): bool {
+        return !isset(self::$typesWithDefinition[$type->value]);
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
      * @return class-string<Types\TypeBase>
      * 
      * @throws \Cassandra\Type\Exception
      */
-    protected static function getClassForDataType(int $type, null|int|array $definition): string {
-        if ($definition === null && in_array($type, self::$typesWithDefinition)) {
-            throw new Exception('type is missing its definition');
-        }
+    protected static function getClassForDataType(Type $type): string {
 
-        if (!isset(self::$typeClassMap[$type])) {
+        if (!isset(self::$typeClassMap[$type->value])) {
             throw new Exception('unknown data type');
         }
 
-        $class = self::$typeClassMap[$type];
+        $class = self::$typeClassMap[$type->value];
 
         if (!is_subclass_of($class, Types\TypeBase::class)) {
             throw new Exception('data type is not a subclass of \\Cassandra\\Type\\TypeBase');
         }
 
         return $class;
-    }
-
-    /**
-     * @param int|array<mixed> $dataType
-     * @return array{
-     *   type: int,
-     *   definition: null|int|array<int|array<mixed>>,
-     * }
-     * 
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function getTypeAndDefinitionOfDataType(int|array $dataType): array {
-        if (is_int($dataType)) {
-            $type = $dataType;
-            $definition = null;
-        } else {
-            $didShift = false;
-
-            if (isset($dataType['type'])) {
-                /** @var mixed $type */
-                $type = $dataType['type'];
-            } else {
-                /** @var mixed $type */
-                $type = array_shift($dataType);
-                $didShift = true;
-            }
-
-            if (isset($dataType['definition'])) {
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = $dataType['definition'];
-            } elseif (isset($dataType['value'])) {
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = $dataType['value'];
-            } elseif (isset($dataType['typeMap'])) {
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = $dataType['typeMap'];
-            } else {
-                if (!$didShift) {
-                    array_shift($dataType);
-                }
-
-                /** @var int|array<int|array<mixed>> $definition */
-                $definition = array_shift($dataType);
-            }
-        }
-
-        if (!is_int($type)) {
-            throw new Exception('invalid data type');
-        }
-
-        return [
-            'type' => $type,
-            'definition' => $definition,
-        ];
     }
 }

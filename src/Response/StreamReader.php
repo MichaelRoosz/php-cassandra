@@ -6,6 +6,16 @@ namespace Cassandra\Response;
 
 use Cassandra\Type;
 use Cassandra\TypeFactory;
+use Cassandra\TypeInfo\CollectionListInfo;
+use Cassandra\TypeInfo\CollectionMapInfo;
+use Cassandra\TypeInfo\CollectionSetInfo;
+use Cassandra\TypeInfo\CustomInfo;
+use Cassandra\TypeInfo\SimpleTypeInfo;
+use Cassandra\TypeInfo\TupleInfo;
+use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\TypeInfo\UDTInfo;
+use TypeError;
+use ValueError;
 
 class StreamReader {
     protected string $data;
@@ -64,18 +74,6 @@ class StreamReader {
         $length = $unpacked[1];
 
         return $length === 0 ? '' : $this->read($length);
-    }
-
-    /**
-     * @deprecated readValue() should be used instead
-     *
-     * @param int|array<mixed> $dataType
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readBytesAndConvertToType($dataType): mixed {
-        return $this->readValue($dataType);
     }
 
     /**
@@ -166,34 +164,18 @@ class StreamReader {
     }
 
     /**
-     * Read list.
-     *
-     * @param int|array<int|array<mixed>> $definition [$valueType]
      * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readList(int|array $definition): array {
-        if (is_array($definition)) {
-            $count = count($definition);
-
-            if ($count < 1) {
-                throw new Exception('invalid type definition');
-            } elseif ($count === 1) {
-                $valueType = array_values($definition)[0];
-            } else {
-                $valueType = $definition;
-            }
-        } else {
-            $valueType = $definition;
-        }
+    public function readList(CollectionListInfo $typeInfo): array {
 
         $list = [];
         $count = $this->readInt();
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
-            $list[] = $this->readValue($valueType);
+            $list[] = $this->readValue($typeInfo->valueType);
         }
 
         return $list;
@@ -216,30 +198,23 @@ class StreamReader {
     }
 
     /**
-     * Read map.
-     *
-     * @param array<int|array<mixed>> $definition [$keyType, $valueType]
      * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readMap(array $definition): array {
-        if (count($definition) < 2) {
-            throw new Exception('invalid type definition');
-        }
+    public function readMap(CollectionMapInfo $typeInfo): array {
 
-        [$keyType, $valueType] = array_values($definition);
         $map = [];
         $count = $this->readInt();
 
         /** @psalm-suppress MixedAssignment */
         for ($i = 0; $i < $count; ++$i) {
-            $key = $this->readValue($keyType);
+            $key = $this->readValue($typeInfo->keyType);
             if (!is_string($key) && !is_int($key)) {
                 throw new Exception('invalid key type');
             }
-            $map[$key] = $this->readValue($valueType);
+            $map[$key] = $this->readValue($typeInfo->valueType);
         }
 
         return $map;
@@ -260,6 +235,24 @@ class StreamReader {
         }
 
         return $map;
+    }
+
+    /**
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function readSet(CollectionSetInfo $typeInfo): array {
+
+        $list = [];
+        $count = $this->readInt();
+        for ($i = 0; $i < $count; ++$i) {
+            /** @psalm-suppress MixedAssignment */
+            $list[] = $this->readValue($typeInfo->valueType);
+        }
+
+        return $list;
     }
 
     /**
@@ -349,16 +342,35 @@ class StreamReader {
     }
 
     /**
+     * @return array<string>
      *
-     * @param array<int|array<mixed>> $definition ['key1'=>$valueType1, 'key2'=>$valueType2, ...]
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function readTextList(): array {
+        $rawList = $this->readList(new CollectionListInfo(new SimpleTypeInfo(Type::TEXT)));
+
+        $list = [];
+        foreach ($rawList as $item) {
+            if (!is_string($item)) {
+                throw new Exception('Invalid text list item: ' . gettype($item));
+            }
+
+            $list[] = $item;
+        }
+
+        return $list;
+    }
+
+    /**
      * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readTuple(array $definition): array {
+    public function readTuple(TupleInfo $typeInfo): array {
         $tuple = [];
-        foreach ($definition as $key => $type) {
+        foreach ($typeInfo->valueTypes as $key => $type) {
             /** @psalm-suppress MixedAssignment */
             $tuple[$key] = $this->readValue($type);
         }
@@ -367,60 +379,91 @@ class StreamReader {
     }
 
     /**
-     * @return int|array<mixed>
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function readType(): TypeInfo {
+        $typeShort = $this->readShort();
+
+        try {
+            $type = Type::from($typeShort);
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid type short: ' . $typeShort);
+        }
+
+        switch ($typeShort) {
+            case Type::CUSTOM:
+                return new CustomInfo(
+                    javaClassName: $this->readString(),
+                );
+
+            case Type::COLLECTION_LIST:
+                return new CollectionListInfo(
+                    valueType: $this->readType(),
+                );
+
+            case Type::COLLECTION_SET:
+                return new CollectionSetInfo(
+                    valueType: $this->readType(),
+                );
+
+            case Type::COLLECTION_MAP:
+                return new CollectionMapInfo(
+                    keyType: $this->readType(),
+                    valueType: $this->readType(),
+                );
+
+            case Type::UDT:
+
+                $keyspace = $this->readString();
+                $name = $this->readString();
+
+                $types = [];
+                $length = $this->readShort();
+                for ($i = 0; $i < $length; ++$i) {
+                    $key = $this->readString();
+                    $types[$key] = $this->readType();
+                }
+
+                return new UDTInfo(
+                    valueTypes: $types,
+                    keyspace: $keyspace,
+                    name: $name,
+                );
+
+            case Type::TUPLE:
+
+                $types = [];
+                $length = $this->readShort();
+                for ($i = 0; $i < $length; ++$i) {
+                    $types[] = $this->readType();
+                }
+
+                return new TupleInfo(
+                    valueTypes: $types,
+                );
+
+            default:
+                return new SimpleTypeInfo(
+                    type: $type,
+                );
+        }
+    }
+
+    /**
+     * @return array<mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readType() {
-        $type = $this->readShort();
-
-        switch ($type) {
-            case Type::CUSTOM->value:
-                return [
-                    'type' => $type,
-                    'definition'=> [$this->readString()],
-                ];
-            case Type::COLLECTION_LIST->value:
-            case Type::COLLECTION_SET->value:
-                return [
-                    'type' => $type,
-                    'definition' => [$this->readType()],
-                ];
-            case Type::COLLECTION_MAP->value:
-                return [
-                    'type' => $type,
-                    'definition'=> [$this->readType(), $this->readType()],
-                ];
-            case Type::UDT->value:
-                $data = [
-                    'type' => $type,
-                    'definition' => [],
-                    'keyspace' => $this->readString(),
-                    'name'=> $this->readString(),
-                ];
-                $length = $this->readShort();
-                for ($i = 0; $i < $length; ++$i) {
-                    $key = $this->readString();
-                    $data['definition'][$key] = $this->readType();
-                }
-
-                return $data;
-            case Type::TUPLE->value:
-                $data = [
-                    'type' => $type,
-                    'definition' => [],
-                ];
-                $length = $this->readShort();
-                for ($i = 0; $i < $length; ++$i) {
-                    $data['definition'][] = $this->readType();
-                }
-
-                return $data;
-
-            default:
-                return $type;
+    public function readUDT(UDTInfo $typeInfo): array {
+        $tuple = [];
+        foreach ($typeInfo->valueTypes as $key => $type) {
+            /** @psalm-suppress MixedAssignment */
+            $tuple[$key] = $this->readValue($type);
         }
+
+        return $tuple;
     }
 
     /**
@@ -439,12 +482,10 @@ class StreamReader {
     }
 
     /**
-     * @param int|array<mixed> $dataType
-     *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readValue($dataType): mixed {
+    public function readValue(TypeInfo $typeInfo): mixed {
         $binaryLength = $this->read(4);
         if ($binaryLength === "\xff\xff\xff\xff") {
             return null;
@@ -460,7 +501,7 @@ class StreamReader {
         $length = $unpacked[1];
 
         $binary = $this->read($length);
-        $typeObject = TypeFactory::getTypeObjectForBinary($dataType, $binary);
+        $typeObject = TypeFactory::getTypeObjectForBinary($typeInfo, $binary);
 
         return $typeObject->getValue();
     }

@@ -7,13 +7,11 @@ namespace Cassandra\Type;
 use Cassandra\TypeFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
+use Cassandra\TypeInfo\TupleInfo;
+use Cassandra\TypeInfo\TypeInfo;
 
-class Tuple extends TypeBase {
-    /**
-     * @var array<int|array<mixed>> $definition
-     */
-    protected array $definition;
-
+final class Tuple extends TypeBase {
+    protected TupleInfo $typeInfo;
     /**
      * @var array<mixed> $value
      */
@@ -21,45 +19,66 @@ class Tuple extends TypeBase {
 
     /**
      * @param array<mixed> $value
-     * @param array<int|array<mixed>> $definition
+     * @param list<Type|(array{ type: Type }&array<mixed>)>|null $valueDefinition
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
      */
-    final public function __construct(array $value, array $definition) {
-        $this->definition = $definition;
+    final public function __construct(array $value, array|null $valueDefinition = null, ?TupleInfo $typeInfo = null) {
         $this->value = $value;
+
+        if ($valueDefinition !== null) {
+            $this->typeInfo = TupleInfo::fromTypeDefinition([
+                'type' => Type::TUPLE,
+                'valueTypes' => $valueDefinition,
+            ]);
+        } elseif ($typeInfo !== null) {
+            $this->typeInfo = $typeInfo;
+        } else {
+            throw new Exception('Either valueDefinition or typeInfo must be provided');
+        }
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, null|int|array $definition = null): static {
-        if (!is_array($definition)) {
-            throw new Exception('invalid Tuple definition');
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required');
         }
 
-        return new static((new StreamReader($binary))->readTuple($definition), $definition);
+        if (!$typeInfo instanceof TupleInfo) {
+            throw new Exception('Invalid type info, TupleInfo expected');
+        }
+
+        return new static((new StreamReader($binary))->readTuple($typeInfo), typeInfo: $typeInfo);
     }
 
     /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
+     * 
      * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
             throw new Exception('Invalid value');
         }
 
-        if (!is_array($definition)) {
-            throw new Exception('Invalid type definition');
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required');
         }
 
-        return new static($value, $definition);
+        if (!$typeInfo instanceof TupleInfo) {
+            throw new Exception('Invalid type info, TupleInfo expected');
+        }
+
+        return new static($value, typeInfo: $typeInfo);
     }
 
     /**
@@ -70,13 +89,13 @@ class Tuple extends TypeBase {
         $binary = '';
         $value = $this->value;
 
-        foreach ($this->definition as $key => $type) {
+        foreach ($this->typeInfo->valueTypes as $key => $type) {
             if ($value[$key] === null) {
                 $binary .= "\xff\xff\xff\xff";
             } else {
                 $valueBinary = $value[$key] instanceof TypeBase
                     ? $value[$key]->getBinary()
-                    : TypeFactory::getBinaryByType($type, $value[$key]);
+                    : TypeFactory::getBinaryByTypeInfo($type, $value[$key]);
 
                 $binary .= pack('N', strlen($valueBinary)) . $valueBinary;
             }

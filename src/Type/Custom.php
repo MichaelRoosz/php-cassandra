@@ -4,26 +4,37 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeInfo\CustomInfo;
+use Cassandra\TypeInfo\TypeInfo;
+
 /**
  * @api
  */
 class Custom extends TypeBase {
-    protected string $javaClassName;
+    protected CustomInfo $typeInfo;
 
     protected string $value;
 
-    final public function __construct(string $value, string $javaClassName = '') {
-        $this->javaClassName = $javaClassName;
+    final public function __construct(string $value, string $javaClassName) {
+
+        $this->typeInfo = new CustomInfo($javaClassName);
         $this->value = $value;
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, null|int|array $definition = null, string $javaClassName = ''): static {
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required');
+        }
+
+        if (!$typeInfo instanceof CustomInfo) {
+            throw new Exception('Invalid type info, CustomInfo expected');
+        }
+
         /**
          * @var false|array<int> $unpacked
          */
@@ -34,20 +45,28 @@ class Custom extends TypeBase {
 
         $length = $unpacked[1];
 
-        return new static(substr($binary, 2, $length), $javaClassName);
+        return new static(substr($binary, 2, $length), $typeInfo->javaClassName);
     }
 
     /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
      */
     #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
+
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required');
+        }
+
+        if (!$typeInfo instanceof CustomInfo) {
+            throw new Exception('Invalid type info, CustomInfo expected');
+        }
+
         if (!is_string($value)) {
             throw new Exception('Invalid value');
         }
 
-        return new static($value);
+        return new static($value, $typeInfo->javaClassName);
     }
 
     #[\Override]
@@ -56,7 +75,7 @@ class Custom extends TypeBase {
     }
 
     public function getJavaClassName(): string {
-        return $this->javaClassName;
+        return $this->typeInfo->javaClassName;
     }
 
     #[\Override]

@@ -7,6 +7,8 @@ namespace Cassandra\Response;
 use ArrayObject;
 use Cassandra\Type;
 use Cassandra\Request\Request;
+use Cassandra\TypeInfo\CollectionListInfo;
+use Cassandra\TypeInfo\SimpleTypeInfo;
 use IteratorAggregate;
 use TypeError;
 use ValueError;
@@ -29,7 +31,7 @@ final class Result extends Response implements IteratorAggregate {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      *  }>,
      * } $metadata
      */
@@ -47,7 +49,7 @@ final class Result extends Response implements IteratorAggregate {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      *  }>,
      * } $metadataOfPreviousResult
      */
@@ -67,7 +69,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      *   result_metadata_id?: ?string
@@ -317,7 +319,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      *   result_metadata: array{
@@ -331,7 +333,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      * }|array{
@@ -382,7 +384,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      *   result_metadata: array{
@@ -396,7 +398,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      * }|array{
@@ -484,7 +486,7 @@ final class Result extends Response implements IteratorAggregate {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      *  }>,
      * }
      *
@@ -515,7 +517,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      *   result_metadata_id?: ?string
@@ -540,7 +542,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      *   result_metadata: array{
@@ -554,7 +556,7 @@ final class Result extends Response implements IteratorAggregate {
      *       keyspace: string,
      *       tableName: string,
      *       name: string,
-     *       type: int|array<mixed>,
+     *       type: \Cassandra\TypeInfo\TypeInfo,
      *     }>,
      *   },
      * }
@@ -664,8 +666,7 @@ final class Result extends Response implements IteratorAggregate {
             case 'AGGREGATE':
                 $data['name'] = $this->stream->readString();
 
-                /** @var string[] $argument_types */
-                $argument_types = $this->stream->readList([Type::TEXT->value]);
+                $argument_types = $this->stream->readTextList();
                 $data['argument_types'] = $argument_types;
 
                 break;
@@ -716,7 +717,7 @@ final class Result extends Response implements IteratorAggregate {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      *  }>,
      * } $metadata
      */
@@ -796,7 +797,7 @@ final class Result extends Response implements IteratorAggregate {
      *   keyspace: string,
      *   tableName: string,
      *   name: string,
-     *   type: int|array<mixed>,
+     *   type: \Cassandra\TypeInfo\TypeInfo,
      *  }>,
      * }
      *

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeInfo\TypeInfo;
 use DateTimeImmutable;
 use DateTimeInterface;
 
@@ -27,24 +28,13 @@ final class Timestamp extends Bigint {
     }
 
     /**
-     * @throws \Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function fromString(string $value): static {
-        $inputDate = new DateTimeImmutable($value);
-
-        return self::fromDateTime($inputDate);
-    }
-
-    /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
+     * 
      * @throws \Cassandra\Type\Exception
      * @throws \Exception
      */
     #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         if (is_string($value)) {
@@ -56,6 +46,16 @@ final class Timestamp extends Bigint {
         }
 
         return new static($value);
+    }
+
+    /**
+     * @throws \Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function fromString(string $value): static {
+        $inputDate = new DateTimeImmutable($value);
+
+        return self::fromDateTime($inputDate);
     }
 
     /**

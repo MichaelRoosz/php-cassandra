@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeInfo\TypeInfo;
 use DateInterval;
 
 final class Duration extends TypeBase {
@@ -32,12 +33,10 @@ final class Duration extends TypeBase {
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         /**
@@ -85,6 +84,38 @@ final class Duration extends TypeBase {
             'months' => $months,
             'days' => $days,
             'nanoseconds' => $totalNanoseconds,
+        ]);
+    }
+
+    /**
+     * @param mixed $value
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    #[\Override]
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
+        self::require64Bit();
+
+        if (!is_array($value)) {
+            throw new Exception('Invalid duration value');
+        }
+
+        if (!isset($value['months']) || !is_int($value['months'])) {
+            throw new Exception('Invalid duration value - value "months" is not set or has an invalid data type (must be int)');
+        }
+
+        if (!isset($value['days']) || !is_int($value['days'])) {
+            throw new Exception('Invalid duration value - value "days" is not set or has an invalid data type (must be int)');
+        }
+
+        if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
+            throw new Exception('Invalid duration value - value "nanoseconds" is not set or has an invalid data type (must be int)');
+        }
+
+        return new static([
+            'months' => $value['months'],
+            'days' => $value['days'],
+            'nanoseconds' => $value['nanoseconds'],
         ]);
     }
 
@@ -167,39 +198,6 @@ final class Duration extends TypeBase {
             'months' => $months,
             'days' => $days,
             'nanoseconds' => $nanoseconds,
-        ]);
-    }
-
-    /**
-     * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
-     *
-     * @throws \Cassandra\Type\Exception
-     */
-    #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
-        self::require64Bit();
-
-        if (!is_array($value)) {
-            throw new Exception('Invalid duration value');
-        }
-
-        if (!isset($value['months']) || !is_int($value['months'])) {
-            throw new Exception('Invalid duration value - value "months" is not set or has an invalid data type (must be int)');
-        }
-
-        if (!isset($value['days']) || !is_int($value['days'])) {
-            throw new Exception('Invalid duration value - value "days" is not set or has an invalid data type (must be int)');
-        }
-
-        if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
-            throw new Exception('Invalid duration value - value "nanoseconds" is not set or has an invalid data type (must be int)');
-        }
-
-        return new static([
-            'months' => $value['months'],
-            'days' => $value['days'],
-            'nanoseconds' => $value['nanoseconds'],
         ]);
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeInfo\TypeInfo;
 use Stringable;
 
 abstract class TypeBase implements Stringable {
@@ -38,19 +39,16 @@ abstract class TypeBase implements Stringable {
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Type\Exception
      */
-    abstract public static function fromBinary(string $binary, null|int|array $definition = null): static;
+    abstract public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static;
 
     /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
      *
      * @throws \Cassandra\Type\Exception
      */
-    abstract public static function fromValue(mixed $value, null|int|array $definition = null): static;
+    abstract public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static;
 
     abstract public function getBinary(): string;
 

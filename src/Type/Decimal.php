@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeInfo\TypeInfo;
+
 final class Decimal extends TypeBase {
     protected string $value;
 
@@ -19,12 +21,10 @@ final class Decimal extends TypeBase {
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         $length = strlen($binary);
 
         /**
@@ -57,12 +57,11 @@ final class Decimal extends TypeBase {
 
     /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
      *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
             throw new Exception('Invalid value');
         }

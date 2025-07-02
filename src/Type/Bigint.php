@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\TypeInfo\TypeInfo;
 use ReflectionClass;
 
 class Bigint extends TypeBase {
@@ -21,12 +22,10 @@ class Bigint extends TypeBase {
     }
 
     /**
-     * @param null|int|array<int|array<mixed>> $definition
-     *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, null|int|array $definition = null): static {
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         /**
@@ -42,12 +41,11 @@ class Bigint extends TypeBase {
 
     /**
      * @param mixed $value
-     * @param null|int|array<int|array<mixed>> $definition
      *
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromValue(mixed $value, null|int|array $definition = null): static {
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         if (!is_int($value)) {

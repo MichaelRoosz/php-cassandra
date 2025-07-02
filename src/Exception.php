@@ -9,12 +9,12 @@ use Throwable;
 
 class Exception extends PhpException {
     /**
-     * @var array<string, string|int|array<int|string, int|string>> $context
+     * @var array<mixed> $context
      */
     protected array $context;
 
     /**
-     * @param array<string, string|int|array<int|string, int|string>> $context
+     * @param array<mixed> $context
      */
     public function __construct(string $message = '', int $code = 0, array $context = [], ?Throwable $previous = null) {
         parent::__construct($message, $code, $previous);
@@ -23,7 +23,14 @@ class Exception extends PhpException {
     }
 
     /**
-     * @return array<string, string|int|array<int|string, int|string>> $context
+     * @return array<mixed> $context
+     */
+    public function context(): array {
+        return $this->context;
+    }
+
+    /**
+     * @return array<mixed> $context
      */
     public function getContext(): array {
         return $this->context;

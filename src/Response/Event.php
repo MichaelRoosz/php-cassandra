@@ -71,8 +71,7 @@ final class Event extends Response {
                     case 'AGGREGATE':
                         $data['name'] = $this->stream->readString();
 
-                        /** @var string[] $argument_types */
-                        $argument_types = $this->stream->readList([Type::TEXT->value]);
+                        $argument_types = $this->stream->readTextList();
                         $data['argument_types'] = $argument_types;
 
                         break;

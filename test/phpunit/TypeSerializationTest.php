@@ -6,6 +6,7 @@ namespace Cassandra\Test\Phpunit;
 
 use PHPUnit\Framework\TestCase;
 use Cassandra\Type;
+use Cassandra\TypeFactory;
 
 final class TypeSerializationTest extends TestCase {
     public function testAscii(): void {
@@ -36,11 +37,18 @@ final class TypeSerializationTest extends TestCase {
             2,
         ];
 
-        $definition = [
-            Type::INT,
-        ];
+        $definition = Type::INT;
 
-        $this->assertSame($value, Type\CollectionList::fromBinary((new Type\CollectionList($value, $definition))->getBinary(), $definition)->getValue());
+        $this->assertSame(
+            $value,
+            Type\CollectionList::fromBinary(
+                (new Type\CollectionList($value, $definition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::COLLECTION_LIST,
+                    'valueType' => $definition,
+                ])
+            )->getValue()
+        );
     }
 
     public function testCollectionMap(): void {
@@ -49,12 +57,20 @@ final class TypeSerializationTest extends TestCase {
             'b' => 2,
         ];
 
-        $definition = [
-            Type::ASCII,
-            Type::INT,
-        ];
+        $keyDefinition = Type::ASCII;
+        $valueDefinition = Type::INT;
 
-        $this->assertSame($value, Type\CollectionMap::fromBinary((new Type\CollectionMap($value, $definition))->getBinary(), $definition)->getValue());
+        $this->assertSame(
+            $value,
+            Type\CollectionMap::fromBinary(
+                (new Type\CollectionMap($value, $keyDefinition, $valueDefinition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::COLLECTION_MAP,
+                    'keyType' => $keyDefinition,
+                    'valueType' => $valueDefinition,
+                ])
+            )->getValue()
+        );
     }
 
     public function testCollectionSet(): void {
@@ -64,11 +80,18 @@ final class TypeSerializationTest extends TestCase {
             3,
         ];
 
-        $definition =[
-            Type::INT,
-        ];
+        $definition = Type::INT;
 
-        $this->assertSame($value, Type\CollectionSet::fromBinary((new Type\CollectionSet($value, $definition))->getBinary(), $definition)->getValue());
+        $this->assertSame(
+            $value,
+            Type\CollectionSet::fromBinary(
+                (new Type\CollectionSet($value, $definition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::COLLECTION_SET,
+                    'valueType' => $definition,
+                ])
+            )->getValue()
+        );
     }
 
     public function testCounter(): void {
@@ -77,8 +100,18 @@ final class TypeSerializationTest extends TestCase {
     }
 
     public function testCustom(): void {
-        $custom = 'abcABC123!#_' . hex2bin('FFAA22');
-        $this->assertSame($custom, Type\Custom::fromBinary((new Type\Custom($custom))->getBinary(), [])->getValue());
+        $customValue = 'abcABC123!#_' . hex2bin('FFAA22');
+        $javaClassName = 'java.lang.String';
+        $this->assertSame(
+            $customValue,
+            Type\Custom::fromBinary(
+                (new Type\Custom($customValue, $javaClassName))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::CUSTOM,
+                    'javaClassName' => $javaClassName,
+                ])
+            )->getValue()
+        );
     }
 
     public function testDate(): void {
@@ -301,30 +334,38 @@ final class TypeSerializationTest extends TestCase {
         ];
 
         $definition = [
-            [
-                'type' => Type::UDT,
-                'definition' => [
-                    'id' => Type::INT,
-                    'name' => Type::VARCHAR,
-                    'active' => Type::BOOLEAN,
-                    'friends' => [
-                        'type' => Type::COLLECTION_LIST,
-                        'value' => Type::VARCHAR,
-                    ],
-                    'drinks' => [
-                        'type' => Type::COLLECTION_LIST,
-                        'value' => [
-                            'type' => Type::UDT,
-                            'typeMap' => [
-                                'qty' => Type::INT,
-                                'brand' => Type::VARCHAR,
-                            ],
+            'type' => Type::UDT,
+            'valueTypes' => [
+                'id' => Type::INT,
+                'name' => Type::VARCHAR,
+                'active' => Type::BOOLEAN,
+                'friends' => [
+                    'type' => Type::COLLECTION_LIST,
+                    'valueType' => Type::VARCHAR,
+                ],
+                'drinks' => [
+                    'type' => Type::COLLECTION_LIST,
+                    'valueType' => [
+                        'type' => Type::UDT,
+                        'valueTypes' => [
+                            'qty' => Type::INT,
+                            'brand' => Type::VARCHAR,
                         ],
                     ],
                 ],
             ],
         ];
-        $this->assertSame($value, Type\CollectionSet::fromBinary((new Type\CollectionSet($value, $definition))->getBinary(), $definition)->getValue());
+
+        $this->assertSame(
+            $value,
+            Type\CollectionSet::fromBinary(
+                (new Type\CollectionSet($value, $definition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::COLLECTION_SET,
+                    'valueType' => $definition,
+                ])
+            )->getValue()
+        );
     }
 
     public function testSmallint(): void {
@@ -369,7 +410,16 @@ final class TypeSerializationTest extends TestCase {
             Type::VARCHAR,
         ];
 
-        $this->assertSame($value, Type\Tuple::fromBinary((new Type\Tuple($value, $definition))->getBinary(), $definition)->getValue());
+        $this->assertSame(
+            $value,
+            Type\Tuple::fromBinary(
+                (new Type\Tuple($value, $definition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::TUPLE,
+                    'valueTypes' => $definition,
+                ])
+            )->getValue()
+        );
     }
 
     public function testUDT(): void {
@@ -383,7 +433,16 @@ final class TypeSerializationTest extends TestCase {
             'textField' => Type::VARCHAR,
         ];
 
-        $this->assertSame($value, Type\UDT::fromBinary((new Type\UDT($value, $definition))->getBinary(), $definition)->getValue());
+        $this->assertSame(
+            $value,
+            Type\UDT::fromBinary(
+                (new Type\UDT($value, $definition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::UDT,
+                    'valueTypes' => $definition,
+                ])
+            )->getValue()
+        );
     }
 
     public function testUuid(): void {
