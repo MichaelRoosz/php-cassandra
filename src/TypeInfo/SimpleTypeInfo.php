@@ -16,7 +16,7 @@ final class SimpleTypeInfo extends TypeInfo {
 
     /**
      * @param array{
-     *  type: Type,
+     *  type: \Cassandra\Type,
      * } $typeDefinition
      * 
      * @throws \Cassandra\TypeInfo\Exception

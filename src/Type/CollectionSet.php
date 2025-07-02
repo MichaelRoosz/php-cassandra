@@ -20,7 +20,7 @@ final class CollectionSet extends TypeBase {
 
     /**
      * @param array<mixed> $value
-     * @param Type|(array{ type: Type }&array<mixed>)|null $valueDefinition 
+     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)|null $valueDefinition 
      *
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception

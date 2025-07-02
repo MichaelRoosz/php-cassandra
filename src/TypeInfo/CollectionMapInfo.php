@@ -17,9 +17,9 @@ final class CollectionMapInfo extends TypeInfo {
 
     /**
      * @param array{
-     *  type: Type::COLLECTION_MAP,
-     *  keyType: Type|array<mixed>,
-     *  valueType: Type|array<mixed>,
+     *  type: \Cassandra\Type::COLLECTION_MAP,
+     *  keyType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
+     *  valueType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
      * } $typeDefinition
      * 
      * @throws \Cassandra\TypeInfo\Exception

@@ -15,7 +15,7 @@ final class CustomInfo extends TypeInfo {
 
     /**
      * @param array{
-     *  type: Type::CUSTOM,
+     *  type: \Cassandra\Type::CUSTOM,
      *  javaClassName: string,
      * } $typeDefinition
      * 

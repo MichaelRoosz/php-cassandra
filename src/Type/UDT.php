@@ -19,7 +19,7 @@ final class UDT extends TypeBase {
 
     /**
      * @param array<mixed> $value
-     * @param array<string,Type|(array{ type: Type }&array<mixed>)>|null $valueDefinition 
+     * @param array<string,\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)>|null $valueDefinition 
      *
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception

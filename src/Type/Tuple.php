@@ -19,7 +19,7 @@ final class Tuple extends TypeBase {
 
     /**
      * @param array<mixed> $value
-     * @param list<Type|(array{ type: Type }&array<mixed>)>|null $valueDefinition
+     * @param list<\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)>|null $valueDefinition
      *
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception

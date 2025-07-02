@@ -19,8 +19,8 @@ final class TupleInfo extends TypeInfo {
 
     /**
      * @param array{
-     *  type: Type::TUPLE,
-     *  valueTypes: list<Type|(array{ type: Type }&array<mixed>)>,
+     *  type: \Cassandra\Type::TUPLE,
+     *  valueTypes: list<\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)>,
      * } $typeDefinition
      * 
      * @throws \Cassandra\TypeInfo\Exception

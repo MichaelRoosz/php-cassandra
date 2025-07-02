@@ -16,8 +16,8 @@ final class CollectionSetInfo extends TypeInfo {
 
     /**
      * @param array{
-     *  type: Type::COLLECTION_SET,
-     *  valueType: Type|array<mixed>,
+     *  type: \Cassandra\Type::COLLECTION_SET,
+     *  valueType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
      * } $typeDefinition
      * 
      * @throws \Cassandra\TypeInfo\Exception
