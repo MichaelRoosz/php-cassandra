@@ -7,7 +7,6 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Consistency;
-use Cassandra\Request\Options\RequestOptions;
 use Cassandra\Type;
 
 final class Query extends Request {
@@ -63,7 +62,7 @@ final class Query extends Request {
             $optional .= Request::valuesBinary($values, !empty($opt['names_for_values']));
         }
 
-        if (!empty($opt['skip_metadata'])) {
+        if (!empty($opt['skip_metadata'])) { //todo: handle differently, should be used in combination with prepare result metadata
             $flags |= QueryFlag::SKIP_METADATA->value;
         }
 

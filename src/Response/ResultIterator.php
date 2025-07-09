@@ -6,86 +6,32 @@ namespace Cassandra\Response;
 
 use ArrayObject;
 use Iterator;
+use Cassandra\Metadata;
 
 /**
  * @implements Iterator<ArrayObject<string, mixed>|array<string, mixed>|null>
  */
 final class ResultIterator implements Iterator {
-    /**
-     * Number of available rows in the resultset
-     */
-    protected int $count;
+    protected int $currentRow = 0;
 
     /**
-     * @var array{
-     *  flags: int,
-     *  columns_count: int,
-     *  paging_state?: ?string,
-     *  new_metadata_id?: string,
-     *  pk_count?: int,
-     *  pk_index?: int[],
-     *  columns?: array<array{
-     *   keyspace: string,
-     *   tableName: string,
-     *   name: string,
-     *   type: \Cassandra\TypeInfo\TypeInfo,
-     *  }>,
-     * } $metadata
-     */
-    protected array $metadata;
-
-    /**
-     * Offset to start reading data in this stream
-     */
-    protected int $offset;
-
-    /**
-     * Current row
-     */
-    protected int $row = 0;
-
-    /**
-     * Class to use for each row of data
-     *
-     * @var ?class-string<RowClass> $rowClass
-     */
-    protected ?string $rowClass;
-
-    /**
-     * Stream containing the raw result data
-     */
-    protected StreamReader $stream;
-
-    /**
-     * @param array{
-     *  flags: int,
-     *  columns_count: int,
-     *  paging_state?: ?string,
-     *  new_metadata_id?: string,
-     *  pk_count?: int,
-     *  pk_index?: int[],
-     *  columns?: array<array{
-     *   keyspace: string,
-     *   tableName: string,
-     *   name: string,
-     *   type: \Cassandra\TypeInfo\TypeInfo,
-     *  }>,
-     * } $metadata
-     * @param class-string<RowClass> $rowClass
+     * @param class-string<RowClass>|null $rowClass
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function __construct(StreamReader $stream, array $metadata, ?string $rowClass = null) {
+    public function __construct(
+        protected StreamReader $stream,
+        protected Metadata $metadata,
+        protected int $rowCount,
+        protected int $dataOffset,
+        protected ?string $rowClass = null,
+    ) {
+
         if ($rowClass !== null && !is_subclass_of($rowClass, ArrayObject::class)) {
             throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
         }
 
-        $this->stream = clone $stream;
-        $this->metadata = $metadata;
-        $this->rowClass = $rowClass;
-        $this->count = $this->stream->readInt();
-        $this->offset = $this->stream->pos();
-        $this->row = 0;
+        $this->currentRow = 0;
     }
 
     /**
@@ -98,8 +44,8 @@ final class ResultIterator implements Iterator {
     public function current(): ArrayObject|array {
         $data = [];
 
-        if (isset($this->metadata['columns'])) {
-            foreach ($this->metadata['columns'] as $column) {
+        if (isset($this->metadata->columns)) {
+            foreach ($this->metadata->columns as $column) {
                 /** @psalm-suppress MixedAssignment */
                 $data[$column['name']] = $this->stream->readValue($column['type']);
             }
@@ -121,7 +67,7 @@ final class ResultIterator implements Iterator {
      */
     #[\Override]
     public function key(): int {
-        return $this->row;
+        return $this->currentRow;
     }
 
     /**
@@ -129,7 +75,7 @@ final class ResultIterator implements Iterator {
      */
     #[\Override]
     public function next(): void {
-        $this->row++;
+        $this->currentRow++;
     }
 
     /**
@@ -137,8 +83,8 @@ final class ResultIterator implements Iterator {
      */
     #[\Override]
     public function rewind(): void {
-        $this->row = 0;
-        $this->stream->offset($this->offset);
+        $this->currentRow = 0;
+        $this->stream->offset($this->dataOffset);
     }
 
     /**
@@ -146,6 +92,6 @@ final class ResultIterator implements Iterator {
      */
     #[\Override]
     public function valid(): bool {
-        return (($this->row >= 0) && ($this->row < $this->count));
+        return (($this->currentRow >= 0) && ($this->currentRow < $this->rowCount));
     }
 }

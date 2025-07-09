@@ -8,6 +8,8 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Consistency;
+use Cassandra\Response\Result\PreparedResult;
+use Cassandra\Response\Result\RowsResult;
 use Cassandra\Response\ResultKind;
 
 final class Execute extends Request {
@@ -50,33 +52,39 @@ final class Execute extends Request {
     ) {
         parent::__construct(Opcode::REQUEST_EXECUTE);
 
-        $previousResultKind = $previousResult->getKind();
-        if ($previousResultKind !== ResultKind::PREPARED && $previousResultKind !== ResultKind::ROWS) {
-            throw new Exception('received invalid previous result');
+        if (
+            !($previousResult instanceof PreparedResult)
+            && !($previousResult instanceof RowsResult)
+        ) {
+            throw new Exception('received invalid previous result', 0, [
+                'expected' => [PreparedResult::class, RowsResult::class],
+                'received' => get_class($previousResult),
+            ]);
         }
 
-        if ($previousResultKind === ResultKind::PREPARED) {
+        if ($previousResult instanceof PreparedResult) {
             $prepareData = $previousResult->getPreparedData();
-            $executeCallInfo = [
-                'id' => $prepareData['id'],
-                'query_metadata' => $prepareData['metadata'],
-                'result_metadata_id' => $prepareData['result_metadata_id'] ?? null,
-            ];
-        } else {
+            $executeCallInfo = new ExecuteCallInfo(
+                id: $prepareData->id,
+                queryMetadata: $prepareData->metadata,
+                resultMetadataId: $prepareData->resultMetadataId,
+            );
+        } elseif ($previousResult instanceof RowsResult) {
             $executeCallInfo = $previousResult->getNextExecuteCallInfo();
             if ($executeCallInfo === null) {
                 throw new Exception('prepared statement not found');
             }
         }
 
-        $this->queryId = $executeCallInfo['id'];
-        $this->resultMetadataId = $executeCallInfo['result_metadata_id'] ?? null;
+        $this->queryId = $executeCallInfo->id;
+        $this->resultMetadataId = $executeCallInfo->resultMetadataId;
 
-        if (!isset($executeCallInfo['query_metadata']['columns'])) {
+        if (!isset($executeCallInfo->queryMetadata->columns)) {
             throw new Exception('missing query metadata');
         }
 
-        $this->values = self::strictTypeValues($values, $executeCallInfo['query_metadata']['columns']);
+        // todo: this might be empty
+        $this->values = self::strictTypeValues($values, $executeCallInfo->queryMetadata->columns);
 
         if ($this->options->skipMetadata === null) {
             $this->options->skipMetadata = true;

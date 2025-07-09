@@ -8,6 +8,7 @@ use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\Flag;
 use Cassandra\Compression\Lz4Decompressor;
+use Cassandra\Protocol\Header;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
@@ -82,6 +83,17 @@ final class Connection {
         Opcode::RESPONSE_EVENT->value => Response\Event::class,
         Opcode::RESPONSE_AUTH_CHALLENGE->value => Response\AuthChallenge::class,
         Opcode::RESPONSE_AUTH_SUCCESS->value => Response\AuthSuccess::class,
+    ];
+
+    /**
+     * @var array<int, class-string<Response\Result>> $resultKindMap
+     */
+    protected static array $resultResponseClassMap = [
+        ResultKind::PREPARED->value => Response\Result\PreparedResult::class,
+        ResultKind::ROWS->value => Response\Result\RowsResult::class,
+        ResultKind::SCHEMA_CHANGE->value => Response\Result\SchemaChangeResult::class,
+        ResultKind::SET_KEYSPACE->value => Response\Result\SetKeyspaceResult::class,
+        ResultKind::VOID->value => Response\Result\VoidResult::class,
     ];
 
     /**
@@ -732,20 +744,28 @@ final class Connection {
          *  length: int
          * } $header
          */
-        $header = unpack('Cflags/nstream/Copcode/Nlength', $this->node->read(8));
-        if ($header === false) {
+        $headerData = unpack('Cflags/nstream/Copcode/Nlength', $this->node->read(8));
+        if ($headerData === false) {
             throw new Exception('cannot read header of response');
         }
 
-        $header['version'] = $version - 0x80;
+        $headerVersion = $version - 0x80;
 
-        $body = $header['length'] === 0 ? '' : $this->node->read($header['length']);
+        $header = new Header(
+            version: $headerVersion,
+            flags: $headerData['flags'],
+            stream: $headerData['stream'],
+            opcode: $headerData['opcode'],
+            length: $headerData['length'],
+        );
 
-        if (!isset(self::$responseClassMap[$header['opcode']])) {
+        $body = $header->length === 0 ? '' : $this->node->read($header->length);
+
+        if (!isset(self::$responseClassMap[$header->opcode])) {
             throw new Response\Exception('Unknown response');
         }
 
-        $responseClass = self::$responseClassMap[$header['opcode']];
+        $responseClass = self::$responseClassMap[$header->opcode];
         if (!is_subclass_of($responseClass, Response\Response::class)) {
             throw new Exception('received unexpected response type: ' . $responseClass, 0, [
                 'expected' => Response\Response::class,
@@ -753,14 +773,35 @@ final class Connection {
             ]);
         }
 
-        if ($this->version < 5 && $header['length'] > 0 && $header['flags'] & Flag::COMPRESSION->value) {
+        if ($this->version < 5 && $header->length > 0 && $header->flags & Flag::COMPRESSION->value) {
             $this->lz4Decompressor->setInput($body);
             $body = $this->lz4Decompressor->decompressBlock();
         }
 
-        $response = new $responseClass($header, new Response\StreamReader($body));
+        $streamReader = new Response\StreamReader($body);
 
-        $streamId = $header['stream'];
+        switch ($responseClass) {
+            case Response\Result::class:
+                $resultKind = $streamReader->readInt();
+                $streamReader->offset(0);
+
+                if (isset(self::$resultResponseClassMap[$resultKind])) {
+                    $responseClass = self::$resultResponseClassMap[$resultKind];
+                } else {
+                    throw new Exception('Unknown result kind: ' . $resultKind, 0, [
+                        'expected' => array_keys(self::$resultResponseClassMap),
+                        'received' => $resultKind,
+                    ]);
+                }
+
+                break;
+            default:
+                break;
+        }
+
+        $response = new $responseClass($header, $streamReader);
+
+        $streamId = $header->stream;
         if ($streamId !== 0 && isset($this->statements[$streamId])) {
             $statement = $this->statements[$streamId];
             $response = $this->handleResponse($statement->getRequest(), $response, $statement);

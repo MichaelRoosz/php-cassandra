@@ -112,12 +112,7 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
-     * @param array<array{
-     *   keyspace: string,
-     *   tableName: string,
-     *   name: string,
-     *   type: \Cassandra\TypeInfo\TypeInfo,
-     * }> $columns
+     * @param array<\Cassandra\ColumnInfo> $columns
      * @return array<mixed>
      *
      * @throws \Cassandra\Type\Exception
@@ -125,14 +120,14 @@ abstract class Request implements Frame, Stringable {
     public static function strictTypeValues(array $values, array $columns): array {
         $strictTypeValues = [];
         foreach ($columns as $index => $column) {
-            $key = array_key_exists($column['name'], $values) ? $column['name'] : $index;
+            $key = array_key_exists($column->name, $values) ? $column->name : $index;
 
             if (!isset($values[$key])) {
                 $strictTypeValues[$key] = null;
             } elseif ($values[$key] instanceof Type\TypeBase) {
                 $strictTypeValues[$key] = $values[$key];
             } else {
-                $strictTypeValues[$key] = TypeFactory::getTypeObjectForValue($column['type'], $values[$key]);
+                $strictTypeValues[$key] = TypeFactory::getTypeObjectForValue($column->type, $values[$key]);
             }
         }
 

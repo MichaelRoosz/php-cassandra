@@ -6,29 +6,16 @@ namespace Cassandra\Response;
 
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
+use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\StreamReader;
 use Stringable;
-use TypeError;
-use ValueError;
 
 abstract class Response implements Frame, Stringable {
-    /**
-     * @var array{
-     *  version: int,
-     *  flags: int,
-     *  stream: int,
-     *  opcode: int,
-     * } $header
-     */
-    protected array $header;
-
     /**
      * @var ?array<string,?string> $payload
      */
     protected ?array $payload = null;
-
-    protected StreamReader $stream;
 
     protected ?string $tracingUuid = null;
 
@@ -38,20 +25,12 @@ abstract class Response implements Frame, Stringable {
     protected ?array $warnings = null;
 
     /**
-     * @param array{
-     *  version: int,
-     *  flags: int,
-     *  stream: int,
-     *  opcode: int,
-     * } $header
-     *
      * @throws \Cassandra\Response\Exception
      */
-    final public function __construct(array $header, StreamReader $stream) {
-        $this->header = $header;
-
-        $this->stream = $stream;
-
+    final public function __construct(
+        protected Header $header,
+        protected StreamReader $stream,
+    ) {
         $this->readExtraData();
     }
 
@@ -61,10 +40,10 @@ abstract class Response implements Frame, Stringable {
 
         return pack(
             'CCnCN',
-            $this->header['version'],
-            $this->header['flags'],
-            $this->header['stream'],
-            $this->header['opcode'],
+            $this->header->version,
+            $this->header->flags,
+            $this->header->stream,
+            $this->header->opcode,
             strlen($body)
         ) . $body;
     }
@@ -80,24 +59,13 @@ abstract class Response implements Frame, Stringable {
 
     #[\Override]
     public function getFlags(): int {
-        return $this->header['flags'];
+        return $this->header->flags;
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
     #[\Override]
     public function getOpcode(): Opcode {
 
-        $opcodeInt = $this->header['opcode'];
-
-        try {
-            return Opcode::from($opcodeInt);
-        } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid opcode: ' . $opcodeInt, 0, [
-                'opcode' => $opcodeInt,
-            ]);
-        }
+        return $this->header->opcode;
     }
 
     /**
@@ -109,7 +77,7 @@ abstract class Response implements Frame, Stringable {
 
     #[\Override]
     public function getStream(): int {
-        return $this->header['stream'];
+        return $this->header->stream;
     }
 
     public function getTracingUuid(): ?string {
@@ -118,7 +86,7 @@ abstract class Response implements Frame, Stringable {
 
     #[\Override]
     public function getVersion(): int {
-        return $this->header['version'];
+        return $this->header->version;
     }
 
     /**
@@ -132,7 +100,7 @@ abstract class Response implements Frame, Stringable {
      * @throws \Cassandra\Response\Exception
      */
     protected function readExtraData(): void {
-        $flags = $this->header['flags'];
+        $flags = $this->header->flags;
 
         if ($flags & Flag::TRACING->value) {
             $this->tracingUuid = $this->stream->readUuid();
