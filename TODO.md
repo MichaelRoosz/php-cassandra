@@ -7,8 +7,6 @@ Todo
 * Update README.md
 * Types
   + Remove uneeded bin -> int -> bin conversions
-  + Add fromValue() and fromMixedValue()
-  + Move bin conversions to a single place
 * Refactor fetch*() API
   PDOStatement::fetch — Fetches the next row from a result set
   PDOStatement::fetchAll — Fetches the remaining rows from a result set
