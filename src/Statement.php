@@ -28,6 +28,22 @@ final class Statement {
         return $this->originalRequest;
     }
 
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getPreparedResult(): Response\Result\PreparedResult {
+        $response = $this->getResponse();
+        if (!($response instanceof Response\Result\PreparedResult)) {
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result\PreparedResult::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
     public function getRequest(): Request\Request {
         return $this->request;
     }
@@ -57,22 +73,6 @@ final class Statement {
         if (!($response instanceof Response\Result)) {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result::class,
-                'received' => get_class($response),
-            ]);
-        }
-
-        return $response;
-    }
-
-    /**
-     * @throws \Cassandra\Exception
-     * @throws \Cassandra\Response\Exception
-     */
-    public function getPreparedResult(): Response\Result\PreparedResult {
-        $response = $this->getResponse();
-        if (!($response instanceof Response\Result\PreparedResult)) {
-            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
-                'expected' => Response\Result\PreparedResult::class,
                 'received' => get_class($response),
             ]);
         }
