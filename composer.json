@@ -43,8 +43,8 @@
         "vimeo/psalm": "^6.12.0"
     },
     "scripts": {
-        "lint": "vendor/bin/php-cs-fixer check",
-        "lint-fix": "vendor/bin/php-cs-fixer fix",
+        "lint": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer check",
+        "lint-fix": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer fix",
         "phpstan": "vendor/bin/phpstan analyse",
         "psalm": "vendor/bin/psalm --no-cache",
         "phpunit": "XDEBUG_MODE=coverage vendor/bin/phpunit --testsuite php-cassandra $@"
