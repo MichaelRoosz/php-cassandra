@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Cassandra\Request;
 
 use Cassandra\Protocol\Opcode;
-use Cassandra\Exception;
-use Cassandra\Response\Result;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Consistency;
 use Cassandra\Request\BatchType;
 use Cassandra\Response\Result\PreparedResult;
-use Cassandra\Response\ResultKind;
+use Cassandra\Type;
 
 final class Batch extends Request {
     /**
@@ -40,16 +38,14 @@ final class Batch extends Request {
 
         $queryId = $prepareData->id;
 
-        if ($prepareData->metadata->columns === null) {
-            throw new Exception('missing query metadata');
+        if ($prepareData->metadata->columns !== null) {
+            $values = self::enocdeValuesForColumnType($values, $prepareData->metadata->columns);
         }
-
-        $values = self::strictTypeValues($values, $prepareData->metadata->columns);
 
         $binary = chr(1);
 
         $binary .= pack('n', strlen($queryId)) . $queryId;
-        $binary .= Request::valuesBinary($values, namesForValues: false);
+        $binary .= self::valuesAsBinary($values, namesForValues: false);
 
         $this->queryArray[] = $binary;
 
@@ -66,7 +62,7 @@ final class Batch extends Request {
         $binary = chr(0);
 
         $binary .= pack('N', strlen($query)) . $query;
-        $binary .= Request::valuesBinary($values, namesForValues: false);
+        $binary .= self::valuesAsBinary($values, namesForValues: false);
 
         $this->queryArray[] = $binary;
 
@@ -80,6 +76,56 @@ final class Batch extends Request {
     public function getBody(): string {
         return chr($this->type->value)
             . pack('n', count($this->queryArray)) . implode('', $this->queryArray)
-            . Query::queryParameters($this->consistency, [], $this->options, $this->version);
+            . self::batchParametersAsBinary($this->consistency, [], $this->options, $this->version);
+    }
+
+    /**
+     * @param array<mixed> $values
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Request\Exception
+     */
+    protected function batchParametersAsBinary(Consistency $consistency, array $values = [], BatchOptions $options = new BatchOptions(), int $version = 3): string {
+        $flags = 0;
+        $optional = '';
+
+        if ($values) {
+            $flags |= QueryFlag::VALUES->value;
+            $optional .= self::valuesAsBinary($values, namesForValues: false);
+        }
+
+        if ($options->serialConsistency !== null) {
+            $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY->value;
+            $optional .= pack('n', $options->serialConsistency);
+        }
+
+        if ($options->defaultTimestamp !== null) {
+            $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP->value;
+            $optional .= (new Type\Bigint($options->defaultTimestamp))->getBinary();
+        }
+
+        if ($options->keyspace !== null) {
+            if ($version >= 5) {
+                $flags |= QueryFlag::WITH_KEYSPACE->value;
+                $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
+            } else {
+                throw new Exception('Option "keyspace" not supported by server');
+            }
+        }
+
+        if ($options->nowInSeconds !== null) {
+            if ($version >= 5) {
+                $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
+                $optional .= pack('N', $options->nowInSeconds);
+            } else {
+                throw new Exception('Option "now_in_seconds" not supported by server');
+            }
+        }
+
+        if ($version < 5) {
+            return pack('n', $consistency->value) . chr($flags) . $optional;
+        } else {
+            return pack('n', $consistency->value) . pack('N', $flags) . $optional;
+        }
     }
 }

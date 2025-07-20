@@ -44,11 +44,13 @@ final class ResultIterator implements Iterator {
     public function current(): ArrayObject|array {
         $data = [];
 
-        if (isset($this->metadata->columns)) {
-            foreach ($this->metadata->columns as $column) {
-                /** @psalm-suppress MixedAssignment */
-                $data[$column->name] = $this->stream->readValue($column->type);
-            }
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
+        }
+
+        foreach ($this->metadata->columns as $column) {
+            /** @psalm-suppress MixedAssignment */
+            $data[$column->name] = $this->stream->readValue($column->type);
         }
 
         if ($this->rowClass === null) {

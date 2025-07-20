@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\Consistency;
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
 use Cassandra\TypeFactory;
 use Cassandra\Protocol\Opcode;
+use Cassandra\Request\Options\ExecuteOptions;
+use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
 use Cassandra\Value;
 use Stringable;
@@ -117,21 +120,89 @@ abstract class Request implements Frame, Stringable {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function strictTypeValues(array $values, array $columns): array {
-        $strictTypeValues = [];
+    protected function enocdeValuesForColumnType(array $values, array $columns): array {
+        $encodedValues = [];
         foreach ($columns as $index => $column) {
             $key = array_key_exists($column->name, $values) ? $column->name : $index;
 
             if (!isset($values[$key])) {
-                $strictTypeValues[$key] = null;
+                $encodedValues[$key] = null;
             } elseif ($values[$key] instanceof Type\TypeBase) {
-                $strictTypeValues[$key] = $values[$key];
+                $encodedValues[$key] = $values[$key];
             } else {
-                $strictTypeValues[$key] = TypeFactory::getTypeObjectForValue($column->type, $values[$key]);
+                $encodedValues[$key] = TypeFactory::getTypeObjectForValue($column->type, $values[$key]);
             }
         }
 
-        return $strictTypeValues;
+        return $encodedValues;
+    }
+
+    /**
+     * @param array<mixed> $values
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Request\Exception
+     */
+    protected function queryParametersAsBinary(Consistency $consistency, array $values = [], QueryOptions $options = new QueryOptions(), int $version = 3): string {
+        $flags = 0;
+        $optional = '';
+
+        if ($values) {
+            $flags |= QueryFlag::VALUES->value;
+            $optional .= self::valuesAsBinary($values, $options->namesForValues === true);
+        }
+
+        if (($options instanceof ExecuteOptions) && $options->skipMetadata) {
+            $flags |= QueryFlag::SKIP_METADATA->value;
+        }
+
+        if ($options->pageSize !== null) {
+            $flags |= QueryFlag::PAGE_SIZE->value;
+            $optional .= pack('N', $options->pageSize);
+        }
+
+        if ($options->pagingState !== null) {
+            $flags |= QueryFlag::WITH_PAGING_STATE->value;
+            $optional .= pack('N', strlen($options->pagingState)) . $options->pagingState;
+        }
+
+        if ($options->serialConsistency !== null) {
+            $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY->value;
+            $optional .= pack('n', $options->serialConsistency);
+        }
+
+        if ($options->defaultTimestamp !== null) {
+            $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP->value;
+            $optional .= (new Type\Bigint($options->defaultTimestamp))->getBinary();
+        }
+
+        if ($options->namesForValues === true) {
+            $flags |= QueryFlag::WITH_NAMES_FOR_VALUES->value;
+        }
+
+        if ($options->keyspace !== null) {
+            if ($version >= 5) {
+                $flags |= QueryFlag::WITH_KEYSPACE->value;
+                $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
+            } else {
+                throw new Exception('Option "keyspace" not supported by server');
+            }
+        }
+
+        if ($options->nowInSeconds !== null) {
+            if ($version >= 5) {
+                $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
+                $optional .= pack('N', $options->nowInSeconds);
+            } else {
+                throw new Exception('Option "now_in_seconds" not supported by server');
+            }
+        }
+
+        if ($version < 5) {
+            return pack('n', $consistency->value) . chr($flags) . $optional;
+        } else {
+            return pack('n', $consistency->value) . pack('N', $flags) . $optional;
+        }
     }
 
     /**
@@ -139,7 +210,7 @@ abstract class Request implements Frame, Stringable {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function valuesBinary(array $values, bool $namesForValues = false): string {
+    protected function valuesAsBinary(array $values, bool $namesForValues = false): string {
         $valuesBinary = pack('n', count($values));
 
         /** @var mixed $value */

@@ -99,7 +99,7 @@ final class TypeFactory {
     public static function getTypeInfoFromTypeDefinition(array|Type $typeDefinition): TypeInfo {
 
         if ($typeDefinition instanceof Type) {
-            return TypeFactory::getTypeInfoFromType($typeDefinition);
+            return self::getTypeInfoFromType($typeDefinition);
         }
 
         if (!isset($typeDefinition['type'])) {

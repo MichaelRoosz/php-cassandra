@@ -6,7 +6,7 @@ namespace Cassandra\Request\Options;
 
 final class PrepareOptions extends RequestOptions {
     public function __construct(
-        public ?string $keyspace = null,
+        public readonly ?string $keyspace = null,
     ) {
     }
 }

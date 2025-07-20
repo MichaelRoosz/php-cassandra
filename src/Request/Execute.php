@@ -78,15 +78,24 @@ final class Execute extends Request {
         $this->queryId = $executeCallInfo->id;
         $this->resultMetadataId = $executeCallInfo->resultMetadataId;
 
-        if (!isset($executeCallInfo->queryMetadata->columns)) {
-            throw new Exception('missing query metadata');
+        if ($executeCallInfo->queryMetadata->columns !== null) {
+            $this->values = self::enocdeValuesForColumnType($values, $executeCallInfo->queryMetadata->columns);
+        } else {
+            $this->values = $values;
         }
 
-        // todo: this might be empty
-        $this->values = self::strictTypeValues($values, $executeCallInfo->queryMetadata->columns);
+        if (
+            $this->options->skipMetadata === null
+            && $executeCallInfo->queryMetadata->columns !== null
+        ) {
+            $this->options = $this->options->withSkipMetadata(true);
+        }
 
-        if ($this->options->skipMetadata === null) {
-            $this->options->skipMetadata = true;
+        if (
+            $this->options->skipMetadata
+            && $executeCallInfo->queryMetadata->columns === null
+        ) {
+            $this->options = $this->options->withSkipMetadata(false);
         }
     }
 
@@ -106,7 +115,7 @@ final class Execute extends Request {
             $body .= pack('n', strlen($this->resultMetadataId)) . $this->resultMetadataId;
         }
 
-        $body .= Query::queryParameters($this->consistency, $this->values, $this->options, $this->version);
+        $body .= self::queryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version);
 
         return $body;
     }
