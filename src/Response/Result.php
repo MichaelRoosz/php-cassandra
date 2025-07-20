@@ -48,7 +48,6 @@ abstract class Result extends Response implements IteratorAggregate {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     public function getMetadata(): Metadata {
         throw new Exception('Result metadata for kind ' . $this->kind->name . ' is not available');

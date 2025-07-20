@@ -10,6 +10,7 @@ use Cassandra\Response\Result;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Consistency;
 use Cassandra\Request\BatchType;
+use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Response\ResultKind;
 
 final class Batch extends Request {
@@ -33,21 +34,17 @@ final class Batch extends Request {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Exception
      */
-    public function appendPreparedStatement(Result $prepareResult, array $values = []): static {
-
-        if ($prepareResult->getKind() !== ResultKind::PREPARED) {
-            throw new Exception('Invalid prepared statement');
-        }
+    public function appendPreparedStatement(PreparedResult $prepareResult, array $values = []): static {
 
         $prepareData = $prepareResult->getPreparedData();
 
-        $queryId = $prepareData['id'];
+        $queryId = $prepareData->id;
 
-        if (!isset($prepareData['metadata']['columns'])) {
+        if ($prepareData->metadata->columns === null) {
             throw new Exception('missing query metadata');
         }
 
-        $values = self::strictTypeValues($values, $prepareData['metadata']['columns']);
+        $values = self::strictTypeValues($values, $prepareData->metadata->columns);
 
         $binary = chr(1);
 

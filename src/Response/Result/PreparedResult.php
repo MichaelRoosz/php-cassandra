@@ -26,6 +26,10 @@ final class PreparedResult extends Result {
         );
     }
 
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
     public function getData(): ResultData {
         return $this->getPreparedData();
     }

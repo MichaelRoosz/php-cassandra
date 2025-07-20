@@ -6,7 +6,7 @@ namespace Cassandra;
 
 use Cassandra\TypeInfo\TypeInfo;
 
-class ColumnInfo {
+final class ColumnInfo {
     public function __construct(
         public string $keyspace,
         public string $tableName,

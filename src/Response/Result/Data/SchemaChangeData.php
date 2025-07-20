@@ -11,7 +11,7 @@ final class SchemaChangeData extends ResultData {
         public readonly string $keyspace,
         public readonly ?string $name = null,
 
-        /** @var string[] $argumentTypes */
+        /** @var ?string[] $argumentTypes */
         public readonly ?array $argumentTypes = null,
     ) {
         parent::__construct();

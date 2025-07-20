@@ -64,6 +64,70 @@ final class Statement {
         return $response;
     }
 
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getPreparedResult(): Response\Result\PreparedResult {
+        $response = $this->getResponse();
+        if (!($response instanceof Response\Result\PreparedResult)) {
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result\PreparedResult::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getRowsResult(): Response\Result\RowsResult {
+        $response = $this->getResponse();
+        if (!($response instanceof Response\Result\RowsResult)) {
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result\RowsResult::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getSchemaChangeResult(): Response\Result\SchemaChangeResult {
+        $response = $this->getResponse();
+        if (!($response instanceof Response\Result\SchemaChangeResult)) {
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result\SchemaChangeResult::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function getSetKeyspaceResult(): Response\Result\SetKeyspaceResult {
+        $response = $this->getResponse();
+        if (!($response instanceof Response\Result\SetKeyspaceResult)) {
+            throw new Exception('received unexpected response type: ' . get_class($response), 0, [
+                'expected' => Response\Result\SetKeyspaceResult::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
     public function getStreamId(): int {
         return $this->streamId;
     }

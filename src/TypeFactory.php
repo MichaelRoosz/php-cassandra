@@ -17,7 +17,7 @@ use Cassandra\TypeInfo\UDTInfo;
 
 final class TypeFactory {
     /**
-     * @var array<int, class-string<Types\TypeBase>> $typeClassMap
+     * @var array<int, class-string<\Cassandra\Type\TypeBase>> $typeClassMap
      */
     protected static array $typeClassMap = [
         Type::ASCII->value => Types\Ascii::class,
@@ -183,7 +183,7 @@ final class TypeFactory {
     }
 
     /**
-     * @return class-string<Types\TypeBase>
+     * @return class-string<\Cassandra\Type\TypeBase>
      * 
      * @throws \Cassandra\Type\Exception
      */

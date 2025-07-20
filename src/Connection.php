@@ -15,6 +15,8 @@ use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
 use Cassandra\Response\ResultKind;
 use SplQueue;
+use TypeError;
+use ValueError;
 
 final class Connection {
     protected Consistency $consistency = Consistency::ONE;
@@ -72,7 +74,7 @@ final class Connection {
     protected SplQueue $recycledStreams;
 
     /**
-     * @var array<int, class-string<Response\Response>> $responseClassMap
+     * @var array<int, class-string<\Cassandra\Response\Response>> $responseClassMap
      */
     protected static array $responseClassMap = [
         Opcode::RESPONSE_ERROR->value => Response\Error::class,
@@ -86,7 +88,7 @@ final class Connection {
     ];
 
     /**
-     * @var array<int, class-string<Response\Result>> $resultKindMap
+     * @var array<int, class-string<\Cassandra\Response\Result>> $resultResponseClassMap
      */
     protected static array $resultResponseClassMap = [
         ResultKind::PREPARED->value => Response\Result\PreparedResult::class,
@@ -331,19 +333,12 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function prepareSync(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result {
+    public function prepareSync(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
         $response = $this->syncRequest(new Request\Prepare($query, $options));
-        if (!($response instanceof Response\Result)) {
+        if (!($response instanceof Response\Result\PreparedResult)) {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
-            ]);
-        }
-
-        if ($response->getKind() !== ResultKind::PREPARED) {
-            throw new Exception('received unexpected result type: ' . $response->getKind()->name, 0, [
-                'expected' => ResultKind::PREPARED->name,
-                'received' => $response->getKind()->name,
             ]);
         }
 
@@ -577,10 +572,10 @@ final class Connection {
      */
     protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
-        if ($result->getKind() !== ResultKind::PREPARED) {
-            throw new Exception('received unexpected result type: ' . $result->getKind()->name, 0, [
-                'expected' => ResultKind::PREPARED->name,
-                'received' => $result->getKind()->name,
+        if (!($result instanceof Response\Result\PreparedResult)) {
+            throw new Exception('received unexpected result type: ' . get_class($result), 0, [
+                'expected' => Response\Result::class,
+                'received' => get_class($result),
             ]);
         }
 
@@ -640,12 +635,13 @@ final class Connection {
         ) {
 
             $prevResult = $request->getPreviousResult();
-            if ($prevResult->getKind() !== ResultKind::PREPARED) {
-                throw new Exception('Unexpected previous result kind for unprepared error: ' . $prevResult->getKind()->name, 0, [
-                    'expected' => ResultKind::PREPARED->name,
-                    'received' => $prevResult->getKind()->name,
+            if (!($prevResult instanceof Response\Result\PreparedResult)) {
+                throw new Exception('Unexpected previous result type for unprepared error: ' . get_class($prevResult), 0, [
+                    'expected' => Response\Result::class,
+                    'received' => get_class($prevResult),
                 ]);
             }
+
             $prevRequest = $prevResult->getRequest();
             if ($prevRequest === null) {
                 throw new Exception('request of previous result is null');
@@ -742,7 +738,7 @@ final class Connection {
          *  stream: int,
          *  opcode: int,
          *  length: int
-         * } $header
+         * } $headerData
          */
         $headerData = unpack('Cflags/nstream/Copcode/Nlength', $this->node->read(8));
         if ($headerData === false) {
@@ -751,21 +747,27 @@ final class Connection {
 
         $headerVersion = $version - 0x80;
 
-        $header = new Header(
-            version: $headerVersion,
-            flags: $headerData['flags'],
-            stream: $headerData['stream'],
-            opcode: $headerData['opcode'],
-            length: $headerData['length'],
-        );
+        try {
+            $header = new Header(
+                version: $headerVersion,
+                flags: $headerData['flags'],
+                stream: $headerData['stream'],
+                opcode: Opcode::from($headerData['opcode']),
+                length: $headerData['length'],
+            );
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid opcode type: ' . $headerData['opcode'], 0, [
+                'opcode' => $headerData['opcode'],
+            ]);
+        }
 
         $body = $header->length === 0 ? '' : $this->node->read($header->length);
 
-        if (!isset(self::$responseClassMap[$header->opcode])) {
+        if (!isset(self::$responseClassMap[$header->opcode->value])) {
             throw new Response\Exception('Unknown response');
         }
 
-        $responseClass = self::$responseClassMap[$header->opcode];
+        $responseClass = self::$responseClassMap[$header->opcode->value];
         if (!is_subclass_of($responseClass, Response\Response::class)) {
             throw new Exception('received unexpected response type: ' . $responseClass, 0, [
                 'expected' => Response\Response::class,

@@ -11,6 +11,9 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Response\StreamReader;
 use Stringable;
 
+/**
+ * @psalm-consistent-constructor
+ */
 abstract class Response implements Frame, Stringable {
     /**
      * @var ?array<string,?string> $payload
@@ -27,7 +30,7 @@ abstract class Response implements Frame, Stringable {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    final public function __construct(
+    public function __construct(
         protected Header $header,
         protected StreamReader $stream,
     ) {

@@ -10,7 +10,6 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Consistency;
 use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Response\Result\RowsResult;
-use Cassandra\Response\ResultKind;
 
 final class Execute extends Request {
     protected string $queryId = '';
@@ -69,7 +68,7 @@ final class Execute extends Request {
                 queryMetadata: $prepareData->metadata,
                 resultMetadataId: $prepareData->resultMetadataId,
             );
-        } elseif ($previousResult instanceof RowsResult) {
+        } else {
             $executeCallInfo = $previousResult->getNextExecuteCallInfo();
             if ($executeCallInfo === null) {
                 throw new Exception('prepared statement not found');

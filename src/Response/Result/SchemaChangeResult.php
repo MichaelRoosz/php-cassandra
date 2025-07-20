@@ -26,6 +26,10 @@ final class SchemaChangeResult extends Result {
         );
     }
 
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
     public function getData(): ResultData {
         return $this->getSchemaChangeData();
     }
@@ -72,9 +76,7 @@ final class SchemaChangeResult extends Result {
             case 'FUNCTION':
             case 'AGGREGATE':
                 $data['name'] = $this->stream->readString();
-
-                $argument_types = $this->stream->readTextList();
-                $data['argument_types'] = $argument_types;
+                $data['argument_types'] = $this->stream->readTextList();
 
                 break;
         }

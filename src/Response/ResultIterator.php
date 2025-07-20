@@ -15,7 +15,7 @@ final class ResultIterator implements Iterator {
     protected int $currentRow = 0;
 
     /**
-     * @param class-string<RowClass>|null $rowClass
+     * @param class-string<\Cassandra\Response\RowClass>|null $rowClass
      *
      * @throws \Cassandra\Response\Exception
      */
@@ -47,7 +47,7 @@ final class ResultIterator implements Iterator {
         if (isset($this->metadata->columns)) {
             foreach ($this->metadata->columns as $column) {
                 /** @psalm-suppress MixedAssignment */
-                $data[$column['name']] = $this->stream->readValue($column['type']);
+                $data[$column->name] = $this->stream->readValue($column->type);
             }
         }
 

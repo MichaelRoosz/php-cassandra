@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
-class Metadata {
+final class Metadata {
     public function __construct(
         public int $flags,
         public int $columnsCount,
@@ -16,8 +16,8 @@ class Metadata {
         /** @var int[]|null $pkIndex */
         public ?array $pkIndex,
 
-        /** @var ColumnInfo[] $columns */
-        public array $columns,
+        /** @var ?ColumnInfo[] $columns */
+        public ?array $columns,
     ) {
     }
 

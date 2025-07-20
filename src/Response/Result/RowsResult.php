@@ -18,7 +18,7 @@ final class RowsResult extends Result {
     protected Metadata $metadata;
 
     /**
-     * @var class-string<RowClass> $rowClass
+     * @var class-string<\Cassandra\Response\RowClass> $rowClass
      */
     protected ?string $rowClass = null;
 
@@ -26,6 +26,7 @@ final class RowsResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -41,8 +42,8 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @param class-string<RowClass> $rowClass
-     * @return array<mixed>
+     * @param class-string<\Cassandra\Response\RowClass> $rowClass
+     * @return array<\ArrayObject<string, mixed>|array<string, mixed>>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
@@ -59,6 +60,10 @@ final class RowsResult extends Result {
 
         if ($rowClass !== null && !is_subclass_of($rowClass, ArrayObject::class)) {
             throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
+        }
+
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
         }
 
         for ($i = 0; $i < $this->rowCount; ++$i) {
@@ -91,7 +96,12 @@ final class RowsResult extends Result {
 
         $array = [];
 
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
+        }
+
         for ($i = 0; $i < $this->rowCount; ++$i) {
+
             /** @psalm-suppress MixedAssignment */
             foreach ($this->metadata->columns as $j => $column) {
                 $value = $this->stream->readValue($column->type);
@@ -117,6 +127,10 @@ final class RowsResult extends Result {
             return null;
         }
 
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
+        }
+
         foreach ($this->metadata->columns as $column) {
             return $this->stream->readValue($column->type);
         }
@@ -136,12 +150,16 @@ final class RowsResult extends Result {
 
         $map = [];
 
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
+        }
+
         for ($i = 0; $i < $this->rowCount; ++$i) {
             $key = null;
 
             /** @psalm-suppress MixedAssignment */
-            foreach ($this->metadata['columns'] as $j => $column) {
-                $value = $this->stream->readValue($column['type']);
+            foreach ($this->metadata->columns as $j => $column) {
+                $value = $this->stream->readValue($column->type);
 
                 if ($j === 0) {
                     $key = $value;
@@ -158,19 +176,15 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @param class-string<RowClass> $rowClass
-     * @return ArrayObject<string, mixed>|array<string, mixed>|null
+     * @param class-string<\Cassandra\Response\RowClass> $rowClass
+     * @return \ArrayObject<string, mixed>|array<string, mixed>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function fetchRow(?string $rowClass = null): ArrayObject|array|null {
+    public function fetchRow(?string $rowClass = null): ArrayObject|array {
 
         $this->stream->offset($this->dataOffset);
-
-        if ($this->rowCount === 0) {
-            return null;
-        }
 
         if ($rowClass === null) {
             $rowClass = $this->rowClass;
@@ -181,28 +195,38 @@ final class RowsResult extends Result {
         }
 
         $data = [];
-        foreach ($this->metadata->columns as $column) {
-            /** @psalm-suppress MixedAssignment */
-            $data[$column->name] = $this->stream->readValue($column->type);
+
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
+        }
+
+        for ($i = 0; $i < $this->rowCount && $i < 1; ++$i) {
+            foreach ($this->metadata->columns as $column) {
+                /** @psalm-suppress MixedAssignment */
+                $data[$column->name] = $this->stream->readValue($column->type);
+            }
         }
 
         if ($rowClass === null) {
             return $data;
         }
 
-        /** @var ArrayObject<string, mixed> $row */
+        /** @var \ArrayObject<string, mixed> $row */
         $row = new $rowClass($data);
 
         return $row;
     }
 
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
     public function getData(): ResultData {
         return $this->getRowsData();
     }
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     #[\Override]
     public function getIterator(): ResultIterator {
@@ -219,17 +243,12 @@ final class RowsResult extends Result {
         );
     }
 
-    /**
-     * @return \Cassandra\Metadata
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
+    #[\Override]
     public function getMetadata(): Metadata {
         return $this->metadata;
     }
 
-    /*
+    /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
@@ -242,6 +261,7 @@ final class RowsResult extends Result {
     /**
      * @param \Cassandra\Metadata $metadata
      */
+    #[\Override]
     public function setMetadata(Metadata $metadata): static {
         $this->metadata = $metadata;
 
@@ -249,7 +269,7 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @param class-string<RowClass> $rowClass
+     * @param class-string<\Cassandra\Response\RowClass> $rowClass
      *
      * @throws \Cassandra\Response\Exception
      */
@@ -272,6 +292,7 @@ final class RowsResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
     protected function readRowsMetadata(): Metadata {
         $this->stream->offset(4);

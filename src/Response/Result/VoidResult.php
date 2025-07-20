@@ -26,14 +26,13 @@ final class VoidResult extends Result {
         );
     }
 
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
     public function getData(): ResultData {
         return $this->getVoidData();
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
     #[\Override]
     public function getIterator(): Iterator {
         return new EmptyIterator();

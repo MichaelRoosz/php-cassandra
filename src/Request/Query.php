@@ -55,54 +55,52 @@ final class Query extends Request {
         $flags = 0;
         $optional = '';
 
-        $opt = $options->toArray();
-
         if ($values) {
             $flags |= QueryFlag::VALUES->value;
-            $optional .= Request::valuesBinary($values, !empty($opt['names_for_values']));
+            $optional .= Request::valuesBinary($values, $options->namesForValues === true);
         }
 
-        if (!empty($opt['skip_metadata'])) { //todo: handle differently, should be used in combination with prepare result metadata
+        if ($options->skipMetadata) { //todo: handle differently, should be used in combination with prepare result metadata
             $flags |= QueryFlag::SKIP_METADATA->value;
         }
 
-        if (isset($opt['page_size'])) {
+        if ($options->pageSize !== null) {
             $flags |= QueryFlag::PAGE_SIZE->value;
-            $optional .= pack('N', $opt['page_size']);
+            $optional .= pack('N', $options->pageSize);
         }
 
-        if (isset($opt['paging_state'])) {
+        if ($options->pagingState !== null) {
             $flags |= QueryFlag::WITH_PAGING_STATE->value;
-            $optional .= pack('N', strlen($opt['paging_state'])) . $opt['paging_state'];
+            $optional .= pack('N', strlen($options->pagingState)) . $options->pagingState;
         }
 
-        if (isset($opt['serial_consistency'])) {
+        if ($options->serialConsistency !== null) {
             $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY->value;
-            $optional .= pack('n', $opt['serial_consistency']);
+            $optional .= pack('n', $options->serialConsistency);
         }
 
-        if (isset($opt['default_timestamp'])) {
+        if ($options->defaultTimestamp !== null) {
             $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP->value;
-            $optional .= (new Type\Bigint($opt['default_timestamp']))->getBinary();
+            $optional .= (new Type\Bigint($options->defaultTimestamp))->getBinary();
         }
 
-        if (!empty($opt['names_for_values'])) {
+        if ($options->namesForValues === true) {
             $flags |= QueryFlag::WITH_NAMES_FOR_VALUES->value;
         }
 
-        if (isset($opt['keyspace'])) {
+        if ($options->keyspace !== null) {
             if ($version >= 5) {
                 $flags |= QueryFlag::WITH_KEYSPACE->value;
-                $optional .= pack('n', strlen($opt['keyspace'])) . $opt['keyspace'];
+                $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
                 throw new Exception('Option "keyspace" not supported by server');
             }
         }
 
-        if (isset($opt['now_in_seconds'])) {
+        if ($options->nowInSeconds !== null) {
             if ($version >= 5) {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
-                $optional .= pack('N', $opt['now_in_seconds']);
+                $optional .= pack('N', $options->nowInSeconds);
             } else {
                 throw new Exception('Option "now_in_seconds" not supported by server');
             }
