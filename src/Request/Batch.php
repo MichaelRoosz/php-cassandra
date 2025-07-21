@@ -32,7 +32,7 @@ final class Batch extends Request {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Exception
      */
-    public function appendPreparedStatement(PreparedResult $prepareResult, array $values = []): static {
+    public function appendPreparedStatement(PreparedResult $prepareResult, array $values = []): self {
 
         $prepareData = $prepareResult->getPreparedData();
 
@@ -57,7 +57,7 @@ final class Batch extends Request {
      *
      * @throws \Cassandra\Type\Exception
      */
-    public function appendQuery(string $query, array $values = []): static {
+    public function appendQuery(string $query, array $values = []): self {
 
         $binary = chr(0);
 

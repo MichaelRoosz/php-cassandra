@@ -19,3 +19,4 @@ Todo
 * Convert to classes
   + Errors
   + Events
+* Think about automatically re-connecting to nodes

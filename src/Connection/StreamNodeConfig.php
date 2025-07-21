@@ -23,8 +23,7 @@ final class StreamNodeConfig extends NodeConfig {
             'verify_peer_name' => true,
             'allow_self_signed' => false,
         ],
-    )
-    {
+    ) {
         parent::__construct(
             host: $host,
             port: $port,

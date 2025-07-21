@@ -262,7 +262,7 @@ final class RowsResult extends Result {
      * @param \Cassandra\Metadata $metadata
      */
     #[\Override]
-    public function setMetadata(Metadata $metadata): static {
+    public function setMetadata(Metadata $metadata): self {
         $this->metadata = $metadata;
 
         return $this;
@@ -273,7 +273,7 @@ final class RowsResult extends Result {
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function setRowClass(string $rowClass): static {
+    public function setRowClass(string $rowClass): self {
         if (!is_subclass_of($rowClass, ArrayObject::class)) {
             throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
         }

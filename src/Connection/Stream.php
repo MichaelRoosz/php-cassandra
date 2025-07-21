@@ -7,7 +7,6 @@ namespace Cassandra\Connection;
 use Cassandra\Request\Request;
 
 final class Stream implements NodeImplementation {
-
     protected StreamNodeConfig $config;
 
     /**
@@ -168,13 +167,13 @@ final class Stream implements NodeImplementation {
 
         $stream = stream_socket_client(
             address: $this->config->host . ':' . $this->config->port,
-            error_code: $errorCode, 
-            error_message: $errorMessage, 
-            timeout: $this->config->connectTimeoutInSeconds, 
-            flags: $flags, 
+            error_code: $errorCode,
+            error_message: $errorMessage,
+            timeout: $this->config->connectTimeoutInSeconds,
+            flags: $flags,
             context: $context
         );
-        
+
         if ($stream === false) {
 
             /** @psalm-suppress TypeDoesNotContainType */
@@ -193,7 +192,7 @@ final class Stream implements NodeImplementation {
         $this->stream = $stream;
 
         $timeoutSeconds = (int) floor($this->config->timeoutInSeconds);
-        $timeoutMicroseconds = (int) (($this->config->timeoutInSeconds - (float)$timeoutSeconds) * 1_000_000.0);
+        $timeoutMicroseconds = (int) (($this->config->timeoutInSeconds - (float) $timeoutSeconds) * 1_000_000.0);
         stream_set_timeout($this->stream, $timeoutSeconds, $timeoutMicroseconds);
 
         return $this->stream;

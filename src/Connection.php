@@ -464,6 +464,7 @@ final class Connection {
         foreach ($this->nodes as $config) {
 
             $className = $config->getNodeClass();
+
             try {
                 /**
                  *  @throws \Cassandra\Exception

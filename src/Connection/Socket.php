@@ -8,7 +8,6 @@ use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
 final class Socket implements NodeImplementation {
-
     protected SocketNodeConfig $config;
 
     protected ?PhpSocket $socket = null;
@@ -40,7 +39,7 @@ final class Socket implements NodeImplementation {
 
         socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
             'l_onoff' => 1,
-            'l_linger' => 1
+            'l_linger' => 1,
         ]);
 
         socket_shutdown($socket);

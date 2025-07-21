@@ -19,8 +19,7 @@ final class SocketNodeConfig extends NodeConfig {
             SO_RCVTIMEO => ['sec' => 30, 'usec' => 0],
             SO_SNDTIMEO => ['sec' => 5, 'usec' => 0],
         ],
-    )
-    {
+    ) {
         parent::__construct(
             host: $host,
             port: $port,
