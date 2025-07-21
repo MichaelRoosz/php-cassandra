@@ -53,18 +53,9 @@ final class FrameCodec implements Node {
         $this->node->close();
     }
 
-    /**
-     * @return array{
-     *  class: string,
-     *  host: ?string,
-     *  port: int,
-     *  username: ?string,
-     *  password: ?string,
-     * } & array<string, mixed> $options
-     */
     #[\Override]
-    public function getOptions(): array {
-        return $this->node->getOptions();
+    public function getConfig(): NodeConfig {
+        return $this->node->getConfig();
     }
 
     /**

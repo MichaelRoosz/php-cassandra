@@ -35,26 +35,9 @@ final class Connection {
     protected ?Connection\Node $node = null;
 
     /**
-     * @var array<string|array{
-     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
-     *  host?: ?string,
-     *  port?: int,
-     *  username?: ?string,
-     *  password?: ?string,
-     *  socket?: array<int, array<mixed>|int|string>,
-     * }|array{
-     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
-     *  host?: ?string,
-     *  port?: int,
-     *  username?: ?string,
-     *  password?: ?string,
-     *  timeout?: int,
-     *  connectTimeout?: int,
-     *  persistent?: bool,
-     *  ssl?: array<string, mixed>,
-     * }> $nodes
+     * @var array<\Cassandra\Connection\NodeConfig> $nodes
      */
-    protected $nodes;
+    protected array $nodes;
 
     /**
      * Connection options
@@ -63,7 +46,7 @@ final class Connection {
     protected array $options = [
         'CQL_VERSION' => '3.0.0',
         'DRIVER_NAME' => 'php-cassandra-client',
-        'DRIVER_VERSION' => '0.7.0',
+        'DRIVER_VERSION' => '0.9.0',
         // 'COMPRESSION' => 'lz4',
         // 'THROW_ON_OVERLOAD' => '1',
     ];
@@ -107,31 +90,11 @@ final class Connection {
     protected int $versionIn = 0x83;
 
     /**
-     * @param array<string|array{
-     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
-     *  host?: ?string,
-     *  port?: int,
-     *  username?: ?string,
-     *  password?: ?string,
-     *  socket?: array<int, array<mixed>|int|string>,
-     * }|array{
-     *  class?: class-string<\Cassandra\Connection\NodeImplementation>,
-     *  host?: ?string,
-     *  port?: int,
-     *  username?: ?string,
-     *  password?: ?string,
-     *  timeout?: int,
-     *  connectTimeout?: int,
-     *  persistent?: bool,
-     *  ssl?: array<string, mixed>,
-     * }> $nodes
+     * @param array<\Cassandra\Connection\NodeConfig> $nodes
      * @param string $keyspace
      * @param array<string,string> $options
      */
     public function __construct(array $nodes, string $keyspace = '', array $options = []) {
-        if (count($nodes) > 1) {
-            shuffle($nodes);
-        }
 
         $this->nodes = $nodes;
         $this->keyspace = $keyspace;
@@ -210,14 +173,10 @@ final class Connection {
         $response = $this->syncRequest(new Request\Startup($this->options));
 
         if ($response instanceof Response\Authenticate) {
-            $nodeOptions = $node->getOptions();
+            $nodeConfig = $node->getConfig();
 
-            if (!isset($nodeOptions['username']) || !isset($nodeOptions['password'])) {
-                throw new Exception('Username and password are required.');
-            }
-
-            if (!$nodeOptions['username'] || !$nodeOptions['password']) {
-                throw new Exception('Username and password must not be empty required.');
+            if (!$nodeConfig->username || !$nodeConfig->password) {
+                throw new Exception('Username and password must not be empty.');
             }
 
             if ($this->version >= 5) {
@@ -227,7 +186,7 @@ final class Connection {
                 $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
 
-            $authResult = $this->syncRequest(new Request\AuthResponse($nodeOptions['username'], $nodeOptions['password']));
+            $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
             if (!($authResult instanceof Response\AuthSuccess)) {
                 throw new Exception('Authentication failed.');
             }
@@ -497,44 +456,27 @@ final class Connection {
      * @throws \Cassandra\Exception
      */
     protected function connectToNode(): void {
-        foreach ($this->nodes as $options) {
-            if (is_string($options)) {
-                if (!preg_match('/^(((tcp|udp|unix|ssl|tls):\/\/)?[\w\.\-]+)(\:(\d+))?/i', $options, $matches)) {
-                    throw new Exception('Invalid host: ' . $options);
-                }
 
-                $options = ['host' => $matches[1]];
+        if (count($this->nodes) > 1) {
+            shuffle($this->nodes);
+        }
 
-                if (isset($matches[5]) && $matches[5]) {
-                    $options['port'] = (int) $matches[5];
-                }
+        foreach ($this->nodes as $config) {
 
-                // Use Connection\Stream when protocol prefix is defined.
-                try {
-                    $this->node = (!isset($matches[2]) || !$matches[2]) ? new Connection\Socket($options) : new Connection\Stream($options);
-                } catch (Exception $e) {
-                    continue;
-                }
-            } else {
-                $className = isset($options['class']) ? $options['class'] : Connection\Socket::class;
-                if (!is_subclass_of($className, Connection\NodeImplementation::class)) {
-                    throw new Exception('Invalid connection class: ' . $className);
-                }
-
-                try {
-                    /**
-                     *  @throws \Cassandra\Exception
-                    */
-                    $this->node = new $className($options);
-                } catch (Exception $e) {
-                    continue;
-                }
+            $className = $config->getNodeClass();
+            try {
+                /**
+                 *  @throws \Cassandra\Exception
+                */
+                $this->node = new $className($config);
+            } catch (Exception $e) {
+                continue;
             }
 
             return;
         }
 
-        throw new Exception('Unable to connect to all Cassandra nodes.');
+        throw new Exception('Unable to connect to any Cassandra node.');
     }
 
     /**
@@ -729,7 +671,7 @@ final class Connection {
         $version = ord($this->node->read(1));
 
         if ($version !== $this->versionIn) {
-            throw new Exception('php-cassandra only supports CQL binary protocol versions v3, v4 and v5. Please upgrade your Cassandra to 2.1 or later.');
+            throw new Exception('php-cassandra only supports CQL binary protocol versions v3, v4 and v5. Please upgrade your Cassandra to version 2.1 or later.');
         }
 
         /**

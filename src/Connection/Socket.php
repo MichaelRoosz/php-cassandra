@@ -8,97 +8,49 @@ use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
 final class Socket implements NodeImplementation {
-    /**
-     * @var array{
-     *  class: string,
-     *  host: ?string,
-     *  port: int,
-     *  username: ?string,
-     *  password: ?string,
-     *  socket: array<int, array<mixed>|int|string>,
-     * } & array<string, mixed> $options
-     */
-    protected array $options = [
-        'class'       => self::class,
-        'host'        => null,
-        'port'        => 9042,
-        'username'    => null,
-        'password'    => null,
-        'socket'      => [
-            SO_RCVTIMEO => ['sec' => 30, 'usec' => 0],
-            SO_SNDTIMEO => ['sec' => 5, 'usec' => 0],
-        ],
-    ];
+
+    protected SocketNodeConfig $config;
+
     protected ?PhpSocket $socket = null;
 
     /**
-     * @param array{
-     *  class?: string,
-     *  host?: ?string,
-     *  port?: int,
-     *  username?: ?string,
-     *  password?: ?string,
-     * } & array<string, mixed> $options
-     *
      * @throws \Cassandra\Connection\SocketException
      */
-    public function __construct(array $options) {
-        if (!isset($options['socket']) || !is_array($options['socket'])) {
-            $options['socket'] = [];
-        } else {
-            foreach (array_keys($options['socket']) as $optname) {
-                if (!is_int($optname)) {
-                    throw new SocketException('Invalid socket option - must be of type int');
-                }
-            }
+    public function __construct(
+        NodeConfig $config
+    ) {
+        if (!($config instanceof SocketNodeConfig)) {
+            throw new SocketException('Expected instance of SocketNodeConfig');
         }
-
-        $options['socket'] += $this->options['socket'];
-
-        /**
-         * @var array{
-         *  class: string,
-         *  host: ?string,
-         *  port: int,
-         *  username: ?string,
-         *  password: ?string,
-         *  socket: array<int, array<mixed>|int|string>,
-         * } & array<string, mixed> $mergedOptions
-         */
-        $mergedOptions = array_merge($this->options, $options);
-        $this->options = $mergedOptions;
+        $this->config = $config;
 
         $this->connect();
     }
 
     #[\Override]
     public function close(): void {
-        if ($this->socket) {
-            $socket = $this->socket;
-            $this->socket = null;
-
-            socket_set_block($socket);
-            socket_set_option($socket, SOL_SOCKET, SO_LINGER, ['l_onoff' => 1, 'l_linger' => 1]);
-
-            socket_shutdown($socket);
-
-            socket_close($socket);
+        if ($this->socket === null) {
+            return;
         }
+
+        $socket = $this->socket;
+        $this->socket = null;
+
+        socket_set_block($socket);
+
+        socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+            'l_onoff' => 1,
+            'l_linger' => 1
+        ]);
+
+        socket_shutdown($socket);
+
+        socket_close($socket);
     }
 
-    /**
-     * @return array{
-     *  class: string,
-     *  host: ?string,
-     *  port: int,
-     *  username: ?string,
-     *  password: ?string,
-     *  socket: array<int, array<mixed>|int|string>,
-     * } & array<string, mixed> $options
-     */
     #[\Override]
-    public function getOptions(): array {
-        return $this->options;
+    public function getConfig(): SocketNodeConfig {
+        return clone $this->config;
     }
 
     /**
@@ -214,11 +166,11 @@ final class Socket implements NodeImplementation {
 
         socket_set_option($this->socket, SOL_TCP, TCP_NODELAY, 1);
 
-        foreach ($this->options['socket'] as $optname => $optval) {
+        foreach ($this->config->socketOptions as $optname => $optval) {
             socket_set_option($this->socket, SOL_SOCKET, $optname, $optval);
         }
 
-        $result = socket_connect($this->socket, $this->options['host'] ?? 'localhost', $this->options['port']);
+        $result = socket_connect($this->socket, $this->config->host, $this->config->port);
         if ($result === false) {
             $errorCode = socket_last_error($this->socket);
 

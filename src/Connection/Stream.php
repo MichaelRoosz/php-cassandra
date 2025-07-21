@@ -7,91 +7,24 @@ namespace Cassandra\Connection;
 use Cassandra\Request\Request;
 
 final class Stream implements NodeImplementation {
-    /**
-     * @var array{
-     *  class: string,
-     *  host: ?string,
-     *  port: int,
-     *  username: ?string,
-     *  password: ?string,
-     *  timeout: int,
-     *  connectTimeout: int,
-     *  persistent: bool,
-     *  ssl: array<string, mixed>,
-     * } & array<string, mixed> $options
-     */
-    protected array $options = [
-        'class'       => self::class,
-        'host'        => null,
-        'port'        => 9042,
-        'username'    => null,
-        'password'    => null,
-        'timeout'     => 30,
-        'connectTimeout' => 5,
-        'persistent'=> false,
-        'ssl' => [
-            'verify_peer' => true,
-            'verify_peer_name' => true,
-            'allow_self_signed' => false,
-        ],
-    ];
+
+    protected StreamNodeConfig $config;
 
     /**
      * @var ?resource $stream
      */
-    protected $stream;
+    protected $stream = null;
 
     /**
-     * @param array{
-     *  class?: string,
-     *  host?: ?string,
-     *  port?: int,
-     *  username?: ?string,
-     *  password?: ?string,
-     * } & array<string, mixed> $options
-     *
      * @throws \Cassandra\Connection\StreamException
      */
-    public function __construct(array $options) {
-        if (isset($options['timeout'])  && !is_int($options['timeout'])) {
-            throw new StreamException('timeout must be an int value');
+    public function __construct(
+        NodeConfig $config
+    ) {
+        if (!($config instanceof StreamNodeConfig)) {
+            throw new StreamException('Expected instance of StreamNodeConfig');
         }
-
-        if (isset($options['connectTimeout'])  && !is_int($options['connectTimeout'])) {
-            throw new StreamException('connectTimeout must be an int value');
-        }
-
-        if (isset($options['persistent'])  && !is_bool($options['persistent'])) {
-            throw new StreamException('persistent must be a bool value');
-        }
-
-        if (!isset($options['ssl']) || !is_array($options['ssl'])) {
-            $options['ssl'] = [];
-        } else {
-            foreach (array_keys($options['ssl']) as $optname) {
-                if (!is_string($optname)) {
-                    throw new StreamException('Invalid ssl option - must be of type string');
-                }
-            }
-        }
-
-        $options['ssl'] += $this->options['ssl'];
-
-        /**
-         * @var array{
-         *  class: string,
-         *  host: ?string,
-         *  port: int,
-         *  username: ?string,
-         *  password: ?string,
-         *  timeout: int,
-         *  connectTimeout: int,
-         *  persistent: bool,
-         *  ssl: array<string, mixed>,
-         * } & array<string, mixed> $mergedOptions
-         */
-        $mergedOptions = array_merge($this->options, $options);
-        $this->options = $mergedOptions;
+        $this->config = $config;
 
         $this->connect();
     }
@@ -105,22 +38,9 @@ final class Stream implements NodeImplementation {
         }
     }
 
-    /**
-     * @return array{
-     *  class: string,
-     *  host: ?string,
-     *  port: int,
-     *  username: ?string,
-     *  password: ?string,
-     *  timeout: int,
-     *  connectTimeout: int,
-     *  persistent: bool,
-     *  ssl: array<string, mixed>,
-     * } & array<string, mixed>
-     */
     #[\Override]
-    public function getOptions(): array {
-        return $this->options;
+    public function getConfig(): StreamNodeConfig {
+        return clone $this->config;
     }
 
     /**
@@ -238,17 +158,23 @@ final class Stream implements NodeImplementation {
             return $this->stream;
         }
 
-        $host = $this->options['host'] ??  'localhost';
+        $context = stream_context_create(
+            options: [
+                'ssl' => $this->config->sslOptions,
+            ]
+        );
 
-        $context = stream_context_create();
+        $flags = $this->config->persistent ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
 
-        /** @var mixed $optval */
-        foreach ($this->options['ssl'] as $optname => $optval) {
-            stream_context_set_option($context, 'ssl', $optname, $optval);
-        }
-
-        $connFlag = $this->options['persistent'] ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
-        $stream = stream_socket_client($host . ':' . $this->options['port'], $errorCode, $errorMessage, $this->options['connectTimeout'], $connFlag, $context);
+        $stream = stream_socket_client(
+            address: $this->config->host . ':' . $this->config->port,
+            error_code: $errorCode, 
+            error_message: $errorMessage, 
+            timeout: $this->config->connectTimeoutInSeconds, 
+            flags: $flags, 
+            context: $context
+        );
+        
         if ($stream === false) {
 
             /** @psalm-suppress TypeDoesNotContainType */
@@ -266,7 +192,9 @@ final class Stream implements NodeImplementation {
 
         $this->stream = $stream;
 
-        stream_set_timeout($this->stream, $this->options['timeout']);
+        $timeoutSeconds = (int) floor($this->config->timeoutInSeconds);
+        $timeoutMicroseconds = (int) (($this->config->timeoutInSeconds - (float)$timeoutSeconds) * 1_000_000.0);
+        stream_set_timeout($this->stream, $timeoutSeconds, $timeoutMicroseconds);
 
         return $this->stream;
     }

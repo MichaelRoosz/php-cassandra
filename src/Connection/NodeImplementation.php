@@ -5,16 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 interface NodeImplementation extends Node {
-    /**
-     * @param array{
-     *  class?: string,
-     *  host?: ?string,
-     *  port?: int,
-     *  username?: ?string,
-     *  password?: ?string,
-     * } & array<string, mixed> $options
-     */
-    public function __construct(array $options);
+
+    public function __construct(NodeConfig $config);
 
     public function write(string $binary): void;
 }

@@ -9,16 +9,7 @@ use Cassandra\Request\Request;
 interface Node {
     public function close(): void;
 
-    /**
-     * @return array{
-     *  class: string,
-     *  host: ?string,
-     *  port: int,
-     *  username: ?string,
-     *  password: ?string,
-     * } & array<string, mixed>
-     */
-    public function getOptions(): array;
+    public function getConfig(): NodeConfig;
 
     public function read(int $length): string;
 
