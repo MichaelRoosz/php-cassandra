@@ -57,7 +57,8 @@ final class ResultIterator implements Iterator {
             return $data;
         }
 
-        /** @var ArrayObject<string, mixed> $row
+        /** 
+         * @var ArrayObject<string, mixed> $row
          */
         $row = new $this->rowClass($data);
 

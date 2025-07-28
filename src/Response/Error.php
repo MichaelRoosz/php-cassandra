@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-use Cassandra\Type;
-
 final class Error extends Response {
     /**
      * Indicates an error processing a request. The body of the message will be an

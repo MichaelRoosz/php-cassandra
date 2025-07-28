@@ -259,16 +259,6 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @param \Cassandra\Metadata $metadata
-     */
-    #[\Override]
-    public function setMetadata(Metadata $metadata): self {
-        $this->metadata = $metadata;
-
-        return $this;
-    }
-
-    /**
      * @param class-string<\Cassandra\Response\RowClass> $rowClass
      *
      * @throws \Cassandra\Response\Exception

@@ -20,3 +20,4 @@ Todo
   + Errors
   + Events
 * Think about automatically re-connecting to nodes
+* Think about cloning some classes on access

@@ -49,7 +49,7 @@ abstract class Result extends Response implements IteratorAggregate {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function getMetadata(): Metadata {
+    protected function getMetadata(): Metadata {
         throw new Exception('Result metadata for kind ' . $this->kind->name . ' is not available');
     }
 
@@ -63,10 +63,6 @@ abstract class Result extends Response implements IteratorAggregate {
 
     public function getRowCount(): int {
         return 0;
-    }
-
-    public function setMetadata(Metadata $metadata): static {
-        return $this;
     }
 
     /**
