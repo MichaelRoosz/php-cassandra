@@ -15,6 +15,17 @@ use Stringable;
  * @psalm-consistent-constructor
  */
 abstract class Response implements Frame, Stringable {
+    public const RESPONSE_CLASS_MAP = [
+        Opcode::RESPONSE_ERROR->value => Error::class,
+        Opcode::RESPONSE_READY->value => Ready::class,
+        Opcode::RESPONSE_AUTHENTICATE->value => Authenticate::class,
+        Opcode::RESPONSE_SUPPORTED->value => Supported::class,
+        Opcode::RESPONSE_RESULT->value => Result::class,
+        Opcode::RESPONSE_EVENT->value => Event::class,
+        Opcode::RESPONSE_AUTH_CHALLENGE->value => AuthChallenge::class,
+        Opcode::RESPONSE_AUTH_SUCCESS->value => AuthSuccess::class,
+    ];
+
     /**
      * @var ?array<string,?string> $payload
      */

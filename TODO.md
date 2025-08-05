@@ -18,6 +18,5 @@ Todo
     string(468) "`USE <keyspace>` with prepared statements is considered to be an anti-pattern due to ambiguity in non-qualified table names. Please consider removing instances of `Session#setKeyspace(<keyspace>)`, `Session#execute("USE <keyspace>")` and `cluster.newSession(<keyspace>)` from your code, and always use fully qualified table names (e.g. <keyspace>.<table>). Keyspace used: test_keyspace, statement keyspace: test_keyspace, statement id: 9b621053664255b24423346115d20c50"
 * Convert to classes
   + Errors
-  + Events
 * Think about automatically re-connecting to nodes
 * Think about cloning some classes on access

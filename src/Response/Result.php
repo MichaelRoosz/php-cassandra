@@ -13,6 +13,7 @@ use Cassandra\Request\Request;
 use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Response\Result\RowsResult;
 use IteratorAggregate;
+use Psalm\Issue\RedundantCast;
 use TypeError;
 use ValueError;
 
@@ -20,6 +21,13 @@ use ValueError;
  * @implements IteratorAggregate<ArrayObject<string, mixed>|array<string, mixed>|null>
  */
 abstract class Result extends Response implements IteratorAggregate {
+    public const RESULT_RESPONSE_CLASS_MAP = [
+        ResultKind::PREPARED->value => Result\PreparedResult::class,
+        ResultKind::ROWS->value => Result\RowsResult::class,
+        ResultKind::SCHEMA_CHANGE->value => Result\SchemaChangeResult::class,
+        ResultKind::SET_KEYSPACE->value => Result\SetKeyspaceResult::class,
+        ResultKind::VOID->value => Result\VoidResult::class,
+    ];
     protected int $dataOffset;
     protected ResultKind $kind;
 

@@ -13,7 +13,6 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
-use Cassandra\Response\ResultKind;
 use SplQueue;
 use TypeError;
 use ValueError;
@@ -55,31 +54,6 @@ final class Connection {
      * @var SplQueue<int> $recycledStreams
      */
     protected SplQueue $recycledStreams;
-
-    /**
-     * @var array<int, class-string<\Cassandra\Response\Response>> $responseClassMap
-     */
-    protected static array $responseClassMap = [
-        Opcode::RESPONSE_ERROR->value => Response\Error::class,
-        Opcode::RESPONSE_READY->value => Response\Ready::class,
-        Opcode::RESPONSE_AUTHENTICATE->value => Response\Authenticate::class,
-        Opcode::RESPONSE_SUPPORTED->value => Response\Supported::class,
-        Opcode::RESPONSE_RESULT->value => Response\Result::class,
-        Opcode::RESPONSE_EVENT->value => Response\Event::class,
-        Opcode::RESPONSE_AUTH_CHALLENGE->value => Response\AuthChallenge::class,
-        Opcode::RESPONSE_AUTH_SUCCESS->value => Response\AuthSuccess::class,
-    ];
-
-    /**
-     * @var array<int, class-string<\Cassandra\Response\Result>> $resultResponseClassMap
-     */
-    protected static array $resultResponseClassMap = [
-        ResultKind::PREPARED->value => Response\Result\PreparedResult::class,
-        ResultKind::ROWS->value => Response\Result\RowsResult::class,
-        ResultKind::SCHEMA_CHANGE->value => Response\Result\SchemaChangeResult::class,
-        ResultKind::SET_KEYSPACE->value => Response\Result\SetKeyspaceResult::class,
-        ResultKind::VOID->value => Response\Result\VoidResult::class,
-    ];
 
     /**
      * @var array<Statement> $statements
@@ -511,6 +485,60 @@ final class Connection {
     }
 
     /**
+     * @return class-string<\Cassandra\Response\Response>
+     *
+     * @throws \Cassandra\Exception
+     */
+    protected function getResponseClass(Opcode $opcode, Response\StreamReader $streamReader): string {
+
+        if (!isset(Response\Response::RESPONSE_CLASS_MAP[$opcode->value])) {
+            throw new Exception('Unknown response type: ' . $opcode->value, 0, [
+                'expected' => array_keys(Response\Response::RESPONSE_CLASS_MAP),
+                'received' => $opcode->value,
+            ]);
+        }
+
+        $responseClass = Response\Response::RESPONSE_CLASS_MAP[$opcode->value];
+
+        switch ($responseClass) {
+            case Response\Result::class:
+                $resultKind = $streamReader->readInt();
+                $streamReader->offset(0);
+
+                if (isset(Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind])) {
+                    $responseClass = Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind];
+                } else {
+                    throw new Exception('Unknown result kind: ' . $resultKind, 0, [
+                        'expected' => array_keys(Response\Result::RESULT_RESPONSE_CLASS_MAP),
+                        'received' => $resultKind,
+                    ]);
+                }
+
+                break;
+
+            case Response\Event::class:
+                $eventType = $streamReader->readString();
+                $streamReader->offset(0);
+
+                if (isset(Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType])) {
+                    $responseClass = Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType];
+                } else {
+                    throw new Exception('Unknown event type: ' . $eventType, 0, [
+                        'expected' => array_keys(Response\Event::EVENT_RESPONSE_CLASS_MAP),
+                        'received' => $eventType,
+                    ]);
+                }
+
+                break;
+
+            default:
+                break;
+        }
+
+        return $responseClass;
+    }
+
+    /**
      * @throws \Cassandra\Exception
      */
     protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
@@ -706,44 +734,13 @@ final class Connection {
 
         $body = $header->length === 0 ? '' : $this->node->read($header->length);
 
-        if (!isset(self::$responseClassMap[$header->opcode->value])) {
-            throw new Response\Exception('Unknown response');
-        }
-
-        $responseClass = self::$responseClassMap[$header->opcode->value];
-        if (!is_subclass_of($responseClass, Response\Response::class)) {
-            throw new Exception('received unexpected response type: ' . $responseClass, 0, [
-                'expected' => Response\Response::class,
-                'received' => $responseClass,
-            ]);
-        }
-
         if ($this->version < 5 && $header->length > 0 && $header->flags & Flag::COMPRESSION->value) {
             $this->lz4Decompressor->setInput($body);
             $body = $this->lz4Decompressor->decompressBlock();
         }
 
         $streamReader = new Response\StreamReader($body);
-
-        switch ($responseClass) {
-            case Response\Result::class:
-                $resultKind = $streamReader->readInt();
-                $streamReader->offset(0);
-
-                if (isset(self::$resultResponseClassMap[$resultKind])) {
-                    $responseClass = self::$resultResponseClassMap[$resultKind];
-                } else {
-                    throw new Exception('Unknown result kind: ' . $resultKind, 0, [
-                        'expected' => array_keys(self::$resultResponseClassMap),
-                        'received' => $resultKind,
-                    ]);
-                }
-
-                break;
-            default:
-                break;
-        }
-
+        $responseClass = $this->getResponseClass($header->opcode, $streamReader);
         $response = new $responseClass($header, $streamReader);
 
         $streamId = $header->stream;
