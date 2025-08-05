@@ -166,7 +166,7 @@ final class Socket implements NodeImplementation {
         socket_set_option($this->socket, SOL_TCP, TCP_NODELAY, 1);
 
         foreach ($this->config->socketOptions as $optname => $optval) {
-            socket_set_option($this->socket, SOL_SOCKET, (int)$optname, $optval);
+            socket_set_option($this->socket, SOL_SOCKET, (int) $optname, $optval);
         }
 
         $result = socket_connect($this->socket, $this->config->host, $this->config->port);

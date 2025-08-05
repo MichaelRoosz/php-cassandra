@@ -46,13 +46,6 @@ abstract class Result extends Response implements IteratorAggregate {
         return $this->kind;
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    protected function getMetadata(): Metadata {
-        throw new Exception('Result metadata for kind ' . $this->kind->name . ' is not available');
-    }
-
     public function getNextExecuteCallInfo(): ?ExecuteCallInfo {
         return $this->nextExecuteCallInfo;
     }
@@ -108,6 +101,13 @@ abstract class Result extends Response implements IteratorAggregate {
 
     public function setRequest(Request $request): void {
         $this->request = $request;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    protected function getMetadata(): Metadata {
+        throw new Exception('Result metadata for kind ' . $this->kind->name . ' is not available');
     }
 
     protected function onPreviousResultUpdated(): void {
