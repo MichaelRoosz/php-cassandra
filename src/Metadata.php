@@ -6,29 +6,31 @@ namespace Cassandra;
 
 final class Metadata {
     public function __construct(
-        public int $flags,
-        public int $columnsCount,
+        public readonly int $flags,
+        public readonly int $columnsCount,
 
-        public ?string $newMetadataId,
-        public ?string $pagingState,
+        public readonly ?string $newMetadataId,
+        public readonly ?string $pagingState,
 
-        public ?int $pkCount,
+        public readonly ?int $pkCount,
         /** @var int[]|null $pkIndex */
-        public ?array $pkIndex,
+        public readonly ?array $pkIndex,
 
         /** @var ?ColumnInfo[] $columns */
-        public ?array $columns,
+        public readonly ?array $columns,
     ) {
     }
 
-    public function mergeWithPreviousMetadata(Metadata $previousMetadata): void {
+    public function mergeWithPreviousMetadata(Metadata $previousMetadata): self {
 
-        $this->newMetadataId = $this->newMetadataId ?? $previousMetadata->newMetadataId;
-        $this->pagingState = $this->pagingState ?? $previousMetadata->pagingState;
-
-        $this->pkCount = $this->pkCount ?? $previousMetadata->pkCount;
-        $this->pkIndex = $this->pkIndex ?? $previousMetadata->pkIndex;
-
-        $this->columns = $this->columns ?? $previousMetadata->columns;
+        return new self(
+            flags: $this->flags,
+            columnsCount: $this->columnsCount,
+            newMetadataId: $this->newMetadataId ?? $previousMetadata->newMetadataId,
+            pagingState: $this->pagingState ?? $previousMetadata->pagingState,
+            pkCount: $this->pkCount ?? $previousMetadata->pkCount,
+            pkIndex: $this->pkIndex ?? $previousMetadata->pkIndex,
+            columns: $this->columns ?? $previousMetadata->columns,
+        );
     }
 }

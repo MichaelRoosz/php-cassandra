@@ -8,10 +8,10 @@ use Cassandra\TypeInfo\TypeInfo;
 
 final class ColumnInfo {
     public function __construct(
-        public string $keyspace,
-        public string $tableName,
-        public string $name,
-        public TypeInfo $type,
+        public readonly string $keyspace,
+        public readonly string $tableName,
+        public readonly string $name,
+        public readonly TypeInfo $type,
     ) {
     }
 }

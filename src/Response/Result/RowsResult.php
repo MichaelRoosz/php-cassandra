@@ -276,7 +276,7 @@ final class RowsResult extends Result {
     #[\Override]
     protected function onPreviousResultUpdated(): void {
         if ($this->metadataOfPreviousResult !== null) {
-            $this->metadata->mergeWithPreviousMetadata($this->metadataOfPreviousResult);
+            $this->metadata = $this->metadata->mergeWithPreviousMetadata($this->metadataOfPreviousResult);
         }
     }
 

@@ -84,7 +84,10 @@ abstract class Result extends Response implements IteratorAggregate {
             );
 
         } elseif ($previousResult instanceof RowsResult) {
-            $this->metadataOfPreviousResult = $previousResult->getMetadata();
+
+            $previousMetadata = $previousResult->getMetadata();
+
+            $this->metadataOfPreviousResult = $previousMetadata;
             $this->onPreviousResultUpdated();
 
             $lastExecuteCallInfo = $previousResult->getNextExecuteCallInfo();
@@ -92,9 +95,7 @@ abstract class Result extends Response implements IteratorAggregate {
                 throw new Exception('prepared statement not found');
             }
 
-            $lastMetadata = $previousResult->getMetadata();
-
-            $resultMetadataId = $lastMetadata->newMetadataId ?? $lastExecuteCallInfo->resultMetadataId ?? null;
+            $resultMetadataId = $previousMetadata->newMetadataId ?? $lastExecuteCallInfo->resultMetadataId ?? null;
 
             $this->nextExecuteCallInfo = new ExecuteCallInfo(
                 id: $lastExecuteCallInfo->id,
