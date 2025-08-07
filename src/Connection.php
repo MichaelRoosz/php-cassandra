@@ -531,6 +531,21 @@ final class Connection {
 
                 break;
 
+            case Response\Error::class:
+                $errorCode = $streamReader->readInt();
+                $streamReader->offset(0);
+
+                if (isset(Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode])) {
+                    $responseClass = Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode];
+                } else {
+                    throw new Exception('Unknown error code: ' . $errorCode, 0, [
+                        'expected' => array_keys(Response\Error::ERROR_RESPONSE_CLASS_MAP),
+                        'received' => $errorCode,
+                    ]);
+                }
+
+                break;
+
             default:
                 break;
         }
@@ -602,7 +617,7 @@ final class Connection {
         // re-prepare query if it is unprepared
         if (
             ($request instanceof Request\Execute)
-            && ($response->getData()['code'] === Response\ErrorType::UNPREPARED->value)
+            && ($response instanceof Response\Error\UnpreparedError)
         ) {
 
             $prevResult = $request->getPreviousResult();

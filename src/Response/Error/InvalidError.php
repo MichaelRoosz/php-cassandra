@@ -6,5 +6,5 @@ namespace Cassandra\Response\Error;
 
 use Cassandra\Response\Error;
 
-final class IsBootstrappingError extends Error {
+final class InvalidError extends Error {
 }

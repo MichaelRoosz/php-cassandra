@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Response\Event;
+namespace Cassandra\Response\Error;
 
 use Cassandra\Response\Error;
 

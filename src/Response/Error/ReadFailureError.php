@@ -7,14 +7,14 @@ namespace Cassandra\Response\Error;
 use Cassandra\Consistency;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
-use Cassandra\Response\Error\Context\WriteTimeoutContext;
+use Cassandra\Response\Error\Context\ReadFailureContext;
 use Cassandra\Response\Exception;
 use Cassandra\Response\StreamReader;
 use TypeError;
 use ValueError;
 
-final class WriteTimeoutError extends Error {
-    private WriteTimeoutContext $context;
+final class ReadFailureError extends Error {
+    private ReadFailureContext $context;
 
     /**
      * @throws \Cassandra\Response\Exception
@@ -30,14 +30,14 @@ final class WriteTimeoutError extends Error {
     }
 
     #[\Override]
-    public function getContext(): WriteTimeoutContext {
+    public function getContext(): ReadFailureContext {
         return $this->context;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    protected function readContext(): WriteTimeoutContext {
+    protected function readContext(): ReadFailureContext {
 
         $consistencyAsInt = $this->stream->readShort();
 
@@ -49,22 +49,26 @@ final class WriteTimeoutError extends Error {
             ]);
         }
 
-        $nodesAcknowledged = $this->stream->readInt();
+        $nodesAnswered = $this->stream->readInt();
         $nodesRequired = $this->stream->readInt();
-        $writeType = $this->stream->readString();
 
         if ($this->getVersion() >= 5) {
-            $contentions = $this->stream->readShort();
+            $reasonMap = $this->stream->readReasonMap();
+            $numFailures = null;
         } else {
-            $contentions = null;
+            $reasonMap = null;
+            $numFailures = $this->stream->readInt();
         }
 
-        return new WriteTimeoutContext(
+        $dataPresent = $this->stream->readChar();
+
+        return new ReadFailureContext(
             consistency: $consistency,
-            nodesAcknowledged: $nodesAcknowledged,
+            nodesAnswered: $nodesAnswered,
             nodesRequired: $nodesRequired,
-            writeType: $writeType,
-            contentions: $contentions,
+            reasonMap: $reasonMap,
+            numFailures: $numFailures,
+            dataPresent: $dataPresent,
         );
     }
 }

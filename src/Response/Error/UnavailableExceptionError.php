@@ -7,14 +7,14 @@ namespace Cassandra\Response\Error;
 use Cassandra\Consistency;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
-use Cassandra\Response\Error\Context\WriteTimeoutContext;
+use Cassandra\Response\Error\Context\UnavailableExceptionContext;
 use Cassandra\Response\Exception;
 use Cassandra\Response\StreamReader;
 use TypeError;
 use ValueError;
 
-final class WriteTimeoutError extends Error {
-    private WriteTimeoutContext $context;
+final class UnavailableExceptionError extends Error {
+    private UnavailableExceptionContext $context;
 
     /**
      * @throws \Cassandra\Response\Exception
@@ -30,14 +30,14 @@ final class WriteTimeoutError extends Error {
     }
 
     #[\Override]
-    public function getContext(): WriteTimeoutContext {
+    public function getContext(): UnavailableExceptionContext {
         return $this->context;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    protected function readContext(): WriteTimeoutContext {
+    protected function readContext(): UnavailableExceptionContext {
 
         $consistencyAsInt = $this->stream->readShort();
 
@@ -49,22 +49,13 @@ final class WriteTimeoutError extends Error {
             ]);
         }
 
-        $nodesAcknowledged = $this->stream->readInt();
         $nodesRequired = $this->stream->readInt();
-        $writeType = $this->stream->readString();
+        $nodesAlive = $this->stream->readInt();
 
-        if ($this->getVersion() >= 5) {
-            $contentions = $this->stream->readShort();
-        } else {
-            $contentions = null;
-        }
-
-        return new WriteTimeoutContext(
+        return new UnavailableExceptionContext(
             consistency: $consistency,
-            nodesAcknowledged: $nodesAcknowledged,
             nodesRequired: $nodesRequired,
-            writeType: $writeType,
-            contentions: $contentions,
+            nodesAlive: $nodesAlive,
         );
     }
 }
