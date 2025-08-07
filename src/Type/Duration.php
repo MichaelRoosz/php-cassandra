@@ -23,9 +23,8 @@ final class Duration extends TypeBase {
      */
     final public function __construct(array $value) {
         self::require64Bit();
-        self::validateValue($value);
 
-        $this->value = $value;
+        $this->value = $this->validateValue($value);
     }
 
     public function __toString(): string {
@@ -458,32 +457,49 @@ final class Duration extends TypeBase {
 
     /**
      * @param array<mixed> $value
-     *
+     * @return array{ months: int, days: int, nanoseconds: int }
+     * 
      * @throws \Cassandra\Type\Exception
      */
-    protected static function validateValue(array $value): void {
-        foreach (['months', 'days', 'nanoseconds'] as $key) {
-            if (!isset($value[$key]) || !is_int($value[$key])) {
-                throw new Exception('Invalid duration value - value "' . $key . '"  is not set or has an invalid data type (must be int)');
-            }
+    protected function validateValue(array $value): array {
+
+        // validate months
+        if (!isset($value['months']) || !is_int($value['months'])) {
+            throw new Exception('Invalid duration value - value "months" is not set or has an invalid data type (must be int)');
         }
+        $months = $value['months'];
 
-        /**
-         * @var array{ months: int, days: int, nanoseconds: int } $value
-         */
-
-        if ($value['months'] < self::INT32_MIN || $value['months'] > self::INT32_MAX) {
+        if ($months < self::INT32_MIN || $months > self::INT32_MAX) {
             throw new Exception('Invalid duration value - value "months" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
         }
 
-        if ($value['days'] < self::INT32_MIN || $value['days'] > self::INT32_MAX) {
+        // validate days
+        if (!isset($value['days']) || !is_int($value['days'])) {
+            throw new Exception('Invalid duration value - value "days" is not set or has an invalid data type (must be int)');
+        }
+        $days = $value['days'];
+
+        if ($days < self::INT32_MIN || $days > self::INT32_MAX) {
             throw new Exception('Invalid duration value - value "days" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
         }
 
-        if (!($value['months'] <= 0 && $value['days'] <= 0 && $value['nanoseconds'] <= 0)
-            && !($value['months'] >= 0 && $value['days'] >= 0 && $value['nanoseconds'] >= 0)
+        // validate nanoseconds
+        if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
+            throw new Exception('Invalid duration value - value "nanoseconds" is not set or has an invalid data type (must be int)');
+        }
+        $nanoseconds = $value['nanoseconds'];
+
+        // validate that months, days and nanoseconds are either all positive or all negative
+        if (!($months <= 0 && $days <= 0 && $nanoseconds <= 0)
+            && !($months >= 0 && $days >= 0 && $nanoseconds >= 0)
         ) {
             throw new Exception('Invalid duration value - days, months and nanoseconds must be either all positive or all negative');
         }
+
+        return [
+            'months' => $months,
+            'days' => $days,
+            'nanoseconds' => $nanoseconds,
+        ];
     }
 }
