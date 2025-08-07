@@ -16,7 +16,7 @@ final class WriteFailureContext extends ErrorContext {
         public readonly int $nodesRequired,
         public readonly ?array $reasonMap,
         public readonly ?int $numFailures,
-        public readonly string $writeType
+        public readonly WriteType $writeType
     ) {
     }
 
@@ -36,7 +36,7 @@ final class WriteFailureContext extends ErrorContext {
             'consistency' => $this->consistency->value,
             'nodes_answered' => $this->nodesAnswered,
             'nodes_required' => $this->nodesRequired,
-            'write_type' => $this->writeType,
+            'write_type' => $this->writeType->value,
             'reasonmap' => $this->reasonMap,
             'num_failures' => $this->numFailures,
         ];

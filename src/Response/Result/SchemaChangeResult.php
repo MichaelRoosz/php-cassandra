@@ -6,6 +6,8 @@ namespace Cassandra\Response\Result;
 
 use ArrayIterator;
 use Cassandra\Protocol\Header;
+use Cassandra\Response\Event\Data\SchemaChangeTarget;
+use Cassandra\Response\Event\Data\SchemaChangeType;
 use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
 use Cassandra\Response\Result\Data\ResultData;
@@ -13,6 +15,8 @@ use Cassandra\Response\Result\Data\SchemaChangeData;
 use Cassandra\Response\ResultKind;
 use Cassandra\Response\StreamReader;
 use Iterator;
+use TypeError;
+use ValueError;
 
 final class SchemaChangeResult extends Result {
     /**
@@ -60,33 +64,54 @@ final class SchemaChangeResult extends Result {
 
         $this->stream->offset(4);
 
-        $data = [
-            'change_type' => $this->stream->readString(),
-            'target' => $this->stream->readString(),
-            'keyspace' => $this->stream->readString(),
-        ];
+        $changeTypeAsString =$this->stream->readString();
 
-        switch ($data['target']) {
-            case 'TABLE':
-            case 'TYPE':
-                $data['name'] = $this->stream->readString();
+        try {
+            $changeType = SchemaChangeType::from($changeTypeAsString);
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid schema change type: ' . $changeTypeAsString, 0, [
+                'schema_change_type' => $changeTypeAsString,
+            ]);
+        }
+
+        $targetAsString = $this->stream->readString();
+
+        try {
+            $target = SchemaChangeTarget::from($targetAsString);
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid schema change target: ' . $targetAsString, 0, [
+                'schema_change_target' => $targetAsString,
+            ]);
+        }
+
+        $keyspace = $this->stream->readString();
+
+        $argumentTypes = null;
+
+        switch ($target) {
+            case SchemaChangeTarget::TABLE:
+            case SchemaChangeTarget::TYPE:
+                $name = $this->stream->readString();
 
                 break;
 
-            case 'FUNCTION':
-            case 'AGGREGATE':
-                $data['name'] = $this->stream->readString();
-                $data['argument_types'] = $this->stream->readTextList();
+            case SchemaChangeTarget::FUNCTION:
+            case SchemaChangeTarget::AGGREGATE:
+                $name = $this->stream->readString();
+                $argumentTypes = $this->stream->readTextList();
 
                 break;
+
+            default:
+                throw new Exception('Invalid schema change target: ' . $target->value);
         }
 
         return new SchemaChangeData(
-            changeType: $data['change_type'],
-            target: $data['target'],
-            keyspace: $data['keyspace'],
-            name: $data['name'] ?? null,
-            argumentTypes: $data['argument_types'] ?? null,
+            changeType: $changeType,
+            target: $target,
+            keyspace: $keyspace,
+            name: $name,
+            argumentTypes: $argumentTypes,
         );
     }
 }

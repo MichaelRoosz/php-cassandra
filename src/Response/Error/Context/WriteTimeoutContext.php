@@ -11,7 +11,7 @@ final class WriteTimeoutContext extends ErrorContext {
         public readonly Consistency $consistency,
         public readonly int $nodesAcknowledged,
         public readonly int $nodesRequired,
-        public readonly string $writeType,
+        public readonly WriteType $writeType,
         public readonly ?int $contentions,
     ) {
         parent::__construct();
@@ -20,9 +20,9 @@ final class WriteTimeoutContext extends ErrorContext {
     /**
      * @return array{
      *   consistency: int,
-     *   nodesAcknowledged: int,
-     *   nodesRequired: int,
-     *   writeType: string,
+     *   nodes_acknowledged: int,
+     *   nodes_required: int,
+     *   write_type: string,
      *   contentions: int|null,
      * }
      */
@@ -30,9 +30,9 @@ final class WriteTimeoutContext extends ErrorContext {
     public function toArray(): array {
         return [
             'consistency' => $this->consistency->value,
-            'nodesAcknowledged' => $this->nodesAcknowledged,
-            'nodesRequired' => $this->nodesRequired,
-            'writeType' => $this->writeType,
+            'nodes_acknowledged' => $this->nodesAcknowledged,
+            'nodes_required' => $this->nodesRequired,
+            'write_type' => $this->writeType->value,
             'contentions' => $this->contentions,
         ];
     }
