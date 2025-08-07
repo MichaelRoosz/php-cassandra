@@ -74,6 +74,7 @@ return $config->setRules([
     'whitespace_after_comma_in_array' => true,
     'visibility_required' => true,
     'return_type_declaration'=> ['space_before' => 'none'],
+    'no_unused_imports' => true,
 ])
     ->setIndent('    ')
     ->setLineEnding("\n")

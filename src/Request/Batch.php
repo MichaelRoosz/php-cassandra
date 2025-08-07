@@ -7,7 +7,6 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Consistency;
-use Cassandra\Request\BatchType;
 use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Type;
 

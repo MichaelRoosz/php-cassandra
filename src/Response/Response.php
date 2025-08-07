@@ -8,7 +8,6 @@ use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
 use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
-use Cassandra\Response\StreamReader;
 use Stringable;
 
 /**

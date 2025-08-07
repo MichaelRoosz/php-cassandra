@@ -13,7 +13,6 @@ use Cassandra\Request\Request;
 use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Response\Result\RowsResult;
 use IteratorAggregate;
-use Psalm\Issue\RedundantCast;
 use TypeError;
 use ValueError;
 

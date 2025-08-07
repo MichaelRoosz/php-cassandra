@@ -7,7 +7,6 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Consistency;
-use Cassandra\Type;
 
 final class Query extends Request {
     /**
