@@ -4,46 +4,65 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-final class Error extends Response {
-    /**
-     * Indicates an error processing a request. The body of the message will be an
-     * error code ([int]) followed by a [string] error message. Then, depending on
-     * the exception, more content may follow. The error codes are defined in
-     * Section 7, along with their additional content if any.
-     *
-     * @return array{
-     *    code: int,
-     *    message: string,
-     *    context: array<string, string|int|array<int|string, int|string>>
-     *  }
-     *
-     * @throws \Cassandra\Response\Exception
-     */
-    public function getData(): array {
+use Cassandra\Protocol\Header;
+use Cassandra\Response\Error\Context\ErrorContext;
+use TypeError;
+use ValueError;
+
+/**
+ * Indicates an error processing a request.
+ */
+abstract class Error extends Response {
+    protected int $code;
+    protected string $message;
+    protected ErrorType $type;
+
+    public function __construct(Header $header, StreamReader $stream) {
+        parent::__construct($header, $stream);
+
+        $this->readData();
+    }
+
+    public function getCode(): int {
+        return $this->code;
+    }
+
+    public function getContext(): ErrorContext {
+        return new ErrorContext();
+    }
+
+    public function getException(): Exception {
+
+        return new Exception(
+            message: $this->message,
+            code: $this->code,
+            context: $this->getContext()->toArray(),
+        );
+    }
+
+    public function getMessage(): string {
+        return $this->message;
+    }
+
+    public function getType(): ErrorType {
+        return $this->type;
+    }
+
+    protected function readData(): void {
         $this->stream->offset(0);
 
-        $code = $this->stream->readInt();
-        $message =  $this->stream->readString();
+        $this->code = $this->stream->readInt();
+        $this->message =  $this->stream->readString();
 
-        $data = [];
-        $data['code'] = $code;
-        $data['context'] = ['message' => $message];
+        try {
+            $this->type = ErrorType::from($this->code);
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid error type: ' . $this->code, 0, [
+                'error_type' => $this->code,
+            ]);
+        }
 
         switch ($code) {
-            case ErrorType::SERVER_ERROR->value:
-                $data['message'] = 'Server error: ' . $message;
-
-                break;
-
-            case ErrorType::PROTOCOL_ERROR->value:
-                $data['message'] = 'Protocol error: ' . $message;
-
-                break;
-
-            case ErrorType::AUTHENTICATION_ERROR->value:
-                $data['message'] = 'Authentication error: ' . $message;
-
-                break;
 
             case ErrorType::UNAVAILABLE_EXCEPTION->value:
                 $data['context'] += [
@@ -52,37 +71,6 @@ final class Error extends Response {
                     'nodes_alive' => $this->stream->readInt(),
                 ];
                 $data['message'] = 'Unavailable exception. Error data: ' . var_export($data['context'], true);
-
-                break;
-
-            case ErrorType::OVERLOADED->value:
-                $data['message'] = 'Overloaded: ' . $message;
-
-                break;
-
-            case ErrorType::IS_BOOTSTRAPPING->value:
-                $data['message'] = 'Is_bootstrapping: ' . $message;
-
-                break;
-
-            case ErrorType::TRUNCATE_ERROR->value:
-                $data['message'] = 'Truncate_error: ' . $message;
-
-                break;
-
-            case ErrorType::WRITE_TIMEOUT->value:
-                $data['context'] += [
-                    'consistency' => $this->stream->readShort(),
-                    'nodes_acknowledged' => $this->stream->readInt(),
-                    'nodes_required' => $this->stream->readInt(),
-                    'write_type' => $this->stream->readString(),
-                ];
-
-                if ($this->getVersion() >= 5) {
-                    $data['context']['contentions'] = $this->stream->readShort();
-                }
-
-                $data['message'] = 'Write_timeout. Error data: ' . var_export($data['context'], true);
 
                 break;
 
@@ -207,14 +195,5 @@ final class Error extends Response {
         }
 
         return $data;
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function getException(): Exception {
-        $data = $this->getData();
-
-        return new Exception($data['message'], $data['code'], $data['context']);
     }
 }
