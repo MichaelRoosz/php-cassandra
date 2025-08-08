@@ -95,13 +95,11 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection;
 
-$nodes = [
-    new SocketNodeConfig(host: '10.0.0.10', port: 9042, username: 'user', password: 'secret',
-        socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]])
-];
+$socketNode =new SocketNodeConfig(host: '10.0.0.10', port: 9042, username: 'user', password: 'secret',
+        socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]);
 
 // Streams transport with SSL/TLS and persistent connection
-$tlsNode = new StreamNodeConfig(
+$streamTlsNode = new StreamNodeConfig(
     host: 'tls://cassandra.example.com',
     port: 9042,
     username: 'user',
@@ -117,7 +115,7 @@ $tlsNode = new StreamNodeConfig(
     ]
 );
 
-$conn = new Connection([$tlsNode], keyspace: 'app');
+$conn = new Connection([$socketNode, $tlsNode], keyspace: 'app');
 $conn->connect();
 ```
 
