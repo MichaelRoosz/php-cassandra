@@ -14,7 +14,7 @@ abstract class TypeBase implements Stringable {
      */
     #[\Override]
     public function __toString(): string {
-        /** @var mixed $value */
+        /** @psalm-suppress MixedAssignment */
         $value = $this->getValue();
 
         if (is_string($value)) {

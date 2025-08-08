@@ -4,63 +4,44 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-use ArrayObject;
+use Cassandra\Response\Result\RowsResult;
 use Iterator;
-use Cassandra\Metadata;
 
 /**
- * @implements Iterator<ArrayObject<string, mixed>|array<string, mixed>|null>
+ * @implements Iterator<RowClassInterface|array<array-key, mixed>|false>
  */
 final class ResultIterator implements Iterator {
-    protected int $currentRow = 0;
+    protected int $currentRow;
+    protected bool $needToRewindRow;
 
-    /**
-     * @param class-string<\Cassandra\Response\RowClass>|null $rowClass
-     *
-     * @throws \Cassandra\Response\Exception
-     */
     public function __construct(
-        protected StreamReader $stream,
-        protected Metadata $metadata,
-        protected int $rowCount,
-        protected int $dataOffset,
-        protected ?string $rowClass = null,
+        protected RowsResult $rowsResult,
     ) {
-
-        if ($rowClass !== null && !is_subclass_of($rowClass, ArrayObject::class)) {
-            throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
-        }
-
         $this->currentRow = 0;
+        $this->needToRewindRow = false;
     }
 
     /**
-     * @return ArrayObject<string, mixed>|array<string, mixed>
+     * @return RowClassInterface|array<array-key, mixed>|false
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public function current(): ArrayObject|array {
-        $data = [];
+    public function current(): RowClassInterface|array|false {
 
-        if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available');
+        if ($this->needToRewindRow) {
+            $this->rowsResult->rewindOneRow();
+            $this->needToRewindRow = false;
         }
 
-        foreach ($this->metadata->columns as $column) {
-            /** @psalm-suppress MixedAssignment */
-            $data[$column->name] = $this->stream->readValue($column->type);
+        if ($this->rowsResult->isFetchObjectConfigurationSet()) {
+            $row = $this->rowsResult->fetchObject();
+        } else {
+            $row = $this->rowsResult->fetch();
         }
 
-        if ($this->rowClass === null) {
-            return $data;
-        }
-
-        /** 
-         * @var ArrayObject<string, mixed> $row
-         */
-        $row = new $this->rowClass($data);
+        $this->needToRewindRow = true;
 
         return $row;
     }
@@ -78,7 +59,8 @@ final class ResultIterator implements Iterator {
      */
     #[\Override]
     public function next(): void {
-        $this->currentRow++;
+        ++$this->currentRow;
+        $this->needToRewindRow = false;
     }
 
     /**
@@ -87,7 +69,8 @@ final class ResultIterator implements Iterator {
     #[\Override]
     public function rewind(): void {
         $this->currentRow = 0;
-        $this->stream->offset($this->dataOffset);
+        $this->rowsResult->rewind();
+        $this->needToRewindRow = false;
     }
 
     /**
@@ -95,6 +78,6 @@ final class ResultIterator implements Iterator {
      */
     #[\Override]
     public function valid(): bool {
-        return (($this->currentRow >= 0) && ($this->currentRow < $this->rowCount));
+        return (($this->currentRow >= 0) && ($this->currentRow < $this->rowsResult->getRowCount()));
     }
 }

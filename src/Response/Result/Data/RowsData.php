@@ -6,7 +6,7 @@ namespace Cassandra\Response\Result\Data;
 
 final class RowsData extends ResultData {
     public function __construct(
-        /** @var array<\ArrayObject<string, mixed>|array<string, mixed>> $rows */
+        /** @var list<array<array-key, mixed>> $rows */
         public readonly array $rows,
     ) {
         parent::__construct();

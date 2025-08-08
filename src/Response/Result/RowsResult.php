@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Result;
 
-use ArrayObject;
 use Cassandra\Metadata;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Exception;
@@ -12,17 +11,31 @@ use Cassandra\Response\Result;
 use Cassandra\Response\Result\Data\ResultData;
 use Cassandra\Response\Result\Data\RowsData;
 use Cassandra\Response\ResultIterator;
+use Cassandra\Response\RowClass;
+use Cassandra\Response\RowClassInterface;
 use Cassandra\Response\StreamReader;
 
 final class RowsResult extends Result {
-    protected Metadata $metadata;
+    private int $dataOffsetOfPreviousRow;
+
+    private int $fetchedRows = 0;
 
     /**
-     * @var class-string<\Cassandra\Response\RowClass> $rowClass
+     * @var array{
+     *     rowClass: class-string<\Cassandra\Response\RowClassInterface>|null,
+     *     constructorArgs: array<mixed>,
+     *     fetchType: FetchType,
+     * }
      */
-    protected ?string $rowClass = null;
+    private array $fetchObjectConfiguration = [
+        'rowClass' => null,
+        'constructorArgs' => [],
+        'fetchType' => FetchType::ASSOC,
+    ];
 
-    protected int $rowCount = 0;
+    private Metadata $metadata;
+
+    private int $rowCount = 0;
 
     /**
      * @throws \Cassandra\Response\Exception
@@ -39,136 +52,163 @@ final class RowsResult extends Result {
         $this->rowCount = $this->stream->readInt();
 
         $this->dataOffset = $this->stream->pos();
+        $this->dataOffsetOfPreviousRow = $this->dataOffset;
+    }
+
+    public function columnCount(): int {
+        return $this->metadata->columnsCount;
     }
 
     /**
-     * @param class-string<\Cassandra\Response\RowClass> $rowClass
-     * @return array<\ArrayObject<string, mixed>|array<string, mixed>>
+     * @param class-string<\Cassandra\Response\RowClassInterface> $rowClass
+     * @param array<mixed> $constructorArgs
+     * @param FetchType $fetchType
+     * 
+     * @throws \Cassandra\Response\Exception
+     */
+    public function configureFetchObject(string $rowClass, array $constructorArgs = [], FetchType $fetchType = FetchType::ASSOC): void {
+        if (!is_subclass_of($rowClass, RowClassInterface::class)) {
+            throw new Exception('row class "' . $rowClass . '" is not a subclass of \Cassandra\Response\RowClassInterface');
+        }
+
+        $this->fetchObjectConfiguration = [
+            'rowClass' => $rowClass,
+            'constructorArgs' => $constructorArgs,
+            'fetchType' => $fetchType,
+        ];
+    }
+
+    /**
+     * Fetches the next row from the result set.
      *
+     * @return array<string|int, mixed>|false
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function fetchAll(?string $rowClass = null): array {
+    public function fetch(FetchType $mode = FetchType::ASSOC): array|false {
+        if ($this->fetchedRows >= $this->rowCount) {
+            return false;
+        }
 
-        $this->stream->offset($this->dataOffset);
+        $previousOffset = $this->stream->pos();
 
+        $row = $this->readNextRow($mode);
+
+        $this->dataOffsetOfPreviousRow = $previousOffset;
+        $this->fetchedRows++;
+
+        return $row;
+    }
+
+    /**
+     * Fetches the remaining rows from the current cursor position.
+     *
+     * @return array<int, array<string|int, mixed>>
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function fetchAll(FetchType $mode = FetchType::ASSOC): array {
         $rows = [];
-
-        if ($rowClass === null) {
-            $rowClass = $this->rowClass;
-        }
-
-        if ($rowClass !== null && !is_subclass_of($rowClass, ArrayObject::class)) {
-            throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
-        }
-
-        if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available');
-        }
-
-        for ($i = 0; $i < $this->rowCount; ++$i) {
-            $data = [];
-
-            foreach ($this->metadata->columns as $column) {
-                /** @psalm-suppress MixedAssignment */
-                $data[$column->name] = $this->stream->readValue($column->type);
+        while (true) {
+            $row = $this->fetch($mode);
+            if ($row === false) {
+                break;
             }
-
-            if ($rowClass === null) {
-                $rows[$i] = $data;
-            } else {
-                $rows[$i] = new $rowClass($data);
-            }
+            $rows[] = $row;
         }
 
         return $rows;
     }
 
     /**
-     * @return array<mixed>
+     * Fetches the remaining rows from the current cursor position and returns
+     * the value of the specified column for each row. Behaves like fetchAll()
+     * in that it consumes the stream from the current cursor forward.
      *
+     * @return array<mixed>
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function fetchCol(int $index = 0): array {
-
-        $this->stream->offset($this->dataOffset);
-
-        $array = [];
-
-        if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available');
-        }
-
-        for ($i = 0; $i < $this->rowCount; ++$i) {
+    public function fetchAllColumns(int $index = 0): array {
+        $values = [];
+        while (true) {
+            /** @psalm-suppress MixedAssignment */
+            $value = $this->fetchColumn($index);
+            if ($value === false) {
+                break;
+            }
 
             /** @psalm-suppress MixedAssignment */
-            foreach ($this->metadata->columns as $j => $column) {
-                $value = $this->stream->readValue($column->type);
-
-                if ($j === $index) {
-                    $array[$i] = $value;
-                }
-            }
+            $values[] = $value;
         }
 
-        return $array;
+        return $values;
     }
 
     /**
+     * Fetches remaining rows and returns an associative map of key => value.
+     * Consumes the cursor from the current position forward.
+     *
+     * @return array<int|string, mixed>
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function fetchOne(): mixed {
-
-        $this->stream->offset($this->dataOffset);
-
-        if ($this->rowCount === 0) {
-            return null;
-        }
+    public function fetchAllKeyPairs(int $keyIndex = 0, int $valueIndex = 1, bool $mergeDuplicates = false): array {
 
         if ($this->metadata->columns === null) {
             throw new Exception('Column metadata is not available');
         }
-
-        foreach ($this->metadata->columns as $column) {
-            return $this->stream->readValue($column->type);
-        }
-
-        return null;
-    }
-
-    /**
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function fetchPairs(): array {
-
-        $this->stream->offset($this->dataOffset);
 
         $map = [];
+        $duplicateKeys = [];
+        while (true) {
+            if ($this->fetchedRows >= $this->rowCount) {
+                break;
+            }
 
-        if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available');
-        }
-
-        for ($i = 0; $i < $this->rowCount; ++$i) {
             $key = null;
+            $value = null;
 
-            /** @psalm-suppress MixedAssignment */
+            $previousOffset = $this->stream->pos();
+
             foreach ($this->metadata->columns as $j => $column) {
-                $value = $this->stream->readValue($column->type);
-
-                if ($j === 0) {
-                    $key = $value;
+                /** @psalm-suppress MixedAssignment */
+                $columnValue = $this->stream->readValue($column->type);
+                if ($j === $keyIndex) {
+                    /** @psalm-suppress MixedAssignment */
+                    $key = $columnValue;
                     if (!is_int($key) && !is_string($key)) {
                         throw new Exception('Invalid key type');
                     }
-                } elseif ($j === 1 && $key !== null) {
+                } elseif ($j === $valueIndex) {
+                    /** @psalm-suppress MixedAssignment */
+                    $value = $columnValue;
+                }
+            }
+
+            $this->dataOffsetOfPreviousRow = $previousOffset;
+            $this->fetchedRows++;
+
+            if ($key === null) {
+                throw new Exception('Invalid key index');
+            }
+
+            if ($mergeDuplicates) {
+                if (array_key_exists($key, $map)) {
+                    if (!isset($duplicateKeys[$key]) || !is_array($map[$key])) {
+                        $map[$key] = [$map[$key], $value];
+                        $duplicateKeys[$key] = true;
+                    } else {
+                        /** @psalm-suppress MixedAssignment */
+                        $map[$key][] = $value;
+                    }
+                } else {
+                    /** @psalm-suppress MixedAssignment */
                     $map[$key] = $value;
                 }
+            } else {
+                /** @psalm-suppress MixedAssignment */
+                $map[$key] = $value;
             }
         }
 
@@ -176,43 +216,135 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @param class-string<\Cassandra\Response\RowClass> $rowClass
-     * @return \ArrayObject<string, mixed>|array<string, mixed>
+     * Fetches all remaining rows and returns them as RowClassInterface instances.
+     *
+     * @return array<RowClassInterface>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function fetchRow(?string $rowClass = null): ArrayObject|array {
+    public function fetchAllObjects(): array {
 
-        $this->stream->offset($this->dataOffset);
-
-        if ($rowClass === null) {
-            $rowClass = $this->rowClass;
+        $rows = [];
+        while (true) {
+            $row = $this->fetchObject();
+            if ($row === false) {
+                break;
+            }
+            $rows[] = $row;
         }
 
-        if ($rowClass !== null && !is_subclass_of($rowClass, ArrayObject::class)) {
-            throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
-        }
+        return $rows;
+    }
 
-        $data = [];
+    /**
+     * Returns a single column from the next row of a result set.
+     * Returns false when there are no more rows.
+     *
+     * @return mixed|false
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function fetchColumn(int $index = 0): mixed {
+        if ($this->fetchedRows >= $this->rowCount) {
+            return false;
+        }
 
         if ($this->metadata->columns === null) {
             throw new Exception('Column metadata is not available');
         }
 
-        for ($i = 0; $i < $this->rowCount && $i < 1; ++$i) {
-            foreach ($this->metadata->columns as $column) {
+        $previousOffset = $this->stream->pos();
+
+        $value = null;
+        foreach ($this->metadata->columns as $j => $column) {
+            /** @psalm-suppress MixedAssignment */
+            $cell = $this->stream->readValue($column->type);
+            if ($j === $index) {
                 /** @psalm-suppress MixedAssignment */
-                $data[$column->name] = $this->stream->readValue($column->type);
+                $value = $cell;
             }
         }
 
-        if ($rowClass === null) {
-            return $data;
+        $this->dataOffsetOfPreviousRow = $previousOffset;
+        $this->fetchedRows++;
+
+        return $value;
+    }
+
+    /**
+     * Fetches a single key/value pair from the next row.
+     * Returns false when there are no more rows.
+     *
+     * @return array<int|string, mixed>|false
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function fetchKeyPair(int $keyIndex = 0, int $valueIndex = 1): array|false {
+        if ($this->fetchedRows >= $this->rowCount) {
+            return false;
         }
 
-        /** @var \ArrayObject<string, mixed> $row */
-        $row = new $rowClass($data);
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
+        }
+
+        $previousOffset = $this->stream->pos();
+
+        $key = null;
+        $value = null;
+
+        foreach ($this->metadata->columns as $j => $column) {
+            /** @psalm-suppress MixedAssignment */
+            $columnValue = $this->stream->readValue($column->type);
+            if ($j === $keyIndex) {
+                /** @psalm-suppress MixedAssignment */
+                $key = $columnValue;
+                if (!is_int($key) && !is_string($key)) {
+                    throw new Exception('Invalid key type');
+                }
+            } elseif ($j === $valueIndex) {
+                /** @psalm-suppress MixedAssignment */
+                $value = $columnValue;
+            }
+        }
+
+        $this->dataOffsetOfPreviousRow = $previousOffset;
+        $this->fetchedRows++;
+
+        if ($key === null) {
+            throw new Exception('Invalid key index');
+        }
+
+        return [$key => $value];
+    }
+
+    /**
+     * Fetches the next row and returns it as an RowClassInterface instance.
+     * Returns false when there are no more rows.
+     *
+     * @return RowClassInterface|false
+     * 
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function fetchObject(): RowClassInterface|false {
+
+        $rowClass = $this->fetchObjectConfiguration['rowClass'] ?? RowClass::class;
+        $additionalConstructorArgs = $this->fetchObjectConfiguration['constructorArgs'];
+        $mode = $this->fetchObjectConfiguration['fetchType'];
+
+        if (!is_subclass_of($rowClass, RowClassInterface::class)) {
+            throw new Exception('row class "' . $rowClass . '" is not a subclass of \Cassandra\Response\RowClassInterface');
+        }
+
+        $rowData = $this->fetch($mode);
+        if ($rowData === false) {
+            return false;
+        }
+
+        /** @var RowClassInterface $row */
+        $row = new $rowClass($rowData, $additionalConstructorArgs);
 
         return $row;
     }
@@ -225,22 +357,14 @@ final class RowsResult extends Result {
         return $this->getRowsData();
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
     #[\Override]
     public function getIterator(): ResultIterator {
 
-        $clonedStream = clone $this->stream;
-        $clonedStream->offset($this->dataOffset);
+        $rowResult = clone $this;
+        $rowResult->stream = clone $this->stream;
+        $rowResult->stream->offset($rowResult->dataOffset);
 
-        return new ResultIterator(
-            $clonedStream,
-            $this->metadata,
-            $this->rowCount,
-            $this->dataOffset,
-            $this->rowClass,
-        );
+        return new ResultIterator($rowResult);
     }
 
     #[\Override]
@@ -248,29 +372,59 @@ final class RowsResult extends Result {
         return $this->metadata;
     }
 
+    #[\Override]
+    public function getRowCount(): int {
+        return $this->rowCount;
+    }
+
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
     public function getRowsData(): RowsData {
-        return new RowsData(
-            rows: $this->fetchAll(),
-        );
-    }
 
-    /**
-     * @param class-string<\Cassandra\Response\RowClass> $rowClass
-     *
-     * @throws \Cassandra\Response\Exception
-     */
-    public function setRowClass(string $rowClass): self {
-        if (!is_subclass_of($rowClass, ArrayObject::class)) {
-            throw new Exception('row class "' . $rowClass . '" is not a subclass of ArrayObject');
+        $savedOffset = $this->stream->pos();
+        $this->stream->offset($this->dataOffset);
+
+        $rows = [];
+        for ($i = 0; $i < $this->rowCount; ++$i) {
+            $rows[] = $this->readNextRow(FetchType::ASSOC);
         }
 
-        $this->rowClass = $rowClass;
+        $this->stream->offset($savedOffset);
 
-        return $this;
+        return new RowsData(rows: $rows);
+    }
+
+    public function isFetchObjectConfigurationSet(): bool {
+        return $this->fetchObjectConfiguration['rowClass'] !== null;
+    }
+
+    public function resetFetchObjectConfiguration(): void {
+        $this->fetchObjectConfiguration = [
+            'rowClass' => null,
+            'constructorArgs' => [],
+            'fetchType' => FetchType::ASSOC,
+        ];
+    }
+
+    public function rewind(): void {
+        $this->fetchedRows = 0;
+        $this->stream->offset($this->dataOffset);
+    }
+
+    public function rewindOneRow(): void {
+
+        if ($this->fetchedRows < 1) {
+            return;
+        }
+
+        $this->fetchedRows--;
+        $this->stream->offset($this->dataOffsetOfPreviousRow);
+    }
+
+    public function rowCount(): int {
+        return $this->rowCount;
     }
 
     #[\Override]
@@ -288,5 +442,52 @@ final class RowsResult extends Result {
         $this->stream->offset(4);
 
         return $this->readMetadata(isPrepareMetaData: false);
+    }
+
+    /**
+     * @return array<mixed>
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    private function readNextRow(FetchType $mode = FetchType::ASSOC): array {
+        if ($this->metadata->columns === null) {
+            throw new Exception('Column metadata is not available');
+        }
+
+        $row = [];
+
+        switch ($mode) {
+            case FetchType::ASSOC:
+                foreach ($this->metadata->columns as $column) {
+                    /** @psalm-suppress MixedAssignment */
+                    $row[$column->name] = $this->stream->readValue($column->type);
+                }
+
+                break;
+
+            case FetchType::NUM:
+                foreach ($this->metadata->columns as $column) {
+                    /** @psalm-suppress MixedAssignment */
+                    $row[] = $this->stream->readValue($column->type);
+                }
+
+                break;
+
+            case FetchType::BOTH:
+                foreach ($this->metadata->columns as $column) {
+                    /** @psalm-suppress MixedAssignment */
+                    $value = $this->stream->readValue($column->type);
+
+                    /** @psalm-suppress MixedAssignment */
+                    $row[$column->name] = $value;
+
+                    /** @psalm-suppress MixedAssignment */
+                    $row[] = $value;
+                }
+
+                break;
+        }
+
+        return $row;
     }
 }

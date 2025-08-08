@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-use ArrayObject;
 use Cassandra\ColumnInfo;
 use Cassandra\Metadata;
 use Cassandra\Protocol\Header;
@@ -17,7 +16,7 @@ use TypeError;
 use ValueError;
 
 /**
- * @implements IteratorAggregate<ArrayObject<string, mixed>|array<string, mixed>|null>
+ * @implements IteratorAggregate<array<string, mixed>|null>
  */
 abstract class Result extends Response implements IteratorAggregate {
     public const RESULT_RESPONSE_CLASS_MAP = [

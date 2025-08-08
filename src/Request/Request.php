@@ -213,7 +213,7 @@ abstract class Request implements Frame, Stringable {
     protected function valuesAsBinary(array $values, bool $namesForValues = false): string {
         $valuesBinary = pack('n', count($values));
 
-        /** @var mixed $value */
+        /** @psalm-suppress MixedAssignment */
         foreach ($values as $name => $value) {
             switch (true) {
                 case $value instanceof Type\TypeBase:
