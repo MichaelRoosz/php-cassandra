@@ -2,7 +2,16 @@
 
 declare(strict_types=1);
 
+use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Connection\StreamNodeConfig;
+use Cassandra\Consistency;
+use Cassandra\Request\BatchType;
+use Cassandra\Request\Options\ExecuteOptions;
+use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Type;
+
 require __DIR__ . '/../vendor/autoload.php';
+
 /*
  CREATE TABLE api.storage (
      filename text,
@@ -13,30 +22,37 @@ require __DIR__ . '/../vendor/autoload.php';
 */
 
 $config = [
-    'hosts' => ['cassandra_img'],
+    'host' => 'cassandra_img',
     'port' => 8092,
     'username' => 'api',
     'password' => 'api',
     'keyspace' => 'api',
 ];
 
-$nodes = [];
-foreach ($config['hosts'] as $h) {
-    $nodes[] =[             // advanced way, using Connection\Stream, persistent connection
-        'host'      => $h,
-        'port'      => $config['port'],
-        'username'  => $config['username'],
-        'password'  => $config['password'],
-        // 'class'     => 'Cassandra\Connection\Stream',//use stream instead of socket, default socket. Stream may not work in some environment
-        'socket'      => [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]], //socket transport only
-        'connectTimeout' => 10, // connection timeout, default 5,  stream transport only
-        'timeout'   => 120, // write/recv timeout, default 30, stream transport only
-        'persistent'    => true, // use persistent PHP connection, default false,  stream transport only
-    ];
-}
+$nodes = [
+    new SocketNodeConfig(
+        host: $config['host'],
+        port: $config['port'],
+        username: $config['username'],
+        password: $config['password'],
+        socketOptions: [
+            SO_RCVTIMEO => ['sec' => 10, 'usec' => 0],
+            SO_SNDTIMEO => ['sec' => 10, 'usec' => 0],
+        ],
+    ),
+    new StreamNodeConfig(
+        host: $config['host'],
+        port: $config['port'],
+        username: $config['username'],
+        password: $config['password'],
+        connectTimeoutInSeconds: 10,
+        timeoutInSeconds: 120,
+        persistent: true,
+    ),
+];
 
 $connection = new Cassandra\Connection($nodes, $config['keyspace']);
-$connection->setConsistency(Cassandra\Request\Request::CONSISTENCY_ONE);
+$connection->setConsistency(Consistency::ONE);
 
 $batches = [];
 $testItem = json_decode('{
@@ -47,7 +63,7 @@ $testItem = json_decode('{
                         "taxonomy": "Music > Pop > 80\'s artists"
                         }', true);
 
-$batch = new Cassandra\Request\Batch(Cassandra\Request\Batch::TYPE_UNLOGGED, Cassandra\Request\Request::CONSISTENCY_ONE);
+$batch = new Cassandra\Request\Batch(BatchType::UNLOGGED, Consistency::ONE);
 
 $counter = $i = $id = $total_counter = 0;
 $partition= 1;
@@ -60,19 +76,11 @@ while (true) {
     $id++;
 
     $batch->appendQuery(
-        'INSERT INTO storage(filename, ukey, value) VALUES(:filename,:ukey,:value)',
+        'INSERT INTO storage(filename, ukey, value) VALUES(:filename, :ukey, :value)',
         [
             new Cassandra\Type\Varchar('p7_' . $partition),
             new Cassandra\Type\Varchar('key_' . $id),
-            new Cassandra\Type\CollectionMap($testItem, [
-                // [
-                Cassandra\Type::VARCHAR,
-                Cassandra\Type::VARCHAR,
-                Cassandra\Type::VARCHAR,
-                Cassandra\Type::VARCHAR,
-                Cassandra\Type::VARCHAR,
-                // ]
-            ]),
+            new Cassandra\Type\CollectionMap($testItem, Type::VARCHAR, Type::VARCHAR),
         ]
     );
 
@@ -88,7 +96,7 @@ while (true) {
 
     if ($counter > 200) {
         $batches[] = $batch;
-        $batch = new Cassandra\Request\Batch(Cassandra\Request\Batch::TYPE_UNLOGGED, Cassandra\Request\Request::CONSISTENCY_ONE);
+        $batch = new Cassandra\Request\Batch(BatchType::UNLOGGED, Consistency::ONE);
         $counter = 0;
     }
 
@@ -103,10 +111,15 @@ while (true) {
 }
 
 echo count($batches) . "\n";
+$batchStatements = [];
 $start = microtime(true);
 foreach ($batches as $batch) {
     usleep(500);
-    $response = $connection->asyncRequest($batch);
+    $batchStatements[] = $connection->batchAsync($batch);
+}
+
+foreach ($batchStatements as $statement) {
+    $statement->waitForResponse();
 }
 
 $taken = round(microtime(true) - $start,2);
@@ -115,22 +128,21 @@ echo "taken: $taken | items: $counter ( total: $i) | partition: $partition | Cas
     round((memory_get_usage()/1024)/1024) . "MB\n";
 
 // 1
-
-$preparedData = $connection->prepare('SELECT * FROM storage where filename = :filename');
+$preparedData = $connection->prepareSync('SELECT * FROM storage where filename = :filename');
 $result = $connection->executeSync(
     $preparedData,
     [
         'filename' => 'p7_2',
     ],
-    \Cassandra\Request\Request::CONSISTENCY_QUORUM,
-    [
-        'page_size' => 100,
-        'names_for_values' => true,
-    ]
-);
+    Consistency::QUORUM,
+    new ExecuteOptions(
+        pageSize: 100,
+        namesForValues: true,
+    )
+)->asRowsResult();
 
-$state = $result->getMetadata()['paging_state'] ?? false;
-echo json_encode($result->fetchRow()) . "\n" . $state . "\n\n";
+$state = $result->getMetadata()->pagingState;
+echo json_encode($result->fetch()) . "\n" . $state . "\n\n";
 
 // == Q2
 $result = $connection->executeSync(
@@ -138,40 +150,39 @@ $result = $connection->executeSync(
     [
         'filename' => 'p7_2',
     ],
-    \Cassandra\Request\Request::CONSISTENCY_QUORUM,
-    [
-        'page_size' => 100,
-        'names_for_values' => true,
-        'paging_state' => $state,
-    ]
-);
+    Consistency::QUORUM,
+    new ExecuteOptions(
+        pageSize: 100,
+        namesForValues: true,
+        pagingState: $state,
+    )
+)->asRowsResult();
 
-$state = $result->getMetadata()['paging_state'] ?? false;
-echo json_encode($result->fetchRow()) . "\n" . $state . "\n\n";
+$state = $result->getMetadata()->pagingState;
+echo json_encode($result->fetch()) . "\n" . $state . "\n\n";
 
 // 2
-
 $query = "SELECT * FROM storage where filename = 'p7_2'";
 $statement1 = $connection->querySync($query,
     [],
-    Cassandra\Request\Request::CONSISTENCY_ONE,
-    [
-        'page_size' => 100,
-    ]
-);
+    Consistency::ONE,
+    new QueryOptions(
+        pageSize: 100,
+    )
+)->asRowsResult();
 
 // == Q2
-$state = $statement1->getMetadata()['paging_state'] ?? false;
-echo json_encode($statement1->fetchRow()) . "\n" . $state . "\n\n";
+$state = $statement1->getMetadata()->pagingState;
+echo json_encode($statement1->fetch()) . "\n" . $state . "\n\n";
 
 $statement1 = $connection->querySync($query,
     [],
-    Cassandra\Request\Request::CONSISTENCY_ONE,
-    [
-        'page_size' => 100,
-        'paging_state' => $state,
-    ]
-);
+    Consistency::ONE,
+    new QueryOptions(
+        pageSize: 100,
+        pagingState: $state,
+    )
+)->asRowsResult();
 
-$state = $statement1->getMetadata()['paging_state'] ?? false;
-echo json_encode($statement1->fetchRow()) . "\n" . $state . "\n\n";
+$state = $statement1->getMetadata()->pagingState;
+echo json_encode($statement1->fetch()) . "\n" . $state . "\n\n";
