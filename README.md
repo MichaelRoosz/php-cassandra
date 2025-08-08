@@ -1,343 +1,318 @@
-Cassandra client library for PHP 
-================================
+php-cassandra: A modern Cassandra client for PHP
+================================================
 
-Cassandra client library for PHP, which supports Protocol v5 (Cassandra 4.x, 5.x) and asynchronous requests.
+php-cassandra is a pure-PHP client for Apache Cassandra with support for CQL binary protocol v3, v4 and v5 (Cassandra 4.x/5.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.
 
-https://packagist.org/packages/mroosz/php-cassandra
+Package: https://packagist.org/packages/mroosz/php-cassandra
 
-## Features
-* Using Protocol v5 (Cassandra 4.x, 5.x)
-* Supports ssl/tls with stream transport layer
-* Supports asynchronous and synchronous requests
-* Support for logged, unlogged and counter batches
-* The ability to specify the consistency, "serial consistency" and all flags defined in the protocol
-* Supports query preparation
-* Supports all data types, including collection types, tuples and UDTs
-* Supports conditional update/insert
-* 5 fetch methods (fetchAll, fetchRow, fetchPairs, fetchCol, fetchOne)
-* Two transport layers - socket and stream.
-* Uses exceptions to report errors
+### Highlights
+- Protocol v3/v4/v5, auto-negotiated
+- Two transports: sockets and PHP streams (streams support SSL/TLS and persistent connections)
+- Synchronous and asynchronous requests
+- Prepared statements with named or positional binding
+- Batches: logged, unlogged, counter
+- Full data type coverage (collections, tuples, UDTs, custom)
+- Iterators plus multiple fetch styles (ASSOC, NUM, BOTH) and object mapping
+- Events (schema/status/topology) with a simple listener interface
+- Optional LZ4 compression and server overload signalling
+
+### Requirements
+- PHP 8.1+
+- 64-bit PHP for 64-bit types like Bigint, Counter, Duration, Time, Timestamp
+- For socket transport: PHP sockets extension; stream transport has no extra extension requirements
 
 ## Installation
 
-PHP 8.1+ is required. There is no need for additional libraries.
-
-If you want to use the Bigint, Counter, Duration, Time or Timestamp types, a 64-bit system is required.
-
-Using composer to install is recommended.
-```
+Using Composer:
+```bash
 composer require mroosz/php-cassandra
 ```
 
-However, you may also fetch the repository from Github and load it via its own class loader:
-```
+Or load the library without Composer:
+```php
 require __DIR__ . '/php-cassandra/php-cassandra.php';
 ```
 
-## Basic Usage
+## Quick start
 
 ```php
 <?php
 
+use Cassandra\Connection;
+use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Connection\StreamNodeConfig;
+use Cassandra\Consistency;
+
+// Choose one or more nodes and a transport
 $nodes = [
-    '127.0.0.1',        // simple way, hostname only
-    '192.168.0.2:9042', // simple way, hostname with port 
-    [ // advanced way, array including username, password and socket options
-        'host'        => '10.205.48.70',
-        'port'        => 9042, //default 9042
-        'username'    => 'admin',
-        'password'    => 'pass',
-        'socket'      => [SO_RCVTIMEO => ["sec" => 10, "usec" => 0], //socket transport only
-        ],
-    ],
-    [ // advanced way, using Connection\Stream, persistent connection
-        'host'        => '10.205.48.70',
-        'port'        => 9042,
-        'username'    => 'admin',
-        'password'    => 'pass',
-        'class'       => 'Cassandra\Connection\Stream',//use stream instead of socket, default socket. Stream may not work in some environment
-        'connectTimeout' => 10, // connection timeout, default 5,  stream transport only
-        'timeout'    => 30, // write/recv timeout, default 30, stream transport only
-        'persistent'    => true, // use persistent PHP connection, default false,  stream transport only  
-    ],
-    [ // advanced way, using SSL/TLS
-        'class'       => 'Cassandra\Connection\Stream', // "class" must be defined as "Cassandra\Connection\Stream" for ssl or tls
-        'host'        => 'ssl://10.205.48.70',// or 'tls://10.205.48.70'
-        'port'        => 9042,
-        'username'    => 'admin',
-        'password'    => 'pass',
-        'ssl'        => ['verify_peer' => false, 'verify_peer_name' => false], // disable certificate verification
-        //'ssl'        => ['cafile' => 'cassandra.pem', 'verify_peer_name'=>false] // with SSL certificate validation, no name check
-    ],
+    new SocketNodeConfig(host: '127.0.0.1', port: 9042, username: 'cassandra', password: 'cassandra'),
+    // or streams (supports SSL/TLS and persistent connections)
+    // new StreamNodeConfig(host: '127.0.0.1', port: 9042, username: 'cassandra', password: 'cassandra'),
 ];
 
-// Create a connection.
-$connection = new \Cassandra\Connection($nodes, 'my_keyspace');
-
-//Connect
-try
-{
-    $connection->connect();
-}
-catch (\Cassandra\Exception $e)
-{
-    echo 'Caught exception: ',  $e->getMessage(), "\n";
-}
-
-
-// Set consistency level for farther requests (default is CONSISTENCY_ONE)
-$connection->setConsistency(Request::CONSISTENCY_QUORUM);
-
-// Run query synchronously.
-try
-{
-    $result = $connection->querySync('SELECT * FROM "users" WHERE "id" = ?', [new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]);
-}
-catch (\Cassandra\Exception $e)
-{
-}
-```
-
-## Fetch Data
-
-```php
-// Return an array containing all of the result set.
-$rows = $result->fetchAll();   // array
-
-// Return an array containing a specified index column from the result set.
-$col = $result->fetchCol();    // array
-
-// Return a assoc array with key-value pairs, the key is the first column, the value is the second column. 
-$col = $result->fetchPairs();  // assoc array
-
-// Return the first row of the result set.
-$row = $result->fetchRow();    // ArrayObject
-
-// Return the first column of the first row of the result set.
-$value = $result->fetchOne();  // mixed
-```
-
-## Iterate over result
-```php
-// Print all roles
-$result = $connection->querySync("SELECT role FROM system_auth.roles");
-foreach($result AS $rowNo => $rowContent)
-{
-    echo $rowContent['role']."\n";
-}
-```
-
-## Query Asynchronously
-
-```php
-// Return a statement immediately
-try
-{
-    $statement1 = $connection->queryAsync($cql1);
-    $statement2 = $connection->queryAsync($cql2);
-
-    // Wait until received the result, can be reversed order
-    $result2 = $statement2->getResult();
-    $result1 = $statement1->getResult();
-
-
-    $rows1 = $result1->fetchAll();
-    $rows2 = $result2->fetchAll();
-}
-catch (\Cassandra\Exception $e)
-{
-}
-```
-
-## Using preparation and data binding
-
-```php
-$prepareResult = $connection->prepare('SELECT * FROM "users" WHERE "id" = :id');
-
-$values = [
-    'id' => 'c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
+// Optional connection options (protocol STARTUP options)
+$options = [
+    // 'COMPRESSION' => 'lz4',
+    // 'THROW_ON_OVERLOAD' => '1', // protocol v4+
 ];
 
-$result = $connection->executeSync(
-    $prepareResult,
-    $values,
-    \Cassandra\Request\Request::CONSISTENCY_QUORUM,
-    [
-        'page_size' => 100,
-        'names_for_values' => true,
+$conn = new Connection($nodes, keyspace: 'my_keyspace', options: $options);
+$conn->connect();
+
+// Consistency default for subsequent requests
+$conn->setConsistency(Consistency::QUORUM);
+
+// Plain query (positional bind)
+$rows = $conn->querySync(
+    'SELECT * FROM users WHERE id = ?',
+    [new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]
+)->fetchAll();
+
+// Prepared statement (named bind + paging)
+$prepared = $conn->prepareSync('SELECT id, name FROM users WHERE org_id = :org_id');
+
+$result = $conn->executeSync(
+    $prepared,
+    values: ['org_id' => 42],
+    consistency: Consistency::LOCAL_QUORUM,
+    options: new \Cassandra\Request\Options\ExecuteOptions(
+        pageSize: 100,
+        namesForValues: true
+    )
+);
+
+foreach ($result as $row) {
+    echo $row['name'], "\n";
+}
+```
+
+## Connecting
+
+Create `NodeConfig` instances and pass them to `Connection`:
+
+```php
+use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Connection\StreamNodeConfig;
+use Cassandra\Connection;
+
+$nodes = [
+    new SocketNodeConfig(host: '10.0.0.10', port: 9042, username: 'user', password: 'secret',
+        socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]])
+];
+
+// Streams transport with SSL/TLS and persistent connection
+$tlsNode = new StreamNodeConfig(
+    host: 'tls://cassandra.example.com',
+    port: 9042,
+    username: 'user',
+    password: 'secret',
+    connectTimeoutInSeconds: 10,
+    timeoutInSeconds: 30,
+    persistent: true,
+    sslOptions: [
+        // See https://www.php.net/manual/en/context.ssl.php
+        'cafile' => '/etc/ssl/certs/ca.pem',
+        'verify_peer' => true,
+        'verify_peer_name' => true,
     ]
 );
 
-$rows = $result->fetchAll();
+$conn = new Connection([$tlsNode], keyspace: 'app');
+$conn->connect();
 ```
 
-## Using Batch
+Startup options (third constructor argument) support:
+- `COMPRESSION` = `lz4` if enabled on server
+- `THROW_ON_OVERLOAD` = `'1'` or `'0'` (v4+)
+
+Keyspace selection:
+- v5: can also be sent per-request via Query/Execute options (see below)
+- v3/v4: call `$conn->setKeyspace('ks')` or run `USE ks`
+
+## Consistency levels
+
+Use the `Consistency` enum:
+- `ALL`, `ANY`, `EACH_QUORUM`, `LOCAL_ONE`, `LOCAL_QUORUM`, `LOCAL_SERIAL`, `ONE`, `QUORUM`, `SERIAL`, `THREE`, `TWO`
+
+Apply per call or as default via `setConsistency()`.
+
+## Queries
+
+Synchronous:
+```php
+$rowsResult = $conn->querySync(
+    'SELECT id, name FROM users WHERE id = ?',
+    [new \Cassandra\Type\Uuid($id)],
+    consistency: \Cassandra\Consistency::ONE,
+    options: new \Cassandra\Request\Options\QueryOptions(pageSize: 100)
+);
+```
+
+Asynchronous:
+```php
+$s1 = $conn->queryAsync('SELECT count(*) FROM t1');
+$s2 = $conn->queryAsync('SELECT count(*) FROM t2');
+
+$r2 = $s2->getResult();
+$r1 = $s1->getResult();
+```
+
+Query options (`QueryOptions`):
+- `pageSize` (int)
+- `pagingState` (string)
+- `serialConsistency` (int; use `Consistency::SERIAL->value` or `Consistency::LOCAL_SERIAL->value`)
+- `defaultTimestamp` (ms since epoch)
+- `namesForValues` (bool): true to use associative binds
+- `keyspace` (string; protocol v5 only)
+- `nowInSeconds` (int; protocol v5 only)
+
+## Prepared statements
 
 ```php
-$batchRequest = new \Cassandra\Request\Batch();
+$prepared = $conn->prepareSync('SELECT * FROM users WHERE email = :email');
 
-// Append a prepared query
-$prepareResult = $connection->prepare('UPDATE "students" SET "age" = :age WHERE "id" = :id');
+$rowsResult = $conn->executeSync(
+    $prepared,
+    ['email' => 'jane@example.com'],
+    options: new \Cassandra\Request\Options\ExecuteOptions(
+        namesForValues: true,
+        pageSize: 50
+    )
+);
+```
 
-$values = [
-    'age' => 21,
-    'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc',
-];
+Pagination with prepared statements:
+```php
+$options = new \Cassandra\Request\Options\ExecuteOptions(pageSize: 100, namesForValues: true);
+$result = $conn->executeSync($prepared, ['org_id' => 1], options: $options);
 
-$batchRequest->appendPreparedStatement($prepareResult, $values);
+do {
+    foreach ($result as $row) {
+        // process row
+    }
 
-// Append a query string
-$batchRequest->appendQuery(
-    'INSERT INTO "students" ("id", "name", "age") VALUES (:id, :name, :age)',
+    $pagingState = $result->getMetadata()->pagingState;
+    if ($pagingState === null) break;
+
+    $options = new \Cassandra\Request\Options\ExecuteOptions(
+        pageSize: 100,
+        namesForValues: true,
+        pagingState: $pagingState
+    );
+    $result = $conn->executeSync($result, [], options: $options); // reuse previous RowsResult for metadata id
+} while (true);
+```
+
+## Batches
+
+```php
+use Cassandra\Request\Batch;
+use Cassandra\Request\BatchType;
+
+$batch = new Batch(type: BatchType::LOGGED, consistency: Consistency::QUORUM);
+
+// Prepared in batch
+$prepared = $conn->prepareSync('UPDATE users SET age = :age WHERE id = :id');
+$batch->appendPreparedStatement($prepared, ['age' => 21, 'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc']);
+
+// Simple query in batch
+$batch->appendQuery(
+    'INSERT INTO users (id, name, age) VALUES (?, ?, ?)',
     [
-        'id' => new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
-        'name' => new \Cassandra\Type\Varchar('Mark'),
-        'age' => 20,
+        new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
+        new \Cassandra\Type\Varchar('Mark'),
+        20,
     ]
 );
 
-$result = $connection->batchSync($batchRequest);
-$rows = $result->fetchAll();
+$conn->batchSync($batch);
 ```
 
-## Supported datatypes
+Batch options (`BatchOptions`): `serialConsistency`, `defaultTimestamp`, `keyspace` (v5), `nowInSeconds` (v5).
 
-All types are supported.
+## Results and fetching
 
+`querySync()`/`executeSync()` return a `RowsResult` for row-returning queries. Supported methods:
+- `fetch(FetchType::ASSOC|NUM|BOTH)` returns next row or false
+- `fetchAll(FetchType)` returns all remaining rows
+- `fetchColumn(int $index)`/`fetchAllColumns(int $index)`
+- `fetchKeyPair(int $keyIndex, int $valueIndex)`/`fetchAllKeyPairs(...)`
+- `getIterator()` returns a `ResultIterator` so you can `foreach ($rowsResult as $row)`
+
+Example:
 ```php
-//  Ascii
-    new \Cassandra\Type\Ascii('string');
+use Cassandra\Response\Result\FetchType;
 
-//  Bigint
-    new \Cassandra\Type\Bigint(10000000000);
+$r = $conn->querySync('SELECT role FROM system_auth.roles');
+foreach ($r as $i => $row) {
+    echo $row['role'], "\n";
+}
 
-//  Blob
-    new \Cassandra\Type\Blob('string');
-
-//  Boolean
-    new \Cassandra\Type\Boolean(true);
-
-//  Counter
-    new \Cassandra\Type\Counter(1000);
-
-//  Date
-    \Cassandra\Type\Date::fromString('2011-02-03');
-    \Cassandra\Type\Date::fromDateTime(new DateTimeImmutable('1970-01-01'));
-
-    $date = new \Cassandra\Type\Date(19435);
-
-    $dateAsString = $date->toString();
-    $dateTime = $date->toDateTime();
-
-//  Decimal
-    new \Cassandra\Type\Decimal('0.0123');
-
-//  Double (same as a PHP "float", 64-bit precision)
-    new \Cassandra\Type\Double(2.718281828459);
-
-//  Duration
-    \Cassandra\Type\Duration::fromString('89h4m48s');
-    \Cassandra\Type\Duration::fromDateInterval(new DateInterval('P6YT5M'));
-
-    $duration = new \Cassandra\Type\Duration(['months' => 1, 'days' => 2, 'nanoseconds'=> 3]);
-
-    $durationAsString = $duration->toString();
-
-    // warning: loses nanosecond precision, DateInterval only supports microseconds
-    $dateInterval = $duration->toDateInterval();
-
-//  Float (32-bit precision - use the "Double" type for a PHP-like "float")
-    new \Cassandra\Type\Float32(2.718);
-
-//  Inet
-    new \Cassandra\Type\Inet('127.0.0.1');
-
-//  Int
-    new \Cassandra\Type\Integer(12345678);
-
-//  Smallint
-    new \Cassandra\Type\Smallint(2048);
-
-//  Tinyint
-    new \Cassandra\Type\Tinyint(122);
-
-//  CollectionList
-    new \Cassandra\Type\CollectionList([1, 1, 1], [\Cassandra\Type::INT]);
-
-//  CollectionMap
-    new \Cassandra\Type\CollectionMap(['a' => 1, 'b' => 2], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
-
-//  CollectionSet
-    new \Cassandra\Type\CollectionSet([1, 2, 3], [\Cassandra\Type::INT]);
-
-//  Time (nanoseconds since midnight)
-    \Cassandra\Type\Time::fromString('08:12:54.123456789');
-    \Cassandra\Type\Time::fromDateTime(new DateTimeImmutable('08:12:54.123456789'));
-    \Cassandra\Type\Time::fromDateInterval(new DateInterval('PT10H9M20S'));
-
-    $time = new \Cassandra\Type\Time(18000000000000);
-
-    $timeAsString = $time->toString();
-
-    // warning: loses nanosecond precision, DateInterval only supports microseconds
-    $dateInterval = $time->toDateInterval();
-
-//  Timestamp
-    \Cassandra\Type\Timestamp::fromString('2011-02-03T04:05:00.000+0000');
-    \Cassandra\Type\Timestamp::fromDateTime(new DateTimeImmutable('2011-02-03T04:05:00.000+0000'))
-
-    $timestamp1 = new \Cassandra\Type\Timestamp((int) (microtime(true) * 1000));
-    $timestamp2 = new \Cassandra\Type\Timestamp(1409830696263);
-
-    $timestampAsString = $timestamp1->toString();
-    $dateTime = $timestamp2->toDateTime();
-
-//  Uuid
-    new \Cassandra\Type\Uuid('62c36092-82a1-3a00-93d1-46196ee77204');
-
-//  Timeuuid
-    new \Cassandra\Type\Timeuuid('2dc65ebe-300b-11e4-a23b-ab416c39d509');
-
-//  Varchar
-    new \Cassandra\Type\Varchar('string');
-
-//  Varint
-    new \Cassandra\Type\Varint(10000000000);
-
-//  Custom
-    new \Cassandra\Type\Custom('string', 'var_name');
-
-//  Tuple
-    new \Cassandra\Type\Tuple([1, '2'], [\Cassandra\Type::INT, \Cassandra\Type::VARCHAR]);
-
-//  UDT
-    new \Cassandra\Type\UDT([
-        'intField' => 1, 
-        'textField' => '2'
-    ], [
-        'intField' => \Cassandra\Type::INT,
-        'textField' => \Cassandra\Type::VARCHAR
-    ]); // in the order defined by the type
+$names = $r->fetchAllColumns(0); // remaining rows of first column
 ```
 
-## Using nested datatypes
+### Object mapping
+
+You can fetch rows into objects by implementing `RowClassInterface` or by using the default `RowClass`:
 
 ```php
-// CollectionSet<UDT>, where UDT contains: Int, Text, Boolean, CollectionList<Text>, CollectionList<UDT>
+final class UserRow implements \Cassandra\Response\RowClassInterface {
+    public function __construct(private array $row, array $args = []) {}
+    public function id(): string { return (string) $this->row['id']; }
+    public function name(): string { return (string) $this->row['name']; }
+}
+
+$rows = $conn->querySync('SELECT id, name FROM users');
+$rows->configureFetchObject(UserRow::class);
+
+foreach ($rows as $user) {
+    echo $user->name(), "\n";
+}
+```
+
+## Data types
+
+All native Cassandra types are supported via classes in `Cassandra\Type\*`. You may pass either:
+- A concrete `Type\...` instance, or
+- A PHP scalar/array matching the type; the driver will convert it when metadata is available
+
+Examples:
+```php
+// Scalars
+new \Cassandra\Type\Ascii('hello');
+new \Cassandra\Type\Bigint(10_000_000_000);
+new \Cassandra\Type\Boolean(true);
+new \Cassandra\Type\Double(2.718281828459);
+new \Cassandra\Type\Float32(2.718);
+new \Cassandra\Type\Integer(123);
+new \Cassandra\Type\Smallint(2048);
+new \Cassandra\Type\Tinyint(12);
+new \Cassandra\Type\Varint(10000000000);
+
+// Temporal
+\Cassandra\Type\Date::fromString('2011-02-03');
+\Cassandra\Type\Time::fromString('08:12:54.123456789');
+\Cassandra\Type\Timestamp::fromString('2011-02-03T04:05:00.000+0000');
+\Cassandra\Type\Duration::fromString('89h4m48s');
+
+// Collections / Tuples / UDT
+new \Cassandra\Type\CollectionList([1, 2, 3], [\Cassandra\Type::INT]);
+new \Cassandra\Type\CollectionSet([1, 2, 3], [\Cassandra\Type::INT]);
+new \Cassandra\Type\CollectionMap(['a' => 1], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
+new \Cassandra\Type\Tuple([1, 'x'], [\Cassandra\Type::INT, \Cassandra\Type::VARCHAR]);
+new \Cassandra\Type\UDT(['id' => 1, 'name' => 'n'], ['id' => \Cassandra\Type::INT, 'name' => \Cassandra\Type::VARCHAR]);
+```
+
+Nested complex example (Set<UDT> inside a row):
+```php
 new \Cassandra\Type\CollectionSet([
     [
         'id' => 1,
         'name' => 'string',
         'active' => true,
-        'friends' => ['string1', 'string2', 'string3'],
-        'drinks' => [['qty' => 5, 'brand' => 'Pepsi'], ['qty' => 3, 'brand' => 'Coke']]
-    ],[
-        'id' => 2,
-        'name' => 'string',
-        'active' => false,
-        'friends' => ['string4', 'string5', 'string6'],
-        'drinks' => []
-    ]
+        'friends' => ['a', 'b'],
+        'drinks' => [['qty' => 5, 'brand' => 'Pepsi']],
+    ],
 ], [
     [
         'type' => \Cassandra\Type::UDT,
@@ -345,53 +320,94 @@ new \Cassandra\Type\CollectionSet([
             'id' => \Cassandra\Type::INT,
             'name' => \Cassandra\Type::VARCHAR,
             'active' => \Cassandra\Type::BOOLEAN,
-            'friends' => [
-                'type' => \Cassandra\Type::COLLECTION_LIST,
-                'value' => \Cassandra\Type::VARCHAR
-            ],
-            'drinks' => [
-                'type' => \Cassandra\Type::COLLECTION_LIST,
-                'value' => [
-                    'type' => \Cassandra\Type::UDT,
-                    'typeMap' => [
-                        'qty' => \Cassandra\Type::INT,
-                        'brand' => \Cassandra\Type::VARCHAR
-                    ]
-                ]
-            ]
-        ]
-    ]
+            'friends' => ['type' => \Cassandra\Type::COLLECTION_LIST, 'value' => \Cassandra\Type::VARCHAR],
+            'drinks' => ['type' => \Cassandra\Type::COLLECTION_LIST, 'value' => [
+                'type' => \Cassandra\Type::UDT,
+                'typeMap' => ['qty' => \Cassandra\Type::INT, 'brand' => \Cassandra\Type::VARCHAR],
+            ]],
+        ],
+    ],
 ]);
 ```
 
-## Listening for events
+Special values:
+- `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET (distinct from NULL)
 
+## Events
+
+Register a listener and subscribe for events on the connection:
 ```php
-$connection->addEventListener(new class () implements \Cassandra\EventListener {
-    public function onEvent(\Cassandra\Response\Event $event): void
-    {
-        var_dump($event->getData());
+$conn->addEventListener(new class () implements \Cassandra\EventListener {
+    public function onEvent(\Cassandra\Response\Event $event): void {
+        // inspect $event->getType() and $event->getData()
     }
 });
 
-$register = new \Cassandra\Request\Register([
-    \Cassandra\Response\Event::TOPOLOGY_CHANGE,
-    \Cassandra\Response\Event::STATUS_CHANGE,
-    \Cassandra\Response\Event::SCHEMA_CHANGE,
-]);
+use Cassandra\Request\Register;
+use Cassandra\Response\EventType;
 
-$connection->syncRequest($register);
+$conn->syncRequest(new Register([
+    EventType::TOPOLOGY_CHANGE->value,
+    EventType::STATUS_CHANGE->value,
+    EventType::SCHEMA_CHANGE->value,
+]));
 
-while ($connection->getResponse()) {
+// process events (simplest possible loop)
+while (true) {
+    $conn->flush();
     sleep(1);
 }
 ```
 
-## Inspired by
-* [duoshuo/php-cassandra](https://github.com/duoshuo/php-cassandra)
+## Tracing and custom payloads (advanced)
 
-## Merged contributions for duoshuo/php-cassandra
-* https://github.com/arnaud-lb/php-cassandra/commit/b6444ee5f8f7079d7df80de85201b11f77e0d376
-* https://github.com/duoshuo/php-cassandra/pull/78
-* https://github.com/duoshuo/php-cassandra/pull/77
-* https://github.com/duoshuo/php-cassandra/pull/66
+You can enable tracing and set a custom payload on any request:
+```php
+use Cassandra\Request\Query;
+
+$req = new Query('SELECT now() FROM system.local');
+$req->enableTracing();
+$req->setPayload(['my-key' => 'my-value']);
+
+$result = $conn->syncRequest($req);
+```
+
+## Compression
+
+Enable LZ4 compression if supported by the server by passing the startup option:
+```php
+$conn = new Cassandra\Connection($nodes, options: ['COMPRESSION' => 'lz4']);
+```
+
+## Error handling
+
+All operations throw `\Cassandra\Exception` for client errors and `\Cassandra\Response\Exception` for server-side errors (e.g., invalid query, unavailable, timeouts). Prepared statements are transparently re-prepared when needed.
+
+## API reference (essentials)
+
+- `Cassandra\Connection`
+  - `connect()`, `disconnect()`
+  - `setConsistency(Consistency)`
+  - `querySync(string, array = [], ?Consistency, QueryOptions)` / `queryAsync(...)`
+  - `prepareSync(string, PrepareOptions)` / `prepareAsync(...)`
+  - `executeSync(PreparedResult|RowsResult, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)`
+  - `batchSync(Batch)` / `batchAsync(Batch)`
+  - `syncRequest(Request)` / `asyncRequest(Request)`
+  - `addEventListener(EventListener)`
+
+- `Cassandra\Request\Options\QueryOptions | ExecuteOptions | BatchOptions`
+- `Cassandra\Request\Batch`, `BatchType`
+- `Cassandra\Response\Result\RowsResult` (iterable, fetch helpers)
+- `Cassandra\Response\RowClassInterface`, `RowClass`
+- `Cassandra\Consistency` (enum)
+- `Cassandra\Type` (enum) and `Cassandra\Type\*` classes
+
+## License
+
+MIT
+
+## Credits
+
+Inspired by and building upon work from:
+- duoshuo/php-cassandra
+- arnaud-lb/php-cassandra
