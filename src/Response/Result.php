@@ -11,6 +11,9 @@ use Cassandra\Request\ExecuteCallInfo;
 use Cassandra\Request\Request;
 use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Response\Result\RowsResult;
+use Cassandra\Response\Result\SchemaChangeResult;
+use Cassandra\Response\Result\SetKeyspaceResult;
+use Cassandra\Response\Result\VoidResult;
 use IteratorAggregate;
 use TypeError;
 use ValueError;
@@ -46,6 +49,71 @@ abstract class Result extends Response implements IteratorAggregate {
         $this->kind = $this->readKind();
 
         $this->dataOffset = $this->stream->pos();
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function asPreparedResult(): PreparedResult {
+        if (!($this instanceof PreparedResult)) {
+            throw new Exception('Result is not a PreparedResult', Exception::RES_NOT_PREPARED_RESULT, [
+                'result_kind' => $this->kind->name,
+            ]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function asRowsResult(): RowsResult {
+        if (!($this instanceof RowsResult)) {
+            throw new Exception('Result is not a RowsResult', Exception::RES_NOT_ROWS_RESULT, [
+                'result_kind' => $this->kind->name,
+            ]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function asSchemaChangeResult(): SchemaChangeResult {
+        if (!($this instanceof SchemaChangeResult)) {
+            throw new Exception('Result is not a SchemaChangeResult', Exception::RES_NOT_SCHEMA_CHANGE_RESULT, [
+                'result_kind' => $this->kind->name,
+            ]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function asSetKeyspaceResult(): SetKeyspaceResult {
+        if (!($this instanceof SetKeyspaceResult)) {
+            throw new Exception('Result is not a SetKeyspaceResult', Exception::RES_NOT_SET_KEYSPACE_RESULT, [
+                'result_kind' => $this->kind->name,
+            ]);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function asVoidResult(): VoidResult {
+        if (!($this instanceof VoidResult)) {
+            throw new Exception('Result is not a VoidResult', Exception::RES_NOT_VOID_RESULT, [
+                'result_kind' => $this->kind->name,
+            ]);
+        }
+
+        return $this;
     }
 
     public function getKind(): ResultKind {

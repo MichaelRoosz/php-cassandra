@@ -157,4 +157,12 @@ final class Statement {
     public function setResponse(?Response\Response $response): void {
         $this->response = $response;
     }
+
+    /**
+     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    public function waitForResponse(): void {
+        $this->getResponse();
+    }
 }

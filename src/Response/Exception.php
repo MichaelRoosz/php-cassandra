@@ -22,6 +22,11 @@ final class Exception extends CassandraException {
     public const READ_TIMEOUT_INVALID_CONSISTENCY = 70011;
     public const RES_INVALID_KIND_VALUE = 70012;
     public const RES_METADATA_NOT_AVAILABLE = 70013;
+    public const RES_NOT_PREPARED_RESULT = 70046;
+    public const RES_NOT_ROWS_RESULT = 70047;
+    public const RES_NOT_SCHEMA_CHANGE_RESULT = 70048;
+    public const RES_NOT_SET_KEYSPACE_RESULT = 70049;
+    public const RES_NOT_VOID_RESULT = 70050;
     public const RES_PREPARED_CONTEXT_NOT_FOUND = 70014;
     public const ROWS_INVALID_KEY_INDEX = 70015;
     public const ROWS_INVALID_KEY_TYPE = 70016;
