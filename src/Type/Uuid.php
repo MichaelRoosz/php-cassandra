@@ -24,7 +24,10 @@ class Uuid extends TypeBase {
         $unpacked = unpack('n8', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack UUID binary data', Exception::CODE_UUID_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 16,
+            ]);
         }
 
         return new static(sprintf(
@@ -48,7 +51,10 @@ class Uuid extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid UUID value; expected string', Exception::CODE_UUID_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+                'expected_format' => 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+            ]);
         }
 
         return new static($value);

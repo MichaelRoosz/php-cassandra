@@ -55,7 +55,11 @@ final class PreparedResult extends Result {
     public function getPreparedData(): PreparedData {
 
         if ($this->kind !== ResultKind::PREPARED) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name);
+            throw new Exception('Unexpected result kind: ' . $this->kind->name, Exception::PREPARED_UNEXPECTED_KIND, [
+                'operation' => 'PreparedResult::getPreparedData',
+                'expected' => ResultKind::PREPARED->name,
+                'received' => $this->kind->name,
+            ]);
         }
 
         $this->stream->offset(4);

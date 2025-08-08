@@ -41,7 +41,7 @@ abstract class Event extends Response {
         try {
             return EventType::from($typeString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid event type: ' . $typeString, 0, [
+            throw new Exception('Invalid event type: ' . $typeString, Exception::EVENT_INVALID_TYPE, [
                 'event_type' => $typeString,
             ]);
         }

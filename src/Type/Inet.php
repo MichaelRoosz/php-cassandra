@@ -21,7 +21,9 @@ final class Inet extends TypeBase {
         $inet = inet_ntop($binary);
 
         if ($inet === false) {
-            throw new Exception('Cannot convert value to string.');
+            throw new Exception('Cannot convert inet binary to string', Exception::CODE_INET_TO_STRING_FAILED, [
+                'binary_length' => strlen($binary),
+            ]);
         }
 
         return new static($inet);
@@ -35,7 +37,9 @@ final class Inet extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid inet value; expected string', Exception::CODE_INET_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);
@@ -49,7 +53,9 @@ final class Inet extends TypeBase {
         $binary = inet_pton($this->value);
 
         if ($binary === false) {
-            throw new Exception('Cannot convert value to binary.');
+            throw new Exception('Cannot convert inet string to binary', Exception::CODE_INET_TO_BINARY_FAILED, [
+                'value' => $this->value,
+            ]);
         }
 
         return $binary;

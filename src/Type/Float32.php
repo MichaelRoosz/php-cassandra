@@ -27,7 +27,10 @@ class Float32 extends TypeBase {
         $unpacked = unpack('G', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack float32 binary data', Exception::CODE_FLOAT32_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 4,
+            ]);
         }
 
         return new static($unpacked[1]);
@@ -41,7 +44,9 @@ class Float32 extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_float($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid float32 value; expected float', Exception::CODE_FLOAT32_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);

@@ -35,7 +35,7 @@ final class UDT extends TypeBase {
         } elseif ($typeInfo !== null) {
             $this->typeInfo = $typeInfo;
         } else {
-            throw new Exception('Either valueDefinition or typeInfo must be provided');
+            throw new Exception('Either valueDefinition or typeInfo must be provided', Exception::CODE_UDT_VALUEDEF_OR_TYPEINFO_REQUIRED);
         }
     }
 
@@ -48,11 +48,13 @@ final class UDT extends TypeBase {
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required');
+            throw new Exception('typeInfo is required', Exception::CODE_UDT_TYPEINFO_REQUIRED);
         }
 
         if (!$typeInfo instanceof UDTInfo) {
-            throw new Exception('Invalid type info, UDTInfo expected');
+            throw new Exception('Invalid type info, UDTInfo expected', Exception::CODE_UDT_INVALID_TYPEINFO, [
+                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+            ]);
         }
 
         return new static((new StreamReader($binary))->readUDT($typeInfo), typeInfo: $typeInfo);
@@ -67,15 +69,19 @@ final class UDT extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid UDT value; expected associative array', Exception::CODE_UDT_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required');
+            throw new Exception('typeInfo is required', Exception::CODE_UDT_TYPEINFO_REQUIRED);
         }
 
         if (!$typeInfo instanceof UDTInfo) {
-            throw new Exception('Invalid type info, UDTInfo expected');
+            throw new Exception('Invalid type info, UDTInfo expected', Exception::CODE_UDT_INVALID_TYPEINFO, [
+                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+            ]);
         }
 
         return new static($value, typeInfo: $typeInfo);

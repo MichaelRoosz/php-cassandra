@@ -69,7 +69,10 @@ final class TypeFactory {
     public static function getBinaryByTypeInfo(TypeInfo $typeInfo, mixed $value): string {
         $type = self::getTypeObjectForValue($typeInfo, $value);
         if ($type === null) {
-            throw new Exception('Cannot get type object');
+            throw new Exception('Cannot get type object for value', Exception::CODE_TYPEFACTORY_CANNOT_GET_TYPE_OBJECT_FOR_VALUE, [
+                'value_type' => gettype($value),
+                'type_info' => get_class($typeInfo),
+            ]);
         }
 
         return $type->getBinary();
@@ -80,11 +83,19 @@ final class TypeFactory {
      */
     public static function getTypeInfoFromType(Type $type): TypeInfo {
         if (!isset(self::$typeClassMap[$type->value])) {
-            throw new Exception('unknown data type');
+            throw new Exception('Unknown data type', Exception::CODE_TYPEFACTORY_UNKNOWN_DATA_TYPE, [
+                'type' => $type->value,
+                'type_name' => $type->name,
+                'supported_types' => array_keys(self::$typeClassMap),
+            ]);
         }
 
         if (!self::isSimpleType($type)) {
-            throw new Exception('Cannot get type info from complex type without definition');
+            throw new Exception('Cannot get type info from complex type without definition', Exception::CODE_TYPEFACTORY_COMPLEX_TYPEINFO_REQUIRED, [
+                'type' => $type->value,
+                'type_name' => $type->name,
+                'context' => 'complex_types_need_definition',
+            ]);
         }
 
         return new SimpleTypeInfo($type);
@@ -103,13 +114,13 @@ final class TypeFactory {
         }
 
         if (!isset($typeDefinition['type'])) {
-            throw new Exception('Type definition must have a type property', 0, [
+            throw new Exception('Type definition must have a type property', Exception::CODE_TYPEFACTORY_TYPEDEF_MISSING_TYPE, [
                 'typeDefinition' => $typeDefinition,
             ]);
         }
 
         if (!($typeDefinition['type'] instanceof Type)) {
-            throw new Exception('Type property must be an instance of Type', 0, [
+            throw new Exception('Type property must be an instance of Type', Exception::CODE_TYPEFACTORY_TYPEDEF_TYPE_NOT_INSTANCE, [
                 'typeDefinition' => $typeDefinition,
             ]);
         }
@@ -190,13 +201,21 @@ final class TypeFactory {
     protected static function getClassForDataType(Type $type): string {
 
         if (!isset(self::$typeClassMap[$type->value])) {
-            throw new Exception('unknown data type');
+            throw new Exception('Unknown data type', Exception::CODE_TYPEFACTORY_CLASS_UNKNOWN_DATA_TYPE, [
+                'type' => $type->value,
+                'type_name' => $type->name,
+                'supported_types' => array_keys(self::$typeClassMap),
+            ]);
         }
 
         $class = self::$typeClassMap[$type->value];
 
         if (!is_subclass_of($class, Types\TypeBase::class)) {
-            throw new Exception('data type is not a subclass of \\Cassandra\\Type\\TypeBase');
+            throw new Exception('Data type class is not a subclass of TypeBase', Exception::CODE_TYPEFACTORY_TYPE_CLASS_NOT_SUBCLASS, [
+                'type_class' => $class,
+                'expected_parent' => Types\TypeBase::class,
+                'type' => $type->value,
+            ]);
         }
 
         return $class;

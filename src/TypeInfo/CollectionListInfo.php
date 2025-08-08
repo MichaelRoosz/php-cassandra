@@ -25,15 +25,38 @@ final class CollectionListInfo extends TypeInfo {
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
-            throw new Exception('Type definition must have a type property');
+            throw new Exception(
+                "CollectionList type definition is missing required 'type' property",
+                Exception::COLLECTION_LIST_MISSING_TYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'valueType'],
+                ]
+            );
         }
 
         if ($typeDefinition['type'] !== Type::COLLECTION_LIST) {
-            throw new Exception('Invalid type definition, must be a CollectionList');
+            throw new Exception(
+                "Invalid type definition for CollectionList: 'type' must be Type::COLLECTION_LIST",
+                Exception::COLLECTION_LIST_INVALID_TYPE,
+                [
+                    'actual_type_value' => $typeDefinition['type']->value,
+                    'actual_type_name' => $typeDefinition['type']->name,
+                    'expected_type_value' => Type::COLLECTION_LIST->value,
+                    'expected_type_name' => Type::COLLECTION_LIST->name,
+                ]
+            );
         }
 
         if (!isset($typeDefinition['valueType'])) {
-            throw new Exception('Type definition must have a valueType property');
+            throw new Exception(
+                "CollectionList type definition is missing required 'valueType' property",
+                Exception::COLLECTION_LIST_MISSING_VALUETYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'valueType'],
+                ]
+            );
         }
 
         $valueType = TypeFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);

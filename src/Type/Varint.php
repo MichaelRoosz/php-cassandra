@@ -29,7 +29,9 @@ final class Varint extends TypeBase {
          */
         $unpacked = unpack('C*', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack varint binary data', Exception::CODE_VARINT_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+            ]);
         }
 
         $value = 0;
@@ -50,7 +52,9 @@ final class Varint extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value) && !is_int($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid varint value; expected int or numeric string', Exception::CODE_VARINT_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);
@@ -75,7 +79,14 @@ final class Varint extends TypeBase {
      */
     public function getValueAsInt(): int {
         if (!is_int($this->value)) {
-            throw new Exception('Value of Varint is outside of possible integer range (this system only supports signed ' . (PHP_INT_SIZE*8) . '-bit integers).');
+            throw new Exception(
+                'Value of Varint is outside of possible integer range for this system',
+                Exception::CODE_VARINT_OUT_OF_PHP_INT_RANGE,
+                [
+                    'php_int_size_bits' => PHP_INT_SIZE * 8,
+                    'value' => (string) $this->value,
+                ]
+            );
         }
 
         return $this->value;

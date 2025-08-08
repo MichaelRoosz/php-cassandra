@@ -44,7 +44,7 @@ final class ReadTimeoutError extends Error {
         try {
             $consistency = Consistency::from($consistencyAsInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid consistency: ' . $consistencyAsInt, 0, [
+            throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::READ_TIMEOUT_INVALID_CONSISTENCY, [
                 'consistency' => $consistencyAsInt,
             ]);
         }

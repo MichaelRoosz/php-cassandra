@@ -30,11 +30,13 @@ final class FrameCodec implements Node {
     public function __construct(NodeImplementation $node, string $compression = '') {
         if ($compression && $compression !== 'lz4') {
             throw new NodeException(
-                message: 'Unsupported compression algorithm',
-                code: 0,
+                message: 'Unsupported frame compression algorithm',
+                code: NodeException::CODE_UNSUPPORTED_COMPRESSION,
                 context: [
                     'compression' => $compression,
                     'supported' => ['lz4'],
+                    'host' => $node->getConfig()->host,
+                    'port' => $node->getConfig()->port,
                 ]
             );
         }
@@ -160,13 +162,14 @@ final class FrameCodec implements Node {
         if ($unpacked === false) {
             throw new NodeException(
                 message: 'Failed to decode frame header',
-                code: 0,
+                code: NodeException::CODE_DECODE_FRAME_HEADER_FAILED,
                 context: [
                     'host' => $this->getConfig()->host,
                     'port' => $this->getConfig()->port,
                     'stage' => 'read_frame_header',
                     'compression' => $this->compression,
                     'header_length' => $headerLength,
+                    'header_hex' => bin2hex($header),
                 ]
             );
         }
@@ -186,7 +189,7 @@ final class FrameCodec implements Node {
         if ($this->crc24($header, $headerLength) !== $headerCrc24) {
             throw new NodeException(
                 message: 'Invalid frame header checksum',
-                code: 0,
+                code: NodeException::CODE_INVALID_HEADER_CRC24,
                 context: [
                     'host' => $this->getConfig()->host,
                     'port' => $this->getConfig()->port,
@@ -194,6 +197,8 @@ final class FrameCodec implements Node {
                     'expected_crc24' => $this->crc24($header, $headerLength),
                     'actual_crc24' => $headerCrc24,
                     'compression' => $this->compression,
+                    'header_length' => $headerLength,
+                    'header_hex' => bin2hex($header),
                 ]
             );
         }
@@ -205,12 +210,13 @@ final class FrameCodec implements Node {
         if ($unpacked === false) {
             throw new NodeException(
                 message: 'Failed to decode frame payload checksum',
-                code: 0,
+                code: NodeException::CODE_DECODE_PAYLOAD_CRC32_FAILED,
                 context: [
                     'host' => $this->getConfig()->host,
                     'port' => $this->getConfig()->port,
                     'stage' => 'read_payload_crc32',
                     'compression' => $this->compression,
+                    'payload_length' => $payloadLength,
                 ]
             );
         }
@@ -222,20 +228,21 @@ final class FrameCodec implements Node {
         $unpacked = unpack('N', $currentChecksum);
         if ($unpacked === false) {
             throw new NodeException(
-                message: 'Failed to decode calculated payload checksum',
-                code: 0,
+                message: 'Failed to decode computed payload checksum',
+                code: NodeException::CODE_DECODE_COMPUTED_CRC32_FAILED,
                 context: [
                     'host' => $this->getConfig()->host,
                     'port' => $this->getConfig()->port,
                     'stage' => 'decode_computed_crc32',
                     'compression' => $this->compression,
+                    'payload_length' => $payloadLength,
                 ]
             );
         }
         if ($unpacked[1] !== $payloadCrc32) {
             throw new NodeException(
                 message: 'Invalid frame payload checksum',
-                code: 0,
+                code: NodeException::CODE_INVALID_PAYLOAD_CRC32,
                 context: [
                     'host' => $this->getConfig()->host,
                     'port' => $this->getConfig()->port,
@@ -243,6 +250,7 @@ final class FrameCodec implements Node {
                     'expected_crc32' => $unpacked[1],
                     'actual_crc32' => $payloadCrc32,
                     'compression' => $this->compression,
+                    'payload_length' => $payloadLength,
                 ]
             );
         }
@@ -251,7 +259,7 @@ final class FrameCodec implements Node {
             if ($this->lz4Decompressor === null) {
                 throw new NodeException(
                     message: 'Decompression failed: LZ4 decompressor not initialized',
-                    code: 0,
+                    code: NodeException::CODE_DECOMPRESSOR_NOT_INITIALIZED,
                     context: [
                         'host' => $this->getConfig()->host,
                         'port' => $this->getConfig()->port,
@@ -262,6 +270,7 @@ final class FrameCodec implements Node {
             }
 
             if ($uncompressedLength > 0) {
+                $compressedLength = $payloadLength;
                 $this->lz4Decompressor->setInput($payload, 0, $payloadLength);
 
                 $payload = $this->lz4Decompressor->decompressBlock();
@@ -270,13 +279,14 @@ final class FrameCodec implements Node {
                 if ($payloadLength !== $uncompressedLength) {
                     throw new NodeException(
                         message: 'Decompression failed: invalid uncompressed length',
-                        code: 0,
+                        code: NodeException::CODE_INVALID_UNCOMPRESSED_LENGTH,
                         context: [
                             'host' => $this->getConfig()->host,
                             'port' => $this->getConfig()->port,
                             'stage' => 'decompress_payload_length_check',
                             'expected_uncompressed_length' => $uncompressedLength,
                             'actual_uncompressed_length' => $payloadLength,
+                            'compressed_length' => $compressedLength,
                         ]
                     );
                 }
@@ -306,7 +316,7 @@ final class FrameCodec implements Node {
         if ($payloadLength > self::PAYLOAD_MAX_SIZE) {
             throw new NodeException(
                 message: 'Output data exceeds frame payload maximum size',
-                code: 0,
+                code: NodeException::CODE_PAYLOAD_EXCEEDS_MAX,
                 context: [
                     'host' => $this->getConfig()->host,
                     'port' => $this->getConfig()->port,
@@ -338,12 +348,13 @@ final class FrameCodec implements Node {
         if ($unpacked === false) {
             throw new NodeException(
                 message: 'Failed to decode payload checksum',
-                code: 0,
+                code: NodeException::CODE_ENCODE_PAYLOAD_CRC32_FAILED,
                 context: [
                     'host' => $this->getConfig()->host,
                     'port' => $this->getConfig()->port,
                     'stage' => 'encode_payload_crc32',
                     'compression' => $this->compression,
+                    'payload_length' => $payloadLength,
                 ]
             );
         }

@@ -27,20 +27,50 @@ final class CollectionMapInfo extends TypeInfo {
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
-            throw new Exception('Type definition must have a type property');
+            throw new Exception(
+                "CollectionMap type definition is missing required 'type' property",
+                Exception::COLLECTION_MAP_MISSING_TYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'keyType', 'valueType'],
+                ]
+            );
         }
 
         if ($typeDefinition['type'] !== Type::COLLECTION_MAP) {
-            throw new Exception('Invalid type definition, must be a CollectionMap');
+            throw new Exception(
+                "Invalid type definition for CollectionMap: 'type' must be Type::COLLECTION_MAP",
+                Exception::COLLECTION_MAP_INVALID_TYPE,
+                [
+                    'actual_type_value' => $typeDefinition['type']->value,
+                    'actual_type_name' => $typeDefinition['type']->name,
+                    'expected_type_value' => Type::COLLECTION_MAP->value,
+                    'expected_type_name' => Type::COLLECTION_MAP->name,
+                ]
+            );
         }
 
         if (!isset($typeDefinition['keyType'])) {
-            throw new Exception('Type definition must have a keyType property');
+            throw new Exception(
+                "CollectionMap type definition is missing required 'keyType' property",
+                Exception::COLLECTION_MAP_MISSING_KEYTYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'keyType', 'valueType'],
+                ]
+            );
         }
         $keyType = TypeFactory::getTypeInfoFromTypeDefinition($typeDefinition['keyType']);
 
         if (!isset($typeDefinition['valueType'])) {
-            throw new Exception('Type definition must have a valueType property');
+            throw new Exception(
+                "CollectionMap type definition is missing required 'valueType' property",
+                Exception::COLLECTION_MAP_MISSING_VALUETYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'keyType', 'valueType'],
+                ]
+            );
         }
         $valueType = TypeFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
 

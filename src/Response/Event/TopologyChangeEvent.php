@@ -49,7 +49,7 @@ final class TopologyChangeEvent extends Event {
         try {
             $changeType = TopologyChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid topology change type: ' . $changeTypeAsString, 0, [
+            throw new Exception('Invalid topology change type: ' . $changeTypeAsString, Exception::EVENT_TOPOLOGY_CHANGE_INVALID_TYPE, [
                 'topology_change_type' => $changeTypeAsString,
             ]);
         }

@@ -43,7 +43,9 @@ final class Date extends Integer {
         }
 
         if (!is_int($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid date value; expected days as int', Exception::CODE_DATE_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);

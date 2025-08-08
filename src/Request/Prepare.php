@@ -30,11 +30,17 @@ final class Prepare extends Request {
                 $flags |= PrepareFlag::WITH_KEYSPACE->value;
                 $optional .= pack('n', strlen($this->options->keyspace)) . $this->options->keyspace;
             } else {
-                throw new Exception('Option "keyspace" not supported by server', 0, [
-                    'required_protocol' => 'v5',
-                    'actual_protocol' => $this->version,
-                    'keyspace' => $this->options->keyspace,
-                ]);
+                throw new Exception(
+                    message: 'Server protocol version does not support request option "keyspace"',
+                    code: Exception::UNSUPPORTED_OPTION_KEYSPACE,
+                    context: [
+                        'request' => 'PREPARE',
+                        'option' => 'keyspace',
+                        'required_protocol' => 'v5',
+                        'actual_protocol' => $this->version,
+                        'keyspace' => $this->options->keyspace,
+                    ]
+                );
             }
         }
 

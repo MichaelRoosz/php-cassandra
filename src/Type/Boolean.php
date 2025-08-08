@@ -26,7 +26,9 @@ final class Boolean extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_bool($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid boolean value; expected bool', Exception::CODE_BOOLEAN_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);

@@ -33,7 +33,10 @@ class Bigint extends TypeBase {
          */
         $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack bigint binary data', Exception::CODE_BIGINT_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 8,
+            ]);
         }
 
         return new static($unpacked[1]);
@@ -49,7 +52,9 @@ class Bigint extends TypeBase {
         self::require64Bit();
 
         if (!is_int($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid bigint value; expected int', Exception::CODE_BIGINT_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);
@@ -72,7 +77,11 @@ class Bigint extends TypeBase {
         if (PHP_INT_SIZE < 8) {
             $className = (new ReflectionClass(static::class))->getShortName();
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system');
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system', Exception::CODE_BIGINT_64BIT_REQUIRED, [
+                'class' => $className,
+                'php_int_size_bytes' => PHP_INT_SIZE,
+                'php_int_size_bits' => PHP_INT_SIZE * 8,
+            ]);
         }
     }
 

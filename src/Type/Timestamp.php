@@ -42,7 +42,9 @@ final class Timestamp extends Bigint {
         }
 
         if (!is_int($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid timestamp value; expected milliseconds as int', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);
@@ -69,7 +71,9 @@ final class Timestamp extends Bigint {
         $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
 
         if ($datetime === false) {
-            throw new Exception('invalid value');
+            throw new Exception('Cannot convert timestamp to DateTimeImmutable', Exception::CODE_TIMESTAMP_TO_DATETIME_FAILED, [
+                'milliseconds' => $this->value,
+            ]);
         }
 
         return $datetime;

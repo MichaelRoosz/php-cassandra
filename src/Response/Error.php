@@ -104,7 +104,7 @@ abstract class Error extends Response {
         try {
             $type = ErrorType::from($code);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid error type: ' . $code, 0, [
+            throw new Exception('Invalid error type: ' . $code, Exception::ERROR_INVALID_TYPE, [
                 'error_type' => $code,
             ]);
         }

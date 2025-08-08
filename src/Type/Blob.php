@@ -26,7 +26,9 @@ final class Blob extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid blob value; expected string', Exception::CODE_BLOB_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);

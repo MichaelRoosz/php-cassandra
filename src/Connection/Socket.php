@@ -20,8 +20,8 @@ final class Socket implements NodeImplementation {
     ) {
         if (!($config instanceof SocketNodeConfig)) {
             throw new SocketException(
-                message: 'Invalid node configuration type; expected SocketNodeConfig',
-                code: 0,
+                message: 'Invalid node configuration type for Socket transport',
+                code: SocketException::CODE_INVALID_CONFIG,
                 context: [
                     'expected_class' => SocketNodeConfig::class,
                     'actual_class' => get_debug_type($config),
@@ -66,8 +66,8 @@ final class Socket implements NodeImplementation {
     public function read(int $length): string {
         if ($this->socket === null) {
             throw new SocketException(
-                message: 'Socket is not connected',
-                code: 0,
+                message: 'Socket transport not connected',
+                code: SocketException::CODE_NOT_CONNECTED_READ,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -82,28 +82,31 @@ final class Socket implements NodeImplementation {
             $errorCode = socket_last_error($this->socket);
 
             throw new SocketException(
-                message: socket_strerror($errorCode),
-                code: $errorCode,
+                message: 'Socket read failed: ' . socket_strerror($errorCode),
+                code: SocketException::CODE_READ_FAILED,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'read',
                     'requested_bytes' => $length,
                     'bytes_read' => 0,
+                    'socket_options' => $this->config->socketOptions,
+                    'system_error_code' => $errorCode,
                 ]
             );
         }
 
         if ($length > 0 && $data === '') {
             throw new SocketException(
-                message: 'socket_read() returned no data',
-                code: 0,
+                message: 'Socket read returned no data',
+                code: SocketException::CODE_READ_NO_DATA,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'read',
                     'requested_bytes' => $length,
                     'bytes_read' => 0,
+                    'socket_options' => $this->config->socketOptions,
                 ]
             );
         }
@@ -117,28 +120,31 @@ final class Socket implements NodeImplementation {
                 $errorCode = socket_last_error($this->socket);
 
                 throw new SocketException(
-                    message: socket_strerror($errorCode),
-                    code: $errorCode,
+                    message: 'Socket read failed: ' . socket_strerror($errorCode),
+                    code: SocketException::CODE_READ_FAILED_CONT,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
                         'operation' => 'read',
                         'requested_bytes' => $length,
                         'bytes_read' => strlen($data),
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
                     ]
                 );
             }
 
             if ($readData === '') {
                 throw new SocketException(
-                    message: 'socket_read() returned no data',
-                    code: 0,
+                    message: 'Socket read returned no data',
+                    code: SocketException::CODE_READ_NO_DATA_CONT,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
                         'operation' => 'read',
                         'requested_bytes' => $length,
                         'bytes_read' => strlen($data),
+                        'socket_options' => $this->config->socketOptions,
                     ]
                 );
             }
@@ -157,8 +163,8 @@ final class Socket implements NodeImplementation {
     public function readOnce(int $length): string {
         if ($this->socket === null) {
             throw new SocketException(
-                message: 'Socket is not connected',
-                code: 0,
+                message: 'Socket transport not connected',
+                code: SocketException::CODE_NOT_CONNECTED_READ_ONCE,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -173,28 +179,31 @@ final class Socket implements NodeImplementation {
             $errorCode = socket_last_error($this->socket);
 
             throw new SocketException(
-                message: socket_strerror($errorCode),
-                code: $errorCode,
+                message: 'Socket read failed: ' . socket_strerror($errorCode),
+                code: SocketException::CODE_READ_ONCE_FAILED,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'readOnce',
                     'requested_bytes' => $length,
                     'bytes_read' => 0,
+                    'socket_options' => $this->config->socketOptions,
+                    'system_error_code' => $errorCode,
                 ]
             );
         }
 
         if ($length > 0 && $data === '') {
             throw new SocketException(
-                message: 'socket_read() returned no data',
-                code: 0,
+                message: 'Socket read returned no data',
+                code: SocketException::CODE_READ_ONCE_NO_DATA,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'readOnce',
                     'requested_bytes' => $length,
                     'bytes_read' => 0,
+                    'socket_options' => $this->config->socketOptions,
                 ]
             );
         }
@@ -209,8 +218,8 @@ final class Socket implements NodeImplementation {
     public function write(string $binary): void {
         if ($this->socket === null) {
             throw new SocketException(
-                message: 'Socket is not connected',
-                code: 0,
+                message: 'Socket transport not connected',
+                code: SocketException::CODE_NOT_CONNECTED_WRITE,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -227,13 +236,15 @@ final class Socket implements NodeImplementation {
                 $errorCode = socket_last_error($this->socket);
 
                 throw new SocketException(
-                    message: socket_strerror($errorCode),
-                    code: $errorCode,
+                    message: 'Socket write failed: ' . socket_strerror($errorCode),
+                    code: SocketException::CODE_WRITE_FAILED,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
                         'operation' => 'write',
                         'bytes_remaining' => strlen($binary),
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
                     ]
                 );
             }
@@ -262,12 +273,13 @@ final class Socket implements NodeImplementation {
             $errorCode = socket_last_error();
 
             throw new SocketException(
-                message: socket_strerror($errorCode),
-                code: $errorCode,
+                message: 'Socket create failed: ' . socket_strerror($errorCode),
+                code: SocketException::CODE_SOCKET_CREATE_FAILED,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'socket_create',
+                    'system_error_code' => $errorCode,
                 ]
             );
         }
@@ -285,12 +297,14 @@ final class Socket implements NodeImplementation {
             $errorCode = socket_last_error($this->socket);
 
             throw new SocketException(
-                message: socket_strerror($errorCode),
-                code: $errorCode,
+                message: 'Socket connect failed: ' . socket_strerror($errorCode),
+                code: SocketException::CODE_CONNECT_FAILED,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'connect',
+                    'socket_options' => $this->config->socketOptions,
+                    'system_error_code' => $errorCode,
                 ]
             );
         }

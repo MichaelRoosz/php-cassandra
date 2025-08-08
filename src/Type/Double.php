@@ -27,7 +27,10 @@ final class Double extends TypeBase {
         $unpacked = unpack('E', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary');
+            throw new Exception('Cannot unpack double binary data', Exception::CODE_DOUBLE_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 8,
+            ]);
         }
 
         return new static($unpacked[1]);
@@ -41,7 +44,9 @@ final class Double extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_float($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid double value; expected float', Exception::CODE_DOUBLE_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);

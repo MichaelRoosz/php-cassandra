@@ -52,7 +52,7 @@ final class SchemaChangeEvent extends Event {
         try {
             $changeType = SchemaChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid schema change type: ' . $changeTypeAsString, 0, [
+            throw new Exception('Invalid schema change type: ' . $changeTypeAsString, Exception::EVENT_SCHEMA_CHANGE_INVALID_TYPE, [
                 'schema_change_type' => $changeTypeAsString,
             ]);
         }
@@ -62,7 +62,7 @@ final class SchemaChangeEvent extends Event {
         try {
             $target = SchemaChangeTarget::from($targetAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid schema change target: ' . $targetAsString, 0, [
+            throw new Exception('Invalid schema change target: ' . $targetAsString, Exception::EVENT_SCHEMA_CHANGE_INVALID_TARGET, [
                 'schema_change_target' => $targetAsString,
             ]);
         }
@@ -86,7 +86,13 @@ final class SchemaChangeEvent extends Event {
                 break;
 
             default:
-                throw new Exception('Invalid schema change target: ' . $target->value);
+                throw new Exception(
+                    message: 'Invalid schema change target: ' . $target->value,
+                    code: Exception::EVENT_SCHEMA_CHANGE_UNEXPECTED_TARGET_VALUE,
+                    context: [
+                        'schema_change_target' => $target->value,
+                    ]
+                );
         }
 
         return new SchemaChangeData(

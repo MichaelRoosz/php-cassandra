@@ -59,7 +59,11 @@ final class SchemaChangeResult extends Result {
      */
     public function getSchemaChangeData(): SchemaChangeData {
         if ($this->kind !== ResultKind::SCHEMA_CHANGE) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name);
+            throw new Exception('Unexpected result kind for schema change data', Exception::SCHEMA_CHANGE_UNEXPECTED_KIND, [
+                'operation' => 'SchemaChangeResult::getSchemaChangeData',
+                'expected' => ResultKind::SCHEMA_CHANGE->name,
+                'received' => $this->kind->name,
+            ]);
         }
 
         $this->stream->offset(4);
@@ -69,7 +73,8 @@ final class SchemaChangeResult extends Result {
         try {
             $changeType = SchemaChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid schema change type: ' . $changeTypeAsString, 0, [
+            throw new Exception('Invalid schema change type', Exception::SCHEMA_CHANGE_INVALID_TYPE, [
+                'operation' => 'SchemaChangeResult::getSchemaChangeData',
                 'schema_change_type' => $changeTypeAsString,
             ]);
         }
@@ -79,7 +84,8 @@ final class SchemaChangeResult extends Result {
         try {
             $target = SchemaChangeTarget::from($targetAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid schema change target: ' . $targetAsString, 0, [
+            throw new Exception('Invalid schema change target', Exception::SCHEMA_CHANGE_INVALID_TARGET, [
+                'operation' => 'SchemaChangeResult::getSchemaChangeData',
                 'schema_change_target' => $targetAsString,
             ]);
         }
@@ -103,7 +109,10 @@ final class SchemaChangeResult extends Result {
                 break;
 
             default:
-                throw new Exception('Invalid schema change target: ' . $target->value);
+                throw new Exception('Invalid schema change target', Exception::SCHEMA_CHANGE_UNEXPECTED_TARGET_VALUE, [
+                    'operation' => 'SchemaChangeResult::getSchemaChangeData',
+                    'schema_change_target' => $target->value,
+                ]);
         }
 
         return new SchemaChangeData(

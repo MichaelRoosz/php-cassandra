@@ -19,7 +19,13 @@ final class ProgressiveStreamReader extends StreamReader {
      */
     #[\Override]
     public function getData(): string {
-        throw new Exception('not supported');
+        throw new Exception(
+            message: 'ProgressiveStreamReader does not support random access via getData()',
+            code: Exception::PSR_GET_DATA_NOT_SUPPORTED,
+            context: [
+                'method' => __METHOD__,
+            ]
+        );
     }
 
     public function setSource(Node $source): void {
@@ -37,7 +43,15 @@ final class ProgressiveStreamReader extends StreamReader {
 
         while ($this->dataLength < $this->offset + $length) {
             if ($this->source === null) {
-                throw new Exception('The response is incomplete, or types expectation mismatch.');
+                throw new Exception(
+                    message: 'The response is incomplete, or types expectation mismatch.',
+                    code: Exception::PSR_INCOMPLETE_RESPONSE,
+                    context: [
+                        'method' => __METHOD__,
+                        'requested_length' => $this->offset + $length,
+                        'available' => $this->dataLength,
+                    ]
+                );
             }
 
             $this->data .= $received = $this->source->readOnce($this->offset + $length - $this->dataLength);

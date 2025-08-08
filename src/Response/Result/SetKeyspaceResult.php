@@ -48,7 +48,11 @@ final class SetKeyspaceResult extends Result {
      */
     public function getSetKeyspaceData(): SetKeyspaceData {
         if ($this->kind !== ResultKind::SET_KEYSPACE) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name);
+            throw new Exception('Unexpected result kind: ' . $this->kind->name, Exception::SET_KEYSPACE_UNEXPECTED_KIND, [
+                'operation' => 'SetKeyspaceResult::getSetKeyspaceData',
+                'expected' => ResultKind::SET_KEYSPACE->name,
+                'received' => $this->kind->name,
+            ]);
         }
 
         $this->stream->offset(4);

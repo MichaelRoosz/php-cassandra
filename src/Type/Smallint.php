@@ -17,7 +17,11 @@ final class Smallint extends TypeBase {
      */
     final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Value "' . $value . '" is outside of possible range');
+            throw new Exception('Smallint value is outside of supported range', Exception::CODE_SMALLINT_OUT_OF_RANGE, [
+                'value' => $value,
+                'min' => self::VALUE_MIN,
+                'max' => self::VALUE_MAX,
+            ]);
         }
 
         $this->value = $value;
@@ -35,7 +39,10 @@ final class Smallint extends TypeBase {
          */
         $unpacked = unpack('n', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary');
+            throw new Exception('Cannot unpack smallint binary data', Exception::CODE_SMALLINT_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 2,
+            ]);
         }
 
         return new static($unpacked[1] << $bits >> $bits);
@@ -49,7 +56,9 @@ final class Smallint extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_int($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid smallint value; expected int', Exception::CODE_SMALLINT_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);

@@ -49,7 +49,7 @@ final class StatusChangeEvent extends Event {
         try {
             $changeType = StatusChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid status change type: ' . $changeTypeAsString, 0, [
+            throw new Exception('Invalid status change type: ' . $changeTypeAsString, Exception::EVENT_STATUS_CHANGE_INVALID_TYPE, [
                 'status_change_type' => $changeTypeAsString,
             ]);
         }

@@ -14,7 +14,9 @@ final class Decimal extends TypeBase {
      */
     final public function __construct(string $value) {
         if (!is_numeric($value)) {
-            throw new Exception('Value must be a numeric string');
+            throw new Exception('Value must be a numeric string', Exception::CODE_DECIMAL_NON_NUMERIC_STRING, [
+                'value' => $value,
+            ]);
         }
 
         $this->value = $value;
@@ -32,7 +34,10 @@ final class Decimal extends TypeBase {
          */
         $unpacked = unpack('N1scale/C*', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary');
+            throw new Exception('Cannot unpack decimal binary data', Exception::CODE_DECIMAL_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'note' => 'expected >= 4 bytes (scale + varint)',
+            ]);
         }
 
         $varintLen = $length - 4;
@@ -63,7 +68,9 @@ final class Decimal extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid decimal value; expected string', Exception::CODE_DECIMAL_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);

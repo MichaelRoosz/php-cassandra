@@ -91,7 +91,10 @@ abstract class Result extends Response implements IteratorAggregate {
 
             $lastExecuteCallInfo = $previousResult->getNextExecuteCallInfo();
             if ($lastExecuteCallInfo === null) {
-                throw new Exception('prepared statement not found');
+                throw new Exception('Prepared statement context not found in previous result', Exception::RES_PREPARED_CONTEXT_NOT_FOUND, [
+                    'operation' => 'Result::setPreviousResult',
+                    'previous_result_class' => get_class($previousResult),
+                ]);
             }
 
             $resultMetadataId = $previousMetadata->newMetadataId ?? $lastExecuteCallInfo->resultMetadataId ?? null;
@@ -114,7 +117,10 @@ abstract class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Response\Exception
      */
     protected function getMetadata(): Metadata {
-        throw new Exception('Result metadata for kind ' . $this->kind->name . ' is not available');
+        throw new Exception('Result metadata is not available for this result kind', Exception::RES_METADATA_NOT_AVAILABLE, [
+            'operation' => 'Result::getMetadata',
+            'result_kind' => $this->kind->name,
+        ]);
     }
 
     protected function onPreviousResultUpdated(): void {
@@ -130,7 +136,8 @@ abstract class Result extends Response implements IteratorAggregate {
         try {
             return ResultKind::from($kindInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid result kind: ' . $kindInt, 0, [
+            throw new Exception('Invalid result kind value', Exception::RES_INVALID_KIND_VALUE, [
+                'operation' => 'Result::readKind',
                 'result_kind' => $kindInt,
             ]);
         }

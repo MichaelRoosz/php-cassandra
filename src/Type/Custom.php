@@ -28,11 +28,13 @@ class Custom extends TypeBase {
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required');
+            throw new Exception('typeInfo is required', Exception::CODE_CUSTOM_TYPEINFO_REQUIRED);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected');
+            throw new Exception('Invalid type info, CustomInfo expected', Exception::CODE_CUSTOM_INVALID_TYPEINFO, [
+                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+            ]);
         }
 
         /**
@@ -40,7 +42,10 @@ class Custom extends TypeBase {
          */
         $unpacked = unpack('n', substr($binary, 0, 2));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack custom type binary header', Exception::CODE_CUSTOM_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_header_length' => 2,
+            ]);
         }
 
         $length = $unpacked[1];
@@ -55,15 +60,19 @@ class Custom extends TypeBase {
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required');
+            throw new Exception('typeInfo is required', Exception::CODE_CUSTOM_TYPEINFO_REQUIRED);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected');
+            throw new Exception('Invalid type info, CustomInfo expected', Exception::CODE_CUSTOM_INVALID_TYPEINFO, [
+                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+            ]);
         }
 
         if (!is_string($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid custom value; expected string', Exception::CODE_CUSTOM_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value, $typeInfo->javaClassName);

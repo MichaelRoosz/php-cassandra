@@ -57,7 +57,9 @@ final class Time extends Bigint {
         }
 
         if (!is_int($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid time value; expected nanoseconds as int', Exception::CODE_TIME_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+            ]);
         }
 
         return new static($value);
@@ -83,10 +85,17 @@ final class Time extends Bigint {
 
                 return new static($totalNanoseconds);
             } else {
-                throw new Exception('Invalid time format');
+                throw new Exception('Invalid time format; expected HH:MM:SS(.fffffffff) within 24h range', Exception::CODE_TIME_INVALID_FORMAT, [
+                    'value' => $value,
+                    'hours' => $hours,
+                    'minutes' => $minutes,
+                    'seconds' => $seconds,
+                ]);
             }
         } else {
-            throw new Exception('Invalid time string');
+            throw new Exception('Invalid time string; expected HH:MM:SS(.fffffffff)', Exception::CODE_TIME_INVALID_STRING, [
+                'value' => $value,
+            ]);
         }
     }
 
@@ -129,7 +138,9 @@ final class Time extends Bigint {
 
         $interval = DateInterval::createFromDateString($duration);
         if ($interval === false) {
-            throw new Exception('Cannot convert Time to DateInterval');
+            throw new Exception('Cannot convert Time to DateInterval', Exception::CODE_TIME_TO_DATEINTERVAL_FAILED, [
+                'nanoseconds' => $this->value,
+            ]);
         }
 
         return $interval;
@@ -161,7 +172,11 @@ final class Time extends Bigint {
     #[\Override]
     protected function validateValue(): void {
         if ($this->value > self::VALUE_MAX || $this->value < 0) {
-            throw new Exception('Value "' . $this->value . '" is outside of possible range');
+            throw new Exception('Time value is outside of supported range', Exception::CODE_TIME_OUT_OF_RANGE, [
+                'value' => $this->value,
+                'min' => 0,
+                'max' => self::VALUE_MAX,
+            ]);
         }
     }
 }

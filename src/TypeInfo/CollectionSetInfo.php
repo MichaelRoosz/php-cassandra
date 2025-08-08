@@ -25,15 +25,38 @@ final class CollectionSetInfo extends TypeInfo {
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
-            throw new Exception('Type definition must have a type property');
+            throw new Exception(
+                "CollectionSet type definition is missing required 'type' property",
+                Exception::COLLECTION_SET_MISSING_TYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'valueType'],
+                ]
+            );
         }
 
         if ($typeDefinition['type'] !== Type::COLLECTION_SET) {
-            throw new Exception('Invalid type definition, must be a CollectionSet');
+            throw new Exception(
+                "Invalid type definition for CollectionSet: 'type' must be Type::COLLECTION_SET",
+                Exception::COLLECTION_SET_INVALID_TYPE,
+                [
+                    'actual_type_value' => $typeDefinition['type']->value,
+                    'actual_type_name' => $typeDefinition['type']->name,
+                    'expected_type_value' => Type::COLLECTION_SET->value,
+                    'expected_type_name' => Type::COLLECTION_SET->name,
+                ]
+            );
         }
 
         if (!isset($typeDefinition['valueType'])) {
-            throw new Exception('Type definition must have a valueType property');
+            throw new Exception(
+                "CollectionSet type definition is missing required 'valueType' property",
+                Exception::COLLECTION_SET_MISSING_VALUETYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'valueType'],
+                ]
+            );
         }
 
         $valueType = TypeFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);

@@ -43,7 +43,11 @@ final class VoidResult extends Result {
      */
     public function getVoidData(): VoidData {
         if ($this->kind !== ResultKind::VOID) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name);
+            throw new Exception('Unexpected result kind: ' . $this->kind->name, Exception::VOID_UNEXPECTED_KIND, [
+                'operation' => 'VoidResult::getVoidData',
+                'expected' => ResultKind::VOID->name,
+                'received' => $this->kind->name,
+            ]);
         }
 
         $this->stream->offset(4);

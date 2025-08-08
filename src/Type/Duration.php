@@ -43,7 +43,9 @@ final class Duration extends TypeBase {
          */
         $values = unpack('C*', $binary);
         if ($values === false) {
-            throw new Exception('Cannot unpack duration.');
+            throw new Exception('Cannot unpack duration binary data', Exception::CODE_DURATION_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+            ]);
         }
 
         $values = array_values($values);
@@ -96,19 +98,31 @@ final class Duration extends TypeBase {
         self::require64Bit();
 
         if (!is_array($value)) {
-            throw new Exception('Invalid duration value');
+            throw new Exception('Invalid duration value; expected array', Exception::CODE_DURATION_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+                'expected_format' => ['months' => 'int', 'days' => 'int', 'nanoseconds' => 'int'],
+            ]);
         }
 
         if (!isset($value['months']) || !is_int($value['months'])) {
-            throw new Exception('Invalid duration value - value "months" is not set or has an invalid data type (must be int)');
+            throw new Exception('Invalid duration value - "months" must be provided as int', Exception::CODE_DURATION_MONTHS_INVALID, [
+                'provided' => $value['months'] ?? null,
+                'provided_type' => isset($value['months']) ? gettype($value['months']) : 'missing',
+            ]);
         }
 
         if (!isset($value['days']) || !is_int($value['days'])) {
-            throw new Exception('Invalid duration value - value "days" is not set or has an invalid data type (must be int)');
+            throw new Exception('Invalid duration value - "days" must be provided as int', Exception::CODE_DURATION_DAYS_INVALID, [
+                'provided' => $value['days'] ?? null,
+                'provided_type' => isset($value['days']) ? gettype($value['days']) : 'missing',
+            ]);
         }
 
         if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
-            throw new Exception('Invalid duration value - value "nanoseconds" is not set or has an invalid data type (must be int)');
+            throw new Exception('Invalid duration value - "nanoseconds" must be provided as int', Exception::CODE_DURATION_NANOSECONDS_INVALID, [
+                'provided' => $value['nanoseconds'] ?? null,
+                'provided_type' => isset($value['nanoseconds']) ? gettype($value['nanoseconds']) : 'missing',
+            ]);
         }
 
         return new static([
@@ -284,7 +298,10 @@ final class Duration extends TypeBase {
 
         $interval = DateInterval::createFromDateString($duration);
         if ($interval === false) {
-            throw new Exception('Cannot convert Time to DateInterval');
+            throw new Exception('Cannot convert Duration to DateInterval', Exception::CODE_DURATION_TO_DATEINTERVAL_FAILED, [
+                'duration_string' => $duration,
+                'value' => $this->value,
+            ]);
         }
 
         return $interval;
@@ -396,7 +413,11 @@ final class Duration extends TypeBase {
         $totalBytes = $extraBytes + 1;
 
         if ($pos + $totalBytes > count($vint)) {
-            throw new Exception('Invalid data value');
+            throw new Exception('Invalid duration VInt data', Exception::CODE_DURATION_VINT_INVALID_DATA, [
+                'position' => $pos,
+                'required_bytes' => $totalBytes,
+                'available_bytes' => count($vint),
+            ]);
         }
 
         $decodedValue = ($byte & 0x7F) >> $extraBytes;
@@ -451,7 +472,10 @@ final class Duration extends TypeBase {
      */
     protected static function require64Bit(): void {
         if (PHP_INT_SIZE < 8) {
-            throw new Exception('The Duration data type requires a 64-bit system');
+            throw new Exception('The Duration data type requires a 64-bit system', Exception::CODE_DURATION_64BIT_REQUIRED, [
+                'php_int_size_bytes' => PHP_INT_SIZE,
+                'php_int_size_bits' => PHP_INT_SIZE * 8,
+            ]);
         }
     }
 
@@ -465,27 +489,44 @@ final class Duration extends TypeBase {
 
         // validate months
         if (!isset($value['months']) || !is_int($value['months'])) {
-            throw new Exception('Invalid duration value - value "months" is not set or has an invalid data type (must be int)');
+            throw new Exception('Invalid duration value - "months" must be provided as int', Exception::CODE_DURATION_MONTHS_INVALID, [
+                'provided' => $value['months'] ?? null,
+                'provided_type' => isset($value['months']) ? gettype($value['months']) : 'missing',
+            ]);
         }
         $months = $value['months'];
 
         if ($months < self::INT32_MIN || $months > self::INT32_MAX) {
-            throw new Exception('Invalid duration value - value "months" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
+            throw new Exception('Invalid duration value - "months" is out of int32 range', Exception::CODE_DURATION_MONTHS_OUT_OF_RANGE, [
+                'value' => $months,
+                'min' => self::INT32_MIN,
+                'max' => self::INT32_MAX,
+            ]);
         }
 
         // validate days
         if (!isset($value['days']) || !is_int($value['days'])) {
-            throw new Exception('Invalid duration value - value "days" is not set or has an invalid data type (must be int)');
+            throw new Exception('Invalid duration value - "days" must be provided as int', Exception::CODE_DURATION_DAYS_INVALID, [
+                'provided' => $value['days'] ?? null,
+                'provided_type' => isset($value['days']) ? gettype($value['days']) : 'missing',
+            ]);
         }
         $days = $value['days'];
 
         if ($days < self::INT32_MIN || $days > self::INT32_MAX) {
-            throw new Exception('Invalid duration value - value "days" must be within the allowed range of ' . self::INT32_MIN . ' and ' . self::INT32_MAX);
+            throw new Exception('Invalid duration value - "days" is out of int32 range', Exception::CODE_DURATION_DAYS_OUT_OF_RANGE, [
+                'value' => $days,
+                'min' => self::INT32_MIN,
+                'max' => self::INT32_MAX,
+            ]);
         }
 
         // validate nanoseconds
         if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
-            throw new Exception('Invalid duration value - value "nanoseconds" is not set or has an invalid data type (must be int)');
+            throw new Exception('Invalid duration value - "nanoseconds" must be provided as int', Exception::CODE_DURATION_NANOSECONDS_INVALID, [
+                'provided' => $value['nanoseconds'] ?? null,
+                'provided_type' => isset($value['nanoseconds']) ? gettype($value['nanoseconds']) : 'missing',
+            ]);
         }
         $nanoseconds = $value['nanoseconds'];
 
@@ -493,7 +534,11 @@ final class Duration extends TypeBase {
         if (!($months <= 0 && $days <= 0 && $nanoseconds <= 0)
             && !($months >= 0 && $days >= 0 && $nanoseconds >= 0)
         ) {
-            throw new Exception('Invalid duration value - days, months and nanoseconds must be either all positive or all negative');
+            throw new Exception('Invalid duration value - sign mismatch across months, days and nanoseconds', Exception::CODE_DURATION_SIGN_MISMATCH, [
+                'months' => $months,
+                'days' => $days,
+                'nanoseconds' => $nanoseconds,
+            ]);
         }
 
         return [

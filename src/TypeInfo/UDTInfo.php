@@ -33,20 +33,50 @@ final class UDTInfo extends TypeInfo {
     public static function fromTypeDefinition(array $typeDefinition): self {
 
         if (!isset($typeDefinition['type'])) {
-            throw new Exception('UDT type definition must have a type property');
+            throw new Exception(
+                "UDT type definition is missing required 'type' property",
+                Exception::UDT_MISSING_TYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'valueTypes'],
+                ]
+            );
         }
 
         if ($typeDefinition['type'] !== Type::UDT) {
-            throw new Exception('Invalid type definition, must be a UDT');
+            throw new Exception(
+                "Invalid type definition for UDT: 'type' must be Type::UDT",
+                Exception::UDT_INVALID_TYPE,
+                [
+                    'actual_type_value' => $typeDefinition['type']->value,
+                    'actual_type_name' => $typeDefinition['type']->name,
+                    'expected_type_value' => Type::UDT->value,
+                    'expected_type_name' => Type::UDT->name,
+                ]
+            );
         }
 
         if (!isset($typeDefinition['valueTypes'])) {
-            throw new Exception('UDT type definition must have a valueTypes property');
+            throw new Exception(
+                "UDT type definition is missing required 'valueTypes' property",
+                Exception::UDT_MISSING_VALUETYPES,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'valueTypes'],
+                ]
+            );
         }
 
         /** @psalm-suppress DocblockTypeContradiction */
         if (!is_array($typeDefinition['valueTypes'])) {
-            throw new Exception('Invalid type definition, valueTypes must be an array');
+            throw new Exception(
+                "Invalid type definition for UDT: 'valueTypes' must be an array",
+                Exception::UDT_VALUETYPES_NOT_ARRAY,
+                [
+                    'valueTypes_type' => gettype($typeDefinition['valueTypes']),
+                    'expected_type' => 'array',
+                ]
+            );
         }
 
         $valueTypes = [];

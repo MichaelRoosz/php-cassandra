@@ -73,7 +73,17 @@ final class Lz4Decompressor {
                 continue;
             }
 
-            throw new Exception('invalid lz4 frame data - invalid magic number');
+            throw new Exception(
+                'invalid lz4 frame data - invalid magic number',
+                Exception::CODE_INVALID_MAGIC,
+                [
+                    'stage' => 'read_magic',
+                    'magicBytes' => $magic,
+                    'magicBytesHex' => sprintf('0x%08X', $magic),
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                ]
+            );
         } while ($this->inputOffset < $this->inputLength);
 
         return $this->output;
@@ -110,7 +120,17 @@ final class Lz4Decompressor {
             if ($nLiterals === 0xF) {
                 do {
                     if ($inputOffset >= $inputLength) {
-                        throw new Exception('invalid lz4 block data - input overflow while reading number of literals');
+                        throw new Exception(
+                            'invalid lz4 block data - input overflow while reading number of literals',
+                            Exception::CODE_INPUT_OVERFLOW,
+                            [
+                                'stage' => 'read_literals_length',
+                                'inputOffset' => $inputOffset,
+                                'inputLength' => $inputLength,
+                                'token' => $token,
+                                'nLiteralsPartial' => $nLiterals,
+                            ]
+                        );
                     }
                     $nLiterals += $summand = ord($this->input[$inputOffset++]);
                 } while ($summand === 0xFF);
@@ -118,7 +138,18 @@ final class Lz4Decompressor {
 
             if ($nLiterals > 0) {
                 if ($inputOffset + $nLiterals > $inputLength) {
-                    throw new Exception('invalid lz4 block data - input overflow while reading literals');
+                    throw new Exception(
+                        'invalid lz4 block data - input overflow while reading literals',
+                        Exception::CODE_INPUT_OVERFLOW,
+                        [
+                            'stage' => 'read_literals',
+                            'inputOffset' => $inputOffset,
+                            'inputLength' => $inputLength,
+                            'requiredBytes' => $nLiterals,
+                            'token' => $token,
+                            'nLiterals' => $nLiterals,
+                        ]
+                    );
                 }
                 $this->output .= substr($this->input, $inputOffset, $nLiterals);
                 $this->outputLength += $nLiterals;
@@ -130,28 +161,73 @@ final class Lz4Decompressor {
             }
 
             if ($inputOffset + 2 > $inputLength) {
-                throw new Exception('invalid lz4 block data - input overflow while reading offset');
+                throw new Exception(
+                    'invalid lz4 block data - input overflow while reading offset',
+                    Exception::CODE_INPUT_OVERFLOW,
+                    [
+                        'stage' => 'read_offset',
+                        'inputOffset' => $inputOffset,
+                        'inputLength' => $inputLength,
+                        'requiredBytes' => 2,
+                        'outputLength' => $this->outputLength,
+                    ]
+                );
             }
 
             $offset = ord($this->input[$inputOffset++]) | (ord($this->input[$inputOffset++]) << 8);
             if ($offset < 1) {
-                throw new Exception('invalid lz4 block data - illegal offset value');
+                throw new Exception(
+                    'invalid lz4 block data - illegal offset value',
+                    Exception::CODE_ILLEGAL_VALUE,
+                    [
+                        'stage' => 'validate_offset',
+                        'offset' => $offset,
+                        'outputLength' => $this->outputLength,
+                    ]
+                );
             }
 
             $matchStart = $this->outputLength - $offset;
             if ($matchStart < 0) {
-                throw new Exception('invalid lz4 block data - output underflow for given match start');
+                throw new Exception(
+                    'invalid lz4 block data - output underflow for given match start',
+                    Exception::CODE_OUTPUT_UNDERFLOW,
+                    [
+                        'stage' => 'compute_match_start',
+                        'matchStart' => $matchStart,
+                        'offset' => $offset,
+                        'outputLength' => $this->outputLength,
+                    ]
+                );
             }
 
             if ($matchStart > $this->outputLength) {
-                throw new Exception('invalid lz4 block data - output overflow for given match');
+                throw new Exception(
+                    'invalid lz4 block data - output overflow for given match',
+                    Exception::CODE_OUTPUT_OVERFLOW,
+                    [
+                        'stage' => 'compute_match_start',
+                        'matchStart' => $matchStart,
+                        'outputLength' => $this->outputLength,
+                    ]
+                );
             }
 
             $matchLength = $token & 0xF;
             if ($matchLength === 0xF) {
                 do {
                     if ($inputOffset >= $inputLength) {
-                        throw new Exception('invalid lz4 block data - input overflow while reading match length');
+                        throw new Exception(
+                            'invalid lz4 block data - input overflow while reading match length',
+                            Exception::CODE_INPUT_OVERFLOW,
+                            [
+                                'stage' => 'read_match_length',
+                                'inputOffset' => $inputOffset,
+                                'inputLength' => $inputLength,
+                                'token' => $token,
+                                'matchLengthPartial' => $matchLength,
+                            ]
+                        );
                     }
                     $matchLength += $summand = ord($this->input[$inputOffset++]);
                 } while ($summand === 0xFF);
@@ -177,20 +253,46 @@ final class Lz4Decompressor {
         }
 
         if ($this->inputOffset + 4 > $this->inputLength) {
-            throw new Exception('invalid lz4 frame data - input overflow while reading block size');
+            throw new Exception(
+                'invalid lz4 frame data - input overflow while reading block size',
+                Exception::CODE_INPUT_OVERFLOW,
+                [
+                    'stage' => 'legacy_block_size',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'requiredBytes' => 4,
+                ]
+            );
         }
 
         /** @var false|array<int> $unpacked */
         $unpacked = unpack('V', $this->input, $this->inputOffset);
         if ($unpacked === false) {
-            throw new Exception('invalid lz4 frame data - cannot decode block size');
+            throw new Exception(
+                'invalid lz4 frame data - cannot decode block size',
+                Exception::CODE_DECODE_FAILURE,
+                [
+                    'stage' => 'legacy_block_size_unpack',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                ]
+            );
         }
         $blockSize = $unpacked[1];
         $this->inputOffset += 4;
 
         if ($blockSize > 0) {
             if ($this->inputOffset + $blockSize > $this->inputLength) {
-                throw new Exception('invalid lz4 frame data - input overflow while reading block data');
+                throw new Exception(
+                    'invalid lz4 frame data - input overflow while reading block data',
+                    Exception::CODE_INPUT_OVERFLOW,
+                    [
+                        'stage' => 'legacy_block_data',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                        'blockSize' => $blockSize,
+                    ]
+                );
             }
 
             $this->decompressBlockAtOffset($this->inputOffset, $this->inputOffset + $blockSize);
@@ -205,13 +307,30 @@ final class Lz4Decompressor {
      */
     protected function readMagicBytes(): int {
         if ($this->inputOffset + 4 > $this->inputLength) {
-            throw new Exception('invalid lz4 frame data - input overflow while reading magic number');
+            throw new Exception(
+                'invalid lz4 frame data - input overflow while reading magic number',
+                Exception::CODE_INPUT_OVERFLOW,
+                [
+                    'stage' => 'read_magic',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'requiredBytes' => 4,
+                ]
+            );
         }
 
         /** @var false|array<int> $unpacked */
         $unpacked = unpack('V', $this->input, $this->inputOffset);
         if ($unpacked === false) {
-            throw new Exception('invalid lz4 frame data - cannot decode magic number');
+            throw new Exception(
+                'invalid lz4 frame data - cannot decode magic number',
+                Exception::CODE_DECODE_FAILURE,
+                [
+                    'stage' => 'unpack_magic',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                ]
+            );
         }
 
         $this->inputOffset += 4;
@@ -228,19 +347,48 @@ final class Lz4Decompressor {
         }
 
         if ($this->inputOffset + 4 > $this->inputLength) {
-            throw new Exception('invalid lz4 frame data - input overflow while reading skipable frame size');
+            throw new Exception(
+                'invalid lz4 frame data - input overflow while reading skipable frame size',
+                Exception::CODE_INPUT_OVERFLOW,
+                [
+                    'stage' => 'skipable_frame_size',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'requiredBytes' => 4,
+                    'magicBytes' => $magicBytes,
+                    'magicBytesHex' => sprintf('0x%08X', $magicBytes),
+                ]
+            );
         }
 
         /** @var false|array<int> $unpacked */
         $unpacked = unpack('V', $this->input, $this->inputOffset);
         if ($unpacked === false) {
-            throw new Exception('invalid lz4 frame data - cannot decode skipable frame size');
+            throw new Exception(
+                'invalid lz4 frame data - cannot decode skipable frame size',
+                Exception::CODE_DECODE_FAILURE,
+                [
+                    'stage' => 'skipable_frame_size_unpack',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'magicBytes' => $magicBytes,
+                ]
+            );
         }
         $skipableFrameSize = $unpacked[1];
         $this->inputOffset += 4;
 
         if ($this->inputOffset + $skipableFrameSize > $this->inputLength) {
-            throw new Exception('invalid lz4 frame data - input overflow while reading skipable frame data');
+            throw new Exception(
+                'invalid lz4 frame data - input overflow while reading skipable frame data',
+                Exception::CODE_INPUT_OVERFLOW,
+                [
+                    'stage' => 'skipable_frame_data',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'skipableFrameSize' => $skipableFrameSize,
+                ]
+            );
         }
 
         $this->inputOffset += $skipableFrameSize;
@@ -253,13 +401,30 @@ final class Lz4Decompressor {
      */
     protected function readVersionOneBlock(int $flgBlockChecksum, bool $validateChecksums): bool {
         if ($this->inputOffset + 4 > $this->inputLength) {
-            throw new Exception('invalid lz4 frame data - input overflow while reading block size');
+            throw new Exception(
+                'invalid lz4 frame data - input overflow while reading block size',
+                Exception::CODE_INPUT_OVERFLOW,
+                [
+                    'stage' => 'v1_block_size',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'requiredBytes' => 4,
+                ]
+            );
         }
 
         /** @var false|array<int> $unpacked */
         $unpacked = unpack('V', $this->input, $this->inputOffset);
         if ($unpacked === false) {
-            throw new Exception('invalid lz4 frame data - cannot decode block size');
+            throw new Exception(
+                'invalid lz4 frame data - cannot decode block size',
+                Exception::CODE_DECODE_FAILURE,
+                [
+                    'stage' => 'v1_block_size_unpack',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                ]
+            );
         }
         $blockSizeRaw = $unpacked[1];
         $this->inputOffset += 4;
@@ -274,7 +439,17 @@ final class Lz4Decompressor {
 
         if ($blockSize > 0) {
             if ($this->inputOffset + $blockSize > $this->inputLength) {
-                throw new Exception('invalid lz4 frame data - input overflow while reading block data');
+                throw new Exception(
+                    'invalid lz4 frame data - input overflow while reading block data',
+                    Exception::CODE_INPUT_OVERFLOW,
+                    [
+                        'stage' => 'v1_block_data',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                        'blockSize' => $blockSize,
+                        'isUncompressed' => (bool) $isUncompressed,
+                    ]
+                );
             }
 
             if ($isUncompressed) {
@@ -289,14 +464,31 @@ final class Lz4Decompressor {
 
         if ($flgBlockChecksum) {
             if ($this->inputOffset + 4 > $this->inputLength) {
-                throw new Exception('invalid lz4 frame data - input overflow while reading block checksum');
+                throw new Exception(
+                    'invalid lz4 frame data - input overflow while reading block checksum',
+                    Exception::CODE_INPUT_OVERFLOW,
+                    [
+                        'stage' => 'v1_block_checksum',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                        'requiredBytes' => 4,
+                    ]
+                );
             }
 
             if ($validateChecksums) {
                 /** @var false|array<int> $unpacked */
                 $unpacked = unpack('V', $this->input, $this->inputOffset);
                 if ($unpacked === false) {
-                    throw new Exception('invalid lz4 frame data - cannot decode block checksum');
+                    throw new Exception(
+                        'invalid lz4 frame data - cannot decode block checksum',
+                        Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                        [
+                            'stage' => 'v1_block_checksum_unpack',
+                            'inputOffset' => $this->inputOffset,
+                            'inputLength' => $this->inputLength,
+                        ]
+                    );
                 }
                 $blockChecksum = $unpacked[1];
 
@@ -320,7 +512,16 @@ final class Lz4Decompressor {
         $headerStart = $this->inputOffset;
 
         if ($this->inputOffset + 2 > $this->inputLength) {
-            throw new Exception('invalid lz4 frame data - input overflow while reading header flg and bd');
+            throw new Exception(
+                'invalid lz4 frame data - input overflow while reading header flg and bd',
+                Exception::CODE_INPUT_OVERFLOW,
+                [
+                    'stage' => 'v1_header_flg_bd',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'requiredBytes' => 2,
+                ]
+            );
         }
         $flg = ord($this->input[$this->inputOffset++]);
 
@@ -336,25 +537,60 @@ final class Lz4Decompressor {
         //$flgBlockMaxSize = ($bd & 0x70) >> 4;
 
         if ($version !== 0x01) {
-            throw new Exception('invalid lz4 frame data - invalid version');
+            throw new Exception(
+                'invalid lz4 frame data - invalid version',
+                Exception::CODE_INVALID_VERSION,
+                [
+                    'stage' => 'v1_header_version',
+                    'version' => $version,
+                    'flg' => $flg,
+                ]
+            );
         }
 
         if ($flgContentSize) {
             if ($this->inputOffset + 8 > $this->inputLength) {
-                throw new Exception('invalid lz4 frame data - input overflow while reading content size');
+                throw new Exception(
+                    'invalid lz4 frame data - input overflow while reading content size',
+                    Exception::CODE_INPUT_OVERFLOW,
+                    [
+                        'stage' => 'v1_header_content_size',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                        'requiredBytes' => 8,
+                    ]
+                );
             }
             $this->inputOffset += 8;
         }
 
         if ($flgDictionaryId) {
             if ($this->inputOffset + 4 > $this->inputLength) {
-                throw new Exception('invalid lz4 frame data - input overflow while reading dictionary id');
+                throw new Exception(
+                    'invalid lz4 frame data - input overflow while reading dictionary id',
+                    Exception::CODE_INPUT_OVERFLOW,
+                    [
+                        'stage' => 'v1_header_dictionary_id',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                        'requiredBytes' => 4,
+                    ]
+                );
             }
             $this->inputOffset += 4;
         }
 
         if ($this->inputOffset + 1 > $this->inputLength) {
-            throw new Exception('invalid lz4 frame data - input overflow while reading header checksum');
+            throw new Exception(
+                'invalid lz4 frame data - input overflow while reading header checksum',
+                Exception::CODE_INPUT_OVERFLOW,
+                [
+                    'stage' => 'v1_header_checksum',
+                    'inputOffset' => $this->inputOffset,
+                    'inputLength' => $this->inputLength,
+                    'requiredBytes' => 1,
+                ]
+            );
         }
         $headerChecksum = ord($this->input[$this->inputOffset++]);
 
@@ -368,14 +604,31 @@ final class Lz4Decompressor {
 
         if ($flgContentChecksum) {
             if ($this->inputOffset + 4 > $this->inputLength) {
-                throw new Exception('invalid lz4 frame data - input overflow while reading content checksum');
+                throw new Exception(
+                    'invalid lz4 frame data - input overflow while reading content checksum',
+                    Exception::CODE_INPUT_OVERFLOW,
+                    [
+                        'stage' => 'v1_content_checksum',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                        'requiredBytes' => 4,
+                    ]
+                );
             }
 
             if ($validateChecksums) {
                 /** @var false|array<int> $unpacked */
                 $unpacked = unpack('V', $this->input, $this->inputOffset);
                 if ($unpacked === false) {
-                    throw new Exception('invalid lz4 frame data - cannot decode content checksum');
+                    throw new Exception(
+                        'invalid lz4 frame data - cannot decode content checksum',
+                        Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                        [
+                            'stage' => 'v1_content_checksum_unpack',
+                            'inputOffset' => $this->inputOffset,
+                            'inputLength' => $this->inputLength,
+                        ]
+                    );
                 }
                 $contentChecksum = $unpacked[1];
 
@@ -399,10 +652,30 @@ final class Lz4Decompressor {
         /** @var false|array<int> $unpacked */
         $unpacked = unpack('N', $currentChecksum);
         if ($unpacked === false) {
-            throw new Exception('invalid lz4 frame data - cannot decode ' . $type . ' checksum');
+            throw new Exception(
+                'invalid lz4 frame data - cannot decode ' . $type . ' checksum',
+                Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                [
+                    'stage' => 'checksum_unpack',
+                    'checksumType' => $type,
+                    'dataStart' => $dataStart,
+                    'dataLength' => $dataLength,
+                ]
+            );
         }
         if ($unpacked[1] !== $checksum) {
-            throw new Exception('invalid lz4 frame data - invalid ' . $type . ' checksum');
+            throw new Exception(
+                'invalid lz4 frame data - invalid ' . $type . ' checksum',
+                Exception::CODE_CHECKSUM_MISMATCH,
+                [
+                    'stage' => 'checksum_validate',
+                    'checksumType' => $type,
+                    'expected' => $checksum,
+                    'actual' => $unpacked[1],
+                    'dataStart' => $dataStart,
+                    'dataLength' => $dataLength,
+                ]
+            );
         }
     }
 
@@ -417,10 +690,28 @@ final class Lz4Decompressor {
         /** @var false|array<int> $unpacked */
         $unpacked = unpack('C4', $currentChecksum);
         if ($unpacked === false) {
-            throw new Exception('invalid lz4 frame data - cannot decode header checksum');
+            throw new Exception(
+                'invalid lz4 frame data - cannot decode header checksum',
+                Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                [
+                    'stage' => 'header_checksum_unpack',
+                    'headerStart' => $headerStart,
+                    'headerLength' => $headerLength,
+                ]
+            );
         }
         if ($unpacked[3] !== $checksum) {
-            throw new Exception('invalid lz4 frame data - invalid header checksum');
+            throw new Exception(
+                'invalid lz4 frame data - invalid header checksum',
+                Exception::CODE_CHECKSUM_MISMATCH,
+                [
+                    'stage' => 'header_checksum_validate',
+                    'expected' => $checksum,
+                    'actual' => $unpacked[3],
+                    'headerStart' => $headerStart,
+                    'headerLength' => $headerLength,
+                ]
+            );
         }
     }
 }

@@ -185,11 +185,17 @@ abstract class Request implements Frame, Stringable {
                 $flags |= QueryFlag::WITH_KEYSPACE->value;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
-                throw new Exception('Option "keyspace" not supported by server', 0, [
-                    'required_protocol' => 'v5',
-                    'actual_protocol' => $version,
-                    'keyspace' => $options->keyspace,
-                ]);
+                throw new Exception(
+                    message: 'Server protocol version does not support request option "keyspace"',
+                    code: Exception::UNSUPPORTED_OPTION_KEYSPACE,
+                    context: [
+                        'request' => 'QUERY',
+                        'option' => 'keyspace',
+                        'required_protocol' => 'v5',
+                        'actual_protocol' => $version,
+                        'keyspace' => $options->keyspace,
+                    ]
+                );
             }
         }
 
@@ -198,11 +204,17 @@ abstract class Request implements Frame, Stringable {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
-                throw new Exception('Option "now_in_seconds" not supported by server', 0, [
-                    'required_protocol' => 'v5',
-                    'actual_protocol' => $version,
-                    'now_in_seconds' => $options->nowInSeconds,
-                ]);
+                throw new Exception(
+                    message: 'Server protocol version does not support request option "now_in_seconds"',
+                    code: Exception::UNSUPPORTED_OPTION_NOW_IN_SECONDS,
+                    context: [
+                        'request' => 'QUERY',
+                        'option' => 'now_in_seconds',
+                        'required_protocol' => 'v5',
+                        'actual_protocol' => $version,
+                        'now_in_seconds' => $options->nowInSeconds,
+                    ]
+                );
             }
         }
 
@@ -261,9 +273,10 @@ abstract class Request implements Frame, Stringable {
 
                 default:
                     throw new Type\Exception(
-                        message: 'Unsupported value type',
-                        code: 0,
+                        message: 'Unsupported bound value type',
+                        code: Exception::VALUES_UNSUPPORTED_VALUE_TYPE,
                         context: [
+                            'stage' => 'values_encoding',
                             'php_type' => gettype($value),
                             'name' => $name,
                         ]
@@ -276,9 +289,11 @@ abstract class Request implements Frame, Stringable {
                 } else {
                     throw new Type\Exception(
                         message: 'Invalid values format: sequential array provided while names_for_values=true expects associative array',
-                        code: 0,
+                        code: Exception::VALUES_NAMES_FOR_VALUES_EXPECTS_ASSOCIATIVE,
                         context: [
+                            'stage' => 'values_encoding',
                             'names_for_values' => true,
+                            'provided_key_type' => gettype($name),
                         ]
                     );
                 }
@@ -288,9 +303,11 @@ abstract class Request implements Frame, Stringable {
                 */
                 throw new Type\Exception(
                     message: 'Invalid values format: associative array provided while names_for_values=false expects sequential array',
-                    code: 0,
+                    code: Exception::VALUES_NAMES_FOR_VALUES_EXPECTS_SEQUENTIAL,
                     context: [
+                        'stage' => 'values_encoding',
                         'names_for_values' => false,
+                        'provided_key_type' => 'string',
                     ]
                 );
             }

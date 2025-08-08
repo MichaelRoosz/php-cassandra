@@ -209,7 +209,17 @@ final class Native extends Calculator {
             $currentHexDigit = $hexString[$i];
             $decimalValue = strpos($hexChars, $currentHexDigit);
             if ($decimalValue === false) {
-                throw new Exception('Invalid value - not a hexadecimal string');
+                throw new Exception(
+                    'Invalid hexadecimal input: non-hex character encountered',
+                    Exception::CODE_INVALID_HEX_STRING,
+                    [
+                        'method' => __METHOD__,
+                        'position' => $i,
+                        'character' => $currentHexDigit,
+                        'input_length' => strlen($hexString),
+                        'input_preview' => substr($hexString, max(0, $i - 8), 16),
+                    ]
+                );
             }
 
             // Multiply existing decimal number by 16 and add current decimal value

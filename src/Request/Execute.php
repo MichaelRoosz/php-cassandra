@@ -55,10 +55,14 @@ final class Execute extends Request {
             !($previousResult instanceof PreparedResult)
             && !($previousResult instanceof RowsResult)
         ) {
-            throw new Exception('received invalid previous result', 0, [
-                'expected' => [PreparedResult::class, RowsResult::class],
-                'received' => get_class($previousResult),
-            ]);
+            throw new Exception(
+                message: 'Execute request received an invalid previous result instance',
+                code: Exception::EXECUTE_INVALID_PREVIOUS_RESULT,
+                context: [
+                    'expected' => [PreparedResult::class, RowsResult::class],
+                    'received' => get_class($previousResult),
+                ]
+            );
         }
 
         if ($previousResult instanceof PreparedResult) {
@@ -71,7 +75,14 @@ final class Execute extends Request {
         } else {
             $executeCallInfo = $previousResult->getNextExecuteCallInfo();
             if ($executeCallInfo === null) {
-                throw new Exception('prepared statement not found');
+                throw new Exception(
+                    message: 'Prepared statement not found for resumption of execution',
+                    code: Exception::EXECUTE_PREPARED_STATEMENT_NOT_FOUND,
+                    context: [
+                        'previous_result_class' => get_class($previousResult),
+                        'hint' => 'Ensure the previous SELECT included metadata required for paging',
+                    ]
+                );
             }
         }
 
@@ -109,7 +120,14 @@ final class Execute extends Request {
 
         if ($this->version >= 5) {
             if ($this->resultMetadataId === null) {
-                throw new Exception('missing result metadata id');
+                throw new Exception(
+                    message: 'Missing result metadata id for protocol v5 execute request',
+                    code: Exception::EXECUTE_MISSING_RESULT_METADATA_ID,
+                    context: [
+                        'protocol_version' => $this->version,
+                        'query_id' => $this->queryId,
+                    ]
+                );
             }
 
             $body .= pack('n', strlen($this->resultMetadataId)) . $this->resultMetadataId;

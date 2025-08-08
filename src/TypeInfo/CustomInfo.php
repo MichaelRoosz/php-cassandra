@@ -23,20 +23,50 @@ final class CustomInfo extends TypeInfo {
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
-            throw new Exception('Custom type definition must have a type property');
+            throw new Exception(
+                "Custom type definition is missing required 'type' property",
+                Exception::CUSTOM_MISSING_TYPE,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'javaClassName'],
+                ]
+            );
         }
 
         if ($typeDefinition['type'] !== Type::CUSTOM) {
-            throw new Exception('Invalid type definition, must be a Custom');
+            throw new Exception(
+                "Invalid type definition for Custom: 'type' must be Type::CUSTOM",
+                Exception::CUSTOM_INVALID_TYPE,
+                [
+                    'actual_type_value' => $typeDefinition['type']->value,
+                    'actual_type_name' => $typeDefinition['type']->name,
+                    'expected_type_value' => Type::CUSTOM->value,
+                    'expected_type_name' => Type::CUSTOM->name,
+                ]
+            );
         }
 
         if (!isset($typeDefinition['javaClassName'])) {
-            throw new Exception('Type definition must have a javaClassName property');
+            throw new Exception(
+                "Custom type definition is missing required 'javaClassName' property",
+                Exception::CUSTOM_MISSING_JAVA_CLASS,
+                [
+                    'provided_keys' => array_keys($typeDefinition),
+                    'required_keys' => ['type', 'javaClassName'],
+                ]
+            );
         }
 
         /** @psalm-suppress DocblockTypeContradiction */
         if (!is_string($typeDefinition['javaClassName'])) {
-            throw new Exception('Invalid type definition, javaClassName must be a string');
+            throw new Exception(
+                'Invalid type definition for Custom: javaClassName must be a string',
+                Exception::CUSTOM_JAVA_CLASS_NOT_STRING,
+                [
+                    'javaClassName_type' => gettype($typeDefinition['javaClassName']),
+                    'expected_type' => 'string',
+                ]
+            );
         }
 
         $javaClassName = $typeDefinition['javaClassName'];

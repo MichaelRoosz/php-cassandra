@@ -108,11 +108,17 @@ final class Batch extends Request {
                 $flags |= QueryFlag::WITH_KEYSPACE->value;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
-                throw new Exception('Option "keyspace" not supported by server', 0, [
-                    'required_protocol' => 'v5',
-                    'actual_protocol' => $version,
-                    'keyspace' => $options->keyspace,
-                ]);
+                throw new Exception(
+                    message: 'Server protocol version does not support request option "keyspace"',
+                    code: Exception::UNSUPPORTED_OPTION_KEYSPACE,
+                    context: [
+                        'request' => 'BATCH',
+                        'option' => 'keyspace',
+                        'required_protocol' => 'v5',
+                        'actual_protocol' => $version,
+                        'keyspace' => $options->keyspace,
+                    ]
+                );
             }
         }
 
@@ -121,11 +127,17 @@ final class Batch extends Request {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
-                throw new Exception('Option "now_in_seconds" not supported by server', 0, [
-                    'required_protocol' => 'v5',
-                    'actual_protocol' => $version,
-                    'now_in_seconds' => $options->nowInSeconds,
-                ]);
+                throw new Exception(
+                    message: 'Server protocol version does not support request option "now_in_seconds"',
+                    code: Exception::UNSUPPORTED_OPTION_NOW_IN_SECONDS,
+                    context: [
+                        'request' => 'BATCH',
+                        'option' => 'now_in_seconds',
+                        'required_protocol' => 'v5',
+                        'actual_protocol' => $version,
+                        'now_in_seconds' => $options->nowInSeconds,
+                    ]
+                );
             }
         }
 

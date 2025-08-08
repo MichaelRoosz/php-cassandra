@@ -17,7 +17,11 @@ class Integer extends TypeBase {
      */
     final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Value "' . $value . '" is outside of possible range');
+            throw new Exception('Integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                'value' => $value,
+                'min' => self::VALUE_MIN,
+                'max' => self::VALUE_MAX,
+            ]);
         }
 
         $this->value = $value;
@@ -35,7 +39,10 @@ class Integer extends TypeBase {
          */
         $unpacked = unpack('N', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack binary.');
+            throw new Exception('Cannot unpack integer binary data', Exception::CODE_INTEGER_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 4,
+            ]);
         }
 
         return new static($unpacked[1] << $bits >> $bits);
@@ -49,7 +56,10 @@ class Integer extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_int($value)) {
-            throw new Exception('Invalid value');
+            throw new Exception('Invalid integer value; expected int', Exception::CODE_INTEGER_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+                'range' => [self::VALUE_MIN, self::VALUE_MAX],
+            ]);
         }
 
         return new static($value);
