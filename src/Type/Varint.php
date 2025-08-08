@@ -84,7 +84,7 @@ final class Varint extends TypeBase {
                 Exception::CODE_VARINT_OUT_OF_PHP_INT_RANGE,
                 [
                     'php_int_size_bits' => PHP_INT_SIZE * 8,
-                    'value' => (string) $this->value,
+                    'value' => $this->value,
                 ]
             );
         }

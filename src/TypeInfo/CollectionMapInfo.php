@@ -41,12 +41,6 @@ final class CollectionMapInfo extends TypeInfo {
             throw new Exception(
                 "Invalid type definition for CollectionMap: 'type' must be Type::COLLECTION_MAP",
                 Exception::COLLECTION_MAP_INVALID_TYPE,
-                [
-                    'actual_type_value' => $typeDefinition['type']->value,
-                    'actual_type_name' => $typeDefinition['type']->name,
-                    'expected_type_value' => Type::COLLECTION_MAP->value,
-                    'expected_type_name' => Type::COLLECTION_MAP->name,
-                ]
             );
         }
 

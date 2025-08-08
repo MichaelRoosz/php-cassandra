@@ -47,12 +47,6 @@ final class UDTInfo extends TypeInfo {
             throw new Exception(
                 "Invalid type definition for UDT: 'type' must be Type::UDT",
                 Exception::UDT_INVALID_TYPE,
-                [
-                    'actual_type_value' => $typeDefinition['type']->value,
-                    'actual_type_name' => $typeDefinition['type']->name,
-                    'expected_type_value' => Type::UDT->value,
-                    'expected_type_name' => Type::UDT->name,
-                ]
             );
         }
 

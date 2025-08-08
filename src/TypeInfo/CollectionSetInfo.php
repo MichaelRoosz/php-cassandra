@@ -39,12 +39,6 @@ final class CollectionSetInfo extends TypeInfo {
             throw new Exception(
                 "Invalid type definition for CollectionSet: 'type' must be Type::COLLECTION_SET",
                 Exception::COLLECTION_SET_INVALID_TYPE,
-                [
-                    'actual_type_value' => $typeDefinition['type']->value,
-                    'actual_type_name' => $typeDefinition['type']->name,
-                    'expected_type_value' => Type::COLLECTION_SET->value,
-                    'expected_type_name' => Type::COLLECTION_SET->name,
-                ]
             );
         }
 

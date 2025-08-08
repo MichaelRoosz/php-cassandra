@@ -53,7 +53,7 @@ final class Tuple extends TypeBase {
 
         if (!$typeInfo instanceof TupleInfo) {
             throw new Exception('Invalid type info, TupleInfo expected', Exception::CODE_TUPLE_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 
@@ -80,7 +80,7 @@ final class Tuple extends TypeBase {
 
         if (!$typeInfo instanceof TupleInfo) {
             throw new Exception('Invalid type info, TupleInfo expected', Exception::CODE_TUPLE_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 

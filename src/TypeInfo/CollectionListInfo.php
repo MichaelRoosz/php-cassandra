@@ -39,12 +39,6 @@ final class CollectionListInfo extends TypeInfo {
             throw new Exception(
                 "Invalid type definition for CollectionList: 'type' must be Type::COLLECTION_LIST",
                 Exception::COLLECTION_LIST_INVALID_TYPE,
-                [
-                    'actual_type_value' => $typeDefinition['type']->value,
-                    'actual_type_name' => $typeDefinition['type']->name,
-                    'expected_type_value' => Type::COLLECTION_LIST->value,
-                    'expected_type_name' => Type::COLLECTION_LIST->name,
-                ]
             );
         }
 

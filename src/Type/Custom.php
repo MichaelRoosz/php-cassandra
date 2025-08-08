@@ -33,7 +33,7 @@ class Custom extends TypeBase {
 
         if (!$typeInfo instanceof CustomInfo) {
             throw new Exception('Invalid type info, CustomInfo expected', Exception::CODE_CUSTOM_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 
@@ -65,7 +65,7 @@ class Custom extends TypeBase {
 
         if (!$typeInfo instanceof CustomInfo) {
             throw new Exception('Invalid type info, CustomInfo expected', Exception::CODE_CUSTOM_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 

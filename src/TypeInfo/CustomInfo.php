@@ -37,12 +37,6 @@ final class CustomInfo extends TypeInfo {
             throw new Exception(
                 "Invalid type definition for Custom: 'type' must be Type::CUSTOM",
                 Exception::CUSTOM_INVALID_TYPE,
-                [
-                    'actual_type_value' => $typeDefinition['type']->value,
-                    'actual_type_name' => $typeDefinition['type']->name,
-                    'expected_type_value' => Type::CUSTOM->value,
-                    'expected_type_name' => Type::CUSTOM->name,
-                ]
             );
         }
 

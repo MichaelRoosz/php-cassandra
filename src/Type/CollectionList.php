@@ -55,7 +55,7 @@ final class CollectionList extends TypeBase {
 
         if (!$typeInfo instanceof CollectionListInfo) {
             throw new Exception('Invalid type info, CollectionListInfo expected', Exception::CODE_COLLECTION_LIST_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 
@@ -82,7 +82,7 @@ final class CollectionList extends TypeBase {
 
         if (!$typeInfo instanceof CollectionListInfo) {
             throw new Exception('Invalid type info, CollectionListInfo expected', Exception::CODE_COLLECTION_LIST_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 

@@ -43,12 +43,6 @@ final class TupleInfo extends TypeInfo {
             throw new Exception(
                 "Invalid type definition for Tuple: 'type' must be Type::TUPLE",
                 Exception::TUPLE_INVALID_TYPE,
-                [
-                    'actual_type_value' => $typeDefinition['type']->value,
-                    'actual_type_name' => $typeDefinition['type']->name,
-                    'expected_type_value' => Type::TUPLE->value,
-                    'expected_type_name' => Type::TUPLE->name,
-                ]
             );
         }
 

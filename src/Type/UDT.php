@@ -53,7 +53,7 @@ final class UDT extends TypeBase {
 
         if (!$typeInfo instanceof UDTInfo) {
             throw new Exception('Invalid type info, UDTInfo expected', Exception::CODE_UDT_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 
@@ -80,7 +80,7 @@ final class UDT extends TypeBase {
 
         if (!$typeInfo instanceof UDTInfo) {
             throw new Exception('Invalid type info, UDTInfo expected', Exception::CODE_UDT_INVALID_TYPEINFO, [
-                'given_type' => is_object($typeInfo) ? get_class($typeInfo) : gettype($typeInfo),
+                'given_type' => get_class($typeInfo),
             ]);
         }
 
