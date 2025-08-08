@@ -126,19 +126,23 @@ final class Connection {
             return true;
         }
 
-        $this->connectToNode();
+        $this->selectNode();
 
         if ($this->node === null) {
-            throw new Exception('not connected');
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.');
         }
 
         $node = $this->node;
 
         $response = $this->syncRequest(new Request\Options());
         if (!($response instanceof Response\Supported)) {
+            $nodeConfig = $this->node->getConfig();
+
             throw new Exception('Connection options exchange failed, received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Supported::class,
                 'received' => get_class($response),
+                'host' => $nodeConfig->host,
+                'port' => $nodeConfig->port,
             ]);
         }
 
@@ -150,7 +154,11 @@ final class Connection {
             $nodeConfig = $node->getConfig();
 
             if (!$nodeConfig->username || !$nodeConfig->password) {
-                throw new Exception('Username and password must not be empty.');
+                throw new Exception('Username and password must not be empty.', 0, [
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
+                    'auth_required' => true,
+                ]);
             }
 
             if ($this->version >= 5) {
@@ -162,7 +170,11 @@ final class Connection {
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
             if (!($authResult instanceof Response\AuthSuccess)) {
-                throw new Exception('Authentication failed.');
+                throw new Exception('Authentication failed.', 0, [
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
+                    'username' => $nodeConfig->username,
+                ]);
             }
         } elseif ($response instanceof Response\Ready) {
             if ($this->version >= 5) {
@@ -172,7 +184,12 @@ final class Connection {
                 $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
         } else {
-            throw new Exception('Connection startup failed.');
+            $nodeConfig = $node->getConfig();
+
+            throw new Exception('Connection startup failed.', 0, [
+                'host' => $nodeConfig->host,
+                'port' => $nodeConfig->port,
+            ]);
         }
 
         if ($this->keyspace) {
@@ -353,7 +370,7 @@ final class Connection {
         }
 
         if ($this->node === null) {
-            throw new Exception('not connected');
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.');
         }
 
         $request->setVersion($this->version);
@@ -363,7 +380,7 @@ final class Connection {
         $response = $this->handleResponse($request, $response);
 
         if ($response === null) {
-            throw new Exception('received unexpected null response');
+            throw new Exception('Received unexpected null response from server.');
         }
 
         if ($response instanceof Response\Error) {
@@ -400,7 +417,14 @@ final class Connection {
             $compressionAlgo = strtolower($this->options['COMPRESSION']);
 
             if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
-                throw new Exception('Compression "' . $compressionAlgo . '" not supported by server.');
+                $nodeConfig = $this->node?->getConfig();
+
+                throw new Exception('Compression "' . $compressionAlgo . '" not supported by server.', 0, [
+                    'host' => $nodeConfig->host ?? null,
+                    'port' => $nodeConfig->port ?? null,
+                    'compression' => $compressionAlgo,
+                    'server_supported' => $serverOptions['COMPRESSION'],
+                ]);
             }
 
             $this->options['COMPRESSION'] = $compressionAlgo;
@@ -429,34 +453,6 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    protected function connectToNode(): void {
-
-        if (count($this->nodes) > 1) {
-            shuffle($this->nodes);
-        }
-
-        foreach ($this->nodes as $config) {
-
-            $className = $config->getNodeClass();
-
-            try {
-                /**
-                 *  @throws \Cassandra\Exception
-                */
-                $this->node = new $className($config);
-            } catch (Exception $e) {
-                continue;
-            }
-
-            return;
-        }
-
-        throw new Exception('Unable to connect to any Cassandra node.');
-    }
-
-    /**
-     * @throws \Cassandra\Exception
-     */
     protected function getNewStreamId(): int {
         if ($this->lastStreamId < 32767) {
             return ++$this->lastStreamId;
@@ -478,7 +474,7 @@ final class Connection {
         } while ($response !== null && $response->getStream() !== $streamId);
 
         if ($response === null) {
-            throw new Exception('received unexpected null response');
+            throw new Exception('Received unexpected null response from server.');
         }
 
         return $response;
@@ -709,7 +705,7 @@ final class Connection {
      */
     protected function readResponse(): ?Response\Response {
         if ($this->node === null) {
-            throw new Exception('not connected');
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.');
         }
 
         $version = ord($this->node->read(1));
@@ -779,13 +775,41 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
+    protected function selectNode(): void {
+
+        if (count($this->nodes) > 1) {
+            shuffle($this->nodes);
+        }
+
+        foreach ($this->nodes as $config) {
+
+            $className = $config->getNodeClass();
+
+            try {
+                /**
+                 *  @throws \Cassandra\Exception
+                */
+                $this->node = new $className($config);
+            } catch (Exception $e) {
+                continue;
+            }
+
+            return;
+        }
+
+        throw new Exception('Unable to select a Cassandra node.');
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
     protected function sendAsyncRequest(Request\Request $request, ?int $streamId = null): Statement {
         if ($this->node === null) {
             $this->connect();
         }
 
         if ($this->node === null) {
-            throw new Exception('not connected');
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.');
         }
 
         $request->setVersion($this->version);

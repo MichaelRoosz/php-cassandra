@@ -69,7 +69,14 @@ class StreamReader {
          */
         $unpacked = unpack('N', $binaryLength);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack 32-bit length prefix',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
         $length = $unpacked[1];
 
@@ -109,7 +116,14 @@ class StreamReader {
          */
         $unpacked = unpack('E', $this->read(8));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack IEEE-754 double',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         return $unpacked[1];
@@ -124,7 +138,14 @@ class StreamReader {
          */
         $unpacked = unpack('G', $this->read(4));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack IEEE-754 float',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         return $unpacked[1];
@@ -137,12 +158,28 @@ class StreamReader {
         $addressLength = ord($this->read(1));
 
         if ($addressLength !== 4 && $addressLength !== 16) {
-            throw new Exception('Invalid read inet length');
+            throw new Exception(
+                message: 'Invalid inet length byte',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'address_length' => $addressLength,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         $inet = inet_ntop(chr($addressLength) . $this->read($addressLength));
         if ($inet === false) {
-            throw new Exception('Cannot read inet');
+            throw new Exception(
+                message: 'Cannot parse inet address',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'address_length' => $addressLength,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         return $inet;
@@ -157,7 +194,14 @@ class StreamReader {
          */
         $unpacked = unpack('N', $this->read(4));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack 32-bit integer',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         return $unpacked[1];
@@ -190,7 +234,14 @@ class StreamReader {
          */
         $unpacked = unpack('N', $this->read(4));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack 32-bit length prefix',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
         $length = $unpacked[1];
 
@@ -212,7 +263,15 @@ class StreamReader {
         for ($i = 0; $i < $count; ++$i) {
             $key = $this->readValue($typeInfo->keyType);
             if (!is_string($key) && !is_int($key)) {
-                throw new Exception('invalid key type');
+                throw new Exception(
+                    message: 'Invalid map key type; expected string|int',
+                    code: 0,
+                    context: [
+                        'method' => __METHOD__,
+                        'key_php_type' => gettype($key),
+                        'offset' => $this->pos(),
+                    ]
+                );
             }
             $map[$key] = $this->readValue($typeInfo->valueType);
         }
@@ -264,7 +323,14 @@ class StreamReader {
          */
         $unpacked = unpack('n', $this->read(2));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack 16-bit integer',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         return $unpacked[1];
@@ -279,7 +345,14 @@ class StreamReader {
          */
         $unpacked = unpack('n', $this->read(2));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack 16-bit length prefix',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
         $length = $unpacked[1];
 
@@ -353,7 +426,15 @@ class StreamReader {
         $list = [];
         foreach ($rawList as $item) {
             if (!is_string($item)) {
-                throw new Exception('Invalid text list item: ' . gettype($item));
+                throw new Exception(
+                    message: 'Invalid text list item; expected string',
+                    code: 0,
+                    context: [
+                        'method' => __METHOD__,
+                        'item_php_type' => gettype($item),
+                        'offset' => $this->pos(),
+                    ]
+                );
             }
 
             $list[] = $item;
@@ -388,7 +469,15 @@ class StreamReader {
         try {
             $type = Type::from($typeShort);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid type short: ' . $typeShort);
+            throw new Exception(
+                message: 'Invalid type discriminator',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'type_short' => $typeShort,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         switch ($typeShort) {
@@ -475,7 +564,14 @@ class StreamReader {
          */
         $data = unpack('n8', $this->read(16));
         if ($data === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack UUID',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', $data[1], $data[2], $data[3], $data[4], $data[5], $data[6], $data[7], $data[8]);
@@ -496,7 +592,14 @@ class StreamReader {
          */
         $unpacked = unpack('N', $binaryLength);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack data');
+            throw new Exception(
+                message: 'Cannot unpack 32-bit length prefix',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
         $length = $unpacked[1];
 
@@ -520,7 +623,17 @@ class StreamReader {
 
         if ($this->offset + $length > $this->dataLength) {
             //$length = $this->dataLength - $this->offset;
-            throw new Exception('Tried to read more data than available');
+            throw new Exception(
+                message: 'Attempted to read beyond available data',
+                code: 0,
+                context: [
+                    'method' => __METHOD__,
+                    'requested_length' => $length,
+                    'available' => $this->dataLength - $this->offset,
+                    'offset' => $this->pos(),
+                    'data_length' => $this->dataLength,
+                ]
+            );
         }
 
         $output = substr($this->data, $this->offset, $length);

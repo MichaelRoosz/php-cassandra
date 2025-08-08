@@ -19,7 +19,14 @@ final class Socket implements NodeImplementation {
         NodeConfig $config
     ) {
         if (!($config instanceof SocketNodeConfig)) {
-            throw new SocketException('Expected instance of SocketNodeConfig');
+            throw new SocketException(
+                message: 'Invalid node configuration type; expected SocketNodeConfig',
+                code: 0,
+                context: [
+                    'expected_class' => SocketNodeConfig::class,
+                    'actual_class' => get_debug_type($config),
+                ]
+            );
         }
         $this->config = $config;
 
@@ -58,18 +65,47 @@ final class Socket implements NodeImplementation {
     #[\Override]
     public function read(int $length): string {
         if ($this->socket === null) {
-            throw new SocketException('not connected');
+            throw new SocketException(
+                message: 'Socket is not connected',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'read',
+                    'requested_bytes' => $length,
+                ]
+            );
         }
 
         $data = socket_read($this->socket, $length);
         if ($data === false) {
             $errorCode = socket_last_error($this->socket);
 
-            throw new SocketException(socket_strerror($errorCode), $errorCode);
+            throw new SocketException(
+                message: socket_strerror($errorCode),
+                code: $errorCode,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'read',
+                    'requested_bytes' => $length,
+                    'bytes_read' => 0,
+                ]
+            );
         }
 
         if ($length > 0 && $data === '') {
-            throw new SocketException('socket_read() returned no data');
+            throw new SocketException(
+                message: 'socket_read() returned no data',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'read',
+                    'requested_bytes' => $length,
+                    'bytes_read' => 0,
+                ]
+            );
         }
 
         $remainder = $length - strlen($data);
@@ -80,11 +116,31 @@ final class Socket implements NodeImplementation {
             if ($readData === false) {
                 $errorCode = socket_last_error($this->socket);
 
-                throw new SocketException(socket_strerror($errorCode), $errorCode);
+                throw new SocketException(
+                    message: socket_strerror($errorCode),
+                    code: $errorCode,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'read',
+                        'requested_bytes' => $length,
+                        'bytes_read' => strlen($data),
+                    ]
+                );
             }
 
             if ($readData === '') {
-                throw new SocketException('socket_read() returned no data');
+                throw new SocketException(
+                    message: 'socket_read() returned no data',
+                    code: 0,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'read',
+                        'requested_bytes' => $length,
+                        'bytes_read' => strlen($data),
+                    ]
+                );
             }
 
             $data .= $readData;
@@ -100,18 +156,47 @@ final class Socket implements NodeImplementation {
     #[\Override]
     public function readOnce(int $length): string {
         if ($this->socket === null) {
-            throw new SocketException('not connected');
+            throw new SocketException(
+                message: 'Socket is not connected',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readOnce',
+                    'requested_bytes' => $length,
+                ]
+            );
         }
 
         $data = socket_read($this->socket, $length);
         if ($data === false) {
             $errorCode = socket_last_error($this->socket);
 
-            throw new SocketException(socket_strerror($errorCode), $errorCode);
+            throw new SocketException(
+                message: socket_strerror($errorCode),
+                code: $errorCode,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readOnce',
+                    'requested_bytes' => $length,
+                    'bytes_read' => 0,
+                ]
+            );
         }
 
         if ($length > 0 && $data === '') {
-            throw new SocketException('socket_read() returned no data');
+            throw new SocketException(
+                message: 'socket_read() returned no data',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readOnce',
+                    'requested_bytes' => $length,
+                    'bytes_read' => 0,
+                ]
+            );
         }
 
         return $data;
@@ -123,7 +208,16 @@ final class Socket implements NodeImplementation {
     #[\Override]
     public function write(string $binary): void {
         if ($this->socket === null) {
-            throw new SocketException('not connected');
+            throw new SocketException(
+                message: 'Socket is not connected',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                    'bytes_remaining' => strlen($binary),
+                ]
+            );
         }
 
         do {
@@ -132,7 +226,16 @@ final class Socket implements NodeImplementation {
             if ($sentBytes === false) {
                 $errorCode = socket_last_error($this->socket);
 
-                throw new SocketException(socket_strerror($errorCode), $errorCode);
+                throw new SocketException(
+                    message: socket_strerror($errorCode),
+                    code: $errorCode,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'write',
+                        'bytes_remaining' => strlen($binary),
+                    ]
+                );
             }
             $binary = substr($binary, $sentBytes);
         } while ($binary);
@@ -158,7 +261,15 @@ final class Socket implements NodeImplementation {
         if ($socket === false) {
             $errorCode = socket_last_error();
 
-            throw new SocketException(socket_strerror($errorCode), $errorCode);
+            throw new SocketException(
+                message: socket_strerror($errorCode),
+                code: $errorCode,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'socket_create',
+                ]
+            );
         }
 
         $this->socket = $socket;
@@ -173,8 +284,15 @@ final class Socket implements NodeImplementation {
         if ($result === false) {
             $errorCode = socket_last_error($this->socket);
 
-            //Unable to connect to Cassandra node: {$this->options['host']}:{$this->options['port']}
-            throw new SocketException(socket_strerror($errorCode), $errorCode);
+            throw new SocketException(
+                message: socket_strerror($errorCode),
+                code: $errorCode,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'connect',
+                ]
+            );
         }
 
         return $this->socket;

@@ -59,11 +59,22 @@ abstract class Error extends Response {
     }
 
     public function getException(): Exception {
+        $baseContext = [
+            'error_code' => $this->code,
+            'error_type' => $this->type->name,
+            'protocol_version' => $this->getVersion(),
+            'stream_id' => $this->getStream(),
+            'tracing_uuid' => $this->getTracingUuid(),
+            'warnings' => $this->getWarnings(),
+            'payload' => $this->getPayload(),
+        ];
+
+        $message = sprintf('[%s %d] %s', $this->type->name, $this->code, $this->message);
 
         return new Exception(
-            message: $this->message,
+            message: $message,
             code: $this->code,
-            context: $this->getContext()->toArray(),
+            context: array_merge($baseContext, $this->getContext()->toArray()),
         );
     }
 

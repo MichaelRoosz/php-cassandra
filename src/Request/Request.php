@@ -185,7 +185,11 @@ abstract class Request implements Frame, Stringable {
                 $flags |= QueryFlag::WITH_KEYSPACE->value;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
-                throw new Exception('Option "keyspace" not supported by server');
+                throw new Exception('Option "keyspace" not supported by server', 0, [
+                    'required_protocol' => 'v5',
+                    'actual_protocol' => $version,
+                    'keyspace' => $options->keyspace,
+                ]);
             }
         }
 
@@ -194,7 +198,11 @@ abstract class Request implements Frame, Stringable {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
-                throw new Exception('Option "now_in_seconds" not supported by server');
+                throw new Exception('Option "now_in_seconds" not supported by server', 0, [
+                    'required_protocol' => 'v5',
+                    'actual_protocol' => $version,
+                    'now_in_seconds' => $options->nowInSeconds,
+                ]);
             }
         }
 
@@ -252,20 +260,39 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 default:
-                    throw new Type\Exception('Unsupported type: ' . gettype($value));
+                    throw new Type\Exception(
+                        message: 'Unsupported value type',
+                        code: 0,
+                        context: [
+                            'php_type' => gettype($value),
+                            'name' => $name,
+                        ]
+                    );
             }
 
             if ($namesForValues) {
                 if (is_string($name)) {
                     $valuesBinary .= pack('n', strlen($name)) . strtolower($name);
                 } else {
-                    throw new Type\Exception('$values should be an associative array given, sequential array given. Or you can set "names_for_values" option to false.');
+                    throw new Type\Exception(
+                        message: 'Invalid values format: sequential array provided while names_for_values=true expects associative array',
+                        code: 0,
+                        context: [
+                            'names_for_values' => true,
+                        ]
+                    );
                 }
             } elseif (is_string($name)) {
                 /**
                 * @see https://github.com/duoshuo/php-cassandra/issues/29
                 */
-                throw new Type\Exception('$values should be an sequential array, associative array given. Or you can set "names_for_values" option to true.');
+                throw new Type\Exception(
+                    message: 'Invalid values format: associative array provided while names_for_values=false expects sequential array',
+                    code: 0,
+                    context: [
+                        'names_for_values' => false,
+                    ]
+                );
             }
 
             if ($binary === null) {

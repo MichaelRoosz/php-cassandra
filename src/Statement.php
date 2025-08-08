@@ -38,6 +38,7 @@ final class Statement {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result\PreparedResult::class,
                 'received' => get_class($response),
+                'stream_id' => $this->streamId,
             ]);
         }
 
@@ -74,6 +75,7 @@ final class Statement {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
+                'stream_id' => $this->streamId,
             ]);
         }
 
@@ -90,6 +92,7 @@ final class Statement {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result\RowsResult::class,
                 'received' => get_class($response),
+                'stream_id' => $this->streamId,
             ]);
         }
 
@@ -106,6 +109,7 @@ final class Statement {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result\SchemaChangeResult::class,
                 'received' => get_class($response),
+                'stream_id' => $this->streamId,
             ]);
         }
 
@@ -122,6 +126,7 @@ final class Statement {
             throw new Exception('received unexpected response type: ' . get_class($response), 0, [
                 'expected' => Response\Result\SetKeyspaceResult::class,
                 'received' => get_class($response),
+                'stream_id' => $this->streamId,
             ]);
         }
 

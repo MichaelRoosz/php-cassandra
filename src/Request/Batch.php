@@ -108,7 +108,11 @@ final class Batch extends Request {
                 $flags |= QueryFlag::WITH_KEYSPACE->value;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
-                throw new Exception('Option "keyspace" not supported by server');
+                throw new Exception('Option "keyspace" not supported by server', 0, [
+                    'required_protocol' => 'v5',
+                    'actual_protocol' => $version,
+                    'keyspace' => $options->keyspace,
+                ]);
             }
         }
 
@@ -117,7 +121,11 @@ final class Batch extends Request {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
-                throw new Exception('Option "now_in_seconds" not supported by server');
+                throw new Exception('Option "now_in_seconds" not supported by server', 0, [
+                    'required_protocol' => 'v5',
+                    'actual_protocol' => $version,
+                    'now_in_seconds' => $options->nowInSeconds,
+                ]);
             }
         }
 

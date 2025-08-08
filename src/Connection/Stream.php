@@ -21,7 +21,14 @@ final class Stream implements NodeImplementation {
         NodeConfig $config
     ) {
         if (!($config instanceof StreamNodeConfig)) {
-            throw new StreamException('Expected instance of StreamNodeConfig');
+            throw new StreamException(
+                message: 'Invalid node configuration type; expected StreamNodeConfig',
+                code: 0,
+                context: [
+                    'expected_class' => StreamNodeConfig::class,
+                    'actual_class' => get_debug_type($config),
+                ]
+            );
         }
         $this->config = $config;
 
@@ -48,7 +55,16 @@ final class Stream implements NodeImplementation {
     #[\Override]
     public function read(int $length): string {
         if ($this->stream === null) {
-            throw new StreamException('not connected');
+            throw new StreamException(
+                message: 'Stream is not connected',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'read',
+                    'requested_bytes' => $length,
+                ]
+            );
         }
 
         if ($length < 1) {
@@ -60,15 +76,46 @@ final class Stream implements NodeImplementation {
             $readData = fread($this->stream, $length);
 
             if (feof($this->stream)) {
-                throw new StreamException('Connection reset by peer');
+                throw new StreamException(
+                    message: 'Connection reset by peer',
+                    code: 0,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'read',
+                        'requested_bytes' => $length,
+                        'bytes_read' => strlen($data),
+                    ]
+                );
             }
 
             if (stream_get_meta_data($this->stream)['timed_out']) {
-                throw new StreamException('Connection timed out');
+                throw new StreamException(
+                    message: 'Connection timed out',
+                    code: 0,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'read',
+                        'timeout_seconds' => $this->config->timeoutInSeconds,
+                        'requested_bytes' => $length,
+                        'bytes_read' => strlen($data),
+                    ]
+                );
             }
 
             if ($readData === false || strlen($readData) == 0) {
-                throw new StreamException('Unknown error');
+                throw new StreamException(
+                    message: 'Unknown stream read error',
+                    code: 0,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'read',
+                        'requested_bytes' => $length,
+                        'bytes_read' => strlen($data),
+                    ]
+                );
             }
 
             $data .= $readData;
@@ -84,7 +131,16 @@ final class Stream implements NodeImplementation {
     #[\Override]
     public function readOnce(int $length): string {
         if ($this->stream === null) {
-            throw new StreamException('not connected');
+            throw new StreamException(
+                message: 'Stream is not connected',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readOnce',
+                    'requested_bytes' => $length,
+                ]
+            );
         }
 
         if ($length < 1) {
@@ -94,15 +150,43 @@ final class Stream implements NodeImplementation {
         $readData = fread($this->stream, $length);
 
         if (feof($this->stream)) {
-            throw new StreamException('Connection reset by peer');
+            throw new StreamException(
+                message: 'Connection reset by peer',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readOnce',
+                    'requested_bytes' => $length,
+                ]
+            );
         }
 
         if (stream_get_meta_data($this->stream)['timed_out']) {
-            throw new StreamException('Connection timed out');
+            throw new StreamException(
+                message: 'Connection timed out',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readOnce',
+                    'timeout_seconds' => $this->config->timeoutInSeconds,
+                    'requested_bytes' => $length,
+                ]
+            );
         }
 
         if ($readData === false || strlen($readData) == 0) {
-            throw new StreamException('Unknown error');
+            throw new StreamException(
+                message: 'Unknown stream read error',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readOnce',
+                    'requested_bytes' => $length,
+                ]
+            );
         }
 
         return $readData;
@@ -114,7 +198,16 @@ final class Stream implements NodeImplementation {
     #[\Override]
     public function write(string $binary): void {
         if ($this->stream === null) {
-            throw new StreamException('not connected');
+            throw new StreamException(
+                message: 'Stream is not connected',
+                code: 0,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                    'bytes_remaining' => strlen($binary),
+                ]
+            );
         }
 
         if (strlen($binary) < 1) {
@@ -125,15 +218,43 @@ final class Stream implements NodeImplementation {
             $sentBytes = fwrite($this->stream, $binary);
 
             if (feof($this->stream)) {
-                throw new StreamException('Connection reset by peer');
+                throw new StreamException(
+                    message: 'Connection reset by peer',
+                    code: 0,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'write',
+                        'bytes_remaining' => strlen($binary),
+                    ]
+                );
             }
 
             if (stream_get_meta_data($this->stream)['timed_out']) {
-                throw new StreamException('Connection timed out');
+                throw new StreamException(
+                    message: 'Connection timed out',
+                    code: 0,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'write',
+                        'timeout_seconds' => $this->config->timeoutInSeconds,
+                        'bytes_remaining' => strlen($binary),
+                    ]
+                );
             }
 
             if ($sentBytes === false || $sentBytes < 1) {
-                throw new StreamException('Unknown error');
+                throw new StreamException(
+                    message: 'Unknown stream write error',
+                    code: 0,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'write',
+                        'bytes_remaining' => strlen($binary),
+                    ]
+                );
             }
 
             $binary = substr($binary, $sentBytes);
@@ -186,7 +307,18 @@ final class Stream implements NodeImplementation {
                 $errorCode = 0;
             }
 
-            throw new StreamException($errorMessage, $errorCode);
+            throw new StreamException(
+                message: $errorMessage,
+                code: $errorCode,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'connect',
+                    'connect_timeout_seconds' => $this->config->connectTimeoutInSeconds,
+                    'persistent' => $this->config->persistent,
+                    'ssl_options' => $this->config->sslOptions,
+                ]
+            );
         }
 
         $this->stream = $stream;
