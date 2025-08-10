@@ -52,7 +52,7 @@ abstract class Request implements Frame, Stringable {
             $this->version,
             $this->flags,
             $this->stream,
-            $this->opcode,
+            $this->opcode->value,
             strlen($body)
         ) . $body;
     }

@@ -481,6 +481,83 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
+    protected function createResponse(Header $header, string $body): Response\Response {
+
+        if (!isset(Response\Response::RESPONSE_CLASS_MAP[$header->opcode->value])) {
+            throw new Exception('Unknown response type: ' . $header->opcode->value, Exception::CODE_UNKNOWN_RESPONSE_TYPE, [
+                'expected' => array_keys(Response\Response::RESPONSE_CLASS_MAP),
+                'received' => $header->opcode->value,
+            ]);
+        }
+
+        $streamReader = new Response\StreamReader($body);
+        $resetStream = true;
+
+        $responseClass = Response\Response::RESPONSE_CLASS_MAP[$header->opcode->value];
+
+        switch ($responseClass) {
+            case Response\Result::class:
+                $result = new Response\Result($header, $streamReader);
+                $resultKind = $result->getKind();
+
+                if (isset(Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind->value])) {
+                    $responseClass = Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind->value];
+                } else {
+                    throw new Exception('Unknown result kind: ' . $resultKind->value, Exception::CODE_UNKNOWN_RESULT_KIND, [
+                        'expected' => array_keys(Response\Result::RESULT_RESPONSE_CLASS_MAP),
+                        'received' => $resultKind->value,
+                    ]);
+                }
+
+                break;
+
+            case Response\Event::class:
+                $result = new Response\Event($header, $streamReader);
+                $eventType = $result->getType();
+
+                if (isset(Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType->value])) {
+                    $responseClass = Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType->value];
+                } else {
+                    throw new Exception('Unknown event type: ' . $eventType->value, Exception::CODE_UNKNOWN_EVENT_TYPE, [
+                        'expected' => array_keys(Response\Event::EVENT_RESPONSE_CLASS_MAP),
+                        'received' => $eventType->value,
+                    ]);
+                }
+
+                break;
+
+            case Response\Error::class:
+                $result = new Response\Error($header, $streamReader);
+                $errorCode = $result->getCode();
+
+                if (isset(Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode])) {
+                    $responseClass = Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode];
+                } else {
+                    throw new Exception('Unknown error code: ' . $errorCode, Exception::CODE_UNKNOWN_ERROR_CODE, [
+                        'expected' => array_keys(Response\Error::ERROR_RESPONSE_CLASS_MAP),
+                        'received' => $errorCode,
+                    ]);
+                }
+
+                break;
+
+            default:
+                $resetStream = false;
+
+                break;
+        }
+
+        if ($resetStream) {
+            $streamReader->extraDataOffset(0);
+            $streamReader->offset(0);
+        }
+
+        return new $responseClass($header, $streamReader);
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
     protected function getNewStreamId(): int {
         if ($this->lastStreamId < 32767) {
             return ++$this->lastStreamId;
@@ -509,75 +586,6 @@ final class Connection {
         }
 
         return $response;
-    }
-
-    /**
-     * @return class-string<\Cassandra\Response\Response>
-     *
-     * @throws \Cassandra\Exception
-     */
-    protected function getResponseClass(Opcode $opcode, Response\StreamReader $streamReader): string {
-
-        if (!isset(Response\Response::RESPONSE_CLASS_MAP[$opcode->value])) {
-            throw new Exception('Unknown response type: ' . $opcode->value, Exception::CODE_UNKNOWN_RESPONSE_TYPE, [
-                'expected' => array_keys(Response\Response::RESPONSE_CLASS_MAP),
-                'received' => $opcode->value,
-            ]);
-        }
-
-        $responseClass = Response\Response::RESPONSE_CLASS_MAP[$opcode->value];
-
-        switch ($responseClass) {
-            case Response\Result::class:
-                $resultKind = $streamReader->readInt();
-                $streamReader->offset(0);
-
-                if (isset(Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind])) {
-                    $responseClass = Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind];
-                } else {
-                    throw new Exception('Unknown result kind: ' . $resultKind, Exception::CODE_UNKNOWN_RESULT_KIND, [
-                        'expected' => array_keys(Response\Result::RESULT_RESPONSE_CLASS_MAP),
-                        'received' => $resultKind,
-                    ]);
-                }
-
-                break;
-
-            case Response\Event::class:
-                $eventType = $streamReader->readString();
-                $streamReader->offset(0);
-
-                if (isset(Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType])) {
-                    $responseClass = Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType];
-                } else {
-                    throw new Exception('Unknown event type: ' . $eventType, Exception::CODE_UNKNOWN_EVENT_TYPE, [
-                        'expected' => array_keys(Response\Event::EVENT_RESPONSE_CLASS_MAP),
-                        'received' => $eventType,
-                    ]);
-                }
-
-                break;
-
-            case Response\Error::class:
-                $errorCode = $streamReader->readInt();
-                $streamReader->offset(0);
-
-                if (isset(Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode])) {
-                    $responseClass = Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode];
-                } else {
-                    throw new Exception('Unknown error code: ' . $errorCode, Exception::CODE_UNKNOWN_ERROR_CODE, [
-                        'expected' => array_keys(Response\Error::ERROR_RESPONSE_CLASS_MAP),
-                        'received' => $errorCode,
-                    ]);
-                }
-
-                break;
-
-            default:
-                break;
-        }
-
-        return $responseClass;
     }
 
     /**
@@ -807,9 +815,7 @@ final class Connection {
             $body = $this->lz4Decompressor->decompressBlock();
         }
 
-        $streamReader = new Response\StreamReader($body);
-        $responseClass = $this->getResponseClass($header->opcode, $streamReader);
-        $response = new $responseClass($header, $streamReader);
+        $response = $this->createResponse($header, $body);
 
         $streamId = $header->stream;
         if ($streamId !== 0 && isset($this->statements[$streamId])) {

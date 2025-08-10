@@ -27,7 +27,7 @@ final class Metadata {
             flags: $this->flags,
             columnsCount: $this->columnsCount,
             newMetadataId: $this->newMetadataId ?? $previousMetadata->newMetadataId,
-            pagingState: $this->pagingState ?? $previousMetadata->pagingState,
+            pagingState: $this->pagingState,
             pkCount: $this->pkCount ?? $previousMetadata->pkCount,
             pkIndex: $this->pkIndex ?? $previousMetadata->pkIndex,
             columns: $this->columns ?? $previousMetadata->columns,

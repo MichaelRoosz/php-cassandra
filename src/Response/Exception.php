@@ -17,7 +17,7 @@ final class Exception extends CassandraException {
     public const EVENT_TOPOLOGY_CHANGE_INVALID_TYPE = 70006;
     public const PREPARED_UNEXPECTED_KIND = 70007;
     public const PSR_GET_DATA_NOT_SUPPORTED = 70008;
-    public const PSR_INCOMPLETE_RESPONSE = 70009;
+    public const PSR_SOURCE_NOT_SET = 70009;
     public const READ_FAILURE_INVALID_CONSISTENCY = 70010;
     public const READ_TIMEOUT_INVALID_CONSISTENCY = 70011;
     public const RES_INVALID_KIND_VALUE = 70012;

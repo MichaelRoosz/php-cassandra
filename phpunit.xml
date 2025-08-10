@@ -8,8 +8,11 @@
     </report>
   </coverage>
   <testsuites>
-    <testsuite name="php-cassandra">
+    <testsuite name="unit">
       <directory>test/phpunit</directory>
+    </testsuite>
+    <testsuite name="integration">
+      <directory>test/integration</directory>
     </testsuite>
   </testsuites>
   <logging>

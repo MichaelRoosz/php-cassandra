@@ -1,0 +1,25 @@
+services:
+  cassandra:
+    image: cassandra:5
+    container_name: php-cassandra-test-db
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_START_RPC=false
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "cqlsh -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - php_cassandra_net
+
+networks:
+  php_cassandra_net:
+    driver: bridge

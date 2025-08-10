@@ -56,7 +56,7 @@ abstract class Response implements Frame, Stringable {
             $this->header->version,
             $this->header->flags,
             $this->header->stream,
-            $this->header->opcode,
+            $this->header->opcode->value,
             strlen($body)
         ) . $body;
     }

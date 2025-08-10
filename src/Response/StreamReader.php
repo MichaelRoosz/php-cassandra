@@ -21,7 +21,6 @@ class StreamReader {
     protected string $data;
     protected int $dataLength;
     protected int $extraDataOffset = 0;
-
     protected int $offset = 0;
 
     public function __construct(string $data) {
@@ -36,8 +35,8 @@ class StreamReader {
         $this->extraDataOffset = $extraDataOffset;
     }
 
-    public function getData(): string {
-        return $this->data;
+    public function getData(bool $includeExtraData = false): string {
+        return $includeExtraData ? $this->data : substr($this->data, $this->extraDataOffset);
     }
 
     public function offset(int $offset): void {
@@ -622,7 +621,6 @@ class StreamReader {
         }
 
         if ($this->offset + $length > $this->dataLength) {
-            //$length = $this->dataLength - $this->offset;
             throw new Exception(
                 message: 'Attempted to read beyond available data',
                 code: Exception::SR_READ_BEYOND_AVAILABLE,

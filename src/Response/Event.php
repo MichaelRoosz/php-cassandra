@@ -9,7 +9,7 @@ use Cassandra\Response\Event\Data\EventData;
 use TypeError;
 use ValueError;
 
-abstract class Event extends Response {
+class Event extends Response {
     public const EVENT_RESPONSE_CLASS_MAP = [
         EventType::SCHEMA_CHANGE->value => Event\SchemaChangeEvent::class,
         EventType::STATUS_CHANGE->value => Event\StatusChangeEvent::class,
@@ -24,7 +24,9 @@ abstract class Event extends Response {
         $this->type = $this->readType();
     }
 
-    abstract public function getData(): EventData;
+    public function getData(): EventData {
+        return new EventData();
+    }
 
     public function getType(): EventType {
         return $this->type;

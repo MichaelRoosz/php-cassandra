@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use ArrayIterator;
 use Cassandra\ColumnInfo;
 use Cassandra\Metadata;
 use Cassandra\Protocol\Header;
@@ -14,6 +15,7 @@ use Cassandra\Response\Result\RowsResult;
 use Cassandra\Response\Result\SchemaChangeResult;
 use Cassandra\Response\Result\SetKeyspaceResult;
 use Cassandra\Response\Result\VoidResult;
+use Iterator;
 use IteratorAggregate;
 use TypeError;
 use ValueError;
@@ -21,7 +23,7 @@ use ValueError;
 /**
  * @implements IteratorAggregate<array<string, mixed>|null>
  */
-abstract class Result extends Response implements IteratorAggregate {
+class Result extends Response implements IteratorAggregate {
     public const RESULT_RESPONSE_CLASS_MAP = [
         ResultKind::PREPARED->value => Result\PreparedResult::class,
         ResultKind::ROWS->value => Result\RowsResult::class,
@@ -29,6 +31,7 @@ abstract class Result extends Response implements IteratorAggregate {
         ResultKind::SET_KEYSPACE->value => Result\SetKeyspaceResult::class,
         ResultKind::VOID->value => Result\VoidResult::class,
     ];
+
     protected int $dataOffset;
     protected ResultKind $kind;
 
@@ -116,6 +119,11 @@ abstract class Result extends Response implements IteratorAggregate {
         return $this;
     }
 
+    #[\Override]
+    public function getIterator(): Iterator {
+        return new ArrayIterator([]);
+    }
+
     public function getKind(): ResultKind {
         return $this->kind;
     }
@@ -151,6 +159,8 @@ abstract class Result extends Response implements IteratorAggregate {
             );
 
         } elseif ($previousResult instanceof RowsResult) {
+
+            // todo: verify this logic
 
             $previousMetadata = $previousResult->getMetadata();
 

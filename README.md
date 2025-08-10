@@ -33,6 +33,30 @@ Or load the library without Composer:
 require __DIR__ . '/php-cassandra/php-cassandra.php';
 ```
 
+## Running tests
+
+- Unit tests:
+
+```bash
+composer install
+composer test:unit
+```
+
+- Integration tests (Dockerized Cassandra 5):
+
+```bash
+composer test:integration
+```
+
+You can manage steps manually:
+
+```bash
+composer test:integration:up
+bash .docker/wait-for-cassandra.sh
+APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9042 vendor/bin/phpunit --testsuite integration
+composer test:integration:down
+```
+
 ## Quick start
 
 ```php

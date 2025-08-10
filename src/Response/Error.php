@@ -12,7 +12,7 @@ use ValueError;
 /**
  * Indicates an error processing a request.
  */
-abstract class Error extends Response {
+class Error extends Response {
     public const ERROR_RESPONSE_CLASS_MAP = [
         ErrorType::ALREADY_EXISTS->value => Error\AlreadyExistsError::class,
         ErrorType::AUTHENTICATION_ERROR->value => Error\AuthenticationError::class,

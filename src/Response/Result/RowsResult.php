@@ -10,6 +10,7 @@ use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
 use Cassandra\Response\Result\Data\ResultData;
 use Cassandra\Response\Result\Data\RowsData;
+use Cassandra\Response\ResultFlag;
 use Cassandra\Response\ResultIterator;
 use Cassandra\Response\RowClass;
 use Cassandra\Response\RowClassInterface;
@@ -423,6 +424,27 @@ final class RowsResult extends Result {
         $this->stream->offset($savedOffset);
 
         return new RowsData(rows: $rows);
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function hasMetadataChanged(): bool {
+        return (bool) ($this->getMetadata()->flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED->value);
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function hasMorePages(): bool {
+        return (bool) ($this->getMetadata()->flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES->value);
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    public function hasNoMetadata(): bool {
+        return (bool) ($this->getMetadata()->flags & ResultFlag::ROWS_FLAG_NO_METADATA->value);
     }
 
     public function isFetchObjectConfigurationSet(): bool {
