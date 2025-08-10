@@ -55,6 +55,11 @@ class Exception extends PhpException {
      * @param array<mixed> $context
      */
     public function __construct(string $message = '', int $code = 0, array $context = [], ?Throwable $previous = null) {
+
+        if ($context && getenv('APP_CASSANDRA_DEBUG')) {
+            $message = $message . ' - context: ' . json_encode($context);
+        }
+
         parent::__construct($message, $code, $previous);
 
         $this->context = $context;

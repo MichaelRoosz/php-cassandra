@@ -2,8 +2,7 @@ Todo
 =====
 
 * Add tests
-
-* Show exception context in phpunit
+* Add examples
 
 ----
 

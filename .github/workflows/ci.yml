@@ -28,5 +28,8 @@ jobs:
     - name: Psalm
       run: composer run psalm
 
-    - name: PHPUnit tests
-      run: composer run phpunit
+    - name: PHPUnit unit tests
+      run: composer run test:unit
+
+    - name: PHPUnit integration tests
+      run: composer run test:integration
