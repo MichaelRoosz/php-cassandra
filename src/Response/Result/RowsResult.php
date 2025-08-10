@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Result;
 
-use Cassandra\Metadata;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Exception;
 use Cassandra\Response\Result;

@@ -479,7 +479,7 @@ class StreamReader {
             );
         }
 
-        switch ($typeShort) {
+        switch ($type) {
             case Type::CUSTOM:
                 return new CustomInfo(
                     javaClassName: $this->readString(),

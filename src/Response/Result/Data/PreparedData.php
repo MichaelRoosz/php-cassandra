@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Result\Data;
 
-use Cassandra\Metadata;
+use Cassandra\Response\Result\Metadata;
 
 final class PreparedData extends ResultData {
     public function __construct(

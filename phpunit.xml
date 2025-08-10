@@ -9,10 +9,10 @@
   </coverage>
   <testsuites>
     <testsuite name="unit">
-      <directory>test/phpunit</directory>
+      <directory>test/Unit</directory>
     </testsuite>
     <testsuite name="integration">
-      <directory>test/integration</directory>
+      <directory>test/Integration</directory>
     </testsuite>
   </testsuites>
   <logging>

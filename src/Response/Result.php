@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use ArrayIterator;
-use Cassandra\ColumnInfo;
-use Cassandra\Metadata;
+use Cassandra\Response\Result\ColumnInfo;
+use Cassandra\Response\Result\Metadata;
 use Cassandra\Protocol\Header;
 use Cassandra\Request\ExecuteCallInfo;
 use Cassandra\Request\Request;

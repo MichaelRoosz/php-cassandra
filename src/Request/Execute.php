@@ -72,6 +72,7 @@ final class Execute extends Request {
                 queryMetadata: $prepareData->metadata,
                 resultMetadataId: $prepareData->resultMetadataId,
             );
+            $pagingStateOfPreviousResult = null;
         } else {
             $executeCallInfo = $previousResult->getNextExecuteCallInfo();
             if ($executeCallInfo === null) {
@@ -84,6 +85,7 @@ final class Execute extends Request {
                     ]
                 );
             }
+            $pagingStateOfPreviousResult = $previousResult->getMetadata()->pagingState;
         }
 
         $this->queryId = $executeCallInfo->id;
@@ -107,6 +109,13 @@ final class Execute extends Request {
             && $executeCallInfo->queryMetadata->columns === null
         ) {
             $this->options = $this->options->withSkipMetadata(false);
+        }
+
+        if (
+            $this->options->pagingState === null
+            && $pagingStateOfPreviousResult !== null
+        ) {
+            $this->options = $this->options->withPagingState($pagingStateOfPreviousResult);
         }
     }
 

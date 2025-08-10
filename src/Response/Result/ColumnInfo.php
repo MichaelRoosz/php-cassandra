@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra;
+namespace Cassandra\Response\Result;
 
 use Cassandra\TypeInfo\TypeInfo;
 

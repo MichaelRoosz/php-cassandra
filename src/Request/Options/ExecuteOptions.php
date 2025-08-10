@@ -26,6 +26,19 @@ final class ExecuteOptions extends QueryOptions {
         );
     }
 
+    public function withPagingState(string $pagingState): self {
+        return new self(
+            skipMetadata: $this->skipMetadata,
+            pageSize: $this->pageSize,
+            pagingState: $pagingState,
+            serialConsistency: $this->serialConsistency,
+            defaultTimestamp: $this->defaultTimestamp,
+            namesForValues: $this->namesForValues,
+            keyspace: $this->keyspace,
+            nowInSeconds: $this->nowInSeconds
+        );
+    }
+
     public function withSkipMetadata(bool $skipMetadata): self {
         return new self(
             skipMetadata: $skipMetadata,

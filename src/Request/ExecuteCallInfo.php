@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\Metadata;
+use Cassandra\Response\Result\Metadata;
 
 final class ExecuteCallInfo {
     public function __construct(

@@ -2,19 +2,22 @@
 
 declare(strict_types=1);
 
-namespace Cassandra;
+namespace Cassandra\Response\Result;
 
 final class Metadata {
     public function __construct(
         public readonly int $flags,
+
         public readonly int $columnsCount,
 
         public readonly ?string $newMetadataId,
+
         public readonly ?string $pagingState,
 
-        public readonly ?int $pkCount,
+        public readonly ?int $pkCount, // only present in PREPARE_RESULT metadata
+
         /** @var int[]|null $pkIndex */
-        public readonly ?array $pkIndex,
+        public readonly ?array $pkIndex, // only present in PREPARE_RESULT metadata
 
         /** @var ?ColumnInfo[] $columns */
         public readonly ?array $columns,
