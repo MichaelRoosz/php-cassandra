@@ -38,7 +38,11 @@ final class Batch extends Request {
         $queryId = $prepareData->id;
 
         if ($prepareData->metadata->columns !== null) {
-            $values = self::enocdeValuesForColumnType($values, $prepareData->metadata->columns);
+            $values = self::encodeValuesForColumnType(
+                $values,
+                $prepareData->metadata->columns,
+                false
+            );
         }
 
         $binary = chr(1);
@@ -84,7 +88,13 @@ final class Batch extends Request {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
-    protected function batchParametersAsBinary(Consistency $consistency, array $values = [], BatchOptions $options = new BatchOptions(), int $version = 3): string {
+    protected function batchParametersAsBinary(
+        Consistency $consistency,
+        array $values = [],
+        BatchOptions $options = new BatchOptions(),
+        int $version = 3
+    ): string {
+
         $flags = 0;
         $optional = '';
 

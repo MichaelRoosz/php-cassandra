@@ -15,4 +15,16 @@ class QueryOptions extends RequestOptions {
         public readonly ?int $nowInSeconds = null,
     ) {
     }
+
+    public function withNamesForValues(bool $namesForValues): self {
+        return new self(
+            pageSize: $this->pageSize,
+            pagingState: $this->pagingState,
+            serialConsistency: $this->serialConsistency,
+            defaultTimestamp: $this->defaultTimestamp,
+            namesForValues: $namesForValues,
+            keyspace: $this->keyspace,
+            nowInSeconds: $this->nowInSeconds,
+        );
+    }
 }

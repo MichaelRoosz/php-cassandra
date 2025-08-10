@@ -51,6 +51,10 @@ final class Execute extends Request {
     ) {
         parent::__construct(Opcode::REQUEST_EXECUTE);
 
+        if ($this->options->namesForValues === null && !array_is_list($values)) {
+            $this->options = $this->options->withNamesForValues(true);
+        }
+
         if (
             !($previousResult instanceof PreparedResult)
             && !($previousResult instanceof RowsResult)
@@ -92,7 +96,11 @@ final class Execute extends Request {
         $this->resultMetadataId = $executeCallInfo->resultMetadataId;
 
         if ($executeCallInfo->queryMetadata->columns !== null) {
-            $this->values = self::enocdeValuesForColumnType($values, $executeCallInfo->queryMetadata->columns);
+            $this->values = self::encodeValuesForColumnType(
+                $values,
+                $executeCallInfo->queryMetadata->columns,
+                $this->options->namesForValues ?? false
+            );
         } else {
             $this->values = $values;
         }

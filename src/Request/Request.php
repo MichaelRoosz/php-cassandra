@@ -120,10 +120,15 @@ abstract class Request implements Frame, Stringable {
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected function enocdeValuesForColumnType(array $values, array $columns): array {
+    protected function encodeValuesForColumnType(array $values, array $columns, bool $namesForValues): array {
         $encodedValues = [];
         foreach ($columns as $index => $column) {
-            $key = array_key_exists($column->name, $values) ? $column->name : $index;
+
+            if ($namesForValues) {
+                $key = $column->name;
+            } else {
+                $key = $index;
+            }
 
             if (!isset($values[$key])) {
                 $encodedValues[$key] = null;

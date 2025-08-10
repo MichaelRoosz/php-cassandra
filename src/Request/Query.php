@@ -30,6 +30,10 @@ final class Query extends Request {
         protected QueryOptions $options = new QueryOptions()
     ) {
         parent::__construct(Opcode::REQUEST_QUERY);
+
+        if ($this->options->namesForValues === null && !array_is_list($values)) {
+            $this->options = $this->options->withNamesForValues(true);
+        }
     }
 
     /**
