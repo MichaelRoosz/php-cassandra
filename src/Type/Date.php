@@ -9,7 +9,27 @@ use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
 
-final class Date extends Integer {
+final class Date extends TypeBase {
+    final public const VALUE_MAX = 4_294_967_295;
+    final public const VALUE_MIN = 0;
+
+    protected int $value;
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    final public function __construct(int $value) {
+        if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
+            throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                'value' => $value,
+                'min' => self::VALUE_MIN,
+                'max' => self::VALUE_MAX,
+            ]);
+        }
+
+        $this->value = $value;
+    }
+
     /**
      * @throws \Exception
      */
@@ -20,11 +40,30 @@ final class Date extends Integer {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    #[\Override]
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N', $binary);
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack unsigned integer binary data', Exception::CODE_INTEGER_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 4,
+            ]);
+        }
+
+        return new static($unpacked[1]);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function fromDateTime(DateTimeInterface $value): static {
         $baseDate = new DateTimeImmutable('1970-01-01');
         $interval = $baseDate->diff($value);
 
-        $days = (int) $interval->format('%r%a');
+        $days = pow(2, 31) + (int) $interval->format('%r%a');
 
         return new static($days);
     }
@@ -61,12 +100,23 @@ final class Date extends Integer {
         return self::fromDateTime($inputDate);
     }
 
+    #[\Override]
+    public function getBinary(): string {
+        return pack('N', $this->value);
+    }
+
+    #[\Override]
+    public function getValue(): int {
+        return $this->value;
+    }
+
     /**
      * @throws \Exception
      */
     public function toDateTime(): DateTimeImmutable {
         $baseDate = new DateTimeImmutable('1970-01-01');
-        $interval = new DateInterval('P' . abs($this->value) . 'D');
+        $adjustedValue = $this->value - pow(2, 31);
+        $interval = new DateInterval('P' . abs($adjustedValue) . 'D');
 
         if ($this->value >= 0) {
             return $baseDate->add($interval);

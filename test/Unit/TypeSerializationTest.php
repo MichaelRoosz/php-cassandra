@@ -117,6 +117,10 @@ final class TypeSerializationTest extends TestCase {
     public function testDate(): void {
         $days = 19434;
         $this->assertSame($days, Type\Date::fromBinary((new Type\Date($days))->getBinary())->getValue());
+
+        $date = '2025-08-11';
+        $this->assertSame($date, Type\Date::fromString($date)->toString());
+        $this->assertSame($date, Type\Date::fromBinary((new Type\Date(Type\Date::fromString($date)->getValue()))->getBinary())->toString());
     }
 
     public function testDecimal(): void {
