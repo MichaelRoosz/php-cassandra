@@ -31,7 +31,7 @@
     ],
     "homepage": "https://github.com/MichaelRoosz/php-cassandra",
     "require": {
-        "php": ">=8.1.0"
+        "php": ">=8.1.31"
     },
     "autoload": {
         "psr-4": { "Cassandra\\": "src/" }
@@ -39,7 +39,7 @@
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.75.0",
         "phpstan/phpstan": "^2.1.17",
-        "phpunit/phpunit": "^10.5.47",
+        "phpunit/phpunit": "^10.5.51",
         "vimeo/psalm": "^6.12.0"
     },
     "scripts": {
