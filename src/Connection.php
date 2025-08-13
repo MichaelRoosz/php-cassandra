@@ -483,9 +483,10 @@ final class Connection {
      */
     protected function createResponse(Header $header, string $body): Response\Response {
 
-        if (!isset(Response\Response::RESPONSE_CLASS_MAP[$header->opcode->value])) {
+        $responseClassMap = Response\Response::getResponseClassMap();
+        if (!isset($responseClassMap[$header->opcode->value])) {
             throw new Exception('Unknown response type: ' . $header->opcode->value, Exception::CODE_UNKNOWN_RESPONSE_TYPE, [
-                'expected' => array_keys(Response\Response::RESPONSE_CLASS_MAP),
+                'expected' => array_keys($responseClassMap),
                 'received' => $header->opcode->value,
             ]);
         }
@@ -493,18 +494,19 @@ final class Connection {
         $streamReader = new Response\StreamReader($body);
         $resetStream = true;
 
-        $responseClass = Response\Response::RESPONSE_CLASS_MAP[$header->opcode->value];
+        $responseClass = $responseClassMap[$header->opcode->value];
 
         switch ($responseClass) {
             case Response\Result::class:
                 $result = new Response\Result($header, $streamReader);
                 $resultKind = $result->getKind();
 
-                if (isset(Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind->value])) {
-                    $responseClass = Response\Result::RESULT_RESPONSE_CLASS_MAP[$resultKind->value];
+                $resultClassMap = Response\Result::getResultClassMap();
+                if (isset($resultClassMap[$resultKind->value])) {
+                    $responseClass = $resultClassMap[$resultKind->value];
                 } else {
                     throw new Exception('Unknown result kind: ' . $resultKind->value, Exception::CODE_UNKNOWN_RESULT_KIND, [
-                        'expected' => array_keys(Response\Result::RESULT_RESPONSE_CLASS_MAP),
+                        'expected' => array_keys($resultClassMap),
                         'received' => $resultKind->value,
                     ]);
                 }
@@ -515,11 +517,12 @@ final class Connection {
                 $result = new Response\Event($header, $streamReader);
                 $eventType = $result->getType();
 
-                if (isset(Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType->value])) {
-                    $responseClass = Response\Event::EVENT_RESPONSE_CLASS_MAP[$eventType->value];
+                $eventClassMap = Response\Event::getEventClassMap();
+                if (isset($eventClassMap[$eventType->value])) {
+                    $responseClass = $eventClassMap[$eventType->value];
                 } else {
                     throw new Exception('Unknown event type: ' . $eventType->value, Exception::CODE_UNKNOWN_EVENT_TYPE, [
-                        'expected' => array_keys(Response\Event::EVENT_RESPONSE_CLASS_MAP),
+                        'expected' => array_keys($eventClassMap),
                         'received' => $eventType->value,
                     ]);
                 }
@@ -530,11 +533,12 @@ final class Connection {
                 $result = new Response\Error($header, $streamReader);
                 $errorCode = $result->getCode();
 
-                if (isset(Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode])) {
-                    $responseClass = Response\Error::ERROR_RESPONSE_CLASS_MAP[$errorCode];
+                $errorClassMap = Response\Error::getErrorClassMap();
+                if (isset($errorClassMap[$errorCode])) {
+                    $responseClass = $errorClassMap[$errorCode];
                 } else {
                     throw new Exception('Unknown error code: ' . $errorCode, Exception::CODE_UNKNOWN_ERROR_CODE, [
-                        'expected' => array_keys(Response\Error::ERROR_RESPONSE_CLASS_MAP),
+                        'expected' => array_keys($errorClassMap),
                         'received' => $errorCode,
                     ]);
                 }

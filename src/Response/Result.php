@@ -24,14 +24,6 @@ use ValueError;
  * @implements IteratorAggregate<array<string, mixed>|null>
  */
 class Result extends Response implements IteratorAggregate {
-    public const RESULT_RESPONSE_CLASS_MAP = [
-        ResultKind::PREPARED->value => Result\PreparedResult::class,
-        ResultKind::ROWS->value => Result\RowsResult::class,
-        ResultKind::SCHEMA_CHANGE->value => Result\SchemaChangeResult::class,
-        ResultKind::SET_KEYSPACE->value => Result\SetKeyspaceResult::class,
-        ResultKind::VOID->value => Result\VoidResult::class,
-    ];
-
     protected int $dataOffset;
     protected ResultKind $kind;
 
@@ -134,6 +126,21 @@ class Result extends Response implements IteratorAggregate {
 
     public function getRequest(): ?Request {
         return $this->request;
+    }
+
+    /**
+     * @todo this should be moved to a const class value once support for php 8.1 is dropped
+     * 
+     * @return array<int, class-string<\Cassandra\Response\Result>>
+     */
+    public static function getResultClassMap(): array {
+        return [
+            ResultKind::PREPARED->value => Result\PreparedResult::class,
+            ResultKind::ROWS->value => Result\RowsResult::class,
+            ResultKind::SCHEMA_CHANGE->value => Result\SchemaChangeResult::class,
+            ResultKind::SET_KEYSPACE->value => Result\SetKeyspaceResult::class,
+            ResultKind::VOID->value => Result\VoidResult::class,
+        ];
     }
 
     public function getRowCount(): int {

@@ -10,12 +10,6 @@ use TypeError;
 use ValueError;
 
 class Event extends Response {
-    public const EVENT_RESPONSE_CLASS_MAP = [
-        EventType::SCHEMA_CHANGE->value => Event\SchemaChangeEvent::class,
-        EventType::STATUS_CHANGE->value => Event\StatusChangeEvent::class,
-        EventType::TOPOLOGY_CHANGE->value => Event\TopologyChangeEvent::class,
-    ];
-
     protected EventType $type;
 
     public function __construct(Header $header, StreamReader $stream) {
@@ -26,6 +20,19 @@ class Event extends Response {
 
     public function getData(): EventData {
         return new EventData();
+    }
+
+    /**
+     * @todo this should be moved to a const class value once support for php 8.1 is dropped
+     * 
+     * @return array<string, class-string<\Cassandra\Response\Event>>
+     */
+    public static function getEventClassMap(): array {
+        return [
+            EventType::SCHEMA_CHANGE->value => Event\SchemaChangeEvent::class,
+            EventType::STATUS_CHANGE->value => Event\StatusChangeEvent::class,
+            EventType::TOPOLOGY_CHANGE->value => Event\TopologyChangeEvent::class,
+        ];
     }
 
     public function getType(): EventType {

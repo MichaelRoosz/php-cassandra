@@ -13,29 +13,6 @@ use ValueError;
  * Indicates an error processing a request.
  */
 class Error extends Response {
-    public const ERROR_RESPONSE_CLASS_MAP = [
-        ErrorType::ALREADY_EXISTS->value => Error\AlreadyExistsError::class,
-        ErrorType::AUTHENTICATION_ERROR->value => Error\AuthenticationError::class,
-        ErrorType::CAS_WRITE_UNKNOWN->value => Error\CasWriteUnknownError::class,
-        ErrorType::CDC_WRITE_FAILURE->value => Error\CdcWriteFailureError::class,
-        ErrorType::CONFIG_ERROR->value => Error\ConfigError::class,
-        ErrorType::FUNCTION_FAILURE->value => Error\FunctionFailureError::class,
-        ErrorType::INVALID->value => Error\InvalidError::class,
-        ErrorType::IS_BOOTSTRAPPING->value => Error\IsBootstrappingError::class,
-        ErrorType::OVERLOADED->value => Error\OverloadedError::class,
-        ErrorType::PROTOCOL_ERROR->value => Error\ProtocolError::class,
-        ErrorType::READ_FAILURE->value => Error\ReadFailureError::class,
-        ErrorType::READ_TIMEOUT->value => Error\ReadTimeoutError::class,
-        ErrorType::SERVER_ERROR->value => Error\ServerError::class,
-        ErrorType::SYNTAX_ERROR->value => Error\SyntaxError::class,
-        ErrorType::TRUNCATE_ERROR->value => Error\TruncateError::class,
-        ErrorType::UNAUTHORIZED->value => Error\UnauthorizedError::class,
-        ErrorType::UNAVAILABLE_EXCEPTION->value => Error\UnavailableExceptionError::class,
-        ErrorType::UNPREPARED->value => Error\UnpreparedError::class,
-        ErrorType::WRITE_FAILURE->value => Error\WriteFailureError::class,
-        ErrorType::WRITE_TIMEOUT->value => Error\WriteTimeoutError::class,
-    ];
-
     protected readonly int $code;
     protected readonly string $message;
     protected readonly ErrorType $type;
@@ -56,6 +33,36 @@ class Error extends Response {
 
     public function getContext(): ErrorContext {
         return new ErrorContext();
+    }
+
+    /**
+     * @todo this should be moved to a const class value once support for php 8.1 is dropped
+     * 
+     * @return array<int, class-string<\Cassandra\Response\Error>>
+     */
+    public static function getErrorClassMap(): array {
+        return [
+            ErrorType::ALREADY_EXISTS->value => Error\AlreadyExistsError::class,
+            ErrorType::AUTHENTICATION_ERROR->value => Error\AuthenticationError::class,
+            ErrorType::CAS_WRITE_UNKNOWN->value => Error\CasWriteUnknownError::class,
+            ErrorType::CDC_WRITE_FAILURE->value => Error\CdcWriteFailureError::class,
+            ErrorType::CONFIG_ERROR->value => Error\ConfigError::class,
+            ErrorType::FUNCTION_FAILURE->value => Error\FunctionFailureError::class,
+            ErrorType::INVALID->value => Error\InvalidError::class,
+            ErrorType::IS_BOOTSTRAPPING->value => Error\IsBootstrappingError::class,
+            ErrorType::OVERLOADED->value => Error\OverloadedError::class,
+            ErrorType::PROTOCOL_ERROR->value => Error\ProtocolError::class,
+            ErrorType::READ_FAILURE->value => Error\ReadFailureError::class,
+            ErrorType::READ_TIMEOUT->value => Error\ReadTimeoutError::class,
+            ErrorType::SERVER_ERROR->value => Error\ServerError::class,
+            ErrorType::SYNTAX_ERROR->value => Error\SyntaxError::class,
+            ErrorType::TRUNCATE_ERROR->value => Error\TruncateError::class,
+            ErrorType::UNAUTHORIZED->value => Error\UnauthorizedError::class,
+            ErrorType::UNAVAILABLE_EXCEPTION->value => Error\UnavailableExceptionError::class,
+            ErrorType::UNPREPARED->value => Error\UnpreparedError::class,
+            ErrorType::WRITE_FAILURE->value => Error\WriteFailureError::class,
+            ErrorType::WRITE_TIMEOUT->value => Error\WriteTimeoutError::class,
+        ];
     }
 
     public function getException(): Exception {

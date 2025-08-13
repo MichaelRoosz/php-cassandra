@@ -16,45 +16,6 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 
 final class TypeFactory {
-    protected const TYPE_CLASS_MAP = [
-        Type::ASCII->value => Types\Ascii::class,
-        Type::VARCHAR->value => Types\Varchar::class,
-        Type::TEXT->value => Types\Varchar::class,  // deprecated in Protocol v3
-        Type::VARINT->value => Types\Varint::class,
-        Type::BIGINT->value => Types\Bigint::class,
-        Type::COUNTER->value => Types\Counter::class,
-        Type::TIMESTAMP->value => Types\Timestamp::class,
-        Type::BLOB->value => Types\Blob::class,
-        Type::BOOLEAN->value => Types\Boolean::class,
-        Type::DECIMAL->value => Types\Decimal::class,
-        Type::DOUBLE->value => Types\Double::class,
-        Type::FLOAT->value => Types\Float32::class,
-        Type::INT->value => Types\Integer::class,
-        Type::UUID->value => Types\Uuid::class,
-        Type::TIMEUUID->value => Types\Timeuuid::class,
-        Type::INET->value => Types\Inet::class,
-        Type::DATE->value => Types\Date::class,
-        Type::TIME->value => Types\Time::class,
-        Type::SMALLINT->value => Types\Smallint::class,
-        Type::TINYINT->value => Types\Tinyint::class,
-        Type::DURATION->value => Types\Duration::class,
-        Type::COLLECTION_LIST->value => Types\CollectionList::class,
-        Type::COLLECTION_SET->value => Types\CollectionSet::class,
-        Type::COLLECTION_MAP->value => Types\CollectionMap::class,
-        Type::UDT->value => Types\UDT::class,
-        Type::TUPLE->value => Types\Tuple::class,
-        Type::CUSTOM->value => Types\Custom::class,
-    ];
-
-    protected const TYPES_WITH_DEFINITION = [
-        Type::COLLECTION_LIST->value => true,
-        Type::COLLECTION_SET->value => true,
-        Type::COLLECTION_MAP->value => true,
-        Type::UDT->value => true,
-        Type::TUPLE->value => true,
-        Type::CUSTOM->value => true,
-    ];
-
     /**
      * @param mixed $value
      *
@@ -76,11 +37,14 @@ final class TypeFactory {
      * @throws \Cassandra\Type\Exception
      */
     public static function getTypeInfoFromType(Type $type): TypeInfo {
-        if (!isset(self::TYPE_CLASS_MAP[$type->value])) {
+
+        $typeClassMap = self::getTypeClassMap();
+
+        if (!isset($typeClassMap[$type->value])) {
             throw new Exception('Unknown data type', Exception::CODE_TYPEFACTORY_UNKNOWN_DATA_TYPE, [
                 'type' => $type->value,
                 'type_name' => $type->name,
-                'supported_types' => array_keys(self::TYPE_CLASS_MAP),
+                'supported_types' => array_keys($typeClassMap),
             ]);
         }
 
@@ -184,7 +148,9 @@ final class TypeFactory {
     }
 
     public static function isSimpleType(Type $type): bool {
-        return !isset(self::TYPES_WITH_DEFINITION[$type->value]);
+        $typesWithDefinition = self::getTypesWithDefinitionList();
+
+        return !isset($typesWithDefinition[$type->value]);
     }
 
     /**
@@ -194,14 +160,68 @@ final class TypeFactory {
      */
     protected static function getClassForDataType(Type $type): string {
 
-        if (!isset(self::TYPE_CLASS_MAP[$type->value])) {
+        $typeClassMap = self::getTypeClassMap();
+
+        if (!isset($typeClassMap[$type->value])) {
             throw new Exception('Unknown data type', Exception::CODE_TYPEFACTORY_CLASS_UNKNOWN_DATA_TYPE, [
                 'type' => $type->value,
                 'type_name' => $type->name,
-                'supported_types' => array_keys(self::TYPE_CLASS_MAP),
+                'supported_types' => array_keys($typeClassMap),
             ]);
         }
 
-        return self::TYPE_CLASS_MAP[$type->value];
+        return $typeClassMap[$type->value];
+    }
+
+    /**
+     * @todo this should be moved to a const class value once support for php 8.1 is dropped
+     * 
+     * @return array<int, class-string<\Cassandra\Type\TypeBase>>
+     */
+    protected static function getTypeClassMap(): array {
+        return [
+            Type::ASCII->value => Types\Ascii::class,
+            Type::VARCHAR->value => Types\Varchar::class,
+            Type::TEXT->value => Types\Varchar::class,  // deprecated in Protocol v3
+            Type::VARINT->value => Types\Varint::class,
+            Type::BIGINT->value => Types\Bigint::class,
+            Type::COUNTER->value => Types\Counter::class,
+            Type::TIMESTAMP->value => Types\Timestamp::class,
+            Type::BLOB->value => Types\Blob::class,
+            Type::BOOLEAN->value => Types\Boolean::class,
+            Type::DECIMAL->value => Types\Decimal::class,
+            Type::DOUBLE->value => Types\Double::class,
+            Type::FLOAT->value => Types\Float32::class,
+            Type::INT->value => Types\Integer::class,
+            Type::UUID->value => Types\Uuid::class,
+            Type::TIMEUUID->value => Types\Timeuuid::class,
+            Type::INET->value => Types\Inet::class,
+            Type::DATE->value => Types\Date::class,
+            Type::TIME->value => Types\Time::class,
+            Type::SMALLINT->value => Types\Smallint::class,
+            Type::TINYINT->value => Types\Tinyint::class,
+            Type::DURATION->value => Types\Duration::class,
+            Type::COLLECTION_LIST->value => Types\CollectionList::class,
+            Type::COLLECTION_SET->value => Types\CollectionSet::class,
+            Type::COLLECTION_MAP->value => Types\CollectionMap::class,
+            Type::UDT->value => Types\UDT::class,
+            Type::TUPLE->value => Types\Tuple::class,
+            Type::CUSTOM->value => Types\Custom::class,
+        ];
+    }
+    /**
+     * @todo this should be moved to a const class value once support for php 8.1 is dropped
+     * 
+     * @return array<int, bool>
+     */
+    protected static function getTypesWithDefinitionList(): array {
+        return [
+            Type::COLLECTION_LIST->value => true,
+            Type::COLLECTION_SET->value => true,
+            Type::COLLECTION_MAP->value => true,
+            Type::UDT->value => true,
+            Type::TUPLE->value => true,
+            Type::CUSTOM->value => true,
+        ];
     }
 }
