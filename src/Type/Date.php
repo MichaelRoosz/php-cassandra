@@ -10,6 +10,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 
 final class Date extends TypeBase {
+    final public const VALUE_2_31 = 2_147_483_648;
     final public const VALUE_MAX = 4_294_967_295;
     final public const VALUE_MIN = 0;
 
@@ -63,7 +64,7 @@ final class Date extends TypeBase {
         $baseDate = new DateTimeImmutable('1970-01-01');
         $interval = $baseDate->diff($value);
 
-        $days = pow(2, 31) + (int) $interval->format('%r%a');
+        $days = self::VALUE_2_31 + (int) $interval->format('%r%a');
 
         return new static($days);
     }
@@ -115,8 +116,7 @@ final class Date extends TypeBase {
      */
     public function toDateTime(): DateTimeImmutable {
         $baseDate = new DateTimeImmutable('1970-01-01');
-        $adjustedValue = $this->value - pow(2, 31);
-        $interval = new DateInterval('P' . abs($adjustedValue) . 'D');
+        $interval = new DateInterval('P' . abs($this->value - self::VALUE_2_31) . 'D');
 
         if ($this->value >= 0) {
             return $baseDate->add($interval);
