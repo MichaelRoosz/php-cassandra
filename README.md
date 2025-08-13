@@ -278,7 +278,7 @@ $names = $r->fetchAllColumns(0); // remaining rows of first column
 You can fetch rows into objects by implementing `RowClassInterface` or by using the default `RowClass`:
 
 ```php
-final class UserRow implements \Cassandra\Response\RowClassInterface {
+final class UserRow implements \Cassandra\Response\Result\RowClassInterface {
     public function __construct(private array $row, array $args = []) {}
     public function id(): string { return (string) $this->row['id']; }
     public function name(): string { return (string) $this->row['name']; }
@@ -420,7 +420,7 @@ All operations throw `\Cassandra\Exception` for client errors and `\Cassandra\Re
 - `Cassandra\Request\Options\QueryOptions | ExecuteOptions | BatchOptions`
 - `Cassandra\Request\Batch`, `BatchType`
 - `Cassandra\Response\Result\RowsResult` (iterable, fetch helpers)
-- `Cassandra\Response\RowClassInterface`, `RowClass`
+- `Cassandra\Response\Result\RowClassInterface`, `RowClass`
 - `Cassandra\Consistency` (enum)
 - `Cassandra\Type` (enum) and `Cassandra\Type\*` classes
 

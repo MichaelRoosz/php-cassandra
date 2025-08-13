@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use Cassandra\Response\Result\RowClassInterface;
 use Cassandra\Response\Result\RowsResult;
 use Iterator;
 
 /**
- * @implements Iterator<RowClassInterface|array<array-key, mixed>|false>
+ * @implements Iterator<\Cassandra\Response\Result\RowClassInterface|array<array-key, mixed>|false>
  */
 final class ResultIterator implements Iterator {
     protected int $currentRow;
@@ -22,7 +23,7 @@ final class ResultIterator implements Iterator {
     }
 
     /**
-     * @return RowClassInterface|array<array-key, mixed>|false
+     * @return \Cassandra\Response\Result\RowClassInterface|array<array-key, mixed>|false
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception

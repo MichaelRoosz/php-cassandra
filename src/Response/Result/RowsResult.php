@@ -11,8 +11,6 @@ use Cassandra\Response\Result\Data\ResultData;
 use Cassandra\Response\Result\Data\RowsData;
 use Cassandra\Response\ResultFlag;
 use Cassandra\Response\ResultIterator;
-use Cassandra\Response\RowClass;
-use Cassandra\Response\RowClassInterface;
 use Cassandra\Response\StreamReader;
 
 final class RowsResult extends Result {
@@ -22,7 +20,7 @@ final class RowsResult extends Result {
 
     /**
      * @var array{
-     *     rowClass: class-string<\Cassandra\Response\RowClassInterface>|null,
+     *     rowClass: class-string<\Cassandra\Response\Result\RowClassInterface>|null,
      *     constructorArgs: array<mixed>,
      *     fetchType: FetchType,
      * }
@@ -60,7 +58,7 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @param class-string<\Cassandra\Response\RowClassInterface> $rowClass
+     * @param class-string<\Cassandra\Response\Result\RowClassInterface> $rowClass
      * @param array<mixed> $constructorArgs
      * @param FetchType $fetchType
      * 
@@ -68,7 +66,7 @@ final class RowsResult extends Result {
      */
     public function configureFetchObject(string $rowClass, array $constructorArgs = [], FetchType $fetchType = FetchType::ASSOC): void {
         if (!is_subclass_of($rowClass, RowClassInterface::class)) {
-            throw new Exception('Invalid row class for fetchObject: must implement RowClassInterface', Exception::ROWS_INVALID_ROWCLASS, [
+            throw new Exception('Invalid row class for fetchObject: must implement \\Cassandra\\Response\\Result\\RowClassInterface', Exception::ROWS_INVALID_ROWCLASS, [
                 'operation' => 'RowsResult::configureFetchObject',
                 'row_class' => $rowClass,
                 'expected_interface' => RowClassInterface::class,
@@ -232,7 +230,7 @@ final class RowsResult extends Result {
     /**
      * Fetches all remaining rows and returns them as RowClassInterface instances.
      *
-     * @return array<RowClassInterface>
+     * @return array<\Cassandra\Response\Result\RowClassInterface>
      *
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
@@ -349,7 +347,7 @@ final class RowsResult extends Result {
      * Fetches the next row and returns it as an RowClassInterface instance.
      * Returns false when there are no more rows.
      *
-     * @return RowClassInterface|false
+     * @return \Cassandra\Response\Result\RowClassInterface|false
      * 
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
@@ -372,7 +370,7 @@ final class RowsResult extends Result {
             return false;
         }
 
-        /** @var RowClassInterface $row */
+        /** @var \Cassandra\Response\Result\RowClassInterface $row */
         $row = new $rowClass($rowData, $additionalConstructorArgs);
 
         return $row;

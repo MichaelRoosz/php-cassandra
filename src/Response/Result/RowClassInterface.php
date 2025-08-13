@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Response;
+namespace Cassandra\Response\Result;
 
 /**
  * @psalm-consistent-constructor
