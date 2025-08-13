@@ -16,10 +16,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 
 final class TypeFactory {
-    /**
-     * @var array<int, class-string<\Cassandra\Type\TypeBase>> $typeClassMap
-     */
-    protected static array $typeClassMap = [
+    protected const TYPE_CLASS_MAP = [
         Type::ASCII->value => Types\Ascii::class,
         Type::VARCHAR->value => Types\Varchar::class,
         Type::TEXT->value => Types\Varchar::class,  // deprecated in Protocol v3
@@ -49,10 +46,7 @@ final class TypeFactory {
         Type::CUSTOM->value => Types\Custom::class,
     ];
 
-    /**
-     * @var array<int, bool> $typesWithDefinition
-     */
-    protected static array $typesWithDefinition = [
+    protected const TYPES_WITH_DEFINITION = [
         Type::COLLECTION_LIST->value => true,
         Type::COLLECTION_SET->value => true,
         Type::COLLECTION_MAP->value => true,
@@ -82,11 +76,11 @@ final class TypeFactory {
      * @throws \Cassandra\Type\Exception
      */
     public static function getTypeInfoFromType(Type $type): TypeInfo {
-        if (!isset(self::$typeClassMap[$type->value])) {
+        if (!isset(self::TYPE_CLASS_MAP[$type->value])) {
             throw new Exception('Unknown data type', Exception::CODE_TYPEFACTORY_UNKNOWN_DATA_TYPE, [
                 'type' => $type->value,
                 'type_name' => $type->name,
-                'supported_types' => array_keys(self::$typeClassMap),
+                'supported_types' => array_keys(self::TYPE_CLASS_MAP),
             ]);
         }
 
@@ -190,7 +184,7 @@ final class TypeFactory {
     }
 
     public static function isSimpleType(Type $type): bool {
-        return !isset(self::$typesWithDefinition[$type->value]);
+        return !isset(self::TYPES_WITH_DEFINITION[$type->value]);
     }
 
     /**
@@ -200,24 +194,14 @@ final class TypeFactory {
      */
     protected static function getClassForDataType(Type $type): string {
 
-        if (!isset(self::$typeClassMap[$type->value])) {
+        if (!isset(self::TYPE_CLASS_MAP[$type->value])) {
             throw new Exception('Unknown data type', Exception::CODE_TYPEFACTORY_CLASS_UNKNOWN_DATA_TYPE, [
                 'type' => $type->value,
                 'type_name' => $type->name,
-                'supported_types' => array_keys(self::$typeClassMap),
+                'supported_types' => array_keys(self::TYPE_CLASS_MAP),
             ]);
         }
 
-        $class = self::$typeClassMap[$type->value];
-
-        if (!is_subclass_of($class, Types\TypeBase::class)) {
-            throw new Exception('Data type class is not a subclass of TypeBase', Exception::CODE_TYPEFACTORY_TYPE_CLASS_NOT_SUBCLASS, [
-                'type_class' => $class,
-                'expected_parent' => Types\TypeBase::class,
-                'type' => $type->value,
-            ]);
-        }
-
-        return $class;
+        return self::TYPE_CLASS_MAP[$type->value];
     }
 }
