@@ -1,26 +1,34 @@
 <?xml version="1.0"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd" cacheDirectory=".phpunit.cache" bootstrap="test/bootstrap.php">
-  <coverage>
-    <report>
-      <clover outputFile="phpunit-report/coverage.xml"/>
-      <html outputDirectory="phpunit-report/html" lowUpperBound="35" highLowerBound="70"/>
-      <text outputFile="php://stdout" showUncoveredFiles="false"/>
-    </report>
-  </coverage>
-  <testsuites>
-    <testsuite name="unit">
-      <directory>test/Unit</directory>
-    </testsuite>
-    <testsuite name="integration">
-      <directory>test/Integration</directory>
-    </testsuite>
-  </testsuites>
-  <logging>
-    <junit outputFile="phpunit-report/logfile.xml"/>
-  </logging>
-  <source>
-    <include>
-      <directory suffix=".php">src</directory>
-    </include>
-  </source>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/11.0/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         processIsolation="false"
+         stderr="true"
+         beStrictAboutTestsThatDoNotTestAnything="false"
+         failOnRisky="true"
+         failOnWarning="true">
+    <coverage>
+        <report>
+            <clover outputFile="phpunit-report/coverage.xml"/>
+            <html outputDirectory="phpunit-report/html" lowUpperBound="35" highLowerBound="70"/>
+            <text outputFile="php://stdout" showUncoveredFiles="false"/>
+        </report>
+    </coverage>
+    <testsuites>
+        <testsuite name="unit">
+            <directory suffix="Test.php">tests/Unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory suffix="Test.php">tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+    <logging>
+        <junit outputFile="phpunit-report/logfile.xml"/>
+    </logging>
+    <source>
+        <include>
+            <directory suffix=".php">src</directory>
+        </include>
+    </source>
 </phpunit>

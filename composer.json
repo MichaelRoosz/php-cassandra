@@ -45,15 +45,14 @@
     "scripts": {
         "lint": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer check",
         "lint-fix": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer fix",
-        "phpstan": "vendor/bin/phpstan analyse",
+        "phpstan": "vendor/bin/phpstan analyse --memory-limit=1G",
         "psalm": "vendor/bin/psalm --no-cache",
-    "phpunit": "XDEBUG_MODE=coverage vendor/bin/phpunit $@",
-    "test:unit": "vendor/bin/phpunit --testsuite unit",
-    "test:integration:up": "docker compose up -d",
-    "test:integration:init": "bash .docker/wait-for-cassandra.sh",
-    "test:integration:run": "APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9042 vendor/bin/phpunit --testsuite integration",
-    "test:integration:down": "docker compose down -v",
-    "test:integration": "docker compose up -d && bash .docker/wait-for-cassandra.sh && APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9042 vendor/bin/phpunit --testsuite integration && docker compose down -v",
-    "ci": "composer lint && composer phpstan && composer test:unit"
+        "phpunit": "XDEBUG_MODE=coverage vendor/bin/phpunit $@",
+        "test:unit": "vendor/bin/phpunit --testsuite unit",
+        "test:integration:up": "docker compose up -d",
+        "test:integration:init": "bash .docker/wait-for-cassandra.sh",
+        "test:integration:run": "APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9042 vendor/bin/phpunit --testsuite integration",
+        "test:integration:down": "docker compose down -v",
+        "test:integration": "docker compose up -d && bash .docker/wait-for-cassandra.sh && APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9042 vendor/bin/phpunit --testsuite integration && docker compose down -v"
     }
 }
