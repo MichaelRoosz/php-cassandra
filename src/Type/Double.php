@@ -9,7 +9,7 @@ use Cassandra\TypeInfo\TypeInfo;
 /**
  * Double-precision floating-point number (same as a PHP "float", 64-bit precision)
  */
-final class Double extends TypeBase {
+class Double extends TypeBase {
     protected float $value;
 
     final public function __construct(float $value) {
