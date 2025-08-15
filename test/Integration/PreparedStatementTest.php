@@ -15,6 +15,8 @@ final class PreparedStatementTest extends TestCase {
     public function testPrepareAndExecuteWithNamedBinds(): void {
         $conn = $this->newConnection();
 
+        $conn->querySync('TRUNCATE users');
+
         $prepared = $conn->prepareSync('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
         $conn->executeSync(
             $prepared,

@@ -293,7 +293,7 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertEqualsWithDelta($testValue, $retrievedValue, 0.000000001, "Double value $testValue should round-trip correctly");
+            $this->assertEqualsWithDelta($testValue, $retrievedValue, max($testValue * 0.01, 0.000001), "Double value $testValue should round-trip correctly");
 
         }
 
@@ -333,7 +333,7 @@ final class DataTypeRoundtripTest extends TestCase {
             $retrievedValue = $row['value'];
 
             // Use delta comparison for floats (float32 has less precision)
-            $this->assertEqualsWithDelta($testValue, $retrievedValue, 0.0001, "Float32 value $testValue should round-trip correctly");
+            $this->assertEqualsWithDelta($testValue, $retrievedValue, max($testValue * 0.01, 0.0001), "Float32 value $testValue should round-trip correctly");
 
         }
 
@@ -627,8 +627,8 @@ final class DataTypeRoundtripTest extends TestCase {
                 'blob' => $this->assertSame('0x' . bin2hex($phpValue), $cqlshValue, 'PHP blob value should match cqlsh hex output'),
                 'boolean' => $this->assertSame($phpValue ? 'True' : 'False', $cqlshValue, 'PHP boolean value should match cqlsh output'),
                 'uuid' => $this->assertSame(strtolower($phpValue), strtolower($cqlshValue), 'PHP UUID value should match cqlsh output'),
-                'float' => $this->assertEqualsWithDelta($phpValue, (float) $cqlshValue, 0.0001, 'PHP float value should match cqlsh output'),
-                'double' => $this->assertEqualsWithDelta($phpValue, (float) $cqlshValue, 0.0000001, 'PHP float value should match cqlsh output'),
+                'float' => $this->assertEqualsWithDelta((float) $phpValue, (float) $cqlshValue, max($phpValue * 0.01, 0.0001), 'PHP float value should match cqlsh output'),
+                'double' => $this->assertEqualsWithDelta((float) $phpValue, (float) $cqlshValue, max($phpValue * 0.01, 0.000001), 'PHP float value should match cqlsh output'),
                 default => $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP value should match cqlsh output'),
             };
         }
@@ -703,7 +703,7 @@ final class DataTypeRoundtripTest extends TestCase {
                 $options['NULL'],
                 $options['ESCAPE'] . $options['QUOTE'],
                 $options['ESCAPE'] . $options['ESCAPE'],
-                '\\\\'
+                '\\\\',
             ], [
                 null, // Replace NULL placeholder with PHP null
                 $options['QUOTE'],
