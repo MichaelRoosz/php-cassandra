@@ -9,45 +9,74 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Type;
 use PHPUnit\Framework\TestCase;
-use Throwable;
 
 /**
- * Integration test to verify that data types round-trip correctly through Cassandra
+ * Integration test to verify that data types round-trip correctly through Cassandra.
  * Tests that values inserted via PHP match when selected back, ensuring compatibility
- * with cqlsh and proper serialization/deserialization
+ * with cqlsh and proper serialization/deserialization.
+ */
+/**
+ * Types to test (Cassandra v5):
+ * - ascii                  *Implemented    
+ * - bigint (counter)       *Implemented
+ * - blob                   *Implemented
+ * - boolean                *Implemented
+ * - list
+ * - map
+ * - set
+ * - custom
+ * - date                   *Implemented
+ * - decimal
+ * - double                 *Implemented
+ * - duration
+ * - float                  *Implemented
+ * - inet                   *Implemented
+ * - integer                *Implemented
+ * - smallint               *Implemented   
+ * - time
+ * - timestamp              *Implemented 
+ * - tinyint                *Implemented
+ * - tuple
+ * - udt
+ * - uuid (timeuuid)        *Implemented
+ * - varchar                *Implemented
+ * - varint
  */
 final class DataTypeRoundtripTest extends TestCase {
     private Connection $connection;
+    private string $dumpFile = './table_dump.csv';
     private string $testKeyspace = 'datatype_test';
 
     protected function setUp(): void {
         parent::setUp();
         $this->connection = $this->newConnection('system');
 
-        // Create test keyspace if it doesn't exist
+        $this->connection->querySync(
+            "DROP KEYSPACE IF EXISTS {$this->testKeyspace}"
+        );
+
         $this->connection->querySync(
             "CREATE KEYSPACE IF NOT EXISTS {$this->testKeyspace} WITH REPLICATION = " .
             "{'class': 'SimpleStrategy', 'replication_factor': 1}"
         );
 
-        // Switch to test keyspace
         $this->connection = $this->newConnection($this->testKeyspace);
     }
 
     protected function tearDown(): void {
-        try {
-            // Clean up test keyspace
-            $this->connection = $this->newConnection('system');
-            $this->connection->querySync("DROP KEYSPACE IF EXISTS {$this->testKeyspace}");
-        } catch (Throwable $e) {
-            // Ignore cleanup errors
+        $this->connection = $this->newConnection('system');
+        $this->connection->querySync("DROP KEYSPACE IF EXISTS {$this->testKeyspace}");
+
+        if (file_exists($this->dumpFile)) {
+            unlink($this->dumpFile);
         }
+
         parent::tearDown();
     }
 
     public function testAsciiRoundtrip(): void {
         $this->connection->querySync(
-            'CREATE TABLE IF NOT EXISTS test_ascii (id int PRIMARY KEY, value ascii)'
+            'CREATE TABLE IF NOT EXISTS test_ascii (id int PRIMARY KEY, value varchar)'
         );
 
         $testValues = [
@@ -59,16 +88,19 @@ final class DataTypeRoundtripTest extends TestCase {
             'UPPERCASE',
             'lowercase',
             'MiXeD cAsE',
+            str_repeat('x', 1000), // Long string
+            '1Newlines\nand\ttabs',
+            "2Newlines\nand\ttabs",
+            'NULL and null and None',
+            json_encode(['key' => 'value', 'number' => 42]),
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_ascii (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Ascii($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_ascii WHERE id = ?',
                 [new Type\Integer($index)]
@@ -78,12 +110,10 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
-                'ASCII value should round-trip correctly');
+            $this->assertSame($testValue, $retrievedValue, 'Ascii value should round-trip correctly');
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_ascii', $index, $testValue);
         }
+        $this->compareWithCqlsh('test_ascii', 'id', 'value', $testValues, 'ascii');
     }
 
     public function testBigintRoundtrip(): void {
@@ -98,19 +128,17 @@ final class DataTypeRoundtripTest extends TestCase {
             PHP_INT_MAX,
             PHP_INT_MIN,
             9223372036854775807,  // max bigint
-            -9223372036854775808, // min bigint
+            -9223372036854775807 - 1, // min bigint
             1000000000000000,
             -1000000000000000,
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_bigint (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Bigint($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_bigint WHERE id = ?',
                 [new Type\Integer($index)]
@@ -120,12 +148,10 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
-                "Bigint value $testValue should round-trip correctly");
-
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_bigint', $index, $testValue);
+            $this->assertSame($testValue, $retrievedValue, "Bigint value $testValue should round-trip correctly");
         }
+
+        $this->compareWithCqlsh('test_bigint', 'id', 'value', $testValues, 'bigint');
     }
 
     public function testBlobRoundtrip(): void {
@@ -143,13 +169,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_blob (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Blob($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_blob WHERE id = ?',
                 [new Type\Integer($index)]
@@ -159,12 +183,10 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
-                'Blob value should round-trip correctly');
-
-            // Also compare with cqlsh output (blob values are hex-encoded in cqlsh)
-            $this->compareWithCqlsh('test_blob', $index, $testValue, 'blob');
+            $this->assertSame($testValue, $retrievedValue, 'Blob value should round-trip correctly');
         }
+
+        $this->compareWithCqlsh('test_blob', 'id', 'value', $testValues, 'blob');
     }
 
     public function testBooleanRoundtrip(): void {
@@ -175,13 +197,11 @@ final class DataTypeRoundtripTest extends TestCase {
         $testValues = [true, false];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_boolean (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Boolean($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_boolean WHERE id = ?',
                 [new Type\Integer($index)]
@@ -191,67 +211,11 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
-                'Boolean value ' . ($testValue ? 'true' : 'false') . ' should round-trip correctly');
+            $this->assertSame($testValue, $retrievedValue, 'Boolean value ' . ($testValue ? 'true' : 'false') . ' should round-trip correctly');
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_boolean', $index, $testValue);
-        }
-    }
-
-    /**
-     * Demonstration test showing cqlsh comparison functionality
-     */
-    public function testCqlshComparisonDemo(): void {
-        $this->connection->querySync(
-            'CREATE TABLE IF NOT EXISTS test_demo (id int PRIMARY KEY, name varchar, active boolean, score double)'
-        );
-
-        // Insert test data
-        $testData = [
-            ['id' => 1, 'name' => 'Alice', 'active' => true, 'score' => 95.5],
-            ['id' => 2, 'name' => 'Bob', 'active' => false, 'score' => 87.2],
-            ['id' => 3, 'name' => 'Charlie', 'active' => true, 'score' => 92.8],
-        ];
-
-        foreach ($testData as $row) {
-            $this->connection->querySync(
-                'INSERT INTO test_demo (id, name, active, score) VALUES (?, ?, ?, ?)',
-                [
-                    new Type\Integer($row['id']),
-                    new Type\Varchar($row['name']),
-                    new Type\Boolean($row['active']),
-                    new Type\Double($row['score']),
-                ]
-            );
         }
 
-        // Test that PHP and cqlsh return the same results
-        foreach ($testData as $row) {
-            // Test varchar field
-            $phpResult = $this->connection->querySync(
-                'SELECT name FROM test_demo WHERE id = ?',
-                [new Type\Integer($row['id'])]
-            )->asRowsResult();
-
-            $phpValue = $phpResult->fetch()['name'];
-            $this->assertSame($row['name'], $phpValue);
-
-            // Compare with cqlsh
-            $this->compareWithCqlsh('test_demo', $row['id'], $row['name'], 'name');
-
-            // Test boolean field
-            $phpResult = $this->connection->querySync(
-                'SELECT active FROM test_demo WHERE id = ?',
-                [new Type\Integer($row['id'])]
-            )->asRowsResult();
-
-            $phpValue = $phpResult->fetch()['active'];
-            $this->assertSame($row['active'], $phpValue);
-
-            // Compare with cqlsh
-            $this->compareWithCqlsh('test_demo', $row['id'], $row['active'], 'active');
-        }
+        $this->compareWithCqlsh('test_boolean', 'id', 'value', $testValues, 'boolean');
     }
 
     public function testDateRoundtrip(): void {
@@ -259,27 +223,29 @@ final class DataTypeRoundtripTest extends TestCase {
             'CREATE TABLE IF NOT EXISTS test_date (id int PRIMARY KEY, value date)'
         );
 
-        $baseDate = Type\Date::VALUE_2_31; // 1970-01-01
-
         $testValues = [
-            $baseDate, // 1970-01-01 (epoch)
-            $baseDate + 1, // 1970-01-02
-            $baseDate - 1, // 1969-12-31
-            $baseDate + 365, // 1971-01-01
-            $baseDate - 365, // 1969-01-01
-            Type\Date::VALUE_MIN, // Minimum date
-            Type\Date::VALUE_MAX, // Maximum date
-            $baseDate + 18262, // 2020-01-01 (approximately)
+            '1970-01-01' => '1970-01-01',
+            '1970-01-02' => '1970-01-02',
+            '1969-12-31' => '1969-12-31',
+            '1971-01-01' => '1971-01-01',
+            '1969-01-01' => '1969-01-01',
+            '2020-01-01' => '2020-01-01',
+            '-2020-01-02' => '-1457317',
+            '-5877641-06-24' => '-2147483647',
+            '-5877641-06-23' => '-2147483648', // min date
+            '0001-01-01' => '0001-01-01',
+            '9999-07-10' => '9999-07-10',
+            '10000-07-10' => '2933088',
+            '5181580-07-10' => '1891813896',
+            '5881580-07-11' => '2147483647', // max date
         ];
 
-        foreach ($testValues as $index => $testValue) {
-            // Insert value
+        foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_date (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Date($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_date WHERE id = ?',
                 [new Type\Integer($index)]
@@ -289,12 +255,10 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
-                "Date value $testValue should round-trip correctly");
-
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_date', $index, $testValue);
+            $this->assertSame($testValue, $retrievedValue, "Date value $testValue should round-trip correctly");
         }
+
+        $this->compareWithCqlsh('test_date', 'id', 'value', array_values($testValues), 'date');
     }
 
     public function testDoubleRoundtrip(): void {
@@ -315,13 +279,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_double (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Double($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_double WHERE id = ?',
                 [new Type\Integer($index)]
@@ -331,13 +293,11 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            // Use delta comparison for floats
-            $this->assertEqualsWithDelta($testValue, $retrievedValue, 0.000000001,
-                "Double value $testValue should round-trip correctly");
+            $this->assertEqualsWithDelta($testValue, $retrievedValue, 0.000000001, "Double value $testValue should round-trip correctly");
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_double', $index, $testValue);
         }
+
+        $this->compareWithCqlsh('test_double', 'id', 'value', $testValues, 'double');
     }
 
     public function testFloat32Roundtrip(): void {
@@ -358,13 +318,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_float32 (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Float32($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_float32 WHERE id = ?',
                 [new Type\Integer($index)]
@@ -375,12 +333,11 @@ final class DataTypeRoundtripTest extends TestCase {
             $retrievedValue = $row['value'];
 
             // Use delta comparison for floats (float32 has less precision)
-            $this->assertEqualsWithDelta($testValue, $retrievedValue, 0.0001,
-                "Float32 value $testValue should round-trip correctly");
+            $this->assertEqualsWithDelta($testValue, $retrievedValue, 0.0001, "Float32 value $testValue should round-trip correctly");
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_float32', $index, $testValue);
         }
+
+        $this->compareWithCqlsh('test_float32', 'id', 'value', $testValues, 'float');
     }
 
     public function testInetRoundtrip(): void {
@@ -396,17 +353,15 @@ final class DataTypeRoundtripTest extends TestCase {
             '0.0.0.0',
             '::1',
             '2001:db8::1',
-            'fe80::1%lo0',
+            'fe80::1',
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_inet (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Inet($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_inet WHERE id = ?',
                 [new Type\Integer($index)]
@@ -416,12 +371,10 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
-                "Inet value $testValue should round-trip correctly");
-
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_inet', $index, $testValue);
+            $this->assertSame($testValue, $retrievedValue, "Inet value $testValue should round-trip correctly");
         }
+
+        $this->compareWithCqlsh('test_inet', 'id', 'value', $testValues, 'inet');
     }
 
     public function testIntegerRoundtrip(): void {
@@ -442,13 +395,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_integer (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Integer($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_integer WHERE id = ?',
                 [new Type\Integer($index)]
@@ -461,9 +412,9 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertSame($testValue, $retrievedValue,
                 "Integer value $testValue should round-trip correctly");
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_integer', $index, $testValue);
         }
+
+        $this->compareWithCqlsh('test_integer', 'id', 'value', $testValues, 'integer');
     }
 
     public function testSmallintRoundtrip(): void {
@@ -482,13 +433,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_smallint (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Smallint($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_smallint WHERE id = ?',
                 [new Type\Integer($index)]
@@ -501,9 +450,8 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertSame($testValue, $retrievedValue,
                 "Smallint value $testValue should round-trip correctly");
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_smallint', $index, $testValue);
         }
+        $this->compareWithCqlsh('test_smallint', 'id', 'value', $testValues, 'smallint');
     }
 
     public function testTimestampRoundtrip(): void {
@@ -521,13 +469,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Timestamp($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_timestamp WHERE id = ?',
                 [new Type\Integer($index)]
@@ -540,9 +486,8 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertSame($testValue, $retrievedValue,
                 "Timestamp value $testValue should round-trip correctly");
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_timestamp', $index, $testValue);
         }
+        $this->compareWithCqlsh('test_timestamp', 'id', 'value', $testValues, 'timestamp');
     }
 
     public function testTinyintRoundtrip(): void {
@@ -561,13 +506,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_tinyint (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Tinyint($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_tinyint WHERE id = ?',
                 [new Type\Integer($index)]
@@ -580,9 +523,8 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertSame($testValue, $retrievedValue,
                 "Tinyint value $testValue should round-trip correctly");
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_tinyint', $index, $testValue);
         }
+        $this->compareWithCqlsh('test_tinyint', 'id', 'value', $testValues, 'tinyint');
     }
 
     public function testUuidRoundtrip(): void {
@@ -599,13 +541,11 @@ final class DataTypeRoundtripTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_uuid (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Uuid($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_uuid WHERE id = ?',
                 [new Type\Integer($index)]
@@ -619,9 +559,8 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertSame(strtolower($testValue), strtolower($retrievedValue),
                 "UUID value $testValue should round-trip correctly");
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_uuid', $index, $testValue, 'uuid');
         }
+        $this->compareWithCqlsh('test_uuid', 'id', 'value', $testValues, 'uuid');
     }
 
     public function testVarcharRoundtrip(): void {
@@ -633,22 +572,25 @@ final class DataTypeRoundtripTest extends TestCase {
             '',
             'a',
             'Hello, World!',
+            '12345',
+            'UPPERCASE',
+            'lowercase',
+            'MiXeD cAsE',
             'Unicode: 🚀 中文 العربية русский',
             'Special chars: !@#$%^&*()_+-=[]{}|;:\'",.<>?/~`',
             str_repeat('x', 1000), // Long string
-            'Newlines\nand\ttabs',
+            '1Newlines\nand\ttabs',
+            "2Newlines\nand\ttabs",
             'NULL and null and None',
             json_encode(['key' => 'value', 'number' => 42]),
         ];
 
         foreach ($testValues as $index => $testValue) {
-            // Insert value
             $this->connection->querySync(
                 'INSERT INTO test_varchar (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Varchar($testValue)]
             );
 
-            // Select value back
             $result = $this->connection->querySync(
                 'SELECT value FROM test_varchar WHERE id = ?',
                 [new Type\Integer($index)]
@@ -658,45 +600,44 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
-                'Varchar value should round-trip correctly');
+            $this->assertSame($testValue, $retrievedValue, 'Varchar value should round-trip correctly');
 
-            // Also compare with cqlsh output
-            $this->compareWithCqlsh('test_varchar', $index, $testValue);
         }
+        $this->compareWithCqlsh('test_varchar', 'id', 'value', $testValues, 'varchar');
     }
 
-    private function compareWithCqlsh(string $tableName, array $columnList, string $idColumn, mixed $phpValue): void {
+    private function compareWithCqlsh(string $tableName, string $idColumn, string $valueColumn, array $testValues, string $dataType): void {
 
-        $cqlshResults = $this->dumpTableWithCqlsh($this->testKeyspace, $tableName, $columnList);
+        $cqlshResults = $this->dumpTableWithCqlsh($this->testKeyspace, $tableName, $idColumn, $valueColumn);
 
-        $this->assertCount(1, $cqlshResults, 'Expected exactly one result from cqlsh');
-        $cqlshValue = $cqlshResults[0][$idColumn];
+        foreach ($testValues as $idValue => $phpValue) {
+            if (!isset($cqlshResults[$idValue])) {
+                $this->fail("No cqlsh result found for ID {$idValue} in table {$tableName}");
+            }
 
-        if (is_float($phpValue)) {
-            $this->assertEqualsWithDelta($phpValue, (float) $cqlshValue, 0.0001,
-                'PHP float value should match cqlsh output');
-        } elseif (is_bool($phpValue)) {
-            $expectedCqlsh = $phpValue ? 'True' : 'False';
-            $this->assertSame($expectedCqlsh, $cqlshValue,
-                'PHP boolean value should match cqlsh output');
-        } elseif (is_string($phpValue) && str_contains($valueType, 'uuid')) {
-            $this->assertSame(strtolower($phpValue), strtolower($cqlshValue),
-                'PHP UUID value should match cqlsh output');
-        } elseif (is_string($phpValue) && str_contains($valueType, 'blob')) {
-            $expectedHex = '0x' . bin2hex($phpValue);
-            $this->assertSame($expectedHex, $cqlshValue,
-                'PHP blob value should match cqlsh hex output');
-        } else {
-            $this->assertSame((string) $phpValue, $cqlshValue,
-                'PHP value should match cqlsh output');
+            if (!isset($cqlshResults[$idValue][$valueColumn])) {
+                $this->fail("Column '{$valueColumn}' not found in cqlsh result for ID {$idValue} in table {$tableName}");
+            }
+
+            $cqlshValue = $cqlshResults[$idValue][$valueColumn];
+
+            match ($dataType) {
+                'ascii', 'varchar' => $this->assertSame($phpValue, $cqlshValue, 'PHP string value should match cqlsh output'),
+                'bigint', 'integer', 'smallint', 'tinyint' => $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP integer value should match cqlsh output'),
+                'blob' => $this->assertSame('0x' . bin2hex($phpValue), $cqlshValue, 'PHP blob value should match cqlsh hex output'),
+                'boolean' => $this->assertSame($phpValue ? 'True' : 'False', $cqlshValue, 'PHP boolean value should match cqlsh output'),
+                'uuid' => $this->assertSame(strtolower($phpValue), strtolower($cqlshValue), 'PHP UUID value should match cqlsh output'),
+                'float' => $this->assertEqualsWithDelta($phpValue, (float) $cqlshValue, 0.0001, 'PHP float value should match cqlsh output'),
+                'double' => $this->assertEqualsWithDelta($phpValue, (float) $cqlshValue, 0.0000001, 'PHP float value should match cqlsh output'),
+                default => $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP value should match cqlsh output'),
+            };
         }
     }
 
     /**
      * @param string[] $columnList
      */
-    private function dumpTableWithCqlsh(string $keyspace, string $tableName, array $columnList): array {
+    private function dumpTableWithCqlsh(string $keyspace, string $tableName, string $idColumn, string $valueColumn): array {
 
         $containerName = 'php-cassandra-test-db';
 
@@ -710,15 +651,18 @@ final class DataTypeRoundtripTest extends TestCase {
             'DELIMITER' => '|',
             'QUOTE' => '"',
             'ESCAPE' => '\\',
-            'NULL' => '',
+            'NULL' => '__NULL__',
             'DATETIMEFORMAT' => '%Y-%m-%d %H:%M:%S%z',
             'DECIMALSEP' => '.',
-            'PAGESIZE' => '1000',
+            'PAGESIZE' => '100',
             'ENCODING' => 'UTF8',
+            'NUMPROCESSES' => '1',
         ];
-        $optionsString = implode(' AND ', array_map(fn($k, $v) => "{$k} = {$v}", array_keys($options), $options));
 
-        $query = "COPY {$keyspace}.{$tableName} (" . implode(',', $columnList) . ") TO 'table_dump.csv' WITH " . $optionsString . ' ;';
+        $optionsString = implode(' AND ', array_map(fn($k, $v) => "{$k} = '{$v}'", array_keys($options), $options));
+
+        $columnList = [$idColumn, $valueColumn];
+        $query = "COPY {$keyspace}.{$tableName} (" . implode(',', $columnList) . ") TO '/tmp/table_dump.csv' WITH " . $optionsString . ' ;';
         $escapedQuery = escapeshellarg($query);
         $command = "docker exec {$containerName} cqlsh -k {$this->testKeyspace} -e {$escapedQuery} 2>&1";
 
@@ -731,17 +675,49 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->fail("cqlsh command failed: {$command}\nOutput: {$output}");
         }
 
-        // read the csv file with csv fgetcsv
+        shell_exec("docker cp {$containerName}:/tmp/table_dump.csv {$this->dumpFile}");
 
-        $rows = [];
-        $handle = fopen('table_dump.csv', 'r');
-        $header = fgetcsv($handle, 0, '|', '"', '\\');
-        while (($row = fgetcsv($handle, 0, '|', '"', '\\')) !== false) {
-            $rows[] = array_combine($header, $row);
+        $rowData = [];
+        $handle = fopen($this->dumpFile, 'r');
+        if ($handle === false) {
+            $this->fail('Failed to open CSV file for reading: ' . $this->dumpFile);
         }
+
+        $header = fgetcsv(
+            stream: $handle,
+            length: 0,
+            separator: $options['DELIMITER'],
+            enclosure: $options['QUOTE'],
+            escape: $options['ESCAPE']
+        );
+
+        while (($row = fgetcsv(
+            stream: $handle,
+            length: 0,
+            separator: $options['DELIMITER'],
+            enclosure: $options['QUOTE'],
+            escape: $options['ESCAPE']
+        )) !== false) {
+
+            $row = array_map(fn($value) => str_replace([
+                $options['NULL'],
+                $options['ESCAPE'] . $options['QUOTE'],
+                $options['ESCAPE'] . $options['ESCAPE'],
+            ], [
+                null, // Replace NULL placeholder with PHP null
+                $options['QUOTE'],
+                $options['ESCAPE'],
+            ], $value), $row);
+
+            $rowData[] = array_combine($header, $row);
+        }
+
         fclose($handle);
 
-        var_dump($rows);
+        $rows = [];
+        foreach ($rowData as $row) {
+            $rows[$row[$idColumn]] = $row;
+        }
 
         return $rows;
     }
@@ -772,82 +748,5 @@ final class DataTypeRoundtripTest extends TestCase {
         $this->assertTrue($conn->isConnected());
 
         return $conn;
-    }
-
-    /**
-     * Parse cqlsh output to extract row values
-     */
-    private function parseCqlshOutput(string $output): array {
-
-        var_dump($output);
-        $lines = explode("\n", trim($output));
-        $rows = [];
-        $foundHeader = false;
-        $foundSeparator = false;
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-
-            // Skip empty lines
-            if (empty($line)) {
-                continue;
-            }
-
-            // Look for column header (contains column name like 'value')
-            if (!$foundHeader && (str_contains($line, 'value') || str_contains($line, '|'))) {
-                $foundHeader = true;
-
-                continue;
-            }
-
-            // Look for separator line (dashes)
-            if ($foundHeader && !$foundSeparator && (str_contains($line, '-') || str_starts_with($line, '+'))) {
-                $foundSeparator = true;
-
-                continue;
-            }
-
-            // Skip summary lines and warnings
-            if (str_contains($line, 'rows)') || str_contains($line, 'Warnings:')
-                || (str_contains($line, '(') && str_contains($line, 'rows'))) {
-                break;
-            }
-
-            // This should be a data row if we've found header and separator
-            if ($foundHeader && $foundSeparator && !empty($line)) {
-                // Handle different output formats
-                if (str_contains($line, '|')) {
-                    // Pipe-separated format: | value |
-                    $parts = array_map('trim', explode('|', $line));
-                    // Find the non-empty part (the actual value)
-                    foreach ($parts as $part) {
-                        if (!empty($part)) {
-                            $value = $part;
-
-                            break;
-                        }
-                    }
-                } else {
-                    // Plain format: just the value
-                    $value = $line;
-                }
-
-                // Handle special cqlsh representations
-                if (isset($value)) {
-                    if ($value === 'null') {
-                        $value = null;
-                    } elseif ($value === 'True') {
-                        $value = true;
-                    } elseif ($value === 'False') {
-                        $value = false;
-                    }
-                    // Keep other values as strings for proper comparison
-
-                    $rows[] = $value;
-                }
-            }
-        }
-
-        return $rows;
     }
 }

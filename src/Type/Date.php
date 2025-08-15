@@ -6,34 +6,92 @@ namespace Cassandra\Type;
 
 use Cassandra\TypeInfo\TypeInfo;
 use DateInterval;
+use DateInvalidOperationException;
+use DateMalformedIntervalStringException;
+use DateMalformedStringException;
 use DateTimeImmutable;
 use DateTimeInterface;
 
 final class Date extends TypeBase {
-    final public const VALUE_2_31 = 2_147_483_648;
-    final public const VALUE_MAX = 4_294_967_295;
-    final public const VALUE_MIN = 0;
+    final public const VALUE_INT_MAX = 4_294_967_295;
+    final public const VALUE_INT_MIN = 0;
+    final protected const VALUE_2_31 = 2_147_483_648;
 
-    protected int $value;
+    protected readonly int $value;
 
     /**
+     * @param int|string|DateTimeInterface $value 
      * @throws \Cassandra\Type\Exception
      */
-    final public function __construct(int $value) {
-        if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
-                'value' => $value,
-                'min' => self::VALUE_MIN,
-                'max' => self::VALUE_MAX,
-            ]);
-        }
+    final public function __construct(int|string|DateTimeInterface $value) {
 
-        $this->value = $value;
+        if (is_int($value)) {
+            if ($value > self::VALUE_INT_MAX || $value < self::VALUE_INT_MIN) {
+                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                    'value' => $value,
+                    'min' => self::VALUE_INT_MIN,
+                    'max' => self::VALUE_INT_MAX,
+                ]);
+            }
+
+            $this->value = $value;
+
+        } elseif (is_string($value)) {
+
+            if (!preg_match('/^[+-]?\d{4,}-\d{1,2}-\d{1,2}$/', $value)) {
+                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', Exception::CODE_DATE_INVALID_STRING_FORMAT, [
+                    'value' => $value,
+                ]);
+            }
+
+            $firstChar = substr($value, 0, 1);
+            if ($firstChar !== '+' && $firstChar !== '-') {
+                $value = '+' . $value; // Ensure the date string has a sign
+            }
+
+            try {
+                $valueAsDate = new DateTimeImmutable($value);
+            } catch (DateMalformedStringException $e) {
+                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', Exception::CODE_DATE_INVALID_STRING_FORMAT, [
+                    'value' => $value,
+                    'note' => 'This may happen if the date is out of range for DateTimeImmutable',
+                ]);
+            }
+
+            $baseDate = new DateTimeImmutable('1970-01-01');
+            $interval = $baseDate->diff($valueAsDate);
+
+            $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
+
+            if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
+                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                    'value' => $valueAsInt,
+                    'min' => self::VALUE_INT_MIN,
+                    'max' => self::VALUE_INT_MAX,
+                ]);
+            }
+
+            $this->value = $valueAsInt;
+
+        } else { // DateTimeInterface
+
+            $baseDate = new DateTimeImmutable('1970-01-01');
+            $interval = $baseDate->diff($value);
+
+            $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
+
+            if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
+                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                    'value' => $valueAsInt,
+                    'min' => self::VALUE_INT_MIN,
+                    'max' => self::VALUE_INT_MAX,
+                ]);
+            }
+
+            $this->value = $valueAsInt;
+        }
     }
 
-    /**
-     * @throws \Exception
-     */
     public function __toString(): string {
         return $this->toString();
     }
@@ -58,47 +116,25 @@ final class Date extends TypeBase {
     }
 
     /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function fromDateTime(DateTimeInterface $value): static {
-        $baseDate = new DateTimeImmutable('1970-01-01');
-        $interval = $baseDate->diff($value);
-
-        $days = self::VALUE_2_31 + (int) $interval->format('%r%a');
-
-        return new static($days);
-    }
-
-    /**
      * @param mixed $value
      *
      * @throws \Cassandra\Type\Exception
-     * @throws \Exception
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
 
-        if (is_string($value)) {
-            return self::fromString($value);
-        }
-
-        if (!is_int($value)) {
-            throw new Exception('Invalid date value; expected days as int', Exception::CODE_DATE_INVALID_VALUE_TYPE, [
-                'value_type' => gettype($value),
-            ]);
+        if (!is_int($value) && !is_string($value) && !$value instanceof DateTimeInterface) {
+            throw new Exception(
+                'Invalid date value; expected number of days since 1970-01-01 as integer, date in format YYYY-mm-dd as string, or DateTimeInterface'
+                , Exception::CODE_DATE_INVALID_VALUE_TYPE,
+                [
+                    'value_type' => gettype($value),
+                    'expected_types' => ['int', 'string', DateTimeInterface::class],
+                ]
+            );
         }
 
         return new static($value);
-    }
-
-    /**
-     * @throws \Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public static function fromString(string $value): static {
-        $inputDate = new DateTimeImmutable($value);
-
-        return self::fromDateTime($inputDate);
     }
 
     #[\Override]
@@ -106,29 +142,73 @@ final class Date extends TypeBase {
         return pack('N', $this->value);
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     #[\Override]
-    public function getValue(): int {
+    public function getValue(): string {
+        return $this->toDateTime()->format('Y-m-d');
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function toDateTime(): DateTimeImmutable {
+        $baseDate = new DateTimeImmutable('1970-01-01');
+        $daysSinceBaseDate = $this->value - self::VALUE_2_31;
+
+        try {
+            $interval = new DateInterval('P' . abs($daysSinceBaseDate) . 'D');
+        } catch (DateMalformedIntervalStringException $e) {
+            throw new Exception('Invalid date value; cannot create DateInterval', Exception::CODE_DATE_OUT_OF_RANGE, [
+                'value' => $this->value,
+                'note' => 'This may happen if the date is out of range for DateTimeImmutable',
+            ]);
+        }
+
+        try {
+            if ($daysSinceBaseDate < 0) {
+                return $baseDate->sub($interval);
+            } else {
+                return $baseDate->add($interval);
+            }
+        } catch (DateInvalidOperationException $e) {
+            throw new Exception('Invalid date value; cannot create DateTimeImmutable', Exception::CODE_DATE_OUT_OF_RANGE, [
+                'value' => $this->value,
+                'note' => 'This may happen if the date is out of range for DateTimeImmutable',
+            ]);
+        }
+    }
+
+    public function toInteger(): int {
         return $this->value;
     }
 
     /**
-     * @throws \Exception
-     */
-    public function toDateTime(): DateTimeImmutable {
-        $baseDate = new DateTimeImmutable('1970-01-01');
-        $interval = new DateInterval('P' . abs($this->value - self::VALUE_2_31) . 'D');
-
-        if ($this->value >= 0) {
-            return $baseDate->add($interval);
-        } else {
-            return $baseDate->sub($interval);
-        }
-    }
-
-    /**
-     * @throws \Exception
+     * @throws \Cassandra\Type\Exception
      */
     public function toString(): string {
         return $this->toDateTime()->format('Y-m-d');
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    protected function getDayCountFromInterval(DateInterval $interval): int {
+        $dayCount = $interval->format('%r%a');
+
+        if (str_starts_with($dayCount, '--')) {
+            if ($dayCount === '--2147483648') {
+                $dayCount = '-2147483648'; // Special case for minimum date
+            } else {
+                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                    'value' => $dayCount,
+                    'min' => self::VALUE_INT_MIN,
+                    'max' => self::VALUE_INT_MAX,
+                ]);
+            }
+        }
+
+        return (int) $dayCount;
     }
 }

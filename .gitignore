@@ -6,3 +6,4 @@ phpunit-report
 phpDocumentor.phar
 .phpdoc
 .php-cs-fixer.cache
+table_dump.csv

@@ -29,9 +29,11 @@ final class Exception extends CassandraException {
     public const CODE_CUSTOM_INVALID_VALUE_TYPE = 90018;
     public const CODE_CUSTOM_TYPEINFO_REQUIRED = 90019;
     public const CODE_CUSTOM_UNPACK_FAILED = 90020;
+    public const CODE_DATE_INVALID_STRING_FORMAT = 90082;
     public const CODE_DATE_INVALID_VALUE_TYPE = 90021;
+    public const CODE_DATE_OUT_OF_RANGE = 90083;
     public const CODE_DECIMAL_INVALID_VALUE_TYPE = 90022;
-    public const CODE_DECIMAL_NON_NUMERIC_STRING = 90023;
+    public const CODE_DECIMAL_NON_NUMERIC = 90023;
     public const CODE_DECIMAL_UNPACK_FAILED = 90024;
     public const CODE_DOUBLE_INVALID_VALUE_TYPE = 90025;
     public const CODE_DOUBLE_UNPACK_FAILED = 90026;
