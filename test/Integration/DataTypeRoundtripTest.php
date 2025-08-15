@@ -650,7 +650,7 @@ final class DataTypeRoundtripTest extends TestCase {
             'HEADER' => 'TRUE',
             'DELIMITER' => '|',
             'QUOTE' => '"',
-            'ESCAPE' => '\\',
+            'ESCAPE' => '?',
             'NULL' => '__NULL__',
             'DATETIMEFORMAT' => '%Y-%m-%d %H:%M:%S%z',
             'DECIMALSEP' => '.',
@@ -703,10 +703,26 @@ final class DataTypeRoundtripTest extends TestCase {
                 $options['NULL'],
                 $options['ESCAPE'] . $options['QUOTE'],
                 $options['ESCAPE'] . $options['ESCAPE'],
+                '\\\\'
             ], [
                 null, // Replace NULL placeholder with PHP null
                 $options['QUOTE'],
                 $options['ESCAPE'],
+                '______ESCAPE______',
+            ], $value), $row);
+
+            $row = array_map(fn($value) => str_replace([
+                '\\t',
+                '\\n',
+            ], [
+                "\t",
+                "\n",
+            ], $value), $row);
+
+            $row = array_map(fn($value) => str_replace([
+                '______ESCAPE______',
+            ], [
+                '\\',
             ], $value), $row);
 
             $rowData[] = array_combine($header, $row);
