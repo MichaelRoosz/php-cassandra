@@ -1,6 +1,6 @@
 services:
   cassandra:
-    image: cassandra:${CASSANDRA_VERSION}
+    image: cassandra:${CASSANDRA_VERSION:-5.0}
     container_name: php-cassandra-test-db
     ports:
       - "9042:9042"
