@@ -12,14 +12,14 @@ final class Decimal extends TypeBase {
     /**
      * @throws \Cassandra\Type\Exception
      */
-    final public function __construct(string $value) {
+    final public function __construct(string|int|float $value) {
         if (!is_numeric($value)) {
-            throw new Exception('Value must be a numeric string', Exception::CODE_DECIMAL_NON_NUMERIC_STRING, [
+            throw new Exception('Value must be a numeric value', Exception::CODE_DECIMAL_NON_NUMERIC, [
                 'value' => $value,
             ]);
         }
 
-        $this->value = $value;
+        $this->value = (string) $value;
     }
 
     /**
@@ -67,8 +67,8 @@ final class Decimal extends TypeBase {
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
-        if (!is_string($value)) {
-            throw new Exception('Invalid decimal value; expected string', Exception::CODE_DECIMAL_INVALID_VALUE_TYPE, [
+        if (!is_numeric($value)) {
+            throw new Exception('Invalid decimal value; expected numeric value', Exception::CODE_DECIMAL_INVALID_VALUE_TYPE, [
                 'value_type' => gettype($value),
             ]);
         }
