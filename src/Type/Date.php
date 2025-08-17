@@ -15,7 +15,9 @@ use DateTimeInterface;
 final class Date extends TypeBase {
     final public const VALUE_INT_MAX = 4_294_967_295;
     final public const VALUE_INT_MIN = 0;
+
     final protected const VALUE_2_31 = 2_147_483_648;
+    final protected const VALUE_INT_9999_12_31 = 2_150_416_544;
 
     protected readonly int $value;
 
@@ -55,7 +57,7 @@ final class Date extends TypeBase {
                 throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', Exception::CODE_DATE_INVALID_STRING_FORMAT, [
                     'value' => $value,
                     'note' => 'This may happen if the date is out of range for DateTimeImmutable',
-                ]);
+                ], $e);
             }
 
             $baseDate = new DateTimeImmutable('1970-01-01');
@@ -93,7 +95,48 @@ final class Date extends TypeBase {
     }
 
     public function __toString(): string {
-        return $this->toString();
+        return $this->asString();
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function asDateTime(): DateTimeImmutable {
+        $baseDate = new DateTimeImmutable('1970-01-01');
+        $daysSinceBaseDate = $this->value - self::VALUE_2_31;
+
+        try {
+            $interval = new DateInterval('P' . abs($daysSinceBaseDate) . 'D');
+        } catch (DateMalformedIntervalStringException $e) {
+            throw new Exception('Invalid date value; cannot create DateInterval', Exception::CODE_DATE_OUT_OF_RANGE, [
+                'value' => $this->value,
+                'note' => 'This may happen if the date is out of range for DateTimeImmutable',
+            ], $e);
+        }
+
+        try {
+            if ($daysSinceBaseDate < 0) {
+                return $baseDate->sub($interval);
+            } else {
+                return $baseDate->add($interval);
+            }
+        } catch (DateInvalidOperationException $e) {
+            throw new Exception('Invalid date value; cannot create DateTimeImmutable', Exception::CODE_DATE_OUT_OF_RANGE, [
+                'value' => $this->value,
+                'note' => 'This may happen if the date is out of range for DateTimeImmutable',
+            ], $e);
+        }
+    }
+
+    public function asInteger(): int {
+        return $this->value;
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function asString(): string {
+        return $this->getValue();
     }
 
     /**
@@ -147,48 +190,11 @@ final class Date extends TypeBase {
      */
     #[\Override]
     public function getValue(): string {
-        return $this->toDateTime()->format('Y-m-d');
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function toDateTime(): DateTimeImmutable {
-        $baseDate = new DateTimeImmutable('1970-01-01');
-        $daysSinceBaseDate = $this->value - self::VALUE_2_31;
-
-        try {
-            $interval = new DateInterval('P' . abs($daysSinceBaseDate) . 'D');
-        } catch (DateMalformedIntervalStringException $e) {
-            throw new Exception('Invalid date value; cannot create DateInterval', Exception::CODE_DATE_OUT_OF_RANGE, [
-                'value' => $this->value,
-                'note' => 'This may happen if the date is out of range for DateTimeImmutable',
-            ]);
+        if ($this->value > self::VALUE_INT_9999_12_31) {
+            return '+' . $this->asDateTime()->format('Y-m-d');
+        } else {
+            return $this->asDateTime()->format('Y-m-d');
         }
-
-        try {
-            if ($daysSinceBaseDate < 0) {
-                return $baseDate->sub($interval);
-            } else {
-                return $baseDate->add($interval);
-            }
-        } catch (DateInvalidOperationException $e) {
-            throw new Exception('Invalid date value; cannot create DateTimeImmutable', Exception::CODE_DATE_OUT_OF_RANGE, [
-                'value' => $this->value,
-                'note' => 'This may happen if the date is out of range for DateTimeImmutable',
-            ]);
-        }
-    }
-
-    public function toInteger(): int {
-        return $this->value;
-    }
-
-    /**
-     * @throws \Cassandra\Type\Exception
-     */
-    public function toString(): string {
-        return $this->toDateTime()->format('Y-m-d');
     }
 
     /**
