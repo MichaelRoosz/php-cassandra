@@ -47,7 +47,7 @@ final class WriteTimeoutError extends Error {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::WRITE_TIMEOUT_INVALID_CONSISTENCY, [
                 'consistency' => $consistencyAsInt,
-            ]);
+            ], $e);
         }
 
         $nodesAcknowledged = $this->stream->readInt();
@@ -59,7 +59,7 @@ final class WriteTimeoutError extends Error {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid write type: ' . $writeTypeAsString, Exception::WRITE_TIMEOUT_INVALID_WRITE_TYPE, [
                 'write_type' => $writeTypeAsString,
-            ]);
+            ], $e);
         }
 
         if ($this->getVersion() >= 5) {

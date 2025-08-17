@@ -46,7 +46,7 @@ final class ReadTimeoutError extends Error {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::READ_TIMEOUT_INVALID_CONSISTENCY, [
                 'consistency' => $consistencyAsInt,
-            ]);
+            ], $e);
         }
 
         $nodesAnswered = $this->stream->readInt();

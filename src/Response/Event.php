@@ -52,7 +52,7 @@ class Event extends Response {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid event type: ' . $typeString, Exception::EVENT_INVALID_TYPE, [
                 'event_type' => $typeString,
-            ]);
+            ], $e);
         }
     }
 }

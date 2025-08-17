@@ -224,7 +224,7 @@ class Result extends Response implements IteratorAggregate {
             throw new Exception('Invalid result kind value', Exception::RES_INVALID_KIND_VALUE, [
                 'operation' => 'Result::readKind',
                 'result_kind' => $kindInt,
-            ]);
+            ], $e);
         }
     }
 

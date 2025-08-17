@@ -51,7 +51,7 @@ final class TopologyChangeEvent extends Event {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid topology change type: ' . $changeTypeAsString, Exception::EVENT_TOPOLOGY_CHANGE_INVALID_TYPE, [
                 'topology_change_type' => $changeTypeAsString,
-            ]);
+            ], $e);
         }
 
         $address = $this->stream->readInet();

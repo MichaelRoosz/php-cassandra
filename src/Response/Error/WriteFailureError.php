@@ -47,7 +47,7 @@ final class WriteFailureError extends Error {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::WRITE_FAILURE_INVALID_CONSISTENCY, [
                 'consistency' => $consistencyAsInt,
-            ]);
+            ], $e);
         }
 
         $nodesAnswered = $this->stream->readInt();
@@ -68,7 +68,7 @@ final class WriteFailureError extends Error {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid write type: ' . $writeTypeAsString, Exception::WRITE_FAILURE_INVALID_WRITE_TYPE, [
                 'write_type' => $writeTypeAsString,
-            ]);
+            ], $e);
         }
 
         return new WriteFailureContext(

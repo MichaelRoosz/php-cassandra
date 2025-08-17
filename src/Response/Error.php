@@ -113,7 +113,7 @@ class Error extends Response {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid error type: ' . $code, Exception::ERROR_INVALID_TYPE, [
                 'error_type' => $code,
-            ]);
+            ], $e);
         }
 
         return [

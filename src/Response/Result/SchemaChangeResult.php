@@ -76,7 +76,7 @@ final class SchemaChangeResult extends Result {
             throw new Exception('Invalid schema change type', Exception::SCHEMA_CHANGE_INVALID_TYPE, [
                 'operation' => 'SchemaChangeResult::getSchemaChangeData',
                 'schema_change_type' => $changeTypeAsString,
-            ]);
+            ], $e);
         }
 
         $targetAsString = $this->stream->readString();
@@ -87,7 +87,7 @@ final class SchemaChangeResult extends Result {
             throw new Exception('Invalid schema change target', Exception::SCHEMA_CHANGE_INVALID_TARGET, [
                 'operation' => 'SchemaChangeResult::getSchemaChangeData',
                 'schema_change_target' => $targetAsString,
-            ]);
+            ], $e);
         }
 
         $keyspace = $this->stream->readString();

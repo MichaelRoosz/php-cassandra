@@ -475,7 +475,8 @@ class StreamReader {
                     'method' => __METHOD__,
                     'type_short' => $typeShort,
                     'offset' => $this->pos(),
-                ]
+                ],
+                previous: $e,
             );
         }
 

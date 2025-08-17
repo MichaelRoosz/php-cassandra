@@ -54,7 +54,7 @@ final class SchemaChangeEvent extends Event {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid schema change type: ' . $changeTypeAsString, Exception::EVENT_SCHEMA_CHANGE_INVALID_TYPE, [
                 'schema_change_type' => $changeTypeAsString,
-            ]);
+            ], $e);
         }
 
         $targetAsString = $this->stream->readString();
@@ -64,7 +64,7 @@ final class SchemaChangeEvent extends Event {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid schema change target: ' . $targetAsString, Exception::EVENT_SCHEMA_CHANGE_INVALID_TARGET, [
                 'schema_change_target' => $targetAsString,
-            ]);
+            ], $e);
         }
 
         $keyspace = $this->stream->readString();

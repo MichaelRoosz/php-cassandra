@@ -809,7 +809,7 @@ final class Connection {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid opcode type: ' . $headerData['opcode'], Exception::CODE_INVALID_OPCODE_TYPE, [
                 'opcode' => $headerData['opcode'],
-            ]);
+            ], $e);
         }
 
         $body = $header->length === 0 ? '' : $this->node->read($header->length);

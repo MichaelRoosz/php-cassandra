@@ -51,7 +51,7 @@ final class StatusChangeEvent extends Event {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid status change type: ' . $changeTypeAsString, Exception::EVENT_STATUS_CHANGE_INVALID_TYPE, [
                 'status_change_type' => $changeTypeAsString,
-            ]);
+            ], $e);
         }
 
         $address = $this->stream->readInet();

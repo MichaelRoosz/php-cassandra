@@ -46,7 +46,7 @@ final class UnavailableExceptionError extends Error {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::UNAVAILABLE_INVALID_CONSISTENCY, [
                 'consistency' => $consistencyAsInt,
-            ]);
+            ], $e);
         }
 
         $nodesRequired = $this->stream->readInt();

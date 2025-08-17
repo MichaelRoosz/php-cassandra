@@ -46,7 +46,7 @@ final class CasWriteUnknownError extends Error {
         } catch (ValueError|TypeError $e) {
             throw new Exception('Invalid consistency: ' . $consistencyAsInt, 0, [
                 'consistency' => $consistencyAsInt,
-            ]);
+            ], $e);
         }
 
         $nodesAcknowledged = $this->stream->readInt();
