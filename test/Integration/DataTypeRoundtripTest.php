@@ -8,6 +8,7 @@ use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Type;
+use DateInterval;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
@@ -29,7 +30,7 @@ use PHPUnit\Framework\TestCase;
  * - date                   *Implemented
  * - decimal
  * - double                 *Implemented
- * - duration
+ * - duration               *Implemented
  * - float                  *Implemented
  * - inet                   *Implemented
  * - integer                *Implemented
@@ -241,6 +242,7 @@ final class DataTypeRoundtripTest extends TestCase {
             '5881580-07-11' => ['php' => '+5881580-07-11', 'cql' => '2147483647'], // max date
         ];
 
+        // test with string values
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_date (id, value) VALUES (?, ?)',
@@ -261,6 +263,39 @@ final class DataTypeRoundtripTest extends TestCase {
 
         $cqlValues = array_map(fn($value) => $value['cql'], array_values($testValues));
         $this->compareWithCqlsh('test_date', 'id', 'value', $cqlValues, 'date');
+
+        // Test with DateTimeImmutable objects
+        $dateTimeValues = [];
+        foreach ($testValues as $input => $output) {
+
+            if (!is_string($input)) {
+                continue;
+            }
+
+            $dateTimeValues[] = [
+                'input' => new DateTimeImmutable($input),
+                'output' => $output['php'],
+            ];
+        }
+
+        foreach ($dateTimeValues as $index => $config) {
+            $this->connection->querySync(
+                'INSERT INTO test_date (id, value) VALUES (?, ?)',
+                [new Type\Integer($index), new Type\Date($config['input'])]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_date WHERE id = ?',
+                [new Type\Integer($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertSame($config['output'], $retrievedValue,
+                "Date value {$config['input']->format('Y-m-d')} should round-trip correctly");
+        }
     }
 
     public function testDoubleRoundtrip(): void {
@@ -300,6 +335,99 @@ final class DataTypeRoundtripTest extends TestCase {
         }
 
         $this->compareWithCqlsh('test_double', 'id', 'value', $testValues, 'double');
+    }
+    public function testDurationRoundtrip(): void {
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_duration (id int PRIMARY KEY, value duration)'
+        );
+
+        $testValues = [
+            '89h4m48s' => ['php' => '89h4m48s', 'cql' => '89h4m48s', 'dateinterval' => 'PT89H4M48S'],
+            'PT89H8M53S' => ['php' => '89h8m53s', 'cql' => '89h8m53s', 'dateinterval' => 'PT89H8M53S'],
+            'P12W' => ['php' => '84d', 'cql' => '84d', 'dateinterval' => 'P84D'],
+            'P0000-00-00T89:09:09' => ['php' => '89h9m9s', 'cql' => '89h9m9s', 'dateinterval' => 'PT89H9M9S'],
+            'PT0S' => ['php' => '0s', 'cql' => '', 'dateinterval' => 'PT0S'],
+            '-1h2m3s' => ['php' => '-1h2m3s', 'cql' => '-1h2m3s', 'dateinterval' => 'PT1H2M3S'],
+            'P123Y456M789DT12H34M56S' => ['php' => '161y789d12h34m56s', 'cql' => '161y789d12h34m56s', 'dateinterval' => 'P161Y789DT12H34M56S'],
+            '161y2mo112w5d12h34m56s' => ['php' => '161y2mo789d12h34m56s', 'cql' => '161y2mo789d12h34m56s', 'dateinterval' => 'P161Y2M789DT12H34M56S'],
+            'P15M' => ['php' => '1y3mo', 'cql' => '1y3mo', 'dateinterval' => 'P1Y3M'],
+            'P2Y' => ['php' => '2y', 'cql' => '2y', 'dateinterval' => 'P2Y'],
+            'P2Y112W' => ['php' => '2y784d', 'cql' => '2y784d', 'dateinterval' => 'P2Y784D'],
+            'P100D' => ['php' => '100d', 'cql' => '100d', 'dateinterval' => 'P100D'],
+            'PT12H' => ['php' => '12h', 'cql' => '12h', 'dateinterval' => 'PT12H'],
+            'PT3600S' => ['php' => '1h', 'cql' => '1h', 'dateinterval' => 'PT1H'],
+            '-0s' => ['php' => '0s', 'cql' => '', 'dateinterval' => 'PT0S'],
+        ];
+
+        // test with string values
+        foreach (array_keys($testValues) as $index => $testValue) {
+            $this->connection->querySync(
+                'INSERT INTO test_duration (id, value) VALUES (?, ?)',
+                [new Type\Integer($index), new Type\Duration($testValue)]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_duration WHERE id = ?',
+                [new Type\Integer($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertSame(
+                $testValues[$testValue]['php'],
+                $retrievedValue,
+                "Duration value $testValue should round-trip correctly"
+            );
+
+            $this->assertSame(
+                $testValues[$testValue]['dateinterval'],
+                (new Type\Duration($retrievedValue))->asDateIntervalString(),
+                "Duration value $testValue should round-trip correctly as DateInterval string"
+            );
+        }
+
+        $cqlValues = array_map(fn($value) => $value['cql'], array_values($testValues));
+        $this->compareWithCqlsh('test_duration', 'id', 'value', $cqlValues, 'duration');
+
+        // Test with DateInterval objects
+        $dateIntervalValues = [];
+        foreach ($testValues as $input => $output) {
+
+            if (
+                !is_string($input)
+                || !str_starts_with($input, 'P')
+                || str_contains($input, '-')
+                || str_contains($input, ':')
+            ) {
+                continue;
+            }
+
+            $dateIntervalValues[] = [
+                'input' => new DateInterval($input),
+                'output' => $output['php'],
+            ];
+        }
+
+        foreach ($dateIntervalValues as $index => $config) {
+            $this->connection->querySync(
+                'INSERT INTO test_duration (id, value) VALUES (?, ?)',
+                [new Type\Integer($index), new Type\Duration($config['input'])]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_duration WHERE id = ?',
+                [new Type\Integer($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertSame($config['output'], $retrievedValue,
+                "Duration value {$config['input']->format('P%yY%mM%dDT%hH%iM%sS')} should round-trip correctly");
+        }
     }
 
     public function testFloat32Roundtrip(): void {
@@ -608,7 +736,6 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertSame($config['output'], $retrievedValue,
                 "Timestamp value {$config['input']->format('Y-m-d H:i:s.vO')} should round-trip correctly");
         }
-
     }
 
     public function testTinyintRoundtrip(): void {
