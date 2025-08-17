@@ -243,6 +243,9 @@ final class Duration extends TypeBase {
         return $duration;
     }
 
+    /**
+     * @return array{ months: int, days: int, nanoseconds: int }
+     */
     public function asNativeValue(): array {
         return $this->value;
     }
