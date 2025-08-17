@@ -166,7 +166,7 @@ final class Date extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
 
-        if (!is_int($value) && !is_string($value) && !$value instanceof DateTimeInterface) {
+        if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
             throw new Exception(
                 'Invalid date value; expected number of days since 1970-01-01 as integer, date in format YYYY-mm-dd as string, or DateTimeInterface'
                 , Exception::CODE_DATE_INVALID_VALUE_TYPE,

@@ -113,7 +113,7 @@ final class Timestamp extends TypeBase {
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
-        if (!is_int($value) && !is_string($value) && !$value instanceof DateTimeInterface) {
+        if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
             throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
                 'value_type' => gettype($value),
                 'expected_types' => ['int', 'string', DateTimeInterface::class],
