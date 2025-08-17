@@ -10,7 +10,7 @@ final class Tinyint extends TypeBase {
     final public const VALUE_MAX = 127;
     final public const VALUE_MIN = -128;
 
-    protected int $value;
+    protected readonly int $value;
 
     /**
      * @throws \Cassandra\Type\Exception

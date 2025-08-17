@@ -8,7 +8,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use ReflectionClass;
 
 class Bigint extends TypeBase {
-    protected int $value;
+    protected readonly int $value;
 
     /**
      * @throws \Cassandra\Type\Exception
@@ -17,8 +17,6 @@ class Bigint extends TypeBase {
         self::require64Bit();
 
         $this->value = $value;
-
-        $this->validateValue();
     }
 
     /**
@@ -83,8 +81,5 @@ class Bigint extends TypeBase {
                 'php_int_size_bits' => PHP_INT_SIZE * 8,
             ]);
         }
-    }
-
-    protected function validateValue(): void {
     }
 }

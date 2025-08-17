@@ -16,7 +16,7 @@ final class CollectionMap extends TypeBase {
     /**
      * @var array<mixed> $value
      */
-    protected array $value;
+    protected readonly array $value;
 
     /**
      * @param array<mixed> $value

@@ -10,7 +10,7 @@ final class Smallint extends TypeBase {
     final public const VALUE_MAX = 32767;
     final public const VALUE_MIN = -32768;
 
-    protected int $value;
+    protected readonly int $value;
 
     /**
      * @throws \Cassandra\Type\Exception

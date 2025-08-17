@@ -16,7 +16,7 @@ final class CollectionSet extends TypeBase {
     /**
      * @var array<mixed> $value
      */
-    protected array $value;
+    protected readonly array $value;
 
     /**
      * @param array<mixed> $value

@@ -10,7 +10,7 @@ class Integer extends TypeBase {
     final public const VALUE_MAX = 2147483647;
     final public const VALUE_MIN = -2147483648;
 
-    protected int $value;
+    protected readonly int $value;
 
     /**
      * @throws \Cassandra\Type\Exception

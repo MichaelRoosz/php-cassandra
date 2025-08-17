@@ -7,7 +7,7 @@ namespace Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Decimal extends TypeBase {
-    protected string $value;
+    protected readonly string $value;
 
     /**
      * @throws \Cassandra\Type\Exception

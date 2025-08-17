@@ -13,7 +13,7 @@ use Cassandra\TypeInfo\TypeInfo;
 class Custom extends TypeBase {
     protected CustomInfo $typeInfo;
 
-    protected string $value;
+    protected readonly string $value;
 
     final public function __construct(string $value, string $javaClassName) {
 
