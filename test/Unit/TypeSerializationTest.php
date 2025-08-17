@@ -227,9 +227,9 @@ final class TypeSerializationTest extends TestCase {
             '3000y11mo20d23h59m59s123ms456us',
             (string) (
                 new Type\Duration(
-                    new Type\Duration(
+                    (new Type\Duration(
                         (new Type\Duration($saneDurationString))->asNativeValue()
-                    )->asDateInterval()
+                    ))->asDateInterval()
                 )
             )
         );
@@ -238,9 +238,9 @@ final class TypeSerializationTest extends TestCase {
             '-3000y11mo20d23h59m59s123ms456us',
             (string) (
                 new Type\Duration(
-                    new Type\Duration(
+                    (new Type\Duration(
                         (new Type\Duration('-' . $saneDurationString))->asNativeValue()
-                    )->asDateInterval()
+                    ))->asDateInterval()
                 )
             )
         );
