@@ -272,6 +272,11 @@ final class DataTypeRoundtripTest extends TestCase {
                 continue;
             }
 
+            $firstChar = substr($input, 0, 1);
+            if ($firstChar !== '+' && $firstChar !== '-') {
+                $input = '+' . $input; // Ensure the date string has a sign
+            }
+
             $dateTimeValues[] = [
                 'input' => new DateTimeImmutable($input),
                 'output' => $output['php'],
