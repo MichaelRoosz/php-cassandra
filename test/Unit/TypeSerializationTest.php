@@ -178,17 +178,17 @@ final class TypeSerializationTest extends TestCase {
 
         $this->assertSame(
             $minDuration,
-            new Type\Duration($minDurationAsString)->asNativeValue()
+            (new Type\Duration($minDurationAsString))->asNativeValue()
         );
 
         $this->assertSame(
             $maxDuration,
-            new Type\Duration($maxDurationAsString)->asNativeValue()
+            (new Type\Duration($maxDurationAsString))->asNativeValue()
         );
 
         $this->assertSame(
             $saneDurationString,
-            (string) new Type\Duration($saneDurationString)
+            (string) (new Type\Duration($saneDurationString))
         );
 
         $this->assertSame(
@@ -218,9 +218,9 @@ final class TypeSerializationTest extends TestCase {
 
         $this->assertSame(
             $exampleDuration,
-            new Type\Duration(
+            (new Type\Duration(
                 (new Type\Duration($exampleDuration))->asDateInterval()
-            )->asNativeValue()
+            ))->asNativeValue()
         );
 
         $this->assertSame(
@@ -251,7 +251,7 @@ final class TypeSerializationTest extends TestCase {
                 'days' => -2147483648,
                 'nanoseconds' => PHP_INT_MIN + 808,
             ],
-            new Type\Duration((new Type\Duration($minDuration))->asDateInterval())->asNativeValue()
+            (new Type\Duration((new Type\Duration($minDuration))->asDateInterval()))->asNativeValue()
         );
 
         $this->assertSame(
@@ -260,7 +260,7 @@ final class TypeSerializationTest extends TestCase {
                 'days' => 2147483647,
                 'nanoseconds' => PHP_INT_MAX - 807,
             ],
-            new Type\Duration((new Type\Duration($maxDuration))->asDateInterval())->asNativeValue()
+            (new Type\Duration((new Type\Duration($maxDuration))->asDateInterval()))->asNativeValue()
         );
 
         $this->assertSame(
@@ -291,7 +291,7 @@ final class TypeSerializationTest extends TestCase {
 
         $this->assertSame(
             '+ 0Y 0M 1D 2562047H 47M 16S 854775F',
-            new Type\Duration('1d' . PHP_INT_MAX . 'ns')
+            (new Type\Duration('1d' . PHP_INT_MAX . 'ns'))
                 ->asDateInterval()->format('%R %yY %mM %dD %hH %iM %sS %fF')
         );
     }
