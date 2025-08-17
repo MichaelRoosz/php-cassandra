@@ -9,3 +9,8 @@ parameters:
         check:
             missingCheckedExceptionInThrows: true
             tooWideThrowType: true
+    ignoreErrors:
+        -
+            path: src/Type/Date.php
+            message: '#Dead catch - Exception is never thrown in the try block\.#'
+            reportUnmatched: false
