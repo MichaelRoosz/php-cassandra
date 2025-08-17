@@ -18,7 +18,7 @@ use PHPUnit\Framework\TestCase;
  */
 /**
  * Types to test (Cassandra v5):
- * - ascii                  *Implemented    
+ * - ascii                  *Implemented
  * - bigint (counter)       *Implemented
  * - blob                   *Implemented
  * - boolean                *Implemented
@@ -33,8 +33,8 @@ use PHPUnit\Framework\TestCase;
  * - float                  *Implemented
  * - inet                   *Implemented
  * - integer                *Implemented
- * - smallint               *Implemented   
- * - time
+ * - smallint               *Implemented
+ * - time                   *Implemented
  * - timestamp              *Implemented 
  * - tinyint                *Implemented
  * - tuple
@@ -454,6 +454,76 @@ final class DataTypeRoundtripTest extends TestCase {
 
         }
         $this->compareWithCqlsh('test_smallint', 'id', 'value', $testValues, 'smallint');
+    }
+
+    public function testTimeRoundtrip(): void {
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_time (id int PRIMARY KEY, value time)'
+        );
+
+        $testValues = [
+            '00:00:00' => ['php' => '00:00:00.000000000', 'cql' => '00:00:00.000000000'],
+            '00:00:00.000' => ['php' => '00:00:00.000000000', 'cql' => '00:00:00.000000000'],
+            '00:00:00.000000000' => ['php' => '00:00:00.000000000', 'cql' => '00:00:00.000000000'],
+            '23:59:59' => ['php' => '23:59:59.000000000', 'cql' => '23:59:59.000000000'],
+            '23:59:59.999999999' => ['php' => '23:59:59.999999999', 'cql' => '23:59:59.999999999'],
+            '12:34:56' => ['php' => '12:34:56.000000000', 'cql' => '12:34:56.000000000'],
+            '12:34:56.789012345' => ['php' => '12:34:56.789012345', 'cql' => '12:34:56.789012345'],
+        ];
+
+        // Test with integer and string values
+        foreach (array_keys($testValues) as $index => $testValue) {
+            $this->connection->querySync(
+                'INSERT INTO test_time (id, value) VALUES (?, ?)',
+                [new Type\Integer($index), new Type\Time($testValue)]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_time WHERE id = ?',
+                [new Type\Integer($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertSame($testValues[$testValue]['php'], $retrievedValue,
+                "Time value $testValue should round-trip correctly");
+        }
+
+        $cqlValues = array_map(fn($value) => $value['cql'], array_values($testValues));
+        $this->compareWithCqlsh('test_time', 'id', 'value', $cqlValues, 'time');
+
+        // Test with DateTimeImmutable objects
+        $dateTimeValues = [
+            ['input' => new DateTimeImmutable('00:00:00'), 'output' => '00:00:00.000000000'],
+            ['input' => new DateTimeImmutable('00:00:00.000'), 'output' => '00:00:00.000000000'],
+            ['input' => new DateTimeImmutable('00:00:00.000000000'), 'output' => '00:00:00.000000000'],
+            ['input' => new DateTimeImmutable('23:59:59'), 'output' => '23:59:59.000000000'],
+            ['input' => new DateTimeImmutable('23:59:59.999999999'), 'output' => '23:59:59.999999000'],
+            ['input' => new DateTimeImmutable('12:34:56'), 'output' => '12:34:56.000000000'],
+            ['input' => new DateTimeImmutable('12:34:56.789012345'), 'output' => '12:34:56.789012000'],
+        ];
+
+        foreach ($dateTimeValues as $index => $config) {
+            $this->connection->querySync(
+                'INSERT INTO test_time (id, value) VALUES (?, ?)',
+                [new Type\Integer($index), new Type\Time($config['input'])]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_time WHERE id = ?',
+                [new Type\Integer($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertSame($config['output'], $retrievedValue,
+                "Time value {$config['input']->format('Y-m-d H:i:s.vO')} should round-trip correctly");
+        }
+
     }
 
     public function testTimestampRoundtrip(): void {

@@ -60,6 +60,7 @@ final class Exception extends CassandraException {
     public const CODE_SMALLINT_OUT_OF_RANGE = 90047;
     public const CODE_SMALLINT_UNPACK_FAILED = 90048;
     public const CODE_TIME_64BIT_REQUIRED = 90049;
+    public const CODE_TIME_INVALID_DATETIME_STRING = 90082;
     public const CODE_TIME_INVALID_FORMAT = 90050;
     public const CODE_TIME_INVALID_STRING = 90051;
     public const CODE_TIME_INVALID_VALUE_TYPE = 90052;
