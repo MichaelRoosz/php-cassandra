@@ -8,6 +8,7 @@ use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Type;
+use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -224,20 +225,20 @@ final class DataTypeRoundtripTest extends TestCase {
         );
 
         $testValues = [
-            '1970-01-01' => '1970-01-01',
-            '1970-01-02' => '1970-01-02',
-            '1969-12-31' => '1969-12-31',
-            '1971-01-01' => '1971-01-01',
-            '1969-01-01' => '1969-01-01',
-            '2020-01-01' => '2020-01-01',
-            '-2020-01-02' => '-1457317',
-            '-5877641-06-24' => '-2147483647',
-            '-5877641-06-23' => '-2147483648', // min date
-            '0001-01-01' => '0001-01-01',
-            '9999-07-10' => '9999-07-10',
-            '10000-07-10' => '2933088',
-            '5181580-07-10' => '1891813896',
-            '5881580-07-11' => '2147483647', // max date
+            '1970-01-01' => ['php' => '1970-01-01', 'cql' => '1970-01-01'],
+            '1970-01-02' => ['php' => '1970-01-02', 'cql' => '1970-01-02'],
+            '1969-12-31' => ['php' => '1969-12-31', 'cql' => '1969-12-31'],
+            '1971-01-01' => ['php' => '1971-01-01', 'cql' => '1971-01-01'],
+            '1969-01-01' => ['php' => '1969-01-01', 'cql' => '1969-01-01'],
+            '2020-01-01' => ['php' => '2020-01-01', 'cql' => '2020-01-01'],
+            '-2020-01-02' => ['php' => '-2020-01-02', 'cql' => '-1457317'],
+            '-5877641-06-24' => ['php' => '-5877641-06-24', 'cql' => '-2147483647'],
+            '-5877641-06-23' => ['php' => '-5877641-06-23', 'cql' => '-2147483648'], // min date
+            '0001-01-01' => ['php' => '0001-01-01', 'cql' => '0001-01-01'],
+            '9999-07-10' => ['php' => '9999-07-10', 'cql' => '9999-07-10'],
+            '10000-07-10' => ['php' => '+10000-07-10', 'cql' => '2933088'],
+            '5181580-07-10' => ['php' => '+5181580-07-10', 'cql' => '1891813896'],
+            '5881580-07-11' => ['php' => '+5881580-07-11', 'cql' => '2147483647'], // max date
         ];
 
         foreach (array_keys($testValues) as $index => $testValue) {
@@ -255,10 +256,11 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue, "Date value $testValue should round-trip correctly");
+            $this->assertSame($testValues[$testValue]['php'], $retrievedValue, "Date value $testValue should round-trip correctly");
         }
 
-        $this->compareWithCqlsh('test_date', 'id', 'value', array_values($testValues), 'date');
+        $cqlValues = array_map(fn($value) => $value['cql'], array_values($testValues));
+        $this->compareWithCqlsh('test_date', 'id', 'value', $cqlValues, 'date');
     }
 
     public function testDoubleRoundtrip(): void {
@@ -459,16 +461,30 @@ final class DataTypeRoundtripTest extends TestCase {
             'CREATE TABLE IF NOT EXISTS test_timestamp (id int PRIMARY KEY, value timestamp)'
         );
 
+        $currentTime = new DateTimeImmutable('now');
+        $currentTimeInMilliseconds = $currentTime->getTimestamp() * 1000 + (int) $currentTime->format('v');
+
         $testValues = [
-            0, // Unix epoch
-            1609459200000, // 2021-01-01 00:00:00 UTC (milliseconds)
-            1234567890123, // Random timestamp
-            -62135596800000, // Year 1 AD
-            253402300799999, // Year 9999
-            time() * 1000, // Current time in milliseconds
+            0 => ['php' => '1970-01-01 00:00:00.000+0000', 'cql' => '1970-01-01 00:00:00.000+0000'],
+            1609459200000 => ['php' => '2021-01-01 00:00:00.000+0000', 'cql' => '2021-01-01 00:00:00.000+0000'],
+            1234567890123 => ['php' => '2009-02-13 23:31:30.123+0000', 'cql' => '2009-02-13 23:31:30.123+0000'],
+            -62135596800000 => ['php' => '0001-01-01 00:00:00.000+0000', 'cql' => '1-01-01 00:00:00.000+0000'],
+            253402300799999 => ['php' => '9999-12-31 23:59:59.999+0000', 'cql' => '9999-12-31 23:59:59.998+0000'],
+            $currentTimeInMilliseconds => ['php' => $currentTime->format('Y-m-d H:i:s.vO'), 'cql' => $currentTime->format('Y-m-d H:i:s.vO')],
+            '1970-01-01 00:00:00.789+0000' => ['php' => '1970-01-01 00:00:00.789+0000', 'cql' => '1970-01-01 00:00:00.789+0000'],
+            '2021-01-01 12:23:57' => ['php' => '2021-01-01 12:23:57.000+0000', 'cql' => '2021-01-01 12:23:57.000+0000'],
+            '2009-02-13 23:31:30.123+0000' => ['php' => '2009-02-13 23:31:30.123+0000', 'cql' => '2009-02-13 23:31:30.123+0000'],
+            '0001-01-01' => ['php' => '0001-01-01 00:00:00.000+0000', 'cql' => '1-01-01 00:00:00.000+0000'],
+            '9999-12-31 23:59:59.999+0000' => ['php' => '9999-12-31 23:59:59.999+0000', 'cql' => '9999-12-31 23:59:59.998+0000'],
+            '2021-01-01 12:23:57.123+0000' => ['php' => '2021-01-01 12:23:57.123+0000', 'cql' => '2021-01-01 12:23:57.123+0000'],
+            '2021-01-01 12:23:57.123' => ['php' => '2021-01-01 12:23:57.123+0000', 'cql' => '2021-01-01 12:23:57.123+0000'],
+            '2021-01-01 12:23:57' => ['php' => '2021-01-01 12:23:57.000+0000', 'cql' => '2021-01-01 12:23:57.000+0000'],
+            '2021-01-01 12:23' => ['php' => '2021-01-01 12:23:00.000+0000', 'cql' => '2021-01-01 12:23:00.000+0000'],
+            '2021-01-01' => ['php' => '2021-01-01 00:00:00.000+0000', 'cql' => '2021-01-01 00:00:00.000+0000'],
         ];
 
-        foreach ($testValues as $index => $testValue) {
+        // Test with integer and string values
+        foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
                 [new Type\Integer($index), new Type\Timestamp($testValue)]
@@ -483,11 +499,46 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->assertNotNull($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame($testValue, $retrievedValue,
+            $this->assertSame($testValues[$testValue]['php'], $retrievedValue,
                 "Timestamp value $testValue should round-trip correctly");
-
         }
-        $this->compareWithCqlsh('test_timestamp', 'id', 'value', $testValues, 'timestamp');
+
+        $cqlValues = array_map(fn($value) => $value['cql'], array_values($testValues));
+        $this->compareWithCqlsh('test_timestamp', 'id', 'value', $cqlValues, 'timestamp');
+
+        // Test with DateTimeImmutable objects
+        $dateTimeValues = [];
+        foreach ($testValues as $input => $output) {
+
+            if (!is_string($input)) {
+                continue;
+            }
+
+            $dateTimeValues[] = [
+                'input' => new DateTimeImmutable($input),
+                'output' => $output['php'],
+            ];
+        }
+
+        foreach ($dateTimeValues as $index => $config) {
+            $this->connection->querySync(
+                'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
+                [new Type\Integer($index), new Type\Timestamp($config['input'])]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_timestamp WHERE id = ?',
+                [new Type\Integer($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertSame($config['output'], $retrievedValue,
+                "Timestamp value {$config['input']->format('Y-m-d H:i:s.vO')} should round-trip correctly");
+        }
+
     }
 
     public function testTinyintRoundtrip(): void {
@@ -652,7 +703,7 @@ final class DataTypeRoundtripTest extends TestCase {
             'QUOTE' => '"',
             'ESCAPE' => '?',
             'NULL' => '__NULL__',
-            'DATETIMEFORMAT' => '%Y-%m-%d %H:%M:%S%z',
+            'DATETIMEFORMAT' => '%Y-%m-%d %H:%M:%S.%f%z',
             'DECIMALSEP' => '.',
             'PAGESIZE' => '100',
             'ENCODING' => 'UTF8',

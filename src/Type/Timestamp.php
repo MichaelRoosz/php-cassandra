@@ -5,70 +5,63 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\TypeInfo\TypeInfo;
+use DateMalformedStringException;
 use DateTimeImmutable;
 use DateTimeInterface;
 
-final class Timestamp extends Bigint {
-    /**
-     * @throws \Exception
-     */
-    public function __toString(): string {
-        return $this->toString();
-    }
+final class Timestamp extends TypeBase {
+    protected readonly int $value;
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromDateTime(DateTimeInterface $value): static {
-        $timestamp = $value->getTimestamp();
-        $microseconds = (int) $value->format('u');
-        $milliseconds = $timestamp * 1000 + intdiv($microseconds, 1000);
-
-        return new static($milliseconds);
-    }
-
-    /**
-     * @param mixed $value
-     * 
-     * @throws \Cassandra\Type\Exception
-     * @throws \Exception
-     */
-    #[\Override]
-    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
+    final public function __construct(int|string|DateTimeInterface $value) {
         self::require64Bit();
 
-        if (is_string($value)) {
-            return self::fromString($value);
-        }
+        if (is_int($value)) {
+            $this->value = $value;
 
-        if (!is_int($value)) {
-            throw new Exception('Invalid timestamp value; expected milliseconds as int', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
-                'value_type' => gettype($value),
-            ]);
-        }
+        } elseif (is_string($value)) {
+            try {
+                $date = new DateTimeImmutable($value);
+                $timestamp = $date->getTimestamp();
+                $milliseconds = ($timestamp * 1000) + (int) $date->format('v');
+            } catch (DateMalformedStringException $e) {
+                throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
+                    'value_type' => gettype($value),
+                    'expected_types' => ['int', 'string', DateTimeInterface::class],
+                ], $e);
+            }
 
-        return new static($value);
+            $this->value = $milliseconds;
+
+        } else {
+            $timestamp = $value->getTimestamp();
+            $milliseconds = ($timestamp * 1000) + (int) $value->format('v');
+
+            $this->value = $milliseconds;
+        }
+    }
+
+    public function __toString(): string {
+        return $this->asString();
     }
 
     /**
-     * @throws \Exception
      * @throws \Cassandra\Type\Exception
      */
-    public static function fromString(string $value): static {
-        $inputDate = new DateTimeImmutable($value);
-
-        return self::fromDateTime($inputDate);
-    }
-
-    /**
-     * @throws \Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function toDateTime(): DateTimeImmutable {
+    public function asDateTime(): DateTimeImmutable {
         $seconds = intdiv($this->value, 1000);
         $microseconds = ($this->value % 1000) * 1000;
-        $datetime = new DateTimeImmutable('@' . $seconds);
-        $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
+
+        try {
+            $datetime = new DateTimeImmutable('@' . $seconds);
+            $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
+        } catch (DateMalformedStringException $e) {
+            throw new Exception('Cannot convert timestamp to DateTimeImmutable', Exception::CODE_TIMESTAMP_TO_DATETIME_FAILED, [
+                'milliseconds' => $this->value,
+            ], $e);
+        }
 
         if ($datetime === false) {
             throw new Exception('Cannot convert timestamp to DateTimeImmutable', Exception::CODE_TIMESTAMP_TO_DATETIME_FAILED, [
@@ -79,11 +72,82 @@ final class Timestamp extends Bigint {
         return $datetime;
     }
 
-    /**
-     * @throws \Exception
-     */
-    public function toString(): string {
-        return $this->toDateTime()->format('Y-m-d H:i:s.uO');
+    public function asInteger(): int {
+        return $this->value;
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public function asString(): string {
+        return $this->getValue();
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    #[\Override]
+    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+        self::require64Bit();
+
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('J', $binary);
+        if ($unpacked === false) {
+            throw new Exception('Cannot unpack bigint binary data', Exception::CODE_BIGINT_UNPACK_FAILED, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 8,
+            ]);
+        }
+
+        return new static($unpacked[1]);
+    }
+
+    /**
+     * @param mixed $value
+     * 
+     * @throws \Cassandra\Type\Exception
+     */
+    #[\Override]
+    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
+        self::require64Bit();
+
+        if (!is_int($value) && !is_string($value) && !$value instanceof DateTimeInterface) {
+            throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
+                'value_type' => gettype($value),
+                'expected_types' => ['int', 'string', DateTimeInterface::class],
+            ]);
+        }
+
+        return new static($value);
+    }
+
+    #[\Override]
+    public function getBinary(): string {
+        return pack('J', $this->value);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    #[\Override]
+    public function getValue(): string {
+        return $this->asDateTime()->format('Y-m-d H:i:s.vO');
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    protected static function require64Bit(): void {
+        if (PHP_INT_SIZE < 8) {
+            $className = self::class;
+
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system', Exception::CODE_BIGINT_64BIT_REQUIRED, [
+                'class' => $className,
+                'php_int_size_bytes' => PHP_INT_SIZE,
+                'php_int_size_bits' => PHP_INT_SIZE * 8,
+            ]);
+        }
+    }
 }
