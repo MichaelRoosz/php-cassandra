@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\TypeInfo\TypeInfo;
-use DateMalformedStringException;
 use DateTimeImmutable;
 use DateTimeInterface;
+use Exception as PhpException;
 use ReflectionClass;
 
 final class Time extends TypeBase {
@@ -92,7 +92,7 @@ final class Time extends TypeBase {
 
         try {
             return new DateTimeImmutable('1970-01-01 ' . $this->asString());
-        } catch (DateMalformedStringException $e) {
+        } catch (PhpException $e) {
             throw new Exception('Invalid time value; cannot create DateTimeImmutable', Exception::CODE_TIME_INVALID_DATETIME_STRING, [
                 'value' => $this->value,
                 'note' => 'This may happen if the time is out of range for DateTimeImmutable',

@@ -6,11 +6,9 @@ namespace Cassandra\Type;
 
 use Cassandra\TypeInfo\TypeInfo;
 use DateInterval;
-use DateInvalidOperationException;
-use DateMalformedIntervalStringException;
-use DateMalformedStringException;
 use DateTimeImmutable;
 use DateTimeInterface;
+use Exception as PhpException;
 
 final class Date extends TypeBase {
     final public const VALUE_INT_MAX = 4_294_967_295;
@@ -53,7 +51,7 @@ final class Date extends TypeBase {
 
             try {
                 $valueAsDate = new DateTimeImmutable($value);
-            } catch (DateMalformedStringException $e) {
+            } catch (PhpException $e) {
                 throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', Exception::CODE_DATE_INVALID_STRING_FORMAT, [
                     'value' => $value,
                     'note' => 'This may happen if the date is out of range for DateTimeImmutable',
@@ -107,7 +105,7 @@ final class Date extends TypeBase {
 
         try {
             $interval = new DateInterval('P' . abs($daysSinceBaseDate) . 'D');
-        } catch (DateMalformedIntervalStringException $e) {
+        } catch (PhpException $e) {
             throw new Exception('Invalid date value; cannot create DateInterval', Exception::CODE_DATE_OUT_OF_RANGE, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',
@@ -120,7 +118,7 @@ final class Date extends TypeBase {
             } else {
                 return $baseDate->add($interval);
             }
-        } catch (DateInvalidOperationException $e) {
+        } catch (PhpException $e) {
             throw new Exception('Invalid date value; cannot create DateTimeImmutable', Exception::CODE_DATE_OUT_OF_RANGE, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',

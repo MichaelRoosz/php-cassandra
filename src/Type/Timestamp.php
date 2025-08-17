@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\TypeInfo\TypeInfo;
-use DateMalformedStringException;
 use DateTimeImmutable;
 use DateTimeInterface;
+use Exception as PhpException;
 
 final class Timestamp extends TypeBase {
     protected readonly int $value;
@@ -26,7 +26,7 @@ final class Timestamp extends TypeBase {
                 $date = new DateTimeImmutable($value);
                 $timestamp = $date->getTimestamp();
                 $milliseconds = ($timestamp * 1000) + (int) $date->format('v');
-            } catch (DateMalformedStringException $e) {
+            } catch (PhpException $e) {
                 throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
                     'value_type' => gettype($value),
                     'expected_types' => ['int', 'string', DateTimeInterface::class],
@@ -57,7 +57,7 @@ final class Timestamp extends TypeBase {
         try {
             $datetime = new DateTimeImmutable('@' . $seconds);
             $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
-        } catch (DateMalformedStringException $e) {
+        } catch (PhpException $e) {
             throw new Exception('Cannot convert timestamp to DateTimeImmutable', Exception::CODE_TIMESTAMP_TO_DATETIME_FAILED, [
                 'milliseconds' => $this->value,
             ], $e);
