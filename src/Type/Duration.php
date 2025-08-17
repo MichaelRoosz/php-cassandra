@@ -89,7 +89,7 @@ final class Duration extends TypeBase {
         $value = $this->value;
 
         $isNegative = $value['months'] < 0 || $value['days'] < 0 || $value['nanoseconds'] < 0;
-        $sign = $isNegative ? '' : '+';
+        $sign = $isNegative ? '-' : '+';
 
         $years = intdiv($value['months'], 12);
         $months = $value['months'] % 12;
@@ -103,7 +103,7 @@ final class Duration extends TypeBase {
             $years = abs($years);
             $months = abs($months);
             $days = abs($days);
-            $nanoseconds = abs($nanoseconds);
+            $weeks = abs($weeks);
         }
 
         $duration = '';
@@ -135,6 +135,13 @@ final class Duration extends TypeBase {
             $nanoseconds %= 1000000000;
 
             $microseconds = intdiv($nanoseconds, 1000);
+
+            if ($isNegative) {
+                $hours = abs($hours);
+                $minutes = abs($minutes);
+                $seconds = abs($seconds);
+                $microseconds = abs($microseconds);
+            }
 
             if ($hours) {
                 $duration .= $sign . $hours . ' hours ';
@@ -183,7 +190,6 @@ final class Duration extends TypeBase {
             $years = abs($years);
             $months = abs($months);
             $days = abs($days);
-            $nanoseconds = abs($nanoseconds);
         }
 
         $duration = 'P';
@@ -209,6 +215,12 @@ final class Duration extends TypeBase {
 
             $seconds = intdiv($nanoseconds, 1000000000);
 
+            if ($isNegative) {
+                $hours = abs($hours);
+                $minutes = abs($minutes);
+                $seconds = abs($seconds);
+            }
+
             $duration .= 'T';
 
             if ($hours) {
@@ -231,6 +243,10 @@ final class Duration extends TypeBase {
         return $duration;
     }
 
+    public function asNativeValue(): array {
+        return $this->value;
+    }
+
     public function asString(): string {
         $value = $this->value;
 
@@ -251,7 +267,6 @@ final class Duration extends TypeBase {
             $years = abs($years);
             $months = abs($months);
             $days = abs($days);
-            $nanoseconds = abs($nanoseconds);
         }
 
         if ($years) {
