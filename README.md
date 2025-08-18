@@ -52,8 +52,8 @@ You can manage steps manually:
 
 ```bash
 composer test:integration:up
-bash .docker/wait-for-cassandra.sh
-APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9042 vendor/bin/phpunit --testsuite integration
+composer test:integration:init
+composer test:integration:run
 composer test:integration:down
 ```
 

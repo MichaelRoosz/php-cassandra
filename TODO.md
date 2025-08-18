@@ -8,7 +8,6 @@ Todo
 * Add examples
 
 * Convert exception codes to enums
-* Make type values readonly
 
 * Implement automatically re-connecting to nodes and load-balancing
  

@@ -3,7 +3,7 @@ services:
     image: cassandra:${CASSANDRA_VERSION:-5.0}
     container_name: php-cassandra-test-db
     ports:
-      - "9042:9042"
+      - "9142:9042"
     environment:
       - CASSANDRA_START_RPC=false
       - MAX_HEAP_SIZE=512M
