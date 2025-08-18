@@ -7,7 +7,4 @@ Todo
   
 * Add examples
 
-* Convert exception codes to enums
-
 * Implement automatically re-connecting to nodes and load-balancing
- 
