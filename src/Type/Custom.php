@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\CustomInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -28,11 +29,11 @@ class Custom extends TypeBase {
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', Exception::CODE_CUSTOM_TYPEINFO_REQUIRED);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_CUSTOM_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected', Exception::CODE_CUSTOM_INVALID_TYPEINFO, [
+            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::TYPE_CUSTOM_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -42,7 +43,7 @@ class Custom extends TypeBase {
          */
         $unpacked = unpack('n', substr($binary, 0, 2));
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack custom type binary header', Exception::CODE_CUSTOM_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack custom type binary header', ExceptionCode::TYPE_CUSTOM_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_header_length' => 2,
             ]);
@@ -60,17 +61,17 @@ class Custom extends TypeBase {
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', Exception::CODE_CUSTOM_TYPEINFO_REQUIRED);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_CUSTOM_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected', Exception::CODE_CUSTOM_INVALID_TYPEINFO, [
+            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::TYPE_CUSTOM_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
 
         if (!is_string($value)) {
-            throw new Exception('Invalid custom value; expected string', Exception::CODE_CUSTOM_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid custom value; expected string', ExceptionCode::TYPE_CUSTOM_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

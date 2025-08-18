@@ -109,7 +109,7 @@ final class Connection {
         $response = $this->syncRequest($batchRequest);
 
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during batchSync', Exception::CODE_UNEXPECTED_RESPONSE_BATCH_SYNC, [
+            throw new Exception('Unexpected response type during batchSync', ExceptionCode::CON_UNEXPECTED_RESPONSE_BATCH_SYNC->value, [
                 'operation' => 'batchSync',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -130,7 +130,7 @@ final class Connection {
         $this->selectNode();
 
         if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', Exception::CODE_NOT_CONNECTED, [
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
                 'operation' => 'connect',
             ]);
         }
@@ -141,7 +141,7 @@ final class Connection {
         if (!($response instanceof Response\Supported)) {
             $nodeConfig = $this->node->getConfig();
 
-            throw new Exception('OPTIONS handshake failed: unexpected response type', Exception::CODE_OPTIONS_UNEXPECTED_RESPONSE, [
+            throw new Exception('OPTIONS handshake failed: unexpected response type', ExceptionCode::CON_OPTIONS_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'connect/options',
                 'expected' => Response\Supported::class,
                 'received' => get_class($response),
@@ -158,7 +158,7 @@ final class Connection {
             $nodeConfig = $node->getConfig();
 
             if (!$nodeConfig->username || !$nodeConfig->password) {
-                throw new Exception('Username and password must not be empty.', Exception::CODE_AUTH_MISSING_CREDENTIALS, [
+                throw new Exception('Username and password must not be empty.', ExceptionCode::CON_AUTH_MISSING_CREDENTIALS->value, [
                     'operation' => 'connect/authenticate',
                     'host' => $nodeConfig->host,
                     'port' => $nodeConfig->port,
@@ -168,7 +168,7 @@ final class Connection {
 
             if ($this->version >= 5) {
                 if (!($node instanceof Connection\NodeImplementation)) {
-                    throw new Exception('Invalid node implementation: expected NodeImplementation', Exception::CODE_AUTH_INVALID_NODE_IMPLEMENTATION, [
+                    throw new Exception('Invalid node implementation: expected NodeImplementation', ExceptionCode::CON_AUTH_INVALID_NODE_IMPLEMENTATION->value, [
                         'operation' => 'connect/authenticate',
                         'node_class' => get_class($node),
                         'expected_interface' => Connection\NodeImplementation::class,
@@ -179,7 +179,7 @@ final class Connection {
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
             if (!($authResult instanceof Response\AuthSuccess)) {
-                throw new Exception('Authentication failed.', Exception::CODE_AUTH_FAILED, [
+                throw new Exception('Authentication failed.', ExceptionCode::CON_AUTH_FAILED->value, [
                     'operation' => 'connect/authenticate',
                     'host' => $nodeConfig->host,
                     'port' => $nodeConfig->port,
@@ -189,7 +189,7 @@ final class Connection {
         } elseif ($response instanceof Response\Ready) {
             if ($this->version >= 5) {
                 if (!($node instanceof Connection\NodeImplementation)) {
-                    throw new Exception('Invalid node implementation: expected NodeImplementation', Exception::CODE_READY_INVALID_NODE_IMPLEMENTATION, [
+                    throw new Exception('Invalid node implementation: expected NodeImplementation', ExceptionCode::CON_READY_INVALID_NODE_IMPLEMENTATION->value, [
                         'operation' => 'connect/ready',
                         'node_class' => get_class($node),
                         'expected_interface' => Connection\NodeImplementation::class,
@@ -200,7 +200,7 @@ final class Connection {
         } else {
             $nodeConfig = $node->getConfig();
 
-            throw new Exception('Connection startup failed: unexpected response type', Exception::CODE_STARTUP_UNEXPECTED_RESPONSE, [
+            throw new Exception('Connection startup failed: unexpected response type', ExceptionCode::CON_STARTUP_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'connect/startup',
                 'expected' => [Response\Authenticate::class, Response\Ready::class],
                 'received' => get_class($response),
@@ -248,7 +248,7 @@ final class Connection {
 
         $response = $this->syncRequest($request);
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during executeSync', Exception::CODE_EXECUTE_UNEXPECTED_RESPONSE, [
+            throw new Exception('Unexpected response type during executeSync', ExceptionCode::CON_EXECUTE_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'executeSync',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -304,7 +304,7 @@ final class Connection {
     public function prepareSync(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
         $response = $this->syncRequest(new Request\Prepare($query, $options));
         if (!($response instanceof Response\Result\PreparedResult)) {
-            throw new Exception('Unexpected response type during prepareSync', Exception::CODE_PREPARE_UNEXPECTED_RESPONSE, [
+            throw new Exception('Unexpected response type during prepareSync', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
             ]);
@@ -337,7 +337,7 @@ final class Connection {
         $response = $this->syncRequest($request);
 
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during querySync', Exception::CODE_QUERY_UNEXPECTED_RESPONSE, [
+            throw new Exception('Unexpected response type during querySync', ExceptionCode::CON_QUERY_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
             ]);
@@ -362,7 +362,7 @@ final class Connection {
 
         $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during setKeyspace', Exception::CODE_SET_KEYSPACE_UNEXPECTED_RESPONSE, [
+            throw new Exception('Unexpected response type during setKeyspace', ExceptionCode::CON_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
                 'operation' => 'setKeyspace',
@@ -390,7 +390,7 @@ final class Connection {
         }
 
         if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', Exception::CODE_NOT_CONNECTED, [
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
                 'operation' => 'syncRequest',
             ]);
         }
@@ -402,7 +402,7 @@ final class Connection {
         $response = $this->handleResponse($request, $response);
 
         if ($response === null) {
-            throw new Exception('Received unexpected null response from server.', Exception::CODE_SYNC_NULL_RESPONSE, [
+            throw new Exception('Received unexpected null response from server.', ExceptionCode::CON_SYNC_NULL_RESPONSE->value, [
                 'operation' => 'syncRequest',
                 'request_class' => get_class($request),
             ]);
@@ -433,7 +433,7 @@ final class Connection {
         } elseif (in_array('3/v3', $serverOptions['PROTOCOL_VERSIONS'])) {
             $this->version = 3;
         } else {
-            throw new Exception('Server does not support a compatible protocol version.', Exception::CODE_SERVER_PROTOCOL_UNSUPPORTED, [
+            throw new Exception('Server does not support a compatible protocol version.', ExceptionCode::CON_SERVER_PROTOCOL_UNSUPPORTED->value, [
                 'server_versions' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
                 'client_supported' => ['3/v3', '4/v4', '5/v5'],
             ]);
@@ -447,7 +447,7 @@ final class Connection {
             if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
                 $nodeConfig = $this->node?->getConfig();
 
-                throw new Exception('Compression "' . $compressionAlgo . '" not supported by server.', Exception::CODE_COMPRESSION_NOT_SUPPORTED, [
+                throw new Exception('Compression "' . $compressionAlgo . '" not supported by server.', ExceptionCode::CON_COMPRESSION_NOT_SUPPORTED->value, [
                     'host' => $nodeConfig->host ?? null,
                     'port' => $nodeConfig->port ?? null,
                     'compression' => $compressionAlgo,
@@ -485,7 +485,7 @@ final class Connection {
 
         $responseClassMap = Response\Response::getResponseClassMap();
         if (!isset($responseClassMap[$header->opcode->value])) {
-            throw new Exception('Unknown response type: ' . $header->opcode->value, Exception::CODE_UNKNOWN_RESPONSE_TYPE, [
+            throw new Exception('Unknown response type: ' . $header->opcode->value, ExceptionCode::CON_UNKNOWN_RESPONSE_TYPE->value, [
                 'expected' => array_keys($responseClassMap),
                 'received' => $header->opcode->value,
             ]);
@@ -505,7 +505,7 @@ final class Connection {
                 if (isset($resultClassMap[$resultKind->value])) {
                     $responseClass = $resultClassMap[$resultKind->value];
                 } else {
-                    throw new Exception('Unknown result kind: ' . $resultKind->value, Exception::CODE_UNKNOWN_RESULT_KIND, [
+                    throw new Exception('Unknown result kind: ' . $resultKind->value, ExceptionCode::CON_UNKNOWN_RESULT_KIND->value, [
                         'expected' => array_keys($resultClassMap),
                         'received' => $resultKind->value,
                     ]);
@@ -521,7 +521,7 @@ final class Connection {
                 if (isset($eventClassMap[$eventType->value])) {
                     $responseClass = $eventClassMap[$eventType->value];
                 } else {
-                    throw new Exception('Unknown event type: ' . $eventType->value, Exception::CODE_UNKNOWN_EVENT_TYPE, [
+                    throw new Exception('Unknown event type: ' . $eventType->value, ExceptionCode::CON_UNKNOWN_EVENT_TYPE->value, [
                         'expected' => array_keys($eventClassMap),
                         'received' => $eventType->value,
                     ]);
@@ -537,7 +537,7 @@ final class Connection {
                 if (isset($errorClassMap[$errorCode])) {
                     $responseClass = $errorClassMap[$errorCode];
                 } else {
-                    throw new Exception('Unknown error code: ' . $errorCode, Exception::CODE_UNKNOWN_ERROR_CODE, [
+                    throw new Exception('Unknown error code: ' . $errorCode, ExceptionCode::CON_UNKNOWN_ERROR_CODE->value, [
                         'expected' => array_keys($errorClassMap),
                         'received' => $errorCode,
                     ]);
@@ -583,7 +583,7 @@ final class Connection {
         } while ($response !== null && $response->getStream() !== $streamId);
 
         if ($response === null) {
-            throw new Exception('Received unexpected null response from server.', Exception::CODE_GET_NEXT_NULL_RESPONSE, [
+            throw new Exception('Received unexpected null response from server.', ExceptionCode::CON_GET_NEXT_NULL_RESPONSE->value, [
                 'operation' => 'getNextResponseForStream',
                 'stream_id' => $streamId,
             ]);
@@ -598,7 +598,7 @@ final class Connection {
     protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
-            throw new Exception('Unexpected result type while handling reprepared statement', Exception::CODE_REPREPARE_UNEXPECTED_RESULT_TYPE, [
+            throw new Exception('Unexpected result type while handling reprepared statement', ExceptionCode::CON_REPREPARE_UNEXPECTED_RESULT_TYPE->value, [
                 'operation' => 'reprepare_result',
                 'expected' => Response\Result\PreparedResult::class,
                 'received' => get_class($result),
@@ -610,7 +610,7 @@ final class Connection {
         }
 
         if (!($originalRequest instanceof Request\Execute)) {
-            throw new Exception('Original request is not an execute request', Exception::CODE_REPREPARE_ORIGINAL_NOT_EXECUTE, [
+            throw new Exception('Original request is not an execute request', ExceptionCode::CON_REPREPARE_ORIGINAL_NOT_EXECUTE->value, [
                 'operation' => 'reprepare_execute',
                 'request_class' => $originalRequest ? get_class($originalRequest) : null,
                 'expected' => Request\Execute::class,
@@ -632,7 +632,7 @@ final class Connection {
 
         $response = $this->syncRequest($newExecuteRequest);
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during re-execute after repreparation', Exception::CODE_REPREPARE_UNEXPECTED_RESPONSE_REEXECUTE, [
+            throw new Exception('Unexpected response type during re-execute after repreparation', ExceptionCode::CON_REPREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
                 'operation' => 'reprepare_execute',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -667,7 +667,7 @@ final class Connection {
 
             $prevResult = $request->getPreviousResult();
             if (!($prevResult instanceof Response\Result\PreparedResult)) {
-                throw new Exception('Unexpected previous result type for UNPREPARED error', Exception::CODE_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE, [
+                throw new Exception('Unexpected previous result type for UNPREPARED error', ExceptionCode::CON_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE->value, [
                     'operation' => 'unprepared_error_handling',
                     'expected' => Response\Result\PreparedResult::class,
                     'received' => get_class($prevResult),
@@ -676,12 +676,12 @@ final class Connection {
 
             $prevRequest = $prevResult->getRequest();
             if ($prevRequest === null) {
-                throw new Exception('Previous prepared result has no associated request', Exception::CODE_UNPREPARED_PREV_NO_REQUEST, [
+                throw new Exception('Previous prepared result has no associated request', ExceptionCode::CON_UNPREPARED_PREV_NO_REQUEST->value, [
                     'operation' => 'unprepared_error_handling',
                 ]);
             }
             if (!($prevRequest instanceof Request\Prepare)) {
-                throw new Exception('Previous result is not a prepare request', Exception::CODE_UNPREPARED_PREV_NOT_PREPARE_REQUEST, [
+                throw new Exception('Previous result is not a prepare request', ExceptionCode::CON_UNPREPARED_PREV_NOT_PREPARE_REQUEST->value, [
                     'operation' => 'unprepared_error_handling',
                     'request_class' => get_class($prevRequest),
                     'expected' => Request\Prepare::class,
@@ -699,7 +699,7 @@ final class Connection {
 
             $prepareResponse = $this->syncRequest($newPrepareRequest);
             if (!($prepareResponse instanceof Response\Result)) {
-                throw new Exception('Unexpected response type during repreparation', Exception::CODE_REPREPARATION_UNEXPECTED_RESPONSE, [
+                throw new Exception('Unexpected response type during repreparation', ExceptionCode::CON_REPREPARATION_UNEXPECTED_RESPONSE->value, [
                     'operation' => 'unprepared_error_handling',
                     'expected' => Response\Result::class,
                     'received' => get_class($prepareResponse),
@@ -762,7 +762,7 @@ final class Connection {
      */
     protected function readResponse(): ?Response\Response {
         if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', Exception::CODE_NOT_CONNECTED, [
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
                 'operation' => 'readResponse',
             ]);
         }
@@ -770,7 +770,7 @@ final class Connection {
         $version = ord($this->node->read(1));
 
         if ($version !== $this->versionIn) {
-            throw new Exception('Unsupported or mismatched CQL binary protocol version received from server.', Exception::CODE_PROTOCOL_VERSION_MISMATCH, [
+            throw new Exception('Unsupported or mismatched CQL binary protocol version received from server.', ExceptionCode::CON_PROTOCOL_VERSION_MISMATCH->value, [
                 'received_version' => $version,
                 'expected_version' => $this->versionIn,
                 'supported_versions' => ['3/v3', '4/v4', '5/v5'],
@@ -789,7 +789,7 @@ final class Connection {
         if ($headerData === false) {
             $nodeConfig = $this->node->getConfig();
 
-            throw new Exception('Cannot read response header', Exception::CODE_CANNOT_READ_RESPONSE_HEADER, [
+            throw new Exception('Cannot read response header', ExceptionCode::CON_CANNOT_READ_RESPONSE_HEADER->value, [
                 'host' => $nodeConfig->host,
                 'port' => $nodeConfig->port,
                 'protocol_version' => $this->version,
@@ -807,7 +807,7 @@ final class Connection {
                 length: $headerData['length'],
             );
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid opcode type: ' . $headerData['opcode'], Exception::CODE_INVALID_OPCODE_TYPE, [
+            throw new Exception('Invalid opcode type: ' . $headerData['opcode'], ExceptionCode::CON_INVALID_OPCODE_TYPE->value, [
                 'opcode' => $headerData['opcode'],
             ], $e);
         }
@@ -870,7 +870,7 @@ final class Connection {
             'class' => $config->getNodeClass(),
         ], $this->nodes);
 
-        throw new Exception('Unable to connect to any Cassandra node', Exception::CODE_UNABLE_TO_CONNECT_ANY_NODE, [
+        throw new Exception('Unable to connect to any Cassandra node', ExceptionCode::CON_UNABLE_TO_CONNECT_ANY_NODE->value, [
             'attempted_nodes' => $nodeConfigs,
             'node_count' => count($this->nodes),
         ]);
@@ -885,7 +885,7 @@ final class Connection {
         }
 
         if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', Exception::CODE_NOT_CONNECTED, [
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
                 'operation' => 'sendAsyncRequest',
             ]);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error\Context\ErrorContext;
 use TypeError;
@@ -111,7 +112,7 @@ class Error extends Response {
         try {
             $type = ErrorType::from($code);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid error type: ' . $code, Exception::ERROR_INVALID_TYPE, [
+            throw new Exception('Invalid error type: ' . $code, ExceptionCode::RESPONSE_ERROR_INVALID_TYPE->value, [
                 'error_type' => $code,
             ], $e);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -27,7 +28,7 @@ final class Timestamp extends TypeBase {
                 $timestamp = $date->getTimestamp();
                 $milliseconds = ($timestamp * 1000) + (int) $date->format('v');
             } catch (PhpException $e) {
-                throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
+                throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::TYPE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
                     'value_type' => gettype($value),
                     'expected_types' => ['int', 'string', DateTimeInterface::class],
                 ], $e);
@@ -58,13 +59,13 @@ final class Timestamp extends TypeBase {
             $datetime = new DateTimeImmutable('@' . $seconds);
             $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
         } catch (PhpException $e) {
-            throw new Exception('Cannot convert timestamp to DateTimeImmutable', Exception::CODE_TIMESTAMP_TO_DATETIME_FAILED, [
+            throw new Exception('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::TYPE_TIMESTAMP_TO_DATETIME_FAILED->value, [
                 'milliseconds' => $this->value,
             ], $e);
         }
 
         if ($datetime === false) {
-            throw new Exception('Cannot convert timestamp to DateTimeImmutable', Exception::CODE_TIMESTAMP_TO_DATETIME_FAILED, [
+            throw new Exception('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::TYPE_TIMESTAMP_TO_DATETIME_FAILED->value, [
                 'milliseconds' => $this->value,
             ]);
         }
@@ -95,7 +96,7 @@ final class Timestamp extends TypeBase {
          */
         $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack bigint binary data', Exception::CODE_BIGINT_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack bigint binary data', ExceptionCode::TYPE_BIGINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -114,7 +115,7 @@ final class Timestamp extends TypeBase {
         self::require64Bit();
 
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
-            throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', Exception::CODE_TIMESTAMP_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::TYPE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'expected_types' => ['int', 'string', DateTimeInterface::class],
             ]);
@@ -143,7 +144,7 @@ final class Timestamp extends TypeBase {
         if (PHP_INT_SIZE < 8) {
             $className = self::class;
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system', Exception::CODE_BIGINT_64BIT_REQUIRED, [
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::TYPE_TIMESTAMP_64BIT_REQUIRED->value, [
                 'class' => $className,
                 'php_int_size_bytes' => PHP_INT_SIZE,
                 'php_int_size_bits' => PHP_INT_SIZE * 8,

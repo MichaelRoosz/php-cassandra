@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 use ReflectionClass;
 
@@ -31,7 +32,7 @@ class Bigint extends TypeBase {
          */
         $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack bigint binary data', Exception::CODE_BIGINT_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack bigint binary data', ExceptionCode::TYPE_BIGINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -50,7 +51,7 @@ class Bigint extends TypeBase {
         self::require64Bit();
 
         if (!is_int($value)) {
-            throw new Exception('Invalid bigint value; expected int', Exception::CODE_BIGINT_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid bigint value; expected int', ExceptionCode::TYPE_BIGINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -75,7 +76,7 @@ class Bigint extends TypeBase {
         if (PHP_INT_SIZE < 8) {
             $className = (new ReflectionClass(static::class))->getShortName();
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system', Exception::CODE_BIGINT_64BIT_REQUIRED, [
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::TYPE_BIGINT_64BIT_REQUIRED->value, [
                 'class' => $className,
                 'php_int_size_bytes' => PHP_INT_SIZE,
                 'php_int_size_bits' => PHP_INT_SIZE * 8,

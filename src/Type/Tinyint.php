@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Tinyint extends TypeBase {
@@ -17,7 +18,7 @@ final class Tinyint extends TypeBase {
      */
     final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Tinyint value is outside of supported range', Exception::CODE_TINYINT_OUT_OF_RANGE, [
+            throw new Exception('Tinyint value is outside of supported range', ExceptionCode::TYPE_TINYINT_OUT_OF_RANGE->value, [
                 'value' => $value,
                 'min' => self::VALUE_MIN,
                 'max' => self::VALUE_MAX,
@@ -37,7 +38,7 @@ final class Tinyint extends TypeBase {
          */
         $unpacked = unpack('c', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack tinyint binary data', Exception::CODE_TINYINT_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack tinyint binary data', ExceptionCode::TYPE_TINYINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 1,
             ]);
@@ -54,7 +55,7 @@ final class Tinyint extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_int($value)) {
-            throw new Exception('Invalid tinyint value; expected int', Exception::CODE_TINYINT_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid tinyint value; expected int', ExceptionCode::TYPE_TINYINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

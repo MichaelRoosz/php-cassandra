@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
@@ -36,7 +37,7 @@ final class CollectionSet extends TypeBase {
         } elseif ($typeInfo !== null) {
             $this->typeInfo = $typeInfo;
         } else {
-            throw new Exception('Either valueDefinition or typeInfo must be provided', Exception::CODE_COLLECTION_SET_VALUEDEF_OR_TYPEINFO_REQUIRED);
+            throw new Exception('Either valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_COLLECTION_SET_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
         }
     }
 
@@ -48,11 +49,11 @@ final class CollectionSet extends TypeBase {
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', Exception::CODE_COLLECTION_SET_TYPEINFO_REQUIRED);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_SET_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CollectionSetInfo) {
-            throw new Exception('Invalid type info, CollectionSetInfo expected', Exception::CODE_COLLECTION_SET_INVALID_TYPEINFO, [
+            throw new Exception('Invalid type info, CollectionSetInfo expected', ExceptionCode::TYPE_COLLECTION_SET_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -69,17 +70,17 @@ final class CollectionSet extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new Exception('Invalid set value; expected array', Exception::CODE_COLLECTION_SET_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid set value; expected array', ExceptionCode::TYPE_COLLECTION_SET_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', Exception::CODE_COLLECTION_SET_TYPEINFO_REQUIRED);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_SET_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CollectionSetInfo) {
-            throw new Exception('Invalid type info, CollectionSetInfo expected', Exception::CODE_COLLECTION_SET_INVALID_TYPEINFO, [
+            throw new Exception('Invalid type info, CollectionSetInfo expected', ExceptionCode::TYPE_COLLECTION_SET_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Consistency;
@@ -120,7 +121,7 @@ final class Batch extends Request {
             } else {
                 throw new Exception(
                     message: 'Server protocol version does not support request option "keyspace"',
-                    code: Exception::UNSUPPORTED_OPTION_KEYSPACE,
+                    code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_KEYSPACE->value,
                     context: [
                         'request' => 'BATCH',
                         'option' => 'keyspace',
@@ -139,7 +140,7 @@ final class Batch extends Request {
             } else {
                 throw new Exception(
                     message: 'Server protocol version does not support request option "now_in_seconds"',
-                    code: Exception::UNSUPPORTED_OPTION_NOW_IN_SECONDS,
+                    code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_NOW_IN_SECONDS->value,
                     context: [
                         'request' => 'BATCH',
                         'option' => 'now_in_seconds',

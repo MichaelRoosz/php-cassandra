@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Event;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Event;
 use Cassandra\Response\Event\Data\EventData;
@@ -49,7 +50,7 @@ final class StatusChangeEvent extends Event {
         try {
             $changeType = StatusChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid status change type: ' . $changeTypeAsString, Exception::EVENT_STATUS_CHANGE_INVALID_TYPE, [
+            throw new Exception('Invalid status change type: ' . $changeTypeAsString, ExceptionCode::RESPONSE_EVENT_STATUS_CHANGE_INVALID_TYPE->value, [
                 'status_change_type' => $changeTypeAsString,
             ], $e);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 class Integer extends TypeBase {
@@ -17,7 +18,7 @@ class Integer extends TypeBase {
      */
     final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+            throw new Exception('Integer value is outside of supported range', ExceptionCode::TYPE_INTEGER_OUT_OF_RANGE->value, [
                 'value' => $value,
                 'min' => self::VALUE_MIN,
                 'max' => self::VALUE_MAX,
@@ -39,7 +40,7 @@ class Integer extends TypeBase {
          */
         $unpacked = unpack('N', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack integer binary data', Exception::CODE_INTEGER_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack integer binary data', ExceptionCode::TYPE_INTEGER_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 4,
             ]);
@@ -56,7 +57,7 @@ class Integer extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_int($value)) {
-            throw new Exception('Invalid integer value; expected int', Exception::CODE_INTEGER_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid integer value; expected int', ExceptionCode::TYPE_INTEGER_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'range' => [self::VALUE_MIN, self::VALUE_MAX],
             ]);

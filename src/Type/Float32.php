@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 /**
@@ -27,7 +28,7 @@ final class Float32 extends TypeBase {
         $unpacked = unpack('G', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack float32 binary data', Exception::CODE_FLOAT32_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack float32 binary data', ExceptionCode::TYPE_FLOAT32_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 4,
             ]);
@@ -44,7 +45,7 @@ final class Float32 extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_float($value)) {
-            throw new Exception('Invalid float32 value; expected float', Exception::CODE_FLOAT32_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid float32 value; expected float', ExceptionCode::TYPE_FLOAT32_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

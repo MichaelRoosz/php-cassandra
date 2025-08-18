@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Type;
 
 final class CustomInfo extends TypeInfo {
@@ -25,7 +26,7 @@ final class CustomInfo extends TypeInfo {
         if (!isset($typeDefinition['type'])) {
             throw new Exception(
                 "Custom type definition is missing required 'type' property",
-                Exception::CUSTOM_MISSING_TYPE,
+                ExceptionCode::TYPEINFO_CUSTOM_MISSING_TYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'javaClassName'],
@@ -36,14 +37,14 @@ final class CustomInfo extends TypeInfo {
         if ($typeDefinition['type'] !== Type::CUSTOM) {
             throw new Exception(
                 "Invalid type definition for Custom: 'type' must be Type::CUSTOM",
-                Exception::CUSTOM_INVALID_TYPE,
+                ExceptionCode::TYPEINFO_CUSTOM_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['javaClassName'])) {
             throw new Exception(
                 "Custom type definition is missing required 'javaClassName' property",
-                Exception::CUSTOM_MISSING_JAVA_CLASS,
+                ExceptionCode::TYPEINFO_CUSTOM_MISSING_JAVA_CLASS->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'javaClassName'],
@@ -55,7 +56,7 @@ final class CustomInfo extends TypeInfo {
         if (!is_string($typeDefinition['javaClassName'])) {
             throw new Exception(
                 'Invalid type definition for Custom: javaClassName must be a string',
-                Exception::CUSTOM_JAVA_CLASS_NOT_STRING,
+                ExceptionCode::TYPEINFO_CUSTOM_JAVA_CLASS_NOT_STRING->value,
                 [
                     'javaClassName_type' => gettype($typeDefinition['javaClassName']),
                     'expected_type' => 'string',

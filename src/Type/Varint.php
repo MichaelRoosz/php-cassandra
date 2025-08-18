@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\StringMath\Calculator;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -29,7 +30,7 @@ final class Varint extends TypeBase {
          */
         $unpacked = unpack('C*', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack varint binary data', Exception::CODE_VARINT_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack varint binary data', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -52,7 +53,7 @@ final class Varint extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value) && !is_int($value)) {
-            throw new Exception('Invalid varint value; expected int or numeric string', Exception::CODE_VARINT_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid varint value; expected int or numeric string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -81,7 +82,7 @@ final class Varint extends TypeBase {
         if (!is_int($this->value)) {
             throw new Exception(
                 'Value of Varint is outside of possible integer range for this system',
-                Exception::CODE_VARINT_OUT_OF_PHP_INT_RANGE,
+                ExceptionCode::TYPE_VARINT_OUT_OF_PHP_INT_RANGE->value,
                 [
                     'php_int_size_bits' => PHP_INT_SIZE * 8,
                     'value' => $this->value,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 use DateInterval;
 use DateTimeImmutable;
@@ -27,7 +28,7 @@ final class Date extends TypeBase {
 
         if (is_int($value)) {
             if ($value > self::VALUE_INT_MAX || $value < self::VALUE_INT_MIN) {
-                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::TYPE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $value,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,
@@ -39,7 +40,7 @@ final class Date extends TypeBase {
         } elseif (is_string($value)) {
 
             if (!preg_match('/^[+-]?\d{4,}-\d{1,2}-\d{1,2}$/', $value)) {
-                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', Exception::CODE_DATE_INVALID_STRING_FORMAT, [
+                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::TYPE_DATE_INVALID_STRING_FORMAT->value, [
                     'value' => $value,
                 ]);
             }
@@ -52,7 +53,7 @@ final class Date extends TypeBase {
             try {
                 $valueAsDate = new DateTimeImmutable($value);
             } catch (PhpException $e) {
-                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', Exception::CODE_DATE_INVALID_STRING_FORMAT, [
+                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::TYPE_DATE_INVALID_STRING_FORMAT->value, [
                     'value' => $value,
                     'note' => 'This may happen if the date is out of range for DateTimeImmutable',
                 ], $e);
@@ -64,7 +65,7 @@ final class Date extends TypeBase {
             $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
-                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::TYPE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $valueAsInt,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,
@@ -81,7 +82,7 @@ final class Date extends TypeBase {
             $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
-                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::TYPE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $valueAsInt,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,
@@ -106,7 +107,7 @@ final class Date extends TypeBase {
         try {
             $interval = new DateInterval('P' . abs($daysSinceBaseDate) . 'D');
         } catch (PhpException $e) {
-            throw new Exception('Invalid date value; cannot create DateInterval', Exception::CODE_DATE_OUT_OF_RANGE, [
+            throw new Exception('Invalid date value; cannot create DateInterval', ExceptionCode::TYPE_DATE_OUT_OF_RANGE->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',
             ], $e);
@@ -119,7 +120,7 @@ final class Date extends TypeBase {
                 return $baseDate->add($interval);
             }
         } catch (PhpException $e) {
-            throw new Exception('Invalid date value; cannot create DateTimeImmutable', Exception::CODE_DATE_OUT_OF_RANGE, [
+            throw new Exception('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::TYPE_DATE_OUT_OF_RANGE->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',
             ], $e);
@@ -147,7 +148,7 @@ final class Date extends TypeBase {
          */
         $unpacked = unpack('N', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack unsigned integer binary data', Exception::CODE_INTEGER_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack unsigned integer binary data', ExceptionCode::TYPE_INTEGER_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 4,
             ]);
@@ -167,7 +168,7 @@ final class Date extends TypeBase {
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
             throw new Exception(
                 'Invalid date value; expected number of days since 1970-01-01 as integer, date in format YYYY-mm-dd as string, or DateTimeInterface'
-                , Exception::CODE_DATE_INVALID_VALUE_TYPE,
+                , ExceptionCode::TYPE_DATE_INVALID_VALUE_TYPE->value,
                 [
                     'value_type' => gettype($value),
                     'expected_types' => ['int', 'string', DateTimeInterface::class],
@@ -205,7 +206,7 @@ final class Date extends TypeBase {
             if ($dayCount === '--2147483648') {
                 $dayCount = '-2147483648'; // Special case for minimum date
             } else {
-                throw new Exception('Unsigned integer value is outside of supported range', Exception::CODE_INTEGER_OUT_OF_RANGE, [
+                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::TYPE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $dayCount,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,

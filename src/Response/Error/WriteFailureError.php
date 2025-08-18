@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response\Error;
 
 use Cassandra\Consistency;
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
 use Cassandra\Response\Error\Context\WriteFailureContext;
@@ -45,7 +46,7 @@ final class WriteFailureError extends Error {
         try {
             $consistency = Consistency::from($consistencyAsInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::WRITE_FAILURE_INVALID_CONSISTENCY, [
+            throw new Exception('Invalid consistency: ' . $consistencyAsInt, ExceptionCode::RESPONSE_WRITE_FAILURE_INVALID_CONSISTENCY->value, [
                 'consistency' => $consistencyAsInt,
             ], $e);
         }
@@ -66,7 +67,7 @@ final class WriteFailureError extends Error {
         try {
             $writeType = WriteType::from($writeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid write type: ' . $writeTypeAsString, Exception::WRITE_FAILURE_INVALID_WRITE_TYPE, [
+            throw new Exception('Invalid write type: ' . $writeTypeAsString, ExceptionCode::RESPONSE_WRITE_FAILURE_INVALID_WRITE_TYPE->value, [
                 'write_type' => $writeTypeAsString,
             ], $e);
         }

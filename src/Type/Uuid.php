@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 class Uuid extends TypeBase {
@@ -24,7 +25,7 @@ class Uuid extends TypeBase {
         $unpacked = unpack('n8', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack UUID binary data', Exception::CODE_UUID_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack UUID binary data', ExceptionCode::TYPE_UUID_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 16,
             ]);
@@ -51,7 +52,7 @@ class Uuid extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid UUID value; expected string', Exception::CODE_UUID_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid UUID value; expected string', ExceptionCode::TYPE_UUID_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'expected_format' => 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
             ]);

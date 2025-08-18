@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Inet extends TypeBase {
@@ -21,7 +22,7 @@ final class Inet extends TypeBase {
         $inet = inet_ntop($binary);
 
         if ($inet === false) {
-            throw new Exception('Cannot convert inet binary to string', Exception::CODE_INET_TO_STRING_FAILED, [
+            throw new Exception('Cannot convert inet binary to string', ExceptionCode::TYPE_INET_TO_STRING_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -37,7 +38,7 @@ final class Inet extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid inet value; expected string', Exception::CODE_INET_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid inet value; expected string', ExceptionCode::TYPE_INET_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -53,7 +54,7 @@ final class Inet extends TypeBase {
         $binary = inet_pton($this->value);
 
         if ($binary === false) {
-            throw new Exception('Cannot convert inet string to binary', Exception::CODE_INET_TO_BINARY_FAILED, [
+            throw new Exception('Cannot convert inet string to binary', ExceptionCode::TYPE_INET_TO_BINARY_FAILED->value, [
                 'value' => $this->value,
             ]);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Event;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Event;
 use Cassandra\Response\Event\Data\EventData;
@@ -49,7 +50,7 @@ final class TopologyChangeEvent extends Event {
         try {
             $changeType = TopologyChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid topology change type: ' . $changeTypeAsString, Exception::EVENT_TOPOLOGY_CHANGE_INVALID_TYPE, [
+            throw new Exception('Invalid topology change type: ' . $changeTypeAsString, ExceptionCode::RESPONSE_EVENT_TOPOLOGY_CHANGE_INVALID_TYPE->value, [
                 'topology_change_type' => $changeTypeAsString,
             ], $e);
         }

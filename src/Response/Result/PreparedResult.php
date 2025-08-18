@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response\Result;
 
 use ArrayIterator;
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
@@ -55,7 +56,7 @@ final class PreparedResult extends Result {
     public function getPreparedData(): PreparedData {
 
         if ($this->kind !== ResultKind::PREPARED) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name, Exception::PREPARED_UNEXPECTED_KIND, [
+            throw new Exception('Unexpected result kind: ' . $this->kind->name, ExceptionCode::RESPONSE_PREPARED_UNEXPECTED_KIND->value, [
                 'operation' => 'PreparedResult::getPreparedData',
                 'expected' => ResultKind::PREPARED->name,
                 'received' => $this->kind->name,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
 
@@ -27,7 +28,7 @@ final class CollectionSetInfo extends TypeInfo {
         if (!isset($typeDefinition['type'])) {
             throw new Exception(
                 "CollectionSet type definition is missing required 'type' property",
-                Exception::COLLECTION_SET_MISSING_TYPE,
+                ExceptionCode::TYPEINFO_COLLECTION_SET_MISSING_TYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueType'],
@@ -38,14 +39,14 @@ final class CollectionSetInfo extends TypeInfo {
         if ($typeDefinition['type'] !== Type::COLLECTION_SET) {
             throw new Exception(
                 "Invalid type definition for CollectionSet: 'type' must be Type::COLLECTION_SET",
-                Exception::COLLECTION_SET_INVALID_TYPE,
+                ExceptionCode::TYPEINFO_COLLECTION_SET_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['valueType'])) {
             throw new Exception(
                 "CollectionSet type definition is missing required 'valueType' property",
-                Exception::COLLECTION_SET_MISSING_VALUETYPE,
+                ExceptionCode::TYPEINFO_COLLECTION_SET_MISSING_VALUETYPE->value ,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueType'],

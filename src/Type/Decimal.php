@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Decimal extends TypeBase {
@@ -14,7 +15,7 @@ final class Decimal extends TypeBase {
      */
     final public function __construct(string|int|float $value) {
         if (!is_numeric($value)) {
-            throw new Exception('Value must be a numeric value', Exception::CODE_DECIMAL_NON_NUMERIC, [
+            throw new Exception('Value must be a numeric value', ExceptionCode::TYPE_DECIMAL_NON_NUMERIC->value, [
                 'value' => $value,
             ]);
         }
@@ -34,7 +35,7 @@ final class Decimal extends TypeBase {
          */
         $unpacked = unpack('N1scale/C*', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack decimal binary data', Exception::CODE_DECIMAL_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack decimal binary data', ExceptionCode::TYPE_DECIMAL_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'note' => 'expected >= 4 bytes (scale + varint)',
             ]);
@@ -68,7 +69,7 @@ final class Decimal extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value)) {
-            throw new Exception('Invalid decimal value; expected numeric value', Exception::CODE_DECIMAL_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid decimal value; expected numeric value', ExceptionCode::TYPE_DECIMAL_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

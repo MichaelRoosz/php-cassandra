@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
 
@@ -31,7 +32,7 @@ final class TupleInfo extends TypeInfo {
         if (!isset($typeDefinition['type'])) {
             throw new Exception(
                 "Tuple type definition is missing required 'type' property",
-                Exception::TUPLE_MISSING_TYPE,
+                ExceptionCode::TYPEINFO_TUPLE_MISSING_TYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueTypes'],
@@ -42,14 +43,14 @@ final class TupleInfo extends TypeInfo {
         if ($typeDefinition['type'] !== Type::TUPLE) {
             throw new Exception(
                 "Invalid type definition for Tuple: 'type' must be Type::TUPLE",
-                Exception::TUPLE_INVALID_TYPE,
+                ExceptionCode::TYPEINFO_TUPLE_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['valueTypes'])) {
             throw new Exception(
                 "Tuple type definition is missing required 'valueTypes' property",
-                Exception::TUPLE_MISSING_VALUETYPES,
+                ExceptionCode::TYPEINFO_TUPLE_MISSING_VALUETYPES->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueTypes'],
@@ -61,7 +62,7 @@ final class TupleInfo extends TypeInfo {
         if (!is_array($typeDefinition['valueTypes'])) {
             throw new Exception(
                 "Invalid type definition for Tuple: 'valueTypes' must be an array",
-                Exception::TUPLE_VALUETYPES_NOT_ARRAY,
+                ExceptionCode::TYPEINFO_TUPLE_VALUETYPES_NOT_ARRAY->value,
                 [
                     'valueTypes_type' => gettype($typeDefinition['valueTypes']),
                     'expected_type' => 'array',

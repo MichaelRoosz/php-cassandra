@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Boolean extends TypeBase {
@@ -26,7 +27,7 @@ final class Boolean extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_bool($value)) {
-            throw new Exception('Invalid boolean value; expected bool', Exception::CODE_BOOLEAN_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid boolean value; expected bool', ExceptionCode::TYPE_BOOLEAN_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Result;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
@@ -66,7 +67,7 @@ final class RowsResult extends Result {
      */
     public function configureFetchObject(string $rowClass, array $constructorArgs = [], FetchType $fetchType = FetchType::ASSOC): void {
         if (!is_subclass_of($rowClass, RowClassInterface::class)) {
-            throw new Exception('Invalid row class for fetchObject: must implement \\Cassandra\\Response\\Result\\RowClassInterface', Exception::ROWS_INVALID_ROWCLASS, [
+            throw new Exception('Invalid row class for fetchObject: must implement \\Cassandra\\Response\\Result\\RowClassInterface', ExceptionCode::RESPONSE_ROWS_INVALID_ROWCLASS->value, [
                 'operation' => 'RowsResult::configureFetchObject',
                 'row_class' => $rowClass,
                 'expected_interface' => RowClassInterface::class,
@@ -158,7 +159,7 @@ final class RowsResult extends Result {
     public function fetchAllKeyPairs(int $keyIndex = 0, int $valueIndex = 1, bool $mergeDuplicates = false): array {
 
         if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available', Exception::ROWS_NO_COLUMN_METADATA, [
+            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchAllKeyPairs',
                 'result_kind' => $this->kind->name,
             ]);
@@ -183,7 +184,7 @@ final class RowsResult extends Result {
                     /** @psalm-suppress MixedAssignment */
                     $key = $columnValue;
                     if (!is_int($key) && !is_string($key)) {
-                        throw new Exception('Invalid key type; expected string|int', Exception::ROWS_INVALID_KEY_TYPE, [
+                        throw new Exception('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
                             'key_type' => gettype($key),
                             'key_index' => $keyIndex,
                         ]);
@@ -198,7 +199,7 @@ final class RowsResult extends Result {
             $this->fetchedRows++;
 
             if ($key === null) {
-                throw new Exception('Invalid key index', Exception::ROWS_INVALID_KEY_INDEX, [
+                throw new Exception('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                     'operation' => 'RowsResult::fetchAllKeyPairs',
                     'key_index' => $keyIndex,
                     'column_count' => count($this->metadata->columns),
@@ -263,7 +264,7 @@ final class RowsResult extends Result {
         }
 
         if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available', Exception::ROWS_NO_COLUMN_METADATA, [
+            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchColumn',
                 'result_kind' => $this->kind->name,
             ]);
@@ -301,7 +302,7 @@ final class RowsResult extends Result {
         }
 
         if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available', Exception::ROWS_NO_COLUMN_METADATA, [
+            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchKeyPair',
                 'result_kind' => $this->kind->name,
             ]);
@@ -319,7 +320,7 @@ final class RowsResult extends Result {
                 /** @psalm-suppress MixedAssignment */
                 $key = $columnValue;
                 if (!is_int($key) && !is_string($key)) {
-                    throw new Exception('Invalid key type; expected string|int', Exception::ROWS_INVALID_KEY_TYPE, [
+                    throw new Exception('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
                         'key_type' => gettype($key),
                         'key_index' => $keyIndex,
                     ]);
@@ -334,7 +335,7 @@ final class RowsResult extends Result {
         $this->fetchedRows++;
 
         if ($key === null) {
-            throw new Exception('Invalid key index', Exception::ROWS_INVALID_KEY_INDEX, [
+            throw new Exception('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                 'key_index' => $keyIndex,
                 'column_count' => count($this->metadata->columns),
             ]);
@@ -359,7 +360,7 @@ final class RowsResult extends Result {
         $mode = $this->fetchObjectConfiguration['fetchType'];
 
         if (!is_subclass_of($rowClass, RowClassInterface::class)) {
-            throw new Exception('row class "' . $rowClass . '" is not a subclass of \\Cassandra\\Response\\RowClassInterface', Exception::ROWS_ROWCLASS_NOT_SUBCLASS, [
+            throw new Exception('row class "' . $rowClass . '" is not a subclass of \\Cassandra\\Response\\RowClassInterface', ExceptionCode::RESPONSE_ROWS_ROWCLASS_NOT_SUBCLASS->value, [
                 'row_class' => $rowClass,
                 'expected_interface' => RowClassInterface::class,
             ]);
@@ -499,7 +500,7 @@ final class RowsResult extends Result {
      */
     private function readNextRow(FetchType $mode = FetchType::ASSOC): array {
         if ($this->metadata->columns === null) {
-            throw new Exception('Column metadata is not available', Exception::ROWS_NO_COLUMN_METADATA, [
+            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::readNextRow',
                 'result_kind' => $this->kind->name,
             ]);

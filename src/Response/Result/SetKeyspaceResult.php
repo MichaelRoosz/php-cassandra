@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response\Result;
 
 use ArrayIterator;
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
@@ -48,7 +49,7 @@ final class SetKeyspaceResult extends Result {
      */
     public function getSetKeyspaceData(): SetKeyspaceData {
         if ($this->kind !== ResultKind::SET_KEYSPACE) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name, Exception::SET_KEYSPACE_UNEXPECTED_KIND, [
+            throw new Exception('Unexpected result kind: ' . $this->kind->name, ExceptionCode::RESPONSE_SET_KEYSPACE_UNEXPECTED_KIND->value, [
                 'operation' => 'SetKeyspaceResult::getSetKeyspaceData',
                 'expected' => ResultKind::SET_KEYSPACE->name,
                 'received' => $this->kind->name,

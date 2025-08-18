@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 use DateInterval;
 
@@ -164,7 +165,7 @@ final class Duration extends TypeBase {
         if ($interval === false) {
             throw new Exception(
                 'Cannot convert Duration to DateInterval',
-                Exception::CODE_DURATION_TO_DATEINTERVAL_FAILED, [
+                ExceptionCode::TYPE_DURATION_TO_DATEINTERVAL_FAILED->value, [
                     'duration_string' => $duration,
                     'value' => $this->value,
                 ]
@@ -351,7 +352,7 @@ final class Duration extends TypeBase {
          */
         $values = unpack('C*', $binary);
         if ($values === false) {
-            throw new Exception('Cannot unpack duration binary data', Exception::CODE_DURATION_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack duration binary data', ExceptionCode::TYPE_DURATION_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -385,7 +386,7 @@ final class Duration extends TypeBase {
         if (!is_array($value) && !is_string($value) && !$value instanceof DateInterval) {
             throw new Exception(
                 'Invalid duration value; expected array, string or DateInterval',
-                Exception::CODE_DURATION_INVALID_VALUE_TYPE,
+                ExceptionCode::TYPE_DURATION_INVALID_VALUE_TYPE->value,
                 [
                     'value_type' => gettype($value),
                     'value' => $value,
@@ -430,7 +431,7 @@ final class Duration extends TypeBase {
         $totalBytes = $extraBytes + 1;
 
         if ($pos + $totalBytes > count($vint)) {
-            throw new Exception('Invalid duration VInt data', Exception::CODE_DURATION_VINT_INVALID_DATA, [
+            throw new Exception('Invalid duration VInt data', ExceptionCode::TYPE_DURATION_VINT_INVALID_DATA->value, [
                 'position' => $pos,
                 'required_bytes' => $totalBytes,
                 'available_bytes' => count($vint),
@@ -529,7 +530,7 @@ final class Duration extends TypeBase {
         if (!$foundPattern) {
             throw new Exception(
                 'Invalid duration value; expected string in ISO 8601 format',
-                Exception::CODE_DURATION_INVALID_VALUE_TYPE, [
+                ExceptionCode::TYPE_DURATION_INVALID_VALUE_TYPE->value, [
                     'givenValue' => $value,
                 ]
             );
@@ -598,7 +599,7 @@ final class Duration extends TypeBase {
         if (PHP_INT_SIZE < 8) {
             throw new Exception(
                 'The Duration data type requires a 64-bit system',
-                Exception::CODE_DURATION_64BIT_REQUIRED, [
+                ExceptionCode::TYPE_DURATION_64BIT_REQUIRED->value, [
                     'php_int_size_bytes' => PHP_INT_SIZE,
                     'php_int_size_bits' => PHP_INT_SIZE * 8,
                 ]
@@ -618,7 +619,7 @@ final class Duration extends TypeBase {
         if (!isset($value['months']) || !is_int($value['months'])) {
             throw new Exception(
                 'Invalid duration value - "months" must be provided as int',
-                Exception::CODE_DURATION_MONTHS_INVALID, [
+                ExceptionCode::TYPE_DURATION_MONTHS_INVALID->value, [
                     'provided' => $value['months'] ?? null,
                     'provided_type' => isset($value['months']) ? gettype($value['months']) : 'missing',
                 ]
@@ -629,7 +630,7 @@ final class Duration extends TypeBase {
         if ($months < self::INT32_MIN || $months > self::INT32_MAX) {
             throw new Exception(
                 'Invalid duration value - "months" is out of int32 range',
-                Exception::CODE_DURATION_MONTHS_OUT_OF_RANGE, [
+                ExceptionCode::TYPE_DURATION_MONTHS_OUT_OF_RANGE->value, [
                     'value' => $months,
                     'min' => self::INT32_MIN,
                     'max' => self::INT32_MAX,
@@ -641,7 +642,7 @@ final class Duration extends TypeBase {
         if (!isset($value['days']) || !is_int($value['days'])) {
             throw new Exception(
                 'Invalid duration value - "days" must be provided as int',
-                Exception::CODE_DURATION_DAYS_INVALID, [
+                ExceptionCode::TYPE_DURATION_DAYS_INVALID->value, [
                     'provided' => $value['days'] ?? null,
                     'provided_type' => isset($value['days']) ? gettype($value['days']) : 'missing',
                 ]
@@ -652,7 +653,7 @@ final class Duration extends TypeBase {
         if ($days < self::INT32_MIN || $days > self::INT32_MAX) {
             throw new Exception(
                 'Invalid duration value - "days" is out of int32 range',
-                Exception::CODE_DURATION_DAYS_OUT_OF_RANGE, [
+                ExceptionCode::TYPE_DURATION_DAYS_OUT_OF_RANGE->value, [
                     'value' => $days,
                     'min' => self::INT32_MIN,
                     'max' => self::INT32_MAX,
@@ -664,7 +665,7 @@ final class Duration extends TypeBase {
         if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
             throw new Exception(
                 'Invalid duration value - "nanoseconds" must be provided as int',
-                Exception::CODE_DURATION_NANOSECONDS_INVALID, [
+                ExceptionCode::TYPE_DURATION_NANOSECONDS_INVALID->value, [
                     'provided' => $value['nanoseconds'] ?? null,
                     'provided_type' => isset($value['nanoseconds']) ? gettype($value['nanoseconds']) : 'missing',
                 ]
@@ -678,7 +679,7 @@ final class Duration extends TypeBase {
         ) {
             throw new Exception(
                 'Invalid duration value - sign mismatch across months, days and nanoseconds',
-                Exception::CODE_DURATION_SIGN_MISMATCH, [
+                ExceptionCode::TYPE_DURATION_SIGN_MISMATCH->value, [
                     'months' => $months,
                     'days' => $days,
                     'nanoseconds' => $nanoseconds,

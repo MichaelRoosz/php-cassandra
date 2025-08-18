@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
 use Cassandra\TypeInfo\CollectionListInfo;
@@ -70,7 +71,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack 32-bit length prefix',
-                code: Exception::SR_READ_BYTES_LENGTH_UNPACK_FAIL,
+                code: ExceptionCode::RESPONSE_SR_READ_BYTES_LENGTH_UNPACK_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -117,7 +118,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack IEEE-754 double',
-                code: Exception::SR_UNPACK_DOUBLE_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_DOUBLE_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -139,7 +140,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack IEEE-754 float',
-                code: Exception::SR_UNPACK_FLOAT_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_FLOAT_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -159,7 +160,7 @@ class StreamReader {
         if ($addressLength !== 4 && $addressLength !== 16) {
             throw new Exception(
                 message: 'Invalid inet length byte',
-                code: Exception::SR_INVALID_INET_LENGTH,
+                code: ExceptionCode::RESPONSE_SR_INVALID_INET_LENGTH->value,
                 context: [
                     'method' => __METHOD__,
                     'address_length' => $addressLength,
@@ -172,7 +173,7 @@ class StreamReader {
         if ($inet === false) {
             throw new Exception(
                 message: 'Cannot parse inet address',
-                code: Exception::SR_INET_PARSE_FAIL,
+                code: ExceptionCode::RESPONSE_SR_INET_PARSE_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'address_length' => $addressLength,
@@ -195,7 +196,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack 32-bit integer',
-                code: Exception::SR_UNPACK_INT_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_INT_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -235,7 +236,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack 32-bit length prefix',
-                code: Exception::SR_UNPACK_LONGSTRING_LENGTH_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_LONGSTRING_LENGTH_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -264,7 +265,7 @@ class StreamReader {
             if (!is_string($key) && !is_int($key)) {
                 throw new Exception(
                     message: 'Invalid map key type; expected string|int',
-                    code: Exception::SR_INVALID_MAP_KEY_TYPE,
+                    code: ExceptionCode::RESPONSE_SR_INVALID_MAP_KEY_TYPE->value,
                     context: [
                         'method' => __METHOD__,
                         'key_php_type' => gettype($key),
@@ -324,7 +325,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack 16-bit integer',
-                code: Exception::SR_UNPACK_SHORT_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_SHORT_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -346,7 +347,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack 16-bit length prefix',
-                code: Exception::SR_UNPACK_STRING_LENGTH_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_STRING_LENGTH_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -427,7 +428,7 @@ class StreamReader {
             if (!is_string($item)) {
                 throw new Exception(
                     message: 'Invalid text list item; expected string',
-                    code: Exception::SR_INVALID_TEXT_LIST_ITEM,
+                    code: ExceptionCode::RESPONSE_SR_INVALID_TEXT_LIST_ITEM->value,
                     context: [
                         'method' => __METHOD__,
                         'item_php_type' => gettype($item),
@@ -470,7 +471,7 @@ class StreamReader {
         } catch (ValueError|TypeError $e) {
             throw new Exception(
                 message: 'Invalid type discriminator',
-                code: Exception::SR_INVALID_TYPE_DISCRIMINATOR,
+                code: ExceptionCode::RESPONSE_SR_INVALID_TYPE_DISCRIMINATOR->value,
                 context: [
                     'method' => __METHOD__,
                     'type_short' => $typeShort,
@@ -566,7 +567,7 @@ class StreamReader {
         if ($data === false) {
             throw new Exception(
                 message: 'Cannot unpack UUID',
-                code: Exception::SR_UNPACK_UUID_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_UUID_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -594,7 +595,7 @@ class StreamReader {
         if ($unpacked === false) {
             throw new Exception(
                 message: 'Cannot unpack 32-bit length prefix',
-                code: Exception::SR_UNPACK_VALUE_LENGTH_FAIL,
+                code: ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
@@ -624,7 +625,7 @@ class StreamReader {
         if ($this->offset + $length > $this->dataLength) {
             throw new Exception(
                 message: 'Attempted to read beyond available data',
-                code: Exception::SR_READ_BEYOND_AVAILABLE,
+                code: ExceptionCode::RESPONSE_SR_READ_BEYOND_AVAILABLE->value,
                 context: [
                     'method' => __METHOD__,
                     'requested_length' => $length,

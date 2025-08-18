@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Request;
 
 use Cassandra\Consistency;
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
 use Cassandra\TypeFactory;
@@ -192,7 +193,7 @@ abstract class Request implements Frame, Stringable {
             } else {
                 throw new Exception(
                     message: 'Server protocol version does not support request option "keyspace"',
-                    code: Exception::UNSUPPORTED_OPTION_KEYSPACE,
+                    code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_KEYSPACE->value,
                     context: [
                         'request' => 'QUERY',
                         'option' => 'keyspace',
@@ -211,7 +212,7 @@ abstract class Request implements Frame, Stringable {
             } else {
                 throw new Exception(
                     message: 'Server protocol version does not support request option "now_in_seconds"',
-                    code: Exception::UNSUPPORTED_OPTION_NOW_IN_SECONDS,
+                    code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_NOW_IN_SECONDS->value,
                     context: [
                         'request' => 'QUERY',
                         'option' => 'now_in_seconds',
@@ -279,7 +280,7 @@ abstract class Request implements Frame, Stringable {
                 default:
                     throw new Type\Exception(
                         message: 'Unsupported bound value type',
-                        code: Exception::VALUES_UNSUPPORTED_VALUE_TYPE,
+                        code: ExceptionCode::REQUEST_VALUES_UNSUPPORTED_VALUE_TYPE->value,
                         context: [
                             'stage' => 'values_encoding',
                             'php_type' => gettype($value),
@@ -294,7 +295,7 @@ abstract class Request implements Frame, Stringable {
                 } else {
                     throw new Type\Exception(
                         message: 'Invalid values format: sequential array provided while names_for_values=true expects associative array',
-                        code: Exception::VALUES_NAMES_FOR_VALUES_EXPECTS_ASSOCIATIVE,
+                        code: ExceptionCode::REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_ASSOCIATIVE->value,
                         context: [
                             'stage' => 'values_encoding',
                             'names_for_values' => true,
@@ -308,7 +309,7 @@ abstract class Request implements Frame, Stringable {
                 */
                 throw new Type\Exception(
                     message: 'Invalid values format: associative array provided while names_for_values=false expects sequential array',
-                    code: Exception::VALUES_NAMES_FOR_VALUES_EXPECTS_SEQUENTIAL,
+                    code: ExceptionCode::REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_SEQUENTIAL->value,
                     context: [
                         'stage' => 'values_encoding',
                         'names_for_values' => false,

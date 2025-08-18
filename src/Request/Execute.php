@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result;
 use Cassandra\Request\Options\ExecuteOptions;
@@ -61,7 +62,7 @@ final class Execute extends Request {
         ) {
             throw new Exception(
                 message: 'Execute request received an invalid previous result instance',
-                code: Exception::EXECUTE_INVALID_PREVIOUS_RESULT,
+                code: ExceptionCode::REQUEST_EXECUTE_INVALID_PREVIOUS_RESULT->value,
                 context: [
                     'expected' => [PreparedResult::class, RowsResult::class],
                     'received' => get_class($previousResult),
@@ -82,7 +83,7 @@ final class Execute extends Request {
             if ($executeCallInfo === null) {
                 throw new Exception(
                     message: 'Prepared statement not found for resumption of execution',
-                    code: Exception::EXECUTE_PREPARED_STATEMENT_NOT_FOUND,
+                    code: ExceptionCode::REQUEST_EXECUTE_PREPARED_STATEMENT_NOT_FOUND->value,
                     context: [
                         'previous_result_class' => get_class($previousResult),
                         'hint' => 'Ensure the previous SELECT included metadata required for paging',
@@ -139,7 +140,7 @@ final class Execute extends Request {
             if ($this->resultMetadataId === null) {
                 throw new Exception(
                     message: 'Missing result metadata id for protocol v5 execute request',
-                    code: Exception::EXECUTE_MISSING_RESULT_METADATA_ID,
+                    code: ExceptionCode::REQUEST_EXECUTE_MISSING_RESULT_METADATA_ID->value,
                     context: [
                         'protocol_version' => $this->version,
                         'query_id' => $this->queryId,

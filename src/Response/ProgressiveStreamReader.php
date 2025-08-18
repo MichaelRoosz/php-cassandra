@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use Cassandra\Connection\Node;
+use Cassandra\ExceptionCode;
 
 final class ProgressiveStreamReader extends StreamReader {
     protected ?Node $source = null;
@@ -21,7 +22,7 @@ final class ProgressiveStreamReader extends StreamReader {
     public function getData(bool $includeExtraData = false): string {
         throw new Exception(
             message: 'ProgressiveStreamReader does not support random access via getData()',
-            code: Exception::PSR_GET_DATA_NOT_SUPPORTED,
+            code: ExceptionCode::RESPONSE_PSR_GET_DATA_NOT_SUPPORTED->value,
             context: [
                 'method' => __METHOD__,
             ]
@@ -44,7 +45,7 @@ final class ProgressiveStreamReader extends StreamReader {
         if ($this->source === null) {
             throw new Exception(
                 message: 'Source not set',
-                code: Exception::PSR_SOURCE_NOT_SET,
+                code: ExceptionCode::RESPONSE_PSR_SOURCE_NOT_SET->value,
                 context: [
                     'method' => __METHOD__,
                     'requested_length' => $this->offset + $length,

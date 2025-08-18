@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
 
@@ -35,7 +36,7 @@ final class UDTInfo extends TypeInfo {
         if (!isset($typeDefinition['type'])) {
             throw new Exception(
                 "UDT type definition is missing required 'type' property",
-                Exception::UDT_MISSING_TYPE,
+                ExceptionCode::TYPEINFO_UDT_MISSING_TYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueTypes'],
@@ -46,14 +47,14 @@ final class UDTInfo extends TypeInfo {
         if ($typeDefinition['type'] !== Type::UDT) {
             throw new Exception(
                 "Invalid type definition for UDT: 'type' must be Type::UDT",
-                Exception::UDT_INVALID_TYPE,
+                ExceptionCode::TYPEINFO_UDT_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['valueTypes'])) {
             throw new Exception(
                 "UDT type definition is missing required 'valueTypes' property",
-                Exception::UDT_MISSING_VALUETYPES,
+                ExceptionCode::TYPEINFO_UDT_MISSING_VALUETYPES->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueTypes'],
@@ -65,7 +66,7 @@ final class UDTInfo extends TypeInfo {
         if (!is_array($typeDefinition['valueTypes'])) {
             throw new Exception(
                 "Invalid type definition for UDT: 'valueTypes' must be an array",
-                Exception::UDT_VALUETYPES_NOT_ARRAY,
+                ExceptionCode::TYPEINFO_UDT_VALUETYPES_NOT_ARRAY->value,
                 [
                     'valueTypes_type' => gettype($typeDefinition['valueTypes']),
                     'expected_type' => 'array',

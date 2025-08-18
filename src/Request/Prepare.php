@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\PrepareOptions;
 
@@ -32,7 +33,7 @@ final class Prepare extends Request {
             } else {
                 throw new Exception(
                     message: 'Server protocol version does not support request option "keyspace"',
-                    code: Exception::UNSUPPORTED_OPTION_KEYSPACE,
+                    code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_KEYSPACE->value,
                     context: [
                         'request' => 'PREPARE',
                         'option' => 'keyspace',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use ArrayIterator;
+use Cassandra\ExceptionCode;
 use Cassandra\Response\Result\ColumnInfo;
 use Cassandra\Response\Result\Metadata;
 use Cassandra\Protocol\Header;
@@ -51,7 +52,7 @@ class Result extends Response implements IteratorAggregate {
      */
     public function asPreparedResult(): PreparedResult {
         if (!($this instanceof PreparedResult)) {
-            throw new Exception('Result is not a PreparedResult', Exception::RES_NOT_PREPARED_RESULT, [
+            throw new Exception('Result is not a PreparedResult', ExceptionCode::RESPONSE_RES_NOT_PREPARED_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -64,7 +65,7 @@ class Result extends Response implements IteratorAggregate {
      */
     public function asRowsResult(): RowsResult {
         if (!($this instanceof RowsResult)) {
-            throw new Exception('Result is not a RowsResult', Exception::RES_NOT_ROWS_RESULT, [
+            throw new Exception('Result is not a RowsResult', ExceptionCode::RESPONSE_RES_NOT_ROWS_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -77,7 +78,7 @@ class Result extends Response implements IteratorAggregate {
      */
     public function asSchemaChangeResult(): SchemaChangeResult {
         if (!($this instanceof SchemaChangeResult)) {
-            throw new Exception('Result is not a SchemaChangeResult', Exception::RES_NOT_SCHEMA_CHANGE_RESULT, [
+            throw new Exception('Result is not a SchemaChangeResult', ExceptionCode::RESPONSE_RES_NOT_SCHEMA_CHANGE_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -90,7 +91,7 @@ class Result extends Response implements IteratorAggregate {
      */
     public function asSetKeyspaceResult(): SetKeyspaceResult {
         if (!($this instanceof SetKeyspaceResult)) {
-            throw new Exception('Result is not a SetKeyspaceResult', Exception::RES_NOT_SET_KEYSPACE_RESULT, [
+            throw new Exception('Result is not a SetKeyspaceResult', ExceptionCode::RESPONSE_RES_NOT_SET_KEYSPACE_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -103,7 +104,7 @@ class Result extends Response implements IteratorAggregate {
      */
     public function asVoidResult(): VoidResult {
         if (!($this instanceof VoidResult)) {
-            throw new Exception('Result is not a VoidResult', Exception::RES_NOT_VOID_RESULT, [
+            throw new Exception('Result is not a VoidResult', ExceptionCode::RESPONSE_RES_NOT_VOID_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -176,7 +177,7 @@ class Result extends Response implements IteratorAggregate {
 
             $lastExecuteCallInfo = $previousResult->getNextExecuteCallInfo();
             if ($lastExecuteCallInfo === null) {
-                throw new Exception('Prepared statement context not found in previous result', Exception::RES_PREPARED_CONTEXT_NOT_FOUND, [
+                throw new Exception('Prepared statement context not found in previous result', ExceptionCode::RESPONSE_RES_PREPARED_CONTEXT_NOT_FOUND->value, [
                     'operation' => 'Result::setPreviousResult',
                     'previous_result_class' => get_class($previousResult),
                 ]);
@@ -202,7 +203,7 @@ class Result extends Response implements IteratorAggregate {
      * @throws \Cassandra\Response\Exception
      */
     protected function getMetadata(): Metadata {
-        throw new Exception('Result metadata is not available for this result kind', Exception::RES_METADATA_NOT_AVAILABLE, [
+        throw new Exception('Result metadata is not available for this result kind', ExceptionCode::RESPONSE_RES_METADATA_NOT_AVAILABLE->value, [
             'operation' => 'Result::getMetadata',
             'result_kind' => $this->kind->name,
         ]);
@@ -221,7 +222,7 @@ class Result extends Response implements IteratorAggregate {
         try {
             return ResultKind::from($kindInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid result kind value', Exception::RES_INVALID_KIND_VALUE, [
+            throw new Exception('Invalid result kind value', ExceptionCode::RESPONSE_RES_INVALID_KIND_VALUE->value, [
                 'operation' => 'Result::readKind',
                 'result_kind' => $kindInt,
             ], $e);

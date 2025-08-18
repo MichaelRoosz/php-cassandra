@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Event\Data\EventData;
 use TypeError;
@@ -50,7 +51,7 @@ class Event extends Response {
         try {
             return EventType::from($typeString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid event type: ' . $typeString, Exception::EVENT_INVALID_TYPE, [
+            throw new Exception('Invalid event type: ' . $typeString, ExceptionCode::RESPONSE_EVENT_INVALID_TYPE->value, [
                 'event_type' => $typeString,
             ], $e);
         }

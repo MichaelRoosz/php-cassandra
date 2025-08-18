@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response\Error;
 
 use Cassandra\Consistency;
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
 use Cassandra\Response\Error\Context\ReadTimeoutContext;
@@ -44,7 +45,7 @@ final class ReadTimeoutError extends Error {
         try {
             $consistency = Consistency::from($consistencyAsInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::READ_TIMEOUT_INVALID_CONSISTENCY, [
+            throw new Exception('Invalid consistency: ' . $consistencyAsInt, ExceptionCode::RESPONSE_READ_TIMEOUT_INVALID_CONSISTENCY->value, [
                 'consistency' => $consistencyAsInt,
             ], $e);
         }

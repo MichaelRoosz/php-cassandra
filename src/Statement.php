@@ -35,7 +35,7 @@ final class Statement {
     public function getPreparedResult(): Response\Result\PreparedResult {
         $response = $this->getResponse();
         if (!($response instanceof Response\Result\PreparedResult)) {
-            throw new Exception('Unexpected response type for getPreparedResult', Exception::CODE_STATEMENT_UNEXPECTED_PREPARED_RESULT, [
+            throw new Exception('Unexpected response type for getPreparedResult', ExceptionCode::STMT_UNEXPECTED_PREPARED_RESULT->value, [
                 'operation' => 'Statement::getPreparedResult',
                 'expected' => Response\Result\PreparedResult::class,
                 'received' => get_class($response),
@@ -73,7 +73,7 @@ final class Statement {
     public function getResult(): Response\Result {
         $response = $this->getResponse();
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type for getResult', Exception::CODE_STATEMENT_UNEXPECTED_RESULT, [
+            throw new Exception('Unexpected response type for getResult', ExceptionCode::STMT_UNEXPECTED_RESULT->value, [
                 'operation' => 'Statement::getResult',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -91,7 +91,7 @@ final class Statement {
     public function getRowsResult(): Response\Result\RowsResult {
         $response = $this->getResponse();
         if (!($response instanceof Response\Result\RowsResult)) {
-            throw new Exception('Unexpected response type for getRowsResult', Exception::CODE_STATEMENT_UNEXPECTED_ROWS_RESULT, [
+            throw new Exception('Unexpected response type for getRowsResult', ExceptionCode::STMT_UNEXPECTED_ROWS_RESULT->value, [
                 'operation' => 'Statement::getRowsResult',
                 'expected' => Response\Result\RowsResult::class,
                 'received' => get_class($response),
@@ -109,7 +109,7 @@ final class Statement {
     public function getSchemaChangeResult(): Response\Result\SchemaChangeResult {
         $response = $this->getResponse();
         if (!($response instanceof Response\Result\SchemaChangeResult)) {
-            throw new Exception('Unexpected response type for getSchemaChangeResult', Exception::CODE_STATEMENT_UNEXPECTED_SCHEMA_CHANGE_RESULT, [
+            throw new Exception('Unexpected response type for getSchemaChangeResult', ExceptionCode::STMT_UNEXPECTED_SCHEMA_CHANGE_RESULT->value, [
                 'operation' => 'Statement::getSchemaChangeResult',
                 'expected' => Response\Result\SchemaChangeResult::class,
                 'received' => get_class($response),
@@ -127,7 +127,7 @@ final class Statement {
     public function getSetKeyspaceResult(): Response\Result\SetKeyspaceResult {
         $response = $this->getResponse();
         if (!($response instanceof Response\Result\SetKeyspaceResult)) {
-            throw new Exception('Unexpected response type for getSetKeyspaceResult', Exception::CODE_STATEMENT_UNEXPECTED_SET_KEYSPACE_RESULT, [
+            throw new Exception('Unexpected response type for getSetKeyspaceResult', ExceptionCode::STMT_UNEXPECTED_SET_KEYSPACE_RESULT->value, [
                 'operation' => 'Statement::getSetKeyspaceResult',
                 'expected' => Response\Result\SetKeyspaceResult::class,
                 'received' => get_class($response),

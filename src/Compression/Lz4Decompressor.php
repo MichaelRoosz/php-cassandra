@@ -29,6 +29,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Compression;
 
+use Cassandra\ExceptionCode;
+
 final class Lz4Decompressor {
     protected string $input;
 
@@ -75,7 +77,7 @@ final class Lz4Decompressor {
 
             throw new Exception(
                 'invalid lz4 frame data - invalid magic number',
-                Exception::CODE_INVALID_MAGIC,
+                ExceptionCode::COMPRESSION_INVALID_MAGIC->value,
                 [
                     'stage' => 'read_magic',
                     'magicBytes' => $magic,
@@ -122,7 +124,7 @@ final class Lz4Decompressor {
                     if ($inputOffset >= $inputLength) {
                         throw new Exception(
                             'invalid lz4 block data - input overflow while reading number of literals',
-                            Exception::CODE_INPUT_OVERFLOW,
+                            ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                             [
                                 'stage' => 'read_literals_length',
                                 'inputOffset' => $inputOffset,
@@ -140,7 +142,7 @@ final class Lz4Decompressor {
                 if ($inputOffset + $nLiterals > $inputLength) {
                     throw new Exception(
                         'invalid lz4 block data - input overflow while reading literals',
-                        Exception::CODE_INPUT_OVERFLOW,
+                        ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                         [
                             'stage' => 'read_literals',
                             'inputOffset' => $inputOffset,
@@ -163,7 +165,7 @@ final class Lz4Decompressor {
             if ($inputOffset + 2 > $inputLength) {
                 throw new Exception(
                     'invalid lz4 block data - input overflow while reading offset',
-                    Exception::CODE_INPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                     [
                         'stage' => 'read_offset',
                         'inputOffset' => $inputOffset,
@@ -178,7 +180,7 @@ final class Lz4Decompressor {
             if ($offset < 1) {
                 throw new Exception(
                     'invalid lz4 block data - illegal offset value',
-                    Exception::CODE_ILLEGAL_VALUE,
+                    ExceptionCode::COMPRESSION_ILLEGAL_VALUE->value,
                     [
                         'stage' => 'validate_offset',
                         'offset' => $offset,
@@ -191,7 +193,7 @@ final class Lz4Decompressor {
             if ($matchStart < 0) {
                 throw new Exception(
                     'invalid lz4 block data - output underflow for given match start',
-                    Exception::CODE_OUTPUT_UNDERFLOW,
+                    ExceptionCode::COMPRESSION_OUTPUT_UNDERFLOW->value,
                     [
                         'stage' => 'compute_match_start',
                         'matchStart' => $matchStart,
@@ -204,7 +206,7 @@ final class Lz4Decompressor {
             if ($matchStart > $this->outputLength) {
                 throw new Exception(
                     'invalid lz4 block data - output overflow for given match',
-                    Exception::CODE_OUTPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value,
                     [
                         'stage' => 'compute_match_start',
                         'matchStart' => $matchStart,
@@ -219,7 +221,7 @@ final class Lz4Decompressor {
                     if ($inputOffset >= $inputLength) {
                         throw new Exception(
                             'invalid lz4 block data - input overflow while reading match length',
-                            Exception::CODE_INPUT_OVERFLOW,
+                            ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                             [
                                 'stage' => 'read_match_length',
                                 'inputOffset' => $inputOffset,
@@ -255,7 +257,7 @@ final class Lz4Decompressor {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new Exception(
                 'invalid lz4 frame data - input overflow while reading block size',
-                Exception::CODE_INPUT_OVERFLOW,
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                 [
                     'stage' => 'legacy_block_size',
                     'inputOffset' => $this->inputOffset,
@@ -270,7 +272,7 @@ final class Lz4Decompressor {
         if ($unpacked === false) {
             throw new Exception(
                 'invalid lz4 frame data - cannot decode block size',
-                Exception::CODE_DECODE_FAILURE,
+                ExceptionCode::COMPRESSION_DECODE_FAILURE->value,
                 [
                     'stage' => 'legacy_block_size_unpack',
                     'inputOffset' => $this->inputOffset,
@@ -285,7 +287,7 @@ final class Lz4Decompressor {
             if ($this->inputOffset + $blockSize > $this->inputLength) {
                 throw new Exception(
                     'invalid lz4 frame data - input overflow while reading block data',
-                    Exception::CODE_INPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                     [
                         'stage' => 'legacy_block_data',
                         'inputOffset' => $this->inputOffset,
@@ -309,7 +311,7 @@ final class Lz4Decompressor {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new Exception(
                 'invalid lz4 frame data - input overflow while reading magic number',
-                Exception::CODE_INPUT_OVERFLOW,
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                 [
                     'stage' => 'read_magic',
                     'inputOffset' => $this->inputOffset,
@@ -324,7 +326,7 @@ final class Lz4Decompressor {
         if ($unpacked === false) {
             throw new Exception(
                 'invalid lz4 frame data - cannot decode magic number',
-                Exception::CODE_DECODE_FAILURE,
+                ExceptionCode::COMPRESSION_DECODE_FAILURE->value,
                 [
                     'stage' => 'unpack_magic',
                     'inputOffset' => $this->inputOffset,
@@ -349,7 +351,7 @@ final class Lz4Decompressor {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new Exception(
                 'invalid lz4 frame data - input overflow while reading skipable frame size',
-                Exception::CODE_INPUT_OVERFLOW,
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                 [
                     'stage' => 'skipable_frame_size',
                     'inputOffset' => $this->inputOffset,
@@ -366,7 +368,7 @@ final class Lz4Decompressor {
         if ($unpacked === false) {
             throw new Exception(
                 'invalid lz4 frame data - cannot decode skipable frame size',
-                Exception::CODE_DECODE_FAILURE,
+                ExceptionCode::COMPRESSION_DECODE_FAILURE->value,
                 [
                     'stage' => 'skipable_frame_size_unpack',
                     'inputOffset' => $this->inputOffset,
@@ -381,7 +383,7 @@ final class Lz4Decompressor {
         if ($this->inputOffset + $skipableFrameSize > $this->inputLength) {
             throw new Exception(
                 'invalid lz4 frame data - input overflow while reading skipable frame data',
-                Exception::CODE_INPUT_OVERFLOW,
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                 [
                     'stage' => 'skipable_frame_data',
                     'inputOffset' => $this->inputOffset,
@@ -403,7 +405,7 @@ final class Lz4Decompressor {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new Exception(
                 'invalid lz4 frame data - input overflow while reading block size',
-                Exception::CODE_INPUT_OVERFLOW,
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                 [
                     'stage' => 'v1_block_size',
                     'inputOffset' => $this->inputOffset,
@@ -418,7 +420,7 @@ final class Lz4Decompressor {
         if ($unpacked === false) {
             throw new Exception(
                 'invalid lz4 frame data - cannot decode block size',
-                Exception::CODE_DECODE_FAILURE,
+                ExceptionCode::COMPRESSION_DECODE_FAILURE->value,
                 [
                     'stage' => 'v1_block_size_unpack',
                     'inputOffset' => $this->inputOffset,
@@ -441,7 +443,7 @@ final class Lz4Decompressor {
             if ($this->inputOffset + $blockSize > $this->inputLength) {
                 throw new Exception(
                     'invalid lz4 frame data - input overflow while reading block data',
-                    Exception::CODE_INPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                     [
                         'stage' => 'v1_block_data',
                         'inputOffset' => $this->inputOffset,
@@ -466,7 +468,7 @@ final class Lz4Decompressor {
             if ($this->inputOffset + 4 > $this->inputLength) {
                 throw new Exception(
                     'invalid lz4 frame data - input overflow while reading block checksum',
-                    Exception::CODE_INPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                     [
                         'stage' => 'v1_block_checksum',
                         'inputOffset' => $this->inputOffset,
@@ -482,7 +484,7 @@ final class Lz4Decompressor {
                 if ($unpacked === false) {
                     throw new Exception(
                         'invalid lz4 frame data - cannot decode block checksum',
-                        Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                        ExceptionCode::COMPRESSION_CHECKSUM_DECODE_FAILURE->value,
                         [
                             'stage' => 'v1_block_checksum_unpack',
                             'inputOffset' => $this->inputOffset,
@@ -514,7 +516,7 @@ final class Lz4Decompressor {
         if ($this->inputOffset + 2 > $this->inputLength) {
             throw new Exception(
                 'invalid lz4 frame data - input overflow while reading header flg and bd',
-                Exception::CODE_INPUT_OVERFLOW,
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                 [
                     'stage' => 'v1_header_flg_bd',
                     'inputOffset' => $this->inputOffset,
@@ -539,7 +541,7 @@ final class Lz4Decompressor {
         if ($version !== 0x01) {
             throw new Exception(
                 'invalid lz4 frame data - invalid version',
-                Exception::CODE_INVALID_VERSION,
+                ExceptionCode::COMPRESSION_INVALID_VERSION->value,
                 [
                     'stage' => 'v1_header_version',
                     'version' => $version,
@@ -552,7 +554,7 @@ final class Lz4Decompressor {
             if ($this->inputOffset + 8 > $this->inputLength) {
                 throw new Exception(
                     'invalid lz4 frame data - input overflow while reading content size',
-                    Exception::CODE_INPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                     [
                         'stage' => 'v1_header_content_size',
                         'inputOffset' => $this->inputOffset,
@@ -568,7 +570,7 @@ final class Lz4Decompressor {
             if ($this->inputOffset + 4 > $this->inputLength) {
                 throw new Exception(
                     'invalid lz4 frame data - input overflow while reading dictionary id',
-                    Exception::CODE_INPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                     [
                         'stage' => 'v1_header_dictionary_id',
                         'inputOffset' => $this->inputOffset,
@@ -583,7 +585,7 @@ final class Lz4Decompressor {
         if ($this->inputOffset + 1 > $this->inputLength) {
             throw new Exception(
                 'invalid lz4 frame data - input overflow while reading header checksum',
-                Exception::CODE_INPUT_OVERFLOW,
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                 [
                     'stage' => 'v1_header_checksum',
                     'inputOffset' => $this->inputOffset,
@@ -606,7 +608,7 @@ final class Lz4Decompressor {
             if ($this->inputOffset + 4 > $this->inputLength) {
                 throw new Exception(
                     'invalid lz4 frame data - input overflow while reading content checksum',
-                    Exception::CODE_INPUT_OVERFLOW,
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
                     [
                         'stage' => 'v1_content_checksum',
                         'inputOffset' => $this->inputOffset,
@@ -622,7 +624,7 @@ final class Lz4Decompressor {
                 if ($unpacked === false) {
                     throw new Exception(
                         'invalid lz4 frame data - cannot decode content checksum',
-                        Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                        ExceptionCode::COMPRESSION_CHECKSUM_DECODE_FAILURE->value,
                         [
                             'stage' => 'v1_content_checksum_unpack',
                             'inputOffset' => $this->inputOffset,
@@ -654,7 +656,7 @@ final class Lz4Decompressor {
         if ($unpacked === false) {
             throw new Exception(
                 'invalid lz4 frame data - cannot decode ' . $type . ' checksum',
-                Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                ExceptionCode::COMPRESSION_CHECKSUM_DECODE_FAILURE->value,
                 [
                     'stage' => 'checksum_unpack',
                     'checksumType' => $type,
@@ -666,7 +668,7 @@ final class Lz4Decompressor {
         if ($unpacked[1] !== $checksum) {
             throw new Exception(
                 'invalid lz4 frame data - invalid ' . $type . ' checksum',
-                Exception::CODE_CHECKSUM_MISMATCH,
+                ExceptionCode::COMPRESSION_CHECKSUM_MISMATCH->value,
                 [
                     'stage' => 'checksum_validate',
                     'checksumType' => $type,
@@ -692,7 +694,7 @@ final class Lz4Decompressor {
         if ($unpacked === false) {
             throw new Exception(
                 'invalid lz4 frame data - cannot decode header checksum',
-                Exception::CODE_CHECKSUM_DECODE_FAILURE,
+                ExceptionCode::COMPRESSION_CHECKSUM_DECODE_FAILURE->value,
                 [
                     'stage' => 'header_checksum_unpack',
                     'headerStart' => $headerStart,
@@ -703,7 +705,7 @@ final class Lz4Decompressor {
         if ($unpacked[3] !== $checksum) {
             throw new Exception(
                 'invalid lz4 frame data - invalid header checksum',
-                Exception::CODE_CHECKSUM_MISMATCH,
+                ExceptionCode::COMPRESSION_CHECKSUM_MISMATCH->value,
                 [
                     'stage' => 'header_checksum_validate',
                     'expected' => $checksum,

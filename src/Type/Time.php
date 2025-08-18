@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -24,7 +25,7 @@ final class Time extends TypeBase {
 
         if (is_int($value)) {
             if ($value > self::VALUE_MAX || $value < 0) {
-                throw new Exception('Time value is outside of supported range', Exception::CODE_TIME_OUT_OF_RANGE, [
+                throw new Exception('Time value is outside of supported range', ExceptionCode::TYPE_TIME_OUT_OF_RANGE->value, [
                     'value' => $value,
                     'min' => 0,
                     'max' => self::VALUE_MAX,
@@ -36,7 +37,7 @@ final class Time extends TypeBase {
         } elseif (is_string($value)) {
 
             if (!preg_match('/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/', $value, $matches)) {
-                throw new Exception('Invalid time string; expected HH:MM:SS(.fffffffff)', Exception::CODE_TIME_INVALID_STRING, [
+                throw new Exception('Invalid time string; expected HH:MM:SS(.fffffffff)', ExceptionCode::TYPE_TIME_INVALID_STRING->value, [
                     'value' => $value,
                 ]);
             }
@@ -51,7 +52,7 @@ final class Time extends TypeBase {
                 || $minutes < 0 || $minutes >= 60
                 || $seconds < 0 || $seconds >= 60
             ) {
-                throw new Exception('Invalid time format; expected HH:MM:SS(.fffffffff) within 24h range', Exception::CODE_TIME_INVALID_FORMAT, [
+                throw new Exception('Invalid time format; expected HH:MM:SS(.fffffffff) within 24h range', ExceptionCode::TYPE_TIME_INVALID_FORMAT->value, [
                     'value' => $value,
                     'hours' => $hours,
                     'minutes' => $minutes,
@@ -93,7 +94,7 @@ final class Time extends TypeBase {
         try {
             return new DateTimeImmutable('1970-01-01 ' . $this->asString());
         } catch (PhpException $e) {
-            throw new Exception('Invalid time value; cannot create DateTimeImmutable', Exception::CODE_TIME_INVALID_DATETIME_STRING, [
+            throw new Exception('Invalid time value; cannot create DateTimeImmutable', ExceptionCode::TYPE_TIME_INVALID_DATETIME_STRING->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the time is out of range for DateTimeImmutable',
                 'error' => $e->getMessage(),
@@ -132,7 +133,7 @@ final class Time extends TypeBase {
          */
         $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack bigint binary data', Exception::CODE_BIGINT_UNPACK_FAILED, [
+            throw new Exception('Cannot unpack bigint binary data', ExceptionCode::TYPE_BIGINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -151,7 +152,7 @@ final class Time extends TypeBase {
         self::require64Bit();
 
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
-            throw new Exception('Invalid time value; expected nanoseconds as int, time in format HH:MM:SS(.fffffffff) as string, or DateTimeInterface', Exception::CODE_TIME_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid time value; expected nanoseconds as int, time in format HH:MM:SS(.fffffffff) as string, or DateTimeInterface', ExceptionCode::TYPE_TIME_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'expected_types' => ['int', 'string', DateTimeInterface::class],
             ]);
@@ -177,7 +178,7 @@ final class Time extends TypeBase {
         if (PHP_INT_SIZE < 8) {
             $className = (new ReflectionClass(static::class))->getShortName();
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system', Exception::CODE_BIGINT_64BIT_REQUIRED, [
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::TYPE_TIME_64BIT_REQUIRED->value, [
                 'class' => $className,
                 'php_int_size_bytes' => PHP_INT_SIZE,
                 'php_int_size_bits' => PHP_INT_SIZE * 8,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
@@ -42,7 +43,7 @@ final class CollectionMap extends TypeBase {
                 'valueType' => $valueDefinition,
             ]);
         } else {
-            throw new Exception('Either keyDefinition and valueDefinition or typeInfo must be provided', Exception::CODE_COLLECTION_MAP_KEY_VALUEDEF_OR_TYPEINFO_REQUIRED);
+            throw new Exception('Either keyDefinition and valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_COLLECTION_MAP_KEY_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
         }
 
         $this->value = $value;
@@ -56,11 +57,11 @@ final class CollectionMap extends TypeBase {
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', Exception::CODE_COLLECTION_MAP_TYPEINFO_REQUIRED);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_MAP_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CollectionMapInfo) {
-            throw new Exception('Invalid type info, CollectionMapInfo expected', Exception::CODE_COLLECTION_MAP_INVALID_TYPEINFO, [
+            throw new Exception('Invalid type info, CollectionMapInfo expected', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -77,17 +78,17 @@ final class CollectionMap extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new Exception('Invalid map value; expected array', Exception::CODE_COLLECTION_MAP_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid map value; expected array', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', Exception::CODE_COLLECTION_MAP_TYPEINFO_REQUIRED);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_MAP_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CollectionMapInfo) {
-            throw new Exception('Invalid type info, CollectionMapInfo expected', Exception::CODE_COLLECTION_MAP_INVALID_TYPEINFO, [
+            throw new Exception('Invalid type info, CollectionMapInfo expected', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }

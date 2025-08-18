@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\StringMath\Calculator;
 
+use Cassandra\ExceptionCode;
 use Cassandra\StringMath\Calculator;
 use Cassandra\StringMath\Exception;
 
@@ -211,7 +212,7 @@ final class Native extends Calculator {
             if ($decimalValue === false) {
                 throw new Exception(
                     'Invalid hexadecimal input: non-hex character encountered',
-                    Exception::CODE_INVALID_HEX_STRING,
+                    ExceptionCode::STRINGMATH_CALCULATOR_NATIVE_INVALID_HEX_STRING->value,
                     [
                         'method' => __METHOD__,
                         'position' => $i,

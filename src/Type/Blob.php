@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\ExceptionCode;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Blob extends TypeBase {
@@ -26,7 +27,7 @@ final class Blob extends TypeBase {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid blob value; expected string', Exception::CODE_BLOB_INVALID_VALUE_TYPE, [
+            throw new Exception('Invalid blob value; expected string', ExceptionCode::TYPE_BLOB_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Result;
 
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
@@ -43,7 +44,7 @@ final class VoidResult extends Result {
      */
     public function getVoidData(): VoidData {
         if ($this->kind !== ResultKind::VOID) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name, Exception::VOID_UNEXPECTED_KIND, [
+            throw new Exception('Unexpected result kind: ' . $this->kind->name, ExceptionCode::RESPONSE_VOID_UNEXPECTED_KIND->value, [
                 'operation' => 'VoidResult::getVoidData',
                 'expected' => ResultKind::VOID->name,
                 'received' => $this->kind->name,

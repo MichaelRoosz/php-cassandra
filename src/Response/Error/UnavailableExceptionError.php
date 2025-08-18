@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response\Error;
 
 use Cassandra\Consistency;
+use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
 use Cassandra\Response\Error\Context\UnavailableExceptionContext;
@@ -44,7 +45,7 @@ final class UnavailableExceptionError extends Error {
         try {
             $consistency = Consistency::from($consistencyAsInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid consistency: ' . $consistencyAsInt, Exception::UNAVAILABLE_INVALID_CONSISTENCY, [
+            throw new Exception('Invalid consistency: ' . $consistencyAsInt, ExceptionCode::RESPONSE_UNAVAILABLE_INVALID_CONSISTENCY->value, [
                 'consistency' => $consistencyAsInt,
             ], $e);
         }
