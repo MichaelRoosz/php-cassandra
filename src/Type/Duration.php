@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use DateInterval;
 
@@ -398,7 +399,6 @@ final class Duration extends TypeBase {
         /** @phpstan-ignore argument.type */
         return new static($value);
     }
-
     #[\Override]
     public function getBinary(): string {
         $monthsEncoded = ($this->value['months'] >> 31) ^ ($this->value['months'] << 1);
@@ -408,6 +408,11 @@ final class Duration extends TypeBase {
         return self::encodeVint($monthsEncoded)
                 . self::encodeVint($daysEncoded)
                 . self::encodeVint($nanosecondsEncoded);
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::DURATION;
     }
 
     #[\Override]

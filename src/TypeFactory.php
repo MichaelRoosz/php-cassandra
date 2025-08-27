@@ -14,6 +14,7 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
+use Cassandra\TypeInfo\VectorInfo;
 
 final class TypeFactory {
     /**
@@ -31,6 +32,12 @@ final class TypeFactory {
         }
 
         return $type->getBinary();
+    }
+
+    public static function getSerializedSizeOfType(Type $type): int {
+        $map = self::getTypesSerializedAsFixedSize();
+
+        return $map[$type->value] ?? -1;
     }
 
     /**
@@ -85,6 +92,7 @@ final class TypeFactory {
 
         $type = $typeDefinition['type'];
 
+        // todo: migrate to a map
         switch ($type) {
             case Type::CUSTOM:
                 /** @psalm-suppress InvalidArgument */
@@ -116,9 +124,16 @@ final class TypeFactory {
                 /** @phpstan-ignore argument.type */
                 return TupleInfo::fromTypeDefinition($typeDefinition);
 
+            case Type::VECTOR:
+                /** @psalm-suppress InvalidArgument */
+                /** @phpstan-ignore argument.type */
+                return VectorInfo::fromTypeDefinition($typeDefinition);
+
             default:
                 /** @psalm-suppress InvalidArgument */
                 return SimpleTypeInfo::fromTypeDefinition($typeDefinition);
+
+                // todo: add remaining types
         }
     }
 
@@ -145,6 +160,12 @@ final class TypeFactory {
         $class = self::getClassForDataType($typeInfo->type);
 
         return $class::fromMixedValue($value, $typeInfo);
+    }
+
+    public static function isSerializedAsFixedSize(Type $type): bool {
+        $map = self::getTypesSerializedAsFixedSize();
+
+        return isset($map[$type->value]);
     }
 
     public static function isSimpleType(Type $type): bool {
@@ -207,8 +228,34 @@ final class TypeFactory {
             Type::UDT->value => Types\UDT::class,
             Type::TUPLE->value => Types\Tuple::class,
             Type::CUSTOM->value => Types\Custom::class,
+            Type::VECTOR->value => Types\Vector::class,
         ];
     }
+
+    /**
+     * @todo this should be moved to a const class value once support for php 8.1 is dropped
+     * 
+     * @return array<int, int>
+     */
+    protected static function getTypesSerializedAsFixedSize(): array {
+        return [
+            Type::BIGINT->value => 8,
+            Type::BOOLEAN->value => 1,
+            Type::COUNTER->value => 8,
+            Type::DATE->value => 8,
+            Type::DOUBLE->value => 8,
+            Type::FLOAT->value => 4,
+            Type::INT->value => 4,
+            Type::TIME->value => 8,
+            Type::TIMESTAMP->value => 8,
+            Type::TIMEUUID->value => 16,
+            Type::UUID->value => 16,
+
+            // note: logically smallint and tinyint are fixed size,
+            // but in cassandra they are defined as variable size
+        ];
+    }
+
     /**
      * @todo this should be moved to a const class value once support for php 8.1 is dropped
      * 
@@ -222,6 +269,7 @@ final class TypeFactory {
             Type::UDT->value => true,
             Type::TUPLE->value => true,
             Type::CUSTOM->value => true,
+            Type::VECTOR->value => true,
         ];
     }
 }

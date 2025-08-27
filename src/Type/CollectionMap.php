@@ -119,6 +119,11 @@ final class CollectionMap extends TypeBase {
         return $binary;
     }
 
+    #[\Override]
+    public function getType(): Type {
+        return Type::COLLECTION_MAP;
+    }
+
     /**
      * @return array<mixed> $value
      */

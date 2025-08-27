@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Inet extends TypeBase {
@@ -60,6 +61,11 @@ final class Inet extends TypeBase {
         }
 
         return $binary;
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::INET;
     }
 
     #[\Override]

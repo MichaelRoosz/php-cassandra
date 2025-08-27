@@ -9,7 +9,7 @@ namespace Cassandra;
  * Each exception class has its own prefix based on its namespace in uppercase.
  * Root exception codes use short names for the class using them.
  * 
- * Next free code: 1261
+ * Next free code: 1272
  */
 enum ExceptionCode: int {
     // Compression namespace (COMPRESSION_)
@@ -134,6 +134,7 @@ enum ExceptionCode: int {
     case RESPONSE_SR_UNPACK_STRING_LENGTH_FAIL = 1132;
     case RESPONSE_SR_UNPACK_UUID_FAIL = 1133;
     case RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL = 1134;
+    case RESPONSE_SR_VECTOR_TYPE_NOT_SUPPORTED = 1271;
     case RESPONSE_UNAVAILABLE_INVALID_CONSISTENCY = 1135;
     case RESPONSE_VOID_UNEXPECTED_KIND = 1136;
     case RESPONSE_WRITE_FAILURE_INVALID_CONSISTENCY = 1137;
@@ -180,6 +181,7 @@ enum ExceptionCode: int {
     case STREAM_WRITE_FAILED = 1063;
 
     // StringMath namespace (STRINGMATH_)
+    case STRINGMATH_CALCULATOR_NATIVE_INVALID_CHARACTER = 1261;
     case STRINGMATH_CALCULATOR_NATIVE_INVALID_HEX_STRING = 1141;
 
     // Type namespace (TYPE_)
@@ -268,6 +270,10 @@ enum ExceptionCode: int {
     case TYPE_VARINT_INVALID_VALUE_TYPE = 1224;
     case TYPE_VARINT_OUT_OF_PHP_INT_RANGE = 1225;
     case TYPE_VARINT_UNPACK_FAILED = 1226;
+    case TYPE_VECTOR_INVALID_TYPEINFO = 1262;
+    case TYPE_VECTOR_INVALID_VALUE_TYPE = 1263;
+    case TYPE_VECTOR_TYPEINFO_REQUIRED = 1264;
+    case TYPE_VECTOR_VALUEDEF_DIM_OR_TYPEINFO_REQUIRED = 1265;
 
     // TypeInfo namespace (TYPEINFO_)
     case TYPEINFO_COLLECTION_LIST_INVALID_TYPE = 1227;
@@ -294,4 +300,9 @@ enum ExceptionCode: int {
     case TYPEINFO_UDT_MISSING_TYPE = 1248;
     case TYPEINFO_UDT_MISSING_VALUETYPES = 1249;
     case TYPEINFO_UDT_VALUETYPES_NOT_ARRAY = 1250;
+    case TYPEINFO_VECTOR_INVALID_DIMENSIONS = 1270;
+    case TYPEINFO_VECTOR_INVALID_TYPE = 1266;
+    case TYPEINFO_VECTOR_MISSING_DIMENSIONS = 1269;
+    case TYPEINFO_VECTOR_MISSING_TYPE = 1267;
+    case TYPEINFO_VECTOR_MISSING_VALUETYPE = 1268;
 }

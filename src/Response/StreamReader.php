@@ -15,6 +15,7 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
+use Cassandra\TypeInfo\VectorInfo;
 use TypeError;
 use ValueError;
 
@@ -483,9 +484,9 @@ class StreamReader {
 
         switch ($type) {
             case Type::CUSTOM:
-                return new CustomInfo(
-                    javaClassName: $this->readString(),
-                );
+                $javaClassName = $this->readString();
+
+                return $this->parseCustomType($javaClassName);
 
             case Type::COLLECTION_LIST:
                 return new CollectionListInfo(
@@ -533,6 +534,17 @@ class StreamReader {
                     valueTypes: $types,
                 );
 
+            case Type::VECTOR:
+
+                // not supported as of protocol v5
+                throw new Exception(
+                    message: 'Native vector type not supported as of protocol v5',
+                    code: ExceptionCode::RESPONSE_SR_VECTOR_TYPE_NOT_SUPPORTED->value,
+                    context: [
+                        'method' => __METHOD__,
+                    ]
+                );
+
             default:
                 return new SimpleTypeInfo(
                     type: $type,
@@ -547,13 +559,13 @@ class StreamReader {
      * @throws \Cassandra\Type\Exception
      */
     public function readUDT(UDTInfo $typeInfo): array {
-        $tuple = [];
+        $udt = [];
         foreach ($typeInfo->valueTypes as $key => $type) {
             /** @psalm-suppress MixedAssignment */
-            $tuple[$key] = $this->readValue($type);
+            $udt[$key] = $this->readValue($type);
         }
 
-        return $tuple;
+        return $udt;
     }
 
     /**
@@ -610,8 +622,60 @@ class StreamReader {
         return $typeObject->getValue();
     }
 
+    /**
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    public function readVector(VectorInfo $typeInfo): array {
+        $vector = [];
+
+        $valueType = $typeInfo->valueType;
+
+        $serializedSize = TypeFactory::getSerializedSizeOfType($valueType->type);
+
+        if ($serializedSize > 0) {
+            for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
+
+                $binary = $this->read($serializedSize);
+                $typeObject = TypeFactory::getTypeObjectForBinary($valueType, $binary);
+
+                /** @psalm-suppress MixedAssignment */
+                $vector[] = $typeObject->getValue();
+
+            }
+        } else {
+            for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
+                /** @psalm-suppress MixedAssignment */
+                $vector[] = $this->readValue($typeInfo->valueType);
+            }
+        }
+
+        return $vector;
+    }
+
     public function reset(): void {
         $this->offset = $this->extraDataOffset;
+    }
+
+    protected function parseCustomType(string $javaClassName): TypeInfo {
+        // todo: detect vector and other types
+        // see https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/cql3/functions/types/DataTypeClassNameParser.java#L48
+
+        if (str_starts_with($javaClassName, 'org.apache.cassandra.db.marshal.VectorType')) {
+            $valueType = new SimpleTypeInfo(Type::FLOAT);
+            $dimensions = 3;
+
+            return new VectorInfo(
+                valueType: $valueType,
+                dimensions: $dimensions,
+            );
+        } else {
+            return new CustomInfo(
+                javaClassName: $javaClassName,
+            );
+        }
     }
 
     /**

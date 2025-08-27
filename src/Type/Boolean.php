@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Boolean extends TypeBase {
@@ -38,6 +39,11 @@ final class Boolean extends TypeBase {
     #[\Override]
     public function getBinary(): string {
         return $this->value ? "\1" : "\0";
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::BOOLEAN;
     }
 
     #[\Override]

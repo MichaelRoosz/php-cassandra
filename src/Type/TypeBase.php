@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Type;
 
+use Cassandra\Type;
+use Cassandra\TypeFactory;
 use Cassandra\TypeInfo\TypeInfo;
 use Stringable;
 
@@ -52,5 +54,11 @@ abstract class TypeBase implements Stringable {
 
     abstract public function getBinary(): string;
 
+    abstract public function getType(): Type;
+
     abstract public function getValue(): mixed;
+
+    public function isSerializedAsFixedSize(): bool {
+        return TypeFactory::isSerializedAsFixedSize($this->getType());
+    }
 }

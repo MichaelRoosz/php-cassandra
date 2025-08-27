@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -127,6 +128,11 @@ final class Timestamp extends TypeBase {
     #[\Override]
     public function getBinary(): string {
         return pack('J', $this->value);
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::TIMESTAMP;
     }
 
     /**

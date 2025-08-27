@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 class Uuid extends TypeBase {
@@ -64,6 +65,11 @@ class Uuid extends TypeBase {
     #[\Override]
     public function getBinary(): string {
         return pack('H*', str_replace('-', '', $this->value));
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::UUID;
     }
 
     #[\Override]

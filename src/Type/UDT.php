@@ -111,6 +111,11 @@ final class UDT extends TypeBase {
         return $binary;
     }
 
+    #[\Override]
+    public function getType(): Type {
+        return Type::UDT;
+    }
+
     /**
      * @return array<mixed> $value
      */

@@ -288,6 +288,7 @@ class Result extends Response implements IteratorAggregate {
                     );
                 }
             }
+
         } else {
             $columns = null;
         }

@@ -111,6 +111,11 @@ final class Tuple extends TypeBase {
         return $binary;
     }
 
+    #[\Override]
+    public function getType(): Type {
+        return Type::TUPLE;
+    }
+
     /**
      * @return array<mixed> $value
      */

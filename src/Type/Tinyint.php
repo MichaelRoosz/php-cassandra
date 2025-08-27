@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Tinyint extends TypeBase {
@@ -66,6 +67,11 @@ final class Tinyint extends TypeBase {
     #[\Override]
     public function getBinary(): string {
         return pack('c', $this->value);
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::TINYINT;
     }
 
     #[\Override]

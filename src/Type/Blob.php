@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Blob extends TypeBase {
@@ -38,6 +39,11 @@ final class Blob extends TypeBase {
     #[\Override]
     public function getBinary(): string {
         return $this->value;
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::BLOB;
     }
 
     #[\Override]

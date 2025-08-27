@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Decimal extends TypeBase {
@@ -28,34 +29,47 @@ final class Decimal extends TypeBase {
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
-        $length = strlen($binary);
 
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('N1scale/C*', $binary);
-        if ($unpacked === false) {
+        $length = strlen($binary);
+        if ($length < 4) {
             throw new Exception('Cannot unpack decimal binary data', ExceptionCode::TYPE_DECIMAL_UNPACK_FAILED->value, [
-                'binary_length' => strlen($binary),
+                'binary_length' => $length,
                 'note' => 'expected >= 4 bytes (scale + varint)',
             ]);
         }
 
-        $varintLen = $length - 4;
-        $varint = 0;
-        for ($i = 1; $i <= $varintLen; ++$i) {
-            $varint |= $unpacked[$i] << (($varintLen - $i) * 8);
+        $scaleUnpacked = unpack('N', substr($binary, 0, 4));
+        if ($scaleUnpacked === false) {
+            throw new Exception('Cannot unpack decimal scale', ExceptionCode::TYPE_DECIMAL_UNPACK_FAILED->value, [
+                'binary_length' => $length,
+            ]);
         }
+        $scale = $scaleUnpacked[1];
 
-        $shift = (PHP_INT_SIZE - $varintLen) * 8;
-        $varint = (string) ($varint << $shift >> $shift);
+        $varintBinary = substr($binary, 4);
+        $unscaledVarint = Varint::fromBinary($varintBinary);
+        $unscaled = $unscaledVarint->getValue();
 
-        if ($unpacked['scale'] === 0) {
-            $value = $varint;
-        } elseif (strlen($varint) > $unpacked['scale']) {
-            $value = substr($varint, 0, -$unpacked['scale']) . '.' . substr($varint, -$unpacked['scale']);
+        if ($scale === 0) {
+            $value = $unscaled;
         } else {
-            $value = $varint >= 0 ? sprintf("0.%0$unpacked[scale]d", $varint) : sprintf("-0.%0$unpacked[scale]d", -$varint);
+            $isNegative = str_starts_with($unscaled, '-');
+            $absUnscaled = $isNegative ? substr($unscaled, 1) : $unscaled;
+
+            // Pad with zeros if necessary
+            $absUnscaled = str_pad($absUnscaled, $scale + 1, '0', STR_PAD_LEFT);
+
+            // Insert decimal point
+            $integerPart = substr($absUnscaled, 0, -$scale);
+            $decimalPart = substr($absUnscaled, -$scale);
+
+            // Remove leading zeros from integer part, but keep at least one digit
+            $integerPart = ltrim($integerPart, '0') ?: '0';
+
+            $value = $integerPart . '.' . $decimalPart;
+            if ($isNegative) {
+                $value = '-' . $value;
+            }
         }
 
         return new static($value);
@@ -79,17 +93,23 @@ final class Decimal extends TypeBase {
 
     #[\Override]
     public function getBinary(): string {
-        $pos = strpos($this->value, '.');
-        $scaleLen = $pos === false ? 0 : strlen($this->value) - $pos - 1;
-        if ($scaleLen) {
-            $numericValue = (int) (((float) $this->value) * (float) pow(10, $scaleLen));
+
+        $scalePos = strpos($this->value, '.');
+        $scale = $scalePos === false ? 0 : strlen($this->value) - $scalePos - 1;
+        if ($scale) {
+            $unscaled = substr($this->value, 0, $scalePos) . substr($this->value, $scalePos + 1);
         } else {
-            $numericValue = (int) $this->value;
+            $unscaled = $this->value;
         }
 
-        $binary = pack('N', $scaleLen) . (new Varint($numericValue))->getBinary();
+        $binary = pack('N', $scale) . (new Varint($unscaled))->getBinary();
 
         return $binary;
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::DECIMAL;
     }
 
     #[\Override]

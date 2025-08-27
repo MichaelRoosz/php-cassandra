@@ -7,10 +7,21 @@ namespace Cassandra\StringMath;
 abstract class Calculator {
     protected static ?Calculator $calculator = null;
 
-    abstract public function binaryToString(string $binary): string;
+    abstract public function decimalBinaryToString(string $binary): string;
+
+    abstract public function decimalStringToBinary(string $decimal): string;
 
     public static function get(): Calculator {
         if (self::$calculator === null) {
+            // Prefer GMP for best performance, then BCMath, fallback to Native
+            if (extension_loaded('gmp')) {
+                self::$calculator = new Calculator\GMP();
+            } elseif (extension_loaded('bcmath')) {
+                self::$calculator = new Calculator\BCMath();
+            } else {
+                self::$calculator = new Calculator\Native();
+            }
+
             self::$calculator = new Calculator\Native();
         }
 
@@ -21,11 +32,7 @@ abstract class Calculator {
         self::$calculator = $calculator;
     }
 
-    abstract public function stringToBinary(string $string): string;
-
     abstract public function stringUnsignedAdd1(string $string): string;
-
-    abstract public function stringUnsignedDiv2(string $string, ?bool &$modulo = null): string;
 
     abstract public function stringUnsignedSub1(string $string): string;
 }

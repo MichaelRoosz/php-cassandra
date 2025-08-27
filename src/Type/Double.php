@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 /**
@@ -44,18 +45,23 @@ class Double extends TypeBase {
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
-        if (!is_float($value)) {
-            throw new Exception('Invalid double value; expected float', ExceptionCode::TYPE_DOUBLE_INVALID_VALUE_TYPE->value, [
+        if (!is_numeric($value)) {
+            throw new Exception('Invalid double value; expected numeric', ExceptionCode::TYPE_DOUBLE_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
-        return new static($value);
+        return new static((float) $value);
     }
 
     #[\Override]
     public function getBinary(): string {
         return pack('E', $this->value);
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::DOUBLE;
     }
 
     #[\Override]

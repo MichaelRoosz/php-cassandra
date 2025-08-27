@@ -22,7 +22,7 @@ enum Type: int {
     case INET = 0x0010;
     case INT = 0x0009;
     case SMALLINT = 0x0013;
-    case TEXT = 0x000A; // deprecated in Protocol v3
+    case TEXT = 0x000A; // deprecated in protocol v3
     case TIME = 0x0012;
     case TIMESTAMP = 0x000B;
     case TIMEUUID = 0x000F;
@@ -32,4 +32,5 @@ enum Type: int {
     case UUID = 0x000C;
     case VARCHAR = 0x000D;
     case VARINT = 0x000E;
+    case VECTOR = 0x0032;
 }

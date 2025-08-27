@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\CustomInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -81,11 +82,16 @@ class Custom extends TypeBase {
 
     #[\Override]
     public function getBinary(): string {
-        return pack('n', strlen($this->value)) . $this->value;
+        return $this->value;
     }
 
     public function getJavaClassName(): string {
         return $this->typeInfo->javaClassName;
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::CUSTOM;
     }
 
     #[\Override]

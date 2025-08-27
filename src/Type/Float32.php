@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 /**
@@ -44,18 +45,23 @@ final class Float32 extends TypeBase {
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
-        if (!is_float($value)) {
-            throw new Exception('Invalid float32 value; expected float', ExceptionCode::TYPE_FLOAT32_INVALID_VALUE_TYPE->value, [
+        if (!is_numeric($value)) {
+            throw new Exception('Invalid float32 value; expected numeric', ExceptionCode::TYPE_FLOAT32_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
-        return new static($value);
+        return new static((float) $value);
     }
 
     #[\Override]
     public function getBinary(): string {
         return pack('G', $this->value);
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::FLOAT;
     }
 
     #[\Override]

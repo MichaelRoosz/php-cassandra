@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use ReflectionClass;
 
@@ -62,6 +63,11 @@ class Bigint extends TypeBase {
     #[\Override]
     public function getBinary(): string {
         return pack('J', $this->value);
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::BIGINT;
     }
 
     #[\Override]

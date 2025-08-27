@@ -6,12 +6,20 @@ namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
 use Cassandra\StringMath\Calculator;
+use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Varint extends TypeBase {
     protected readonly string|int $value;
 
     final public function __construct(string|int $value) {
+        if (!is_numeric($value)) {
+            throw new Exception('Invalid varint value; expected int or numeric string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
+                'value_type' => gettype($value),
+            ]);
+        }
+
+        // todo: if it fits into PHP_INT_MAX, we should use int value
         $this->value = $value;
     }
 
@@ -52,7 +60,7 @@ final class Varint extends TypeBase {
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
-        if (!is_string($value) && !is_int($value)) {
+        if (!is_numeric($value)) {
             throw new Exception('Invalid varint value; expected int or numeric string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
@@ -68,6 +76,11 @@ final class Varint extends TypeBase {
         }
 
         return Calculator::get()->stringToBinary($this->value);
+    }
+
+    #[\Override]
+    public function getType(): Type {
+        return Type::VARINT;
     }
 
     #[\Override]
