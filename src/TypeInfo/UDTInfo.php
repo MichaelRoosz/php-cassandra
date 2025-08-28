@@ -25,6 +25,7 @@ final class UDTInfo extends TypeInfo {
      * @param array{
      *  type: \Cassandra\Type::UDT,
      *  valueTypes: array<string,\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)>,
+     *  isFrozen: bool,
      *  keyspace?: string,
      *  name?: string,
      * } $typeDefinition

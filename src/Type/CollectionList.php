@@ -26,7 +26,12 @@ final class CollectionList extends TypeBase {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception
      */
-    final public function __construct(array $value, Type|array|null $valueDefinition = null, ?CollectionListInfo $typeInfo = null) {
+    final public function __construct(
+        array $value,
+        Type|array|null $valueDefinition = null,
+        bool $isFrozen = false,
+        ?CollectionListInfo $typeInfo = null,
+    ) {
         $this->value = $value;
 
         if ($typeInfo !== null) {
@@ -36,6 +41,7 @@ final class CollectionList extends TypeBase {
             $this->typeInfo = CollectionListInfo::fromTypeDefinition([
                 'type' => Type::COLLECTION_LIST,
                 'valueType' => $valueDefinition,
+                'isFrozen' => $isFrozen,
             ]);
 
         } else {

@@ -26,13 +26,19 @@ final class CollectionSet extends TypeBase {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception
      */
-    final public function __construct(array $value, Type|array|null $valueDefinition = null, ?CollectionSetInfo $typeInfo = null) {
+    final public function __construct(
+        array $value,
+        Type|array|null $valueDefinition = null,
+        bool $isFrozen = false,
+        ?CollectionSetInfo $typeInfo = null,
+    ) {
         $this->value = $value;
 
         if ($valueDefinition !== null) {
             $this->typeInfo = CollectionSetInfo::fromTypeDefinition([
                 'type' => Type::COLLECTION_SET,
                 'valueType' => $valueDefinition,
+                'isFrozen' => $isFrozen,
             ]);
         } elseif ($typeInfo !== null) {
             $this->typeInfo = $typeInfo;

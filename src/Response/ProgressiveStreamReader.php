@@ -6,6 +6,7 @@ namespace Cassandra\Response;
 
 use Cassandra\Connection\Node;
 use Cassandra\ExceptionCode;
+use Cassandra\TypeNameParser;
 
 final class ProgressiveStreamReader extends StreamReader {
     protected ?Node $source = null;
@@ -13,6 +14,7 @@ final class ProgressiveStreamReader extends StreamReader {
     public function __construct(string $data = '') {
         $this->data = $data;
         $this->dataLength = strlen($data);
+        $this->typeNameParser = new TypeNameParser();
     }
 
     /**

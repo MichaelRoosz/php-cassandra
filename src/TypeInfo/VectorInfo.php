@@ -20,6 +20,7 @@ final class VectorInfo extends TypeInfo {
      * @param array{
      *  type: \Cassandra\Type::VECTOR,
      *  valueType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
+     *  dimensions: int,
      * } $typeDefinition
      *
      * @throws \Cassandra\TypeInfo\Exception
@@ -68,6 +69,7 @@ final class VectorInfo extends TypeInfo {
             );
         }
 
+        /** @psalm-suppress DocblockTypeContradiction */
         if (!is_int($typeDefinition['dimensions'])) {
             throw new Exception(
                 "Vector type definition 'dimensions' must be an integer",

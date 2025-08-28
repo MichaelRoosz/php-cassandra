@@ -22,6 +22,7 @@ final class CollectionMapInfo extends TypeInfo {
      *  type: \Cassandra\Type::COLLECTION_MAP,
      *  keyType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
      *  valueType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
+     *  isFrozen: bool,
      * } $typeDefinition
      * 
      * @throws \Cassandra\TypeInfo\Exception

@@ -31,7 +31,8 @@ final class CollectionMap extends TypeBase {
         array $value,
         Type|array|null $keyDefinition = null,
         Type|array|null $valueDefinition = null,
-        ?CollectionMapInfo $typeInfo = null
+        bool $isFrozen = false,
+        ?CollectionMapInfo $typeInfo = null,
     ) {
 
         if ($typeInfo !== null) {
@@ -41,6 +42,7 @@ final class CollectionMap extends TypeBase {
                 'type' => Type::COLLECTION_MAP,
                 'keyType' => $keyDefinition,
                 'valueType' => $valueDefinition,
+                'isFrozen' => $isFrozen,
             ]);
         } else {
             throw new Exception('Either keyDefinition and valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_COLLECTION_MAP_KEY_VALUEDEF_OR_TYPEINFO_REQUIRED->value);

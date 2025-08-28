@@ -20,6 +20,7 @@ final class CollectionListInfo extends TypeInfo {
      * @param array{
      *  type: \Cassandra\Type::COLLECTION_LIST,
      *  valueType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
+     *  isFrozen: bool,
      * } $typeDefinition
      *
      * @throws \Cassandra\TypeInfo\Exception

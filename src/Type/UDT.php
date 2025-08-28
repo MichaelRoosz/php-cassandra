@@ -25,13 +25,19 @@ final class UDT extends TypeBase {
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception
      */
-    final public function __construct(array $value, array|null $valueDefinition = null, ?UDTInfo $typeInfo = null) {
+    final public function __construct(
+        array $value,
+        array|null $valueDefinition = null,
+        bool $isFrozen = false,
+        ?UDTInfo $typeInfo = null,
+    ) {
         $this->value = $value;
 
         if ($valueDefinition !== null) {
             $this->typeInfo = UDTInfo::fromTypeDefinition([
                 'type' => Type::UDT,
                 'valueTypes' => $valueDefinition,
+                'isFrozen' => $isFrozen,
             ]);
         } elseif ($typeInfo !== null) {
             $this->typeInfo = $typeInfo;
