@@ -1,13 +1,6 @@
 Todo
 =====
 
-
-* Add isFrozen() Info
-        public boolean isImplicitlyFrozen()
-        {
-            return isTuple() || isVector();
-        }
-
 * Finish tests
 
 * Add to readme: 

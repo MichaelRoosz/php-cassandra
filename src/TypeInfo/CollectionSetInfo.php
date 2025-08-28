@@ -11,6 +11,7 @@ use Cassandra\TypeFactory;
 final class CollectionSetInfo extends TypeInfo {
     public function __construct(
         public readonly TypeInfo $valueType,
+        public readonly bool $isFrozen,
     ) {
         parent::__construct(Type::COLLECTION_SET);
     }
@@ -56,6 +57,12 @@ final class CollectionSetInfo extends TypeInfo {
 
         $valueType = TypeFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
 
-        return new self($valueType);
+        if (isset($typeDefinition['isFrozen']) && $typeDefinition['isFrozen'] === true) {
+            $isFrozen = true;
+        } else {
+            $isFrozen = false;
+        }
+
+        return new self($valueType, $isFrozen);
     }
 }

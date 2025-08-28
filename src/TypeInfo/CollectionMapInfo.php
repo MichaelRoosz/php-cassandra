@@ -12,6 +12,7 @@ final class CollectionMapInfo extends TypeInfo {
     public function __construct(
         public readonly TypeInfo $keyType,
         public readonly TypeInfo $valueType,
+        public readonly bool $isFrozen,
     ) {
         parent::__construct(Type::COLLECTION_MAP);
     }
@@ -69,7 +70,13 @@ final class CollectionMapInfo extends TypeInfo {
         }
         $valueType = TypeFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
 
-        return new self($keyType, $valueType);
+        if (isset($typeDefinition['isFrozen']) && $typeDefinition['isFrozen'] === true) {
+            $isFrozen = true;
+        } else {
+            $isFrozen = false;
+        }
+
+        return new self($keyType, $valueType, $isFrozen);
     }
 
 }

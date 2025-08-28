@@ -92,7 +92,6 @@ final class TypeFactory {
 
         $type = $typeDefinition['type'];
 
-        // todo: migrate to a map
         switch ($type) {
             case Type::CUSTOM:
                 /** @psalm-suppress InvalidArgument */
@@ -132,8 +131,6 @@ final class TypeFactory {
             default:
                 /** @psalm-suppress InvalidArgument */
                 return SimpleTypeInfo::fromTypeDefinition($typeDefinition);
-
-                // todo: add remaining types
         }
     }
 

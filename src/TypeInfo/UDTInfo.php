@@ -14,6 +14,7 @@ final class UDTInfo extends TypeInfo {
          * @var array<string,TypeInfo> $valueTypes
          */
         public readonly array $valueTypes,
+        public readonly bool $isFrozen,
         public readonly ?string $keyspace = null,
         public readonly ?string $name = null,
     ) {
@@ -93,6 +94,12 @@ final class UDTInfo extends TypeInfo {
             $name = null;
         }
 
-        return new self($valueTypes, $keyspace, $name);
+        if (isset($typeDefinition['isFrozen']) && $typeDefinition['isFrozen'] === true) {
+            $isFrozen = true;
+        } else {
+            $isFrozen = false;
+        }
+
+        return new self($valueTypes, $isFrozen, $keyspace, $name);
     }
 }

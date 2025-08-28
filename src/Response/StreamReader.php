@@ -10,12 +10,12 @@ use Cassandra\TypeFactory;
 use Cassandra\TypeInfo\CollectionListInfo;
 use Cassandra\TypeInfo\CollectionMapInfo;
 use Cassandra\TypeInfo\CollectionSetInfo;
-use Cassandra\TypeInfo\CustomInfo;
 use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeInfo\VectorInfo;
+use Cassandra\TypeNameParser;
 use TypeError;
 use ValueError;
 
@@ -422,7 +422,7 @@ class StreamReader {
      * @throws \Cassandra\Type\Exception
      */
     public function readTextList(): array {
-        $rawList = $this->readList(new CollectionListInfo(new SimpleTypeInfo(Type::TEXT)));
+        $rawList = $this->readList(new CollectionListInfo(new SimpleTypeInfo(Type::TEXT), isFrozen: false));
 
         $list = [];
         foreach ($rawList as $item) {
@@ -486,22 +486,27 @@ class StreamReader {
             case Type::CUSTOM:
                 $javaClassName = $this->readString();
 
-                return $this->parseCustomType($javaClassName);
+                $typeNameParser = new TypeNameParser();
+
+                return $typeNameParser->parse($javaClassName);
 
             case Type::COLLECTION_LIST:
                 return new CollectionListInfo(
                     valueType: $this->readType(),
+                    isFrozen: false,
                 );
 
             case Type::COLLECTION_SET:
                 return new CollectionSetInfo(
                     valueType: $this->readType(),
+                    isFrozen: false,
                 );
 
             case Type::COLLECTION_MAP:
                 return new CollectionMapInfo(
                     keyType: $this->readType(),
                     valueType: $this->readType(),
+                    isFrozen: false,
                 );
 
             case Type::UDT:
@@ -518,6 +523,7 @@ class StreamReader {
 
                 return new UDTInfo(
                     valueTypes: $types,
+                    isFrozen: false,
                     keyspace: $keyspace,
                     name: $name,
                 );
@@ -657,25 +663,6 @@ class StreamReader {
 
     public function reset(): void {
         $this->offset = $this->extraDataOffset;
-    }
-
-    protected function parseCustomType(string $javaClassName): TypeInfo {
-        // todo: detect vector and other types
-        // see https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/cql3/functions/types/DataTypeClassNameParser.java#L48
-
-        if (str_starts_with($javaClassName, 'org.apache.cassandra.db.marshal.VectorType')) {
-            $valueType = new SimpleTypeInfo(Type::FLOAT);
-            $dimensions = 3;
-
-            return new VectorInfo(
-                valueType: $valueType,
-                dimensions: $dimensions,
-            );
-        } else {
-            return new CustomInfo(
-                javaClassName: $javaClassName,
-            );
-        }
     }
 
     /**
