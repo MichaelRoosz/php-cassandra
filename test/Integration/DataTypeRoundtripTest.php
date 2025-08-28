@@ -137,7 +137,7 @@ final class DataTypeRoundtripTest extends TestCase {
             -1,
             PHP_INT_MAX,
             PHP_INT_MIN,
-            9223372036854775807,  // max bigint
+            9223372036854775807, // max bigint
             -9223372036854775807 - 1, // min bigint
             1000000000000000,
             -1000000000000000,
@@ -408,6 +408,10 @@ final class DataTypeRoundtripTest extends TestCase {
             '-42' => ['php' => '-42', 'cql' => '-42'],
             '123456789.987654321' => ['php' => '123456789.987654321', 'cql' => '123456789.987654321'],
             '-123456789.987654321' => ['php' => '-123456789.987654321', 'cql' => '-123456789.987654321'],
+            '.11111' => ['php' => '0.11111', 'cql' => '0.11111'],
+            '-.11111' => ['php' => '-0.11111', 'cql' => '-0.11111'],
+            '11111.' => ['php' => '11111', 'cql' => '11111'],
+            '-11111.' => ['php' => '-11111', 'cql' => '-11111'],
         ];
 
         foreach (array_keys($testValues) as $index => $testValue) {

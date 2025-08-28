@@ -93,15 +93,28 @@ final class TypeFactory {
         $type = $typeDefinition['type'];
 
         /** @psalm-suppress InvalidArgument */
-        /** @phpstan-ignore argument.type */
         return match ($type) {
+            /** @phpstan-ignore argument.type */
             Type::CUSTOM => CustomInfo::fromTypeDefinition($typeDefinition),
+
+            /** @phpstan-ignore argument.type */
             Type::COLLECTION_LIST => CollectionListInfo::fromTypeDefinition($typeDefinition),
+
+            /** @phpstan-ignore argument.type */
             Type::COLLECTION_SET => CollectionSetInfo::fromTypeDefinition($typeDefinition),
+
+            /** @phpstan-ignore argument.type */
             Type::COLLECTION_MAP => CollectionMapInfo::fromTypeDefinition($typeDefinition),
+
+            /** @phpstan-ignore argument.type */
             Type::UDT => UDTInfo::fromTypeDefinition($typeDefinition),
+
+            /** @phpstan-ignore argument.type */
             Type::TUPLE => TupleInfo::fromTypeDefinition($typeDefinition),
+
+            /** @phpstan-ignore argument.type */
             Type::VECTOR => VectorInfo::fromTypeDefinition($typeDefinition),
+
             default => SimpleTypeInfo::fromTypeDefinition($typeDefinition),
         };
     }

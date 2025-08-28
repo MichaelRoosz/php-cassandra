@@ -5,32 +5,62 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
-use Cassandra\StringMath\Calculator;
+use Cassandra\StringMath\DecimalCalculator;
+use Cassandra\StringMath\Exception as StringMathException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Varint extends TypeBase {
     protected readonly string|int $value;
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     final public function __construct(string|int $value) {
-        if (!is_numeric($value)) {
-            throw new Exception('Invalid varint value; expected int or numeric string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
+
+        if (is_int($value)) {
+            $this->value = $value;
+
+            return;
+        }
+
+        $isInteger = str_starts_with($value, '-') ? ctype_digit(substr($value, 1)) : ctype_digit($value);
+        if (!$isInteger) {
+            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
-        // todo: if it fits into PHP_INT_MAX, we should use int value
-        $this->value = $value;
+        // convert to int value if it fits into PHP_INT_MAX, otherwise keep as string
+        $length = strlen($value);
+        if (str_starts_with($value, '-')) {
+            $length--;
+        }
+
+        $this->value = match (PHP_INT_SIZE) {
+            4 => $length <= 9 ? (int) $value : $value,
+            8 => $length <= 18 ? (int) $value : $value, /** @phpstan-ignore match.alwaysTrue */
+            default => $value,
+        };
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         $length = strlen($binary);
 
         if ($length > PHP_INT_SIZE) {
-            $value = Calculator::get()->binaryToString($binary);
+            try {
+                $decimal = DecimalCalculator::get()->fromBinary($binary);
+            } catch (StringMathException $e) {
+                throw new Exception('Failed to get decimal from binary', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
+                    'binary' => $binary,
+                ]);
+            }
 
-            return new static($value);
+            return new static($decimal);
         }
 
         /**
@@ -60,8 +90,8 @@ final class Varint extends TypeBase {
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
-        if (!is_numeric($value)) {
-            throw new Exception('Invalid varint value; expected int or numeric string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
+        if (!is_numeric($value) || is_float($value)) {
+            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -69,13 +99,23 @@ final class Varint extends TypeBase {
         return new static($value);
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     #[\Override]
     public function getBinary(): string {
+
         if (is_int($this->value)) {
             return $this->getBinaryFromIntValue($this->value);
         }
 
-        return Calculator::get()->stringToBinary($this->value);
+        try {
+            return DecimalCalculator::get()->toBinary($this->value);
+        } catch (StringMathException $e) {
+            throw new Exception('Failed to get binary from decimal', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
+                'decimal' => $this->value,
+            ]);
+        }
     }
 
     #[\Override]

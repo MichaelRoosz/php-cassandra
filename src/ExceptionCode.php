@@ -9,7 +9,7 @@ namespace Cassandra;
  * Each exception class has its own prefix based on its namespace in uppercase.
  * Root exception codes use short names for the class using them.
  * 
- * Next free code: 1290
+ * Next free code: 1294
  */
 enum ExceptionCode: int {
     // Compression namespace (COMPRESSION_)
@@ -181,8 +181,12 @@ enum ExceptionCode: int {
     case STREAM_WRITE_FAILED = 1063;
 
     // StringMath namespace (STRINGMATH_)
+    case STRINGMATH_BCMATH_EXTENSION_NOT_LOADED = 1291;
+    case STRINGMATH_CALCULATOR_BCMATH_DIVISION_BY_ZERO = 1293;
+    case STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL = 1292;
     case STRINGMATH_CALCULATOR_NATIVE_INVALID_CHARACTER = 1261;
     case STRINGMATH_CALCULATOR_NATIVE_INVALID_HEX_STRING = 1141;
+    case STRINGMATH_GMP_EXTENSION_NOT_LOADED = 1290;
 
     // Type namespace (TYPE_)
     case TYPE_BIGINT_64BIT_REQUIRED = 1142;

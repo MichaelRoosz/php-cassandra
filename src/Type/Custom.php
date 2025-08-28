@@ -39,20 +39,7 @@ class Custom extends TypeBase {
             ]);
         }
 
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('n', substr($binary, 0, 2));
-        if ($unpacked === false) {
-            throw new Exception('Cannot unpack custom type binary header', ExceptionCode::TYPE_CUSTOM_UNPACK_FAILED->value, [
-                'binary_length' => strlen($binary),
-                'expected_header_length' => 2,
-            ]);
-        }
-
-        $length = $unpacked[1];
-
-        return new static(substr($binary, 2, $length), $typeInfo->javaClassName);
+        return new static($binary, $typeInfo->javaClassName);
     }
 
     /**

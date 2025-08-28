@@ -21,6 +21,12 @@ final class Decimal extends TypeBase {
             ]);
         }
 
+        if (is_float($value)) {
+            $this->value = number_format($value, 0, '.', '');
+
+            return;
+        }
+
         $this->value = (string) $value;
     }
 
@@ -37,7 +43,9 @@ final class Decimal extends TypeBase {
                 'note' => 'expected >= 4 bytes (scale + varint)',
             ]);
         }
-
+        /**
+         * @var false|array<int> $scaleUnpacked
+         */
         $scaleUnpacked = unpack('N', substr($binary, 0, 4));
         if ($scaleUnpacked === false) {
             throw new Exception('Cannot unpack decimal scale', ExceptionCode::TYPE_DECIMAL_UNPACK_FAILED->value, [
@@ -91,14 +99,20 @@ final class Decimal extends TypeBase {
         return new static($value);
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     #[\Override]
     public function getBinary(): string {
 
         $scalePos = strpos($this->value, '.');
-        $scale = $scalePos === false ? 0 : strlen($this->value) - $scalePos - 1;
-        if ($scale) {
+        $hasScale = $scalePos !== false;
+
+        if ($hasScale) {
+            $scale = strlen($this->value) - $scalePos - 1;
             $unscaled = substr($this->value, 0, $scalePos) . substr($this->value, $scalePos + 1);
         } else {
+            $scale = 0;
             $unscaled = $this->value;
         }
 
