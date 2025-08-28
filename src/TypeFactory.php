@@ -92,46 +92,18 @@ final class TypeFactory {
 
         $type = $typeDefinition['type'];
 
-        switch ($type) {
-            case Type::CUSTOM:
-                /** @psalm-suppress InvalidArgument */
-                /** @phpstan-ignore argument.type */
-                return CustomInfo::fromTypeDefinition($typeDefinition);
-
-            case Type::COLLECTION_LIST:
-                /** @psalm-suppress InvalidArgument */
-                /** @phpstan-ignore argument.type */
-                return CollectionListInfo::fromTypeDefinition($typeDefinition);
-
-            case Type::COLLECTION_SET:
-                /** @psalm-suppress InvalidArgument */
-                /** @phpstan-ignore argument.type */
-                return CollectionSetInfo::fromTypeDefinition($typeDefinition);
-
-            case Type::COLLECTION_MAP:
-                /** @psalm-suppress InvalidArgument */
-                /** @phpstan-ignore argument.type */
-                return CollectionMapInfo::fromTypeDefinition($typeDefinition);
-
-            case Type::UDT:
-                /** @psalm-suppress InvalidArgument */
-                /** @phpstan-ignore argument.type */
-                return UDTInfo::fromTypeDefinition($typeDefinition);
-
-            case Type::TUPLE:
-                /** @psalm-suppress InvalidArgument */
-                /** @phpstan-ignore argument.type */
-                return TupleInfo::fromTypeDefinition($typeDefinition);
-
-            case Type::VECTOR:
-                /** @psalm-suppress InvalidArgument */
-                /** @phpstan-ignore argument.type */
-                return VectorInfo::fromTypeDefinition($typeDefinition);
-
-            default:
-                /** @psalm-suppress InvalidArgument */
-                return SimpleTypeInfo::fromTypeDefinition($typeDefinition);
-        }
+        /** @psalm-suppress InvalidArgument */
+        /** @phpstan-ignore argument.type */
+        return match ($type) {
+            Type::CUSTOM => CustomInfo::fromTypeDefinition($typeDefinition),
+            Type::COLLECTION_LIST => CollectionListInfo::fromTypeDefinition($typeDefinition),
+            Type::COLLECTION_SET => CollectionSetInfo::fromTypeDefinition($typeDefinition),
+            Type::COLLECTION_MAP => CollectionMapInfo::fromTypeDefinition($typeDefinition),
+            Type::UDT => UDTInfo::fromTypeDefinition($typeDefinition),
+            Type::TUPLE => TupleInfo::fromTypeDefinition($typeDefinition),
+            Type::VECTOR => VectorInfo::fromTypeDefinition($typeDefinition),
+            default => SimpleTypeInfo::fromTypeDefinition($typeDefinition),
+        };
     }
 
     /**

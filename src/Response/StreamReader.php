@@ -24,10 +24,12 @@ class StreamReader {
     protected int $dataLength;
     protected int $extraDataOffset = 0;
     protected int $offset = 0;
+    protected TypeNameParser $typeNameParser;
 
     public function __construct(string $data) {
         $this->data = $data;
         $this->dataLength = strlen($data);
+        $this->typeNameParser = new TypeNameParser();
     }
 
     /**
@@ -486,9 +488,7 @@ class StreamReader {
             case Type::CUSTOM:
                 $javaClassName = $this->readString();
 
-                $typeNameParser = new TypeNameParser();
-
-                return $typeNameParser->parse($javaClassName);
+                return $this->typeNameParser->parse($javaClassName);
 
             case Type::COLLECTION_LIST:
                 return new CollectionListInfo(
