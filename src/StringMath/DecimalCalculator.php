@@ -43,9 +43,6 @@ abstract class DecimalCalculator {
             } else {
                 self::$calculator = new DecimalCalculator\Native();
             }
-
-            // todo: remove this once we have a proper calculator
-            self::$calculator = new DecimalCalculator\Native();
         }
 
         return self::$calculator;

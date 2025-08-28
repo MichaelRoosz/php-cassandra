@@ -1546,6 +1546,11 @@ final class DataTypeRoundtripTest extends TestCase {
 
     public function testVectorRoundtrip(): void {
 
+        $cassandraVersion = getenv('APP_CASSANDRA_VERSION');
+        if ($cassandraVersion !== null && version_compare($cassandraVersion, '5.0', '<')) {
+            $this->markTestSkipped('Vectors are  not supported in Cassandra versions before 5.0');
+        }
+
         // test vector of 3 float values (data type with fixed size)
         $this->connection->querySync(
             'CREATE TABLE IF NOT EXISTS test_vector_float3 (id int PRIMARY KEY, value vector<float, 3>)'
