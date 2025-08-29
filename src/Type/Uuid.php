@@ -26,10 +26,14 @@ class Uuid extends TypeBase {
         $unpacked = unpack('n8', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack UUID binary data', ExceptionCode::TYPE_UUID_UNPACK_FAILED->value, [
-                'binary_length' => strlen($binary),
-                'expected_length' => 16,
-            ]);
+            throw new Exception(
+                'Cannot unpack UUID binary data',
+                ExceptionCode::TYPE_UUID_UNPACK_FAILED->value,
+                [
+                    'binary_length' => strlen($binary),
+                    'expected_length' => 16,
+                ]
+            );
         }
 
         return new static(sprintf(
