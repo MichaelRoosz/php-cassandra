@@ -111,7 +111,9 @@ final class Vector extends TypeBase {
                 if ($isSerializedAsFixedSize) {
                     $binary .= $valueBinary;
                 } else {
-                    $binary .= pack('N', strlen($valueBinary)) . $valueBinary;
+                    $length = strlen($valueBinary);
+                    $lengthBinary = (new Varint($length))->getBinary();
+                    $binary .= $lengthBinary . $valueBinary;
                 }
             }
         }

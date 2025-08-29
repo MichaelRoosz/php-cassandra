@@ -593,7 +593,17 @@ class StreamReader {
             );
         }
 
-        return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x', $data[1], $data[2], $data[3], $data[4], $data[5], $data[6], $data[7], $data[8]);
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            $data[1],
+            $data[2],
+            $data[3],
+            $data[4],
+            $data[5],
+            $data[6],
+            $data[7],
+            $data[8]
+        );
     }
 
     /**
@@ -653,8 +663,14 @@ class StreamReader {
             }
         } else {
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
+
+                $serializedSize = $this->readVarintUnsigned32();
+
+                $binary = $this->read($serializedSize);
+                $typeObject = TypeFactory::getTypeObjectForBinary($valueType, $binary);
+
                 /** @psalm-suppress MixedAssignment */
-                $vector[] = $this->readValue($typeInfo->valueType);
+                $vector[] = $typeObject->getValue();
             }
         }
 

@@ -1600,7 +1600,55 @@ final class DataTypeRoundtripTest extends TestCase {
 
         $this->compareWithCqlsh('test_vector_float3', 'id', 'value', $testValues, 'vector');
 
-        // todo: test vector of 4 varint values (data type with variable size)
+        // test vector of 4 varint values (data type with variable size)
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_vector_varint4 (id int PRIMARY KEY, value vector<varint, 4>)'
+        );
+
+        $testValues = [
+            [0, 0, 0, 0],
+            [1, 2, 3, 4],
+            [-1, -2, -3, -4],
+            [PHP_INT_MAX, PHP_INT_MIN, PHP_INT_MAX, PHP_INT_MIN],
+            ['0', '1', '2', '3'],
+            ['-1', '-2', '-3', '-4'],
+            [
+                '999999999999999999999999999999999999999999999999999999999999999999',
+                '-999999999999999999999999999999999999999999999999999999999999999999',
+                '170141183460469231731687303715884105727',
+                '-170141183460469231731687303715884105728',
+            ],
+        ];
+
+        foreach ($testValues as $index => $testValue) {
+            $this->connection->querySync(
+                'INSERT INTO test_vector_varint4 (id, value) VALUES (?, ?)',
+                [new Type\Integer($index), new Type\Vector($testValue, Type::VARINT, 4)],
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_vector_varint4 WHERE id = ?',
+                [new Type\Integer($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertIsArray($retrievedValue, 'Vector should be returned as an array');
+            $this->assertCount(4, $retrievedValue, 'Vector length should be 4');
+
+            foreach ([0, 1, 2, 3] as $i) {
+                $this->assertEquals(
+                    (string) $testValue[$i],
+                    (string) $retrievedValue[$i],
+                    "Vector element {$i} should round-trip correctly"
+                );
+            }
+        }
+
+        // cqlsh does not support varint vectors currently
+        //$this->compareWithCqlsh('test_vector_varint4', 'id', 'value', $testValues, 'vector');
     }
 
     private function compareWithCqlsh(string $tableName, string $idColumn, string $valueColumn, array $testValues, string $dataType): void {
