@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use Cassandra\Consistency;
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
@@ -14,22 +15,26 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
-use Cassandra\TypeInfo\VectorInfo;
 use Cassandra\TypeNameParser;
 use TypeError;
 use ValueError;
+use Cassandra\VIntCodec;
 
 class StreamReader {
+    final protected const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
+
     protected string $data;
     protected int $dataLength;
     protected int $extraDataOffset = 0;
     protected int $offset = 0;
     protected TypeNameParser $typeNameParser;
+    protected VIntCodec $vIntCodec;
 
     public function __construct(string $data) {
         $this->data = $data;
         $this->dataLength = strlen($data);
         $this->typeNameParser = new TypeNameParser();
+        $this->vIntCodec = new VIntCodec();
     }
 
     /**
@@ -54,36 +59,55 @@ class StreamReader {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readBoolean(): bool {
-        return (bool) ord($this->read(1));
+    public function read(int $length): string {
+        if ($length < 1) {
+            return '';
+        }
+
+        if ($this->offset + $length > $this->dataLength) {
+            throw new Exception(
+                message: 'Attempted to read beyond available data',
+                code: ExceptionCode::RESPONSE_SR_READ_BEYOND_AVAILABLE->value,
+                context: [
+                    'method' => __METHOD__,
+                    'requested_length' => $length,
+                    'available' => $this->dataLength - $this->offset,
+                    'offset' => $this->pos(),
+                    'data_length' => $this->dataLength,
+                ]
+            );
+        }
+
+        $output = substr($this->data, $this->offset, $length);
+        $this->offset += $length;
+
+        return $output;
+    }
+
+    /**
+     * Reads a 1 byte unsigned integer
+     * @throws \Cassandra\Response\Exception
+     */
+    final public function readByte(): int {
+        return ord($this->read(1));
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readBytes(): ?string {
-        $binaryLength = $this->read(4);
-        if ($binaryLength === "\xff\xff\xff\xff") {
+    final public function readBytes(): ?string {
+
+        $length = $this->readInt();
+
+        if ($length < 0) {
             return null;
         }
 
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('N', $binaryLength);
-        if ($unpacked === false) {
-            throw new Exception(
-                message: 'Cannot unpack 32-bit length prefix',
-                code: ExceptionCode::RESPONSE_SR_READ_BYTES_LENGTH_UNPACK_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'offset' => $this->pos(),
-                ]
-            );
+        if ($length === 0) {
+            return '';
         }
-        $length = $unpacked[1];
 
-        return $length === 0 ? '' : $this->read($length);
+        return $this->read($length);
     }
 
     /**
@@ -91,7 +115,7 @@ class StreamReader {
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readBytesMap(): array {
+    final public function readBytesMap(): array {
         $map = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
@@ -106,80 +130,71 @@ class StreamReader {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readChar(): int {
-        return ord($this->read(1));
-    }
+    final public function readConsistency(): Consistency {
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readDouble(): float {
-        /**
-         * @var false|array<float> $unpacked
-         */
-        $unpacked = unpack('E', $this->read(8));
-        if ($unpacked === false) {
+        $consistencyAsInt = $this->readShort();
+
+        try {
+            $consistency = Consistency::from($consistencyAsInt);
+        } catch (ValueError|TypeError $e) {
             throw new Exception(
-                message: 'Cannot unpack IEEE-754 double',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_DOUBLE_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'offset' => $this->pos(),
-                ]
+                'Invalid consistency: ' . $consistencyAsInt,
+                ExceptionCode::RESPONSE_SR_INVALID_CONSISTENCY->value,
+                [
+                    'consistency' => $consistencyAsInt,
+                ],
+                $e
             );
         }
 
-        return $unpacked[1];
+        return $consistency;
+    }
+
+    /**
+     * @return array{
+     *   ip: string,
+     *   port: int,
+     * }
+     * 
+     * @throws \Cassandra\Response\Exception
+     */
+    final public function readInet(): array {
+        $address = $this->readInetAddr();
+        $port = $this->readInt();
+
+        return [
+            'ip' => $address,
+            'port' => $port,
+        ];
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readFloat(): float {
-        /**
-         * @var false|array<float> $unpacked
-         */
-        $unpacked = unpack('G', $this->read(4));
-        if ($unpacked === false) {
-            throw new Exception(
-                message: 'Cannot unpack IEEE-754 float',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_FLOAT_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'offset' => $this->pos(),
-                ]
-            );
-        }
+    final public function readInetAddr(): string {
 
-        return $unpacked[1];
-    }
+        $length = $this->readByte();
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    public function readInet(): string {
-        $addressLength = ord($this->read(1));
-
-        if ($addressLength !== 4 && $addressLength !== 16) {
+        if ($length !== 4 && $length !== 16) {
             throw new Exception(
                 message: 'Invalid inet length byte',
                 code: ExceptionCode::RESPONSE_SR_INVALID_INET_LENGTH->value,
                 context: [
                     'method' => __METHOD__,
-                    'address_length' => $addressLength,
+                    'address_length' => $length,
                     'offset' => $this->pos(),
                 ]
             );
         }
 
-        $inet = inet_ntop(chr($addressLength) . $this->read($addressLength));
+        $inet = inet_ntop($this->read($length));
         if ($inet === false) {
             throw new Exception(
                 message: 'Cannot parse inet address',
                 code: ExceptionCode::RESPONSE_SR_INET_PARSE_FAIL->value,
                 context: [
                     'method' => __METHOD__,
-                    'address_length' => $addressLength,
+                    'address_length' => $length,
                     'offset' => $this->pos(),
                 ]
             );
@@ -191,7 +206,8 @@ class StreamReader {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readInt(): int {
+    final public function readInt(): int {
+
         /**
          * @var false|array<int> $unpacked
          */
@@ -207,79 +223,42 @@ class StreamReader {
             );
         }
 
-        return $unpacked[1];
-    }
-
-    /**
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readList(CollectionListInfo $typeInfo): array {
-
-        $list = [];
-        $count = $this->readInt();
-        for ($i = 0; $i < $count; ++$i) {
-            /** @psalm-suppress MixedAssignment */
-            $list[] = $this->readValue($typeInfo->valueType);
-        }
-
-        return $list;
+        return $unpacked[1]
+            << self::SIGNED_INT_SHIFT_BIT_SIZE
+            >> self::SIGNED_INT_SHIFT_BIT_SIZE;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readLongString(): string {
+    final public function readLong(): int {
+
         /**
          * @var false|array<int> $unpacked
          */
-        $unpacked = unpack('N', $this->read(4));
+        $unpacked = unpack('J', $this->read(8));
         if ($unpacked === false) {
             throw new Exception(
-                message: 'Cannot unpack 32-bit length prefix',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_LONGSTRING_LENGTH_FAIL->value,
+                message: 'Cannot unpack 64-bit integer',
+                code: ExceptionCode::RESPONSE_SR_UNPACK_LONG_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
                 ]
             );
         }
-        $length = $unpacked[1];
 
-        return $length === 0 ? '' : $this->read($length);
+        return $unpacked[1];
     }
 
     /**
-     * @return array<mixed>
-     *
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
-    public function readMap(CollectionMapInfo $typeInfo): array {
+    final public function readLongString(): string {
 
-        $map = [];
-        $count = $this->readInt();
+        $length = $this->readInt();
 
-        /** @psalm-suppress MixedAssignment */
-        for ($i = 0; $i < $count; ++$i) {
-            $key = $this->readValue($typeInfo->keyType);
-            if (!is_string($key) && !is_int($key)) {
-                throw new Exception(
-                    message: 'Invalid map key type; expected string|int',
-                    code: ExceptionCode::RESPONSE_SR_INVALID_MAP_KEY_TYPE->value,
-                    context: [
-                        'method' => __METHOD__,
-                        'key_php_type' => gettype($key),
-                        'offset' => $this->pos(),
-                    ]
-                );
-            }
-            $map[$key] = $this->readValue($typeInfo->valueType);
-        }
-
-        return $map;
+        return $length === 0 ? '' : $this->read($length);
     }
 
     /**
@@ -287,11 +266,11 @@ class StreamReader {
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readReasonMap(): array {
+    final public function readReasonMap(): array {
         $map = [];
         $count = $this->readInt();
         for ($i = 0; $i < $count; $i++) {
-            $key = $this->readInet();
+            $key = $this->readInetAddr();
             $value = $this->readShort();
             $map[$key] = $value;
         }
@@ -300,27 +279,10 @@ class StreamReader {
     }
 
     /**
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readSet(CollectionSetInfo $typeInfo): array {
-
-        $list = [];
-        $count = $this->readInt();
-        for ($i = 0; $i < $count; ++$i) {
-            /** @psalm-suppress MixedAssignment */
-            $list[] = $this->readValue($typeInfo->valueType);
-        }
-
-        return $list;
-    }
-
-    /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readShort(): int {
+    final public function readShort(): int {
+
         /**
          * @var false|array<int> $unpacked
          */
@@ -342,32 +304,50 @@ class StreamReader {
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readString(): string {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('n', $this->read(2));
-        if ($unpacked === false) {
-            throw new Exception(
-                message: 'Cannot unpack 16-bit length prefix',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_STRING_LENGTH_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'offset' => $this->pos(),
-                ]
-            );
-        }
-        $length = $unpacked[1];
+    final public function readShortBytes(): string {
+
+        $length = $this->readShort();
 
         return $length === 0 ? '' : $this->read($length);
     }
 
     /**
-     * @return array<string>
+     * Reads a signed VInt with a maximum size of 32 bits
+     * 
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception
+     */
+    final public function readSignedVint32(): int {
+        return $this->vIntCodec->readSignedVint32($this);
+    }
+
+    /**
+     * Reads a signed VInt with a maximum size of 64 bits.
+     * This is named "vint" in the native protocol specification.
+     * 
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception
+     */
+    final public function readSignedVint64(): int {
+        return $this->vIntCodec->readSignedVint64($this);
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    final public function readString(): string {
+
+        $length = $this->readShort();
+
+        return $length === 0 ? '' : $this->read($length);
+    }
+
+    /**
+     * @return string[]
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readStringList(): array {
+    final public function readStringList(): array {
         $list = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
@@ -382,7 +362,7 @@ class StreamReader {
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readStringMap(): array {
+    final public function readStringMap(): array {
         $map = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
@@ -395,21 +375,16 @@ class StreamReader {
     }
 
     /**
-     * @return array<string,array<int,string>>
+     * @return array<string,string[]>
      *
      * @throws \Cassandra\Response\Exception
      */
-    public function readStringMultimap(): array {
+    final public function readStringMultimap(): array {
         $map = [];
         $count = $this->readShort();
         for ($i = 0; $i < $count; $i++) {
             $key = $this->readString();
-
-            $listLength = $this->readShort();
-            $list = [];
-            for ($j = 0; $j < $listLength; $j++) {
-                $list[] = $this->readString();
-            }
+            $list = $this->readStringList();
 
             $map[$key] = $list;
         }
@@ -418,55 +393,13 @@ class StreamReader {
     }
 
     /**
-     * @return array<string>
-     *
+     * Reads a type info object.
+     * The native protocol specification calls this an "option".
+     * 
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readTextList(): array {
-        $rawList = $this->readList(new CollectionListInfo(new SimpleTypeInfo(Type::TEXT), isFrozen: false));
-
-        $list = [];
-        foreach ($rawList as $item) {
-            if (!is_string($item)) {
-                throw new Exception(
-                    message: 'Invalid text list item; expected string',
-                    code: ExceptionCode::RESPONSE_SR_INVALID_TEXT_LIST_ITEM->value,
-                    context: [
-                        'method' => __METHOD__,
-                        'item_php_type' => gettype($item),
-                        'offset' => $this->pos(),
-                    ]
-                );
-            }
-
-            $list[] = $item;
-        }
-
-        return $list;
-    }
-
-    /**
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readTuple(TupleInfo $typeInfo): array {
-        $tuple = [];
-        foreach ($typeInfo->valueTypes as $key => $type) {
-            /** @psalm-suppress MixedAssignment */
-            $tuple[$key] = $this->readValue($type);
-        }
-
-        return $tuple;
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readType(): TypeInfo {
+    final public function readTypeInfo(): TypeInfo {
         $typeShort = $this->readShort();
 
         try {
@@ -492,20 +425,20 @@ class StreamReader {
 
             case Type::COLLECTION_LIST:
                 return new CollectionListInfo(
-                    valueType: $this->readType(),
+                    valueType: $this->readTypeInfo(),
                     isFrozen: false,
                 );
 
             case Type::COLLECTION_SET:
                 return new CollectionSetInfo(
-                    valueType: $this->readType(),
+                    valueType: $this->readTypeInfo(),
                     isFrozen: false,
                 );
 
             case Type::COLLECTION_MAP:
                 return new CollectionMapInfo(
-                    keyType: $this->readType(),
-                    valueType: $this->readType(),
+                    keyType: $this->readTypeInfo(),
+                    valueType: $this->readTypeInfo(),
                     isFrozen: false,
                 );
 
@@ -518,7 +451,7 @@ class StreamReader {
                 $length = $this->readShort();
                 for ($i = 0; $i < $length; ++$i) {
                     $key = $this->readString();
-                    $types[$key] = $this->readType();
+                    $types[$key] = $this->readTypeInfo();
                 }
 
                 return new UDTInfo(
@@ -533,7 +466,7 @@ class StreamReader {
                 $types = [];
                 $length = $this->readShort();
                 for ($i = 0; $i < $length; ++$i) {
-                    $types[] = $this->readType();
+                    $types[] = $this->readTypeInfo();
                 }
 
                 return new TupleInfo(
@@ -559,29 +492,37 @@ class StreamReader {
     }
 
     /**
-     * @return array<mixed>
-     *
+     * Reads an unsigned VInt with a maximum size of 32 bits
+     * 
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Exception
      */
-    public function readUDT(UDTInfo $typeInfo): array {
-        $udt = [];
-        foreach ($typeInfo->valueTypes as $key => $type) {
-            /** @psalm-suppress MixedAssignment */
-            $udt[$key] = $this->readValue($type);
-        }
+    final public function readUnsignedVInt32(): int {
+        return $this->vIntCodec->readUnsignedVint32($this);
+    }
 
-        return $udt;
+    /**
+     * Reads an unsigned VInt with a maximum size of 64 bits.
+     * This is named "unsigned vint" in the native protocol specification.
+     * 
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception
+     */
+    final public function readUnsignedVInt64(): int {
+        return $this->vIntCodec->readUnsignedVint64($this);
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      */
-    public function readUuid(): string {
+    final public function readUuid(): string {
+
+        $binary = $this->read(16);
+
         /**
          * @var false|array<int> $data
          */
-        $data = unpack('n8', $this->read(16));
+        $data = unpack('n8', $binary);
         if ($data === false) {
             throw new Exception(
                 message: 'Cannot unpack UUID',
@@ -589,6 +530,8 @@ class StreamReader {
                 context: [
                     'method' => __METHOD__,
                     'offset' => $this->pos(),
+                    'binary_length' => strlen($binary),
+                    'expected_length' => 16,
                 ]
             );
         }
@@ -610,102 +553,37 @@ class StreamReader {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function readValue(TypeInfo $typeInfo): mixed {
-        $binaryLength = $this->read(4);
-        if ($binaryLength === "\xff\xff\xff\xff") {
-            return null;
-        }
+    final public function readValue(TypeInfo $typeInfo): mixed {
 
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('N', $binaryLength);
-        if ($unpacked === false) {
+        $length = $this->readInt();
+
+        if ($length < 0) {
+            if ($length === -1) {
+                return null;
+            }
+
+            if ($length === -2) { // "not set"
+                // note: we could also return a NotSet object here,
+                // but we return null to avoid serializing issues
+                return null;
+            }
+
             throw new Exception(
-                message: 'Cannot unpack 32-bit length prefix',
+                message: 'Invalid value length',
                 code: ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value,
                 context: [
                     'method' => __METHOD__,
-                    'offset' => $this->pos(),
+                    'length' => $length,
                 ]
             );
         }
-        $length = $unpacked[1];
 
-        $binary = $this->read($length);
-        $typeObject = TypeFactory::getTypeObjectForBinary($typeInfo, $binary);
+        $typeObject = TypeFactory::getTypeObjectFromStream($typeInfo, $length, $this);
 
         return $typeObject->getValue();
     }
 
-    /**
-     * @return array<mixed>
-     *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    public function readVector(VectorInfo $typeInfo): array {
-        $vector = [];
-
-        $valueType = $typeInfo->valueType;
-
-        $serializedSize = TypeFactory::getSerializedSizeOfType($valueType->type);
-
-        if ($serializedSize > 0) {
-            for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
-
-                $binary = $this->read($serializedSize);
-                $typeObject = TypeFactory::getTypeObjectForBinary($valueType, $binary);
-
-                /** @psalm-suppress MixedAssignment */
-                $vector[] = $typeObject->getValue();
-
-            }
-        } else {
-            for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
-
-                $serializedSize = $this->readVarintUnsigned32();
-
-                $binary = $this->read($serializedSize);
-                $typeObject = TypeFactory::getTypeObjectForBinary($valueType, $binary);
-
-                /** @psalm-suppress MixedAssignment */
-                $vector[] = $typeObject->getValue();
-            }
-        }
-
-        return $vector;
-    }
-
     public function reset(): void {
         $this->offset = $this->extraDataOffset;
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    protected function read(int $length): string {
-        if ($length < 1) {
-            return '';
-        }
-
-        if ($this->offset + $length > $this->dataLength) {
-            throw new Exception(
-                message: 'Attempted to read beyond available data',
-                code: ExceptionCode::RESPONSE_SR_READ_BEYOND_AVAILABLE->value,
-                context: [
-                    'method' => __METHOD__,
-                    'requested_length' => $length,
-                    'available' => $this->dataLength - $this->offset,
-                    'offset' => $this->pos(),
-                    'data_length' => $this->dataLength,
-                ]
-            );
-        }
-
-        $output = substr($this->data, $this->offset, $length);
-        $this->offset += $length;
-
-        return $output;
     }
 }

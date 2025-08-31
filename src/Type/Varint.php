@@ -10,7 +10,7 @@ use Cassandra\StringMath\Exception as StringMathException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Varint extends TypeBase {
+final class Varint extends TypeReadableWithLength {
     protected readonly string|int $value;
 
     /**
@@ -144,6 +144,11 @@ final class Varint extends TypeBase {
         }
 
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 
     protected function getBinaryFromIntValue(int $value): string {

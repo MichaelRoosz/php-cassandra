@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Error;
 
-use Cassandra\Consistency;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
 use Cassandra\Response\Error\Context\CasWriteUnknownContext;
-use Cassandra\Response\Exception;
 use Cassandra\Response\StreamReader;
-use TypeError;
-use ValueError;
 
 final class CasWriteUnknownError extends Error {
     private CasWriteUnknownContext $context;
@@ -39,16 +35,7 @@ final class CasWriteUnknownError extends Error {
      */
     protected function readContext(): CasWriteUnknownContext {
 
-        $consistencyAsInt = $this->stream->readShort();
-
-        try {
-            $consistency = Consistency::from($consistencyAsInt);
-        } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid consistency: ' . $consistencyAsInt, 0, [
-                'consistency' => $consistencyAsInt,
-            ], $e);
-        }
-
+        $consistency = $this->stream->readConsistency();
         $nodesAcknowledged = $this->stream->readInt();
         $nodesRequired = $this->stream->readInt();
 

@@ -12,7 +12,7 @@ use DateTimeInterface;
 use Exception as PhpException;
 use ReflectionClass;
 
-final class Time extends TypeBase {
+final class Time extends TypeWithFixedLength {
     final public const VALUE_MAX = 86399999999999;
 
     protected readonly int $value;
@@ -122,6 +122,11 @@ final class Time extends TypeBase {
         return $formatted_time;
     }
 
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 8;
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
@@ -175,6 +180,16 @@ final class Time extends TypeBase {
     #[\Override]
     public function getValue(): string {
         return $this->asString();
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 
     /**

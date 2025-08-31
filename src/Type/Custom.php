@@ -12,7 +12,7 @@ use Cassandra\TypeInfo\TypeInfo;
 /**
  * @api
  */
-class Custom extends TypeBase {
+class Custom extends TypeReadableWithLength {
     protected CustomInfo $typeInfo;
 
     protected readonly string $value;
@@ -84,5 +84,10 @@ class Custom extends TypeBase {
     #[\Override]
     public function getValue(): string {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

@@ -11,7 +11,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class UDT extends TypeBase {
+final class UDT extends TypeReadableWithoutLength {
     protected UDTInfo $typeInfo;
     /**
      * @var array<mixed> $value
@@ -54,17 +54,7 @@ final class UDT extends TypeBase {
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
 
-        if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_UDT_TYPEINFO_REQUIRED->value);
-        }
-
-        if (!$typeInfo instanceof UDTInfo) {
-            throw new Exception('Invalid type info, UDTInfo expected', ExceptionCode::TYPE_UDT_INVALID_TYPEINFO->value, [
-                'given_type' => get_class($typeInfo),
-            ]);
-        }
-
-        return new static((new StreamReader($binary))->readUDT($typeInfo), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
     }
 
     /**
@@ -92,6 +82,33 @@ final class UDT extends TypeBase {
         }
 
         return new static($value, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    #[\Override]
+    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_UDT_TYPEINFO_REQUIRED->value);
+        }
+
+        if (!$typeInfo instanceof UDTInfo) {
+            throw new Exception('Invalid type info, UDTInfo expected', ExceptionCode::TYPE_UDT_INVALID_TYPEINFO->value, [
+                'given_type' => get_class($typeInfo),
+            ]);
+        }
+
+        $udt = [];
+        foreach ($typeInfo->valueTypes as $key => $type) {
+            /** @psalm-suppress MixedAssignment */
+            $udt[$key] = $stream->readValue($type);
+        }
+
+        return new static($udt, typeInfo: $typeInfo);
     }
 
     /**
@@ -128,5 +145,10 @@ final class UDT extends TypeBase {
     #[\Override]
     public function getValue(): array {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return true;
     }
 }

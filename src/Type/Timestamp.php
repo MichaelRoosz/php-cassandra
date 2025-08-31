@@ -11,7 +11,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use Exception as PhpException;
 
-final class Timestamp extends TypeBase {
+final class Timestamp extends TypeWithFixedLength {
     protected readonly int $value;
 
     /**
@@ -85,6 +85,11 @@ final class Timestamp extends TypeBase {
         return $this->getValue();
     }
 
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 8;
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
@@ -141,6 +146,16 @@ final class Timestamp extends TypeBase {
     #[\Override]
     public function getValue(): string {
         return $this->asDateTime()->format('Y-m-d H:i:s.vO');
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 
     /**

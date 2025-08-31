@@ -21,6 +21,7 @@ final class SimpleTypeInfo extends TypeInfo {
      * } $typeDefinition
      * 
      *  @throws \Cassandra\TypeInfo\Exception
+     *  @throws \Cassandra\Type\Exception
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {

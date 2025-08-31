@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Error;
 
-use Cassandra\Consistency;
 use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
@@ -41,16 +40,7 @@ final class WriteTimeoutError extends Error {
      */
     protected function readContext(): WriteTimeoutContext {
 
-        $consistencyAsInt = $this->stream->readShort();
-
-        try {
-            $consistency = Consistency::from($consistencyAsInt);
-        } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid consistency: ' . $consistencyAsInt, ExceptionCode::RESPONSE_WRITE_TIMEOUT_INVALID_CONSISTENCY->value, [
-                'consistency' => $consistencyAsInt,
-            ], $e);
-        }
-
+        $consistency = $this->stream->readConsistency();
         $nodesAcknowledged = $this->stream->readInt();
         $nodesRequired = $this->stream->readInt();
         $writeTypeAsString = $this->stream->readString();

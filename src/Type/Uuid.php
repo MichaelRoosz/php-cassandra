@@ -8,11 +8,16 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-class Uuid extends TypeBase {
+class Uuid extends TypeWithFixedLength {
     protected readonly string $value;
 
     final public function __construct(string $value) {
         $this->value = $value;
+    }
+
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 16;
     }
 
     /**
@@ -79,5 +84,15 @@ class Uuid extends TypeBase {
     #[\Override]
     public function getValue(): string {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

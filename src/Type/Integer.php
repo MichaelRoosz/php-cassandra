@@ -8,9 +8,10 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-class Integer extends TypeBase {
+class Integer extends TypeWithFixedLength {
     final public const VALUE_MAX = 2147483647;
     final public const VALUE_MIN = -2147483648;
+    final protected const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
 
     protected readonly int $value;
 
@@ -29,12 +30,16 @@ class Integer extends TypeBase {
         $this->value = $value;
     }
 
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 4;
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
-        $bits = PHP_INT_SIZE * 8 - 32;
 
         /**
          * @var false|array<int> $unpacked
@@ -47,7 +52,11 @@ class Integer extends TypeBase {
             ]);
         }
 
-        return new static($unpacked[1] << $bits >> $bits);
+        return new static(
+            $unpacked[1]
+            << self::SIGNED_INT_SHIFT_BIT_SIZE
+            >> self::SIGNED_INT_SHIFT_BIT_SIZE
+        );
     }
 
     /**
@@ -80,5 +89,15 @@ class Integer extends TypeBase {
     #[\Override]
     public function getValue(): int {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

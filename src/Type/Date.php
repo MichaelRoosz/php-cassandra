@@ -12,7 +12,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use Exception as PhpException;
 
-final class Date extends TypeBase {
+final class Date extends TypeWithFixedLength {
     final public const VALUE_INT_MAX = 4_294_967_295;
     final public const VALUE_INT_MIN = 0;
 
@@ -139,6 +139,11 @@ final class Date extends TypeBase {
         return $this->getValue();
     }
 
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 4;
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
@@ -202,6 +207,16 @@ final class Date extends TypeBase {
         }
     }
 
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
@@ -222,4 +237,5 @@ final class Date extends TypeBase {
 
         return (int) $dayCount;
     }
+
 }

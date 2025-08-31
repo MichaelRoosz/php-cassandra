@@ -9,7 +9,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use ReflectionClass;
 
-class Bigint extends TypeBase {
+class Bigint extends TypeWithFixedLength {
     protected readonly int $value;
 
     /**
@@ -21,11 +21,16 @@ class Bigint extends TypeBase {
         $this->value = $value;
     }
 
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 8;
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    final public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         /**
@@ -48,7 +53,7 @@ class Bigint extends TypeBase {
      * @throws \Cassandra\Type\Exception
      */
     #[\Override]
-    public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
+    final public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         if (!is_int($value)) {
@@ -61,7 +66,7 @@ class Bigint extends TypeBase {
     }
 
     #[\Override]
-    public function getBinary(): string {
+    final public function getBinary(): string {
         return pack('J', $this->value);
     }
 
@@ -71,14 +76,24 @@ class Bigint extends TypeBase {
     }
 
     #[\Override]
-    public function getValue(): int {
+    final public function getValue(): int {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      */
-    protected static function require64Bit(): void {
+    final protected static function require64Bit(): void {
         if (PHP_INT_SIZE < 8) {
             $className = (new ReflectionClass(static::class))->getShortName();
 

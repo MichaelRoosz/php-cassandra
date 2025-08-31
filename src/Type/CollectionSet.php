@@ -11,7 +11,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\CollectionSetInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class CollectionSet extends TypeBase {
+final class CollectionSet extends TypeReadableWithoutLength {
     protected CollectionSetInfo $typeInfo;
 
     /**
@@ -54,17 +54,8 @@ final class CollectionSet extends TypeBase {
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
-        if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_SET_TYPEINFO_REQUIRED->value);
-        }
 
-        if (!$typeInfo instanceof CollectionSetInfo) {
-            throw new Exception('Invalid type info, CollectionSetInfo expected', ExceptionCode::TYPE_COLLECTION_SET_INVALID_TYPEINFO->value, [
-                'given_type' => get_class($typeInfo),
-            ]);
-        }
-
-        return new static((new StreamReader($binary))->readSet($typeInfo), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
     }
 
     /**
@@ -92,6 +83,32 @@ final class CollectionSet extends TypeBase {
         }
 
         return new static($value, typeInfo: $typeInfo);
+    }
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    #[\Override]
+    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_SET_TYPEINFO_REQUIRED->value);
+        }
+
+        if (!$typeInfo instanceof CollectionSetInfo) {
+            throw new Exception('Invalid type info, CollectionSetInfo expected', ExceptionCode::TYPE_COLLECTION_SET_INVALID_TYPEINFO->value, [
+                'given_type' => get_class($typeInfo),
+            ]);
+        }
+
+        $list = [];
+        $count = $stream->readInt();
+        for ($i = 0; $i < $count; ++$i) {
+            /** @psalm-suppress MixedAssignment */
+            $list[] = $stream->readValue($typeInfo->valueType);
+        }
+
+        return new static($list, typeInfo: $typeInfo);
     }
 
     /**
@@ -121,5 +138,10 @@ final class CollectionSet extends TypeBase {
     #[\Override]
     public function getValue(): array {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return true;
     }
 }

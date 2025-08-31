@@ -11,11 +11,16 @@ use Cassandra\TypeInfo\TypeInfo;
 /**
  * Double-precision floating-point number (same as a PHP "float", 64-bit precision)
  */
-class Double extends TypeBase {
+class Double extends TypeWithFixedLength {
     protected readonly float $value;
 
     final public function __construct(float $value) {
         $this->value = $value;
+    }
+
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 8;
     }
 
     /**
@@ -67,5 +72,15 @@ class Double extends TypeBase {
     #[\Override]
     public function getValue(): float {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

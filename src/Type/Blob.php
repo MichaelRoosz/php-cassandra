@@ -8,7 +8,7 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Blob extends TypeBase {
+final class Blob extends TypeReadableWithLength {
     protected readonly string $value;
 
     final public function __construct(string $value) {
@@ -49,5 +49,10 @@ final class Blob extends TypeBase {
     #[\Override]
     public function getValue(): string {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

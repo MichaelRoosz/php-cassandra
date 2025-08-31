@@ -8,7 +8,7 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Decimal extends TypeBase {
+final class Decimal extends TypeReadableWithLength {
     protected readonly string $value;
 
     /**
@@ -129,5 +129,10 @@ final class Decimal extends TypeBase {
     #[\Override]
     public function getValue(): string {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

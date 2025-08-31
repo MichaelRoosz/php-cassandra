@@ -7,6 +7,7 @@ namespace Cassandra\Response;
 use Cassandra\Connection\Node;
 use Cassandra\ExceptionCode;
 use Cassandra\TypeNameParser;
+use Cassandra\VIntCodec;
 
 final class ProgressiveStreamReader extends StreamReader {
     protected ?Node $source = null;
@@ -15,6 +16,7 @@ final class ProgressiveStreamReader extends StreamReader {
         $this->data = $data;
         $this->dataLength = strlen($data);
         $this->typeNameParser = new TypeNameParser();
+        $this->vIntCodec = new VIntCodec();
     }
 
     /**
@@ -31,15 +33,11 @@ final class ProgressiveStreamReader extends StreamReader {
         );
     }
 
-    public function setSource(Node $source): void {
-        $this->source = $source;
-    }
-
     /**
      * @throws \Cassandra\Response\Exception
      */
     #[\Override]
-    protected function read(int $length): string {
+    public function read(int $length): string {
         if ($length < 1) {
             return '';
         }
@@ -65,5 +63,9 @@ final class ProgressiveStreamReader extends StreamReader {
         $this->offset += $length;
 
         return $output;
+    }
+
+    public function setSource(Node $source): void {
+        $this->source = $source;
     }
 }

@@ -11,7 +11,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\CollectionMapInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class CollectionMap extends TypeBase {
+final class CollectionMap extends TypeReadableWithoutLength {
     protected CollectionMapInfo $typeInfo;
 
     /**
@@ -58,17 +58,8 @@ final class CollectionMap extends TypeBase {
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
-        if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_MAP_TYPEINFO_REQUIRED->value);
-        }
 
-        if (!$typeInfo instanceof CollectionMapInfo) {
-            throw new Exception('Invalid type info, CollectionMapInfo expected', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_TYPEINFO->value, [
-                'given_type' => get_class($typeInfo),
-            ]);
-        }
-
-        return new static((new StreamReader($binary))->readMap($typeInfo), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
     }
 
     /**
@@ -96,6 +87,47 @@ final class CollectionMap extends TypeBase {
         }
 
         return new static($value, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    #[\Override]
+    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_MAP_TYPEINFO_REQUIRED->value);
+        }
+
+        if (!$typeInfo instanceof CollectionMapInfo) {
+            throw new Exception('Invalid type info, CollectionMapInfo expected', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_TYPEINFO->value, [
+                'given_type' => get_class($typeInfo),
+            ]);
+        }
+
+        $map = [];
+        $count = $stream->readInt();
+
+        /** @psalm-suppress MixedAssignment */
+        for ($i = 0; $i < $count; ++$i) {
+            $key = $stream->readValue($typeInfo->keyType);
+            if (!is_string($key) && !is_int($key)) {
+                throw new Exception(
+                    message: 'Invalid map key type; expected string|int',
+                    code: ExceptionCode::TYPE_COLLECTION_MAP_INVALID_MAP_KEY_TYPE->value,
+                    context: [
+                        'method' => __METHOD__,
+                        'key_php_type' => gettype($key),
+                        'offset' => $stream->pos(),
+                    ]
+                );
+            }
+            $map[$key] = $stream->readValue($typeInfo->valueType);
+        }
+
+        return new static($map, typeInfo: $typeInfo);
     }
 
     /**
@@ -132,5 +164,10 @@ final class CollectionMap extends TypeBase {
     #[\Override]
     public function getValue(): array {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return true;
     }
 }

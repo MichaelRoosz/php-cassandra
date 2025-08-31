@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Inet extends TypeBase {
+final class Inet extends TypeReadableWithLength {
     protected readonly string $value;
 
     final public function __construct(string $value) {
@@ -49,6 +50,41 @@ final class Inet extends TypeBase {
 
     /**
      * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Response\Exception
+     */
+    #[\Override]
+    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+
+        if ($length !== 4 && $length !== 16) {
+            throw new Exception(
+                message: 'Invalid inet length byte',
+                code: ExceptionCode::TYPE_INET_INVALID_LENGTH->value,
+                context: [
+                    'method' => __METHOD__,
+                    'address_length' => $length,
+                    'offset' => $stream->pos(),
+                ]
+            );
+        }
+
+        $inet = inet_ntop($stream->read($length));
+        if ($inet === false) {
+            throw new Exception(
+                message: 'Cannot parse inet address',
+                code: ExceptionCode::TYPE_INET_PARSE_FAIL->value,
+                context: [
+                    'method' => __METHOD__,
+                    'address_length' => $length,
+                    'offset' => $stream->pos(),
+                ]
+            );
+        }
+
+        return new static($inet);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
      */
     #[\Override]
     public function getBinary(): string {
@@ -71,5 +107,10 @@ final class Inet extends TypeBase {
     #[\Override]
     public function getValue(): string {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

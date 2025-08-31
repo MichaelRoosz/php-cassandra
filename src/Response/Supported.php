@@ -6,7 +6,7 @@ namespace Cassandra\Response;
 
 final class Supported extends Response {
     /**
-     * @return array<string,array<int,string>>
+     * @return array<string,string[]>
      *
      * @throws \Cassandra\Response\Exception
      */

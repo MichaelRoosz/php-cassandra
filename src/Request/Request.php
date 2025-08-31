@@ -136,7 +136,7 @@ abstract class Request implements Frame, Stringable {
             } elseif ($values[$key] instanceof Type\TypeBase) {
                 $encodedValues[$key] = $values[$key];
             } else {
-                $encodedValues[$key] = TypeFactory::getTypeObjectForValue($column->type, $values[$key]);
+                $encodedValues[$key] = TypeFactory::getTypeObjectFromValue($column->type, $values[$key]);
             }
         }
 

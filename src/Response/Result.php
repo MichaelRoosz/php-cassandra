@@ -244,7 +244,7 @@ class Result extends Response implements IteratorAggregate {
         }
 
         if ($flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED->value) {
-            $newMetadataId = $this->stream->readString();
+            $newMetadataId = $this->stream->readShortBytes();
         } else {
             $newMetadataId = null;
         }
@@ -275,7 +275,7 @@ class Result extends Response implements IteratorAggregate {
                         keyspace: $keyspace,
                         tableName: $tableName,
                         name: $this->stream->readString(),
-                        type: $this->stream->readType(),
+                        type: $this->stream->readTypeInfo(),
                     );
                 }
             } else {
@@ -284,7 +284,7 @@ class Result extends Response implements IteratorAggregate {
                         keyspace: $this->stream->readString(),
                         tableName: $this->stream->readString(),
                         name: $this->stream->readString(),
-                        type: $this->stream->readType(),
+                        type: $this->stream->readTypeInfo(),
                     );
                 }
             }

@@ -7,7 +7,9 @@ namespace Cassandra\Response\Event\Data;
 final class TopologyChangeData extends EventData {
     public function __construct(
         public readonly TopologyChangeType $changeType,
-        public readonly string $address,
+
+        /** @var array{ip: string, port: int} $address */
+        public readonly array $address,
     ) {
         parent::__construct();
     }

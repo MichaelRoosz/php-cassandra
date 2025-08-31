@@ -33,7 +33,6 @@ final class SchemaChangeResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     public function getData(): ResultData {
         return $this->getSchemaChangeData();
@@ -41,7 +40,6 @@ final class SchemaChangeResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     #[\Override]
     public function getIterator(): Iterator {
@@ -56,7 +54,6 @@ final class SchemaChangeResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     public function getSchemaChangeData(): SchemaChangeData {
         if ($this->kind !== ResultKind::SCHEMA_CHANGE) {
@@ -105,7 +102,7 @@ final class SchemaChangeResult extends Result {
             case SchemaChangeTarget::FUNCTION:
             case SchemaChangeTarget::AGGREGATE:
                 $name = $this->stream->readString();
-                $argumentTypes = $this->stream->readTextList();
+                $argumentTypes = $this->stream->readStringList();
 
                 break;
 

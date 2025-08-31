@@ -21,7 +21,6 @@ final class SchemaChangeEvent extends Event {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -44,7 +43,6 @@ final class SchemaChangeEvent extends Event {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     protected function readData(): SchemaChangeData {
 
@@ -82,7 +80,7 @@ final class SchemaChangeEvent extends Event {
             case SchemaChangeTarget::FUNCTION:
             case SchemaChangeTarget::AGGREGATE:
                 $name = $this->stream->readString();
-                $argumentTypes = $this->stream->readTextList();
+                $argumentTypes = $this->stream->readStringList();
 
                 break;
 

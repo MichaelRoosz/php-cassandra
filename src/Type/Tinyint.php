@@ -8,7 +8,7 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Tinyint extends TypeBase {
+final class Tinyint extends TypeWithFixedLength {
     final public const VALUE_MAX = 127;
     final public const VALUE_MIN = -128;
 
@@ -27,6 +27,11 @@ final class Tinyint extends TypeBase {
         }
 
         $this->value = $value;
+    }
+
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 1;
     }
 
     /**
@@ -77,5 +82,18 @@ final class Tinyint extends TypeBase {
     #[\Override]
     public function getValue(): int {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+
+        // note: logically tinyint is fixed length,
+        // but in cassandra it is defined as variable length
+        return false;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

@@ -11,7 +11,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\VectorInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Vector extends TypeBase {
+final class Vector extends TypeReadableWithoutLength {
     protected VectorInfo $typeInfo;
     /**
      * @var array<mixed> $value
@@ -45,21 +45,12 @@ final class Vector extends TypeBase {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception
+     * @throws \Cassandra\Exception
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
 
-        if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_VECTOR_TYPEINFO_REQUIRED->value);
-        }
-
-        if (!$typeInfo instanceof VectorInfo) {
-            throw new Exception('Invalid type info, VectorInfo expected', ExceptionCode::TYPE_VECTOR_INVALID_TYPEINFO->value, [
-                'given_type' => get_class($typeInfo),
-            ]);
-        }
-
-        return new static((new StreamReader($binary))->readVector($typeInfo), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
     }
 
     /**
@@ -91,13 +82,60 @@ final class Vector extends TypeBase {
 
     /**
      * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception
+     */
+    #[\Override]
+    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_VECTOR_TYPEINFO_REQUIRED->value);
+        }
+
+        if (!$typeInfo instanceof VectorInfo) {
+            throw new Exception('Invalid type info, VectorInfo expected', ExceptionCode::TYPE_VECTOR_INVALID_TYPEINFO->value, [
+                'given_type' => get_class($typeInfo),
+            ]);
+        }
+
+        $vector = [];
+
+        $valueType = $typeInfo->valueType;
+
+        $serializedLength = TypeFactory::getSerializedLengthOfType($valueType->type);
+
+        if ($serializedLength > 0) {
+            for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
+
+                $typeObject = TypeFactory::getTypeObjectFromStream($valueType, $serializedLength, $stream);
+
+                /** @psalm-suppress MixedAssignment */
+                $vector[] = $typeObject->getValue();
+
+            }
+        } else {
+            for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
+
+                $serializedLength = $stream->readUnsignedVint32();
+                $typeObject = TypeFactory::getTypeObjectFromStream($valueType, $serializedLength, $stream);
+
+                /** @psalm-suppress MixedAssignment */
+                $vector[] = $typeObject->getValue();
+            }
+        }
+
+        return new static($vector, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
      */
     #[\Override]
     public function getBinary(): string {
         $binary = '';
         $value = $this->value;
 
-        $isSerializedAsFixedSize = TypeFactory::isSerializedAsFixedSize($this->typeInfo->valueType->type);
+        $isSerializedAsFixedLength = TypeFactory::isSerializedAsFixedLength($this->typeInfo->valueType->type);
 
         for ($i = 0; $i < $this->typeInfo->dimensions; ++$i) {
             if ($value[$i] === null) {
@@ -108,7 +146,7 @@ final class Vector extends TypeBase {
                     ? $value[$i]->getBinary()
                     : TypeFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $value[$i]);
 
-                if ($isSerializedAsFixedSize) {
+                if ($isSerializedAsFixedLength) {
                     $binary .= $valueBinary;
                 } else {
                     $length = strlen($valueBinary);
@@ -132,5 +170,10 @@ final class Vector extends TypeBase {
     #[\Override]
     public function getValue(): array {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return true;
     }
 }

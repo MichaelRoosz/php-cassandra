@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Cassandra\Type;
 
 use Cassandra\ExceptionCode;
+use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\VIntCodec;
 use DateInterval;
 
-final class Duration extends TypeBase {
+final class Duration extends TypeReadableWithoutLength {
     final protected const INT32_MAX = 2147483647;
     final protected const INT32_MIN = -2147483648;
 
@@ -343,36 +345,13 @@ final class Duration extends TypeBase {
 
     /**
      * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
-        self::require64Bit();
 
-        /**
-         * @var false|array<int> $values
-         */
-        $values = unpack('C*', $binary);
-        if ($values === false) {
-            throw new Exception('Cannot unpack duration binary data', ExceptionCode::TYPE_DURATION_UNPACK_FAILED->value, [
-                'binary_length' => strlen($binary),
-            ]);
-        }
-
-        $values = array_values($values);
-
-        $pos = 0;
-
-        $monthsEncoded = self::decodeVint($values, $pos);
-        $daysEncoded = self::decodeVint($values, $pos);
-        $nanosecondsEncoded = self::decodeVint($values, $pos);
-
-        $value = [
-            'months' => ($monthsEncoded >> 1) ^ -($monthsEncoded & 1),
-            'days' => ($daysEncoded >> 1) ^ -($daysEncoded & 1),
-            'nanoseconds' => (($nanosecondsEncoded >> 1) & 0x7FFFFFFFFFFFFFFF) ^ -($nanosecondsEncoded & 1),
-        ];
-
-        return new static($value);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
     }
 
     /**
@@ -399,15 +378,40 @@ final class Duration extends TypeBase {
         /** @phpstan-ignore argument.type */
         return new static($value);
     }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception
+     */
+    #[\Override]
+    public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+        self::require64Bit();
+
+        $months = $stream->readSignedVint32();
+        $days = $stream->readSignedVint32();
+        $nanoseconds = $stream->readSignedVint64();
+
+        $value = [
+            'months' => $months,
+            'days' => $days,
+            'nanoseconds' => $nanoseconds,
+        ];
+
+        return new static($value);
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
     #[\Override]
     public function getBinary(): string {
-        $monthsEncoded = ($this->value['months'] >> 31) ^ ($this->value['months'] << 1);
-        $daysEncoded = ($this->value['days'] >> 31) ^ ($this->value['days'] << 1);
-        $nanosecondsEncoded = ($this->value['nanoseconds'] >> 63) ^ ($this->value['nanoseconds'] << 1);
 
-        return self::encodeVint($monthsEncoded)
-                . self::encodeVint($daysEncoded)
-                . self::encodeVint($nanosecondsEncoded);
+        $vIntCodec = new VIntCodec();
+
+        return $vIntCodec->encodeSignedVint32($this->value['months'])
+                . $vIntCodec->encodeSignedVint32($this->value['days'])
+                . $vIntCodec->encodeSignedVint64($this->value['nanoseconds']);
     }
 
     #[\Override]
@@ -420,74 +424,9 @@ final class Duration extends TypeBase {
         return $this->asString();
     }
 
-    /**
-     * @param array<int> $vint
-     * @throws \Cassandra\Type\Exception
-     */
-    protected static function decodeVint(array $vint, int &$pos = 0): int {
-        $byte = $vint[$pos];
-        $extraBytes = 0;
-
-        while (($byte & 0x80) !== 0) {
-            $extraBytes++;
-            $byte <<= 1;
-        }
-
-        $totalBytes = $extraBytes + 1;
-
-        if ($pos + $totalBytes > count($vint)) {
-            throw new Exception('Invalid duration VInt data', ExceptionCode::TYPE_DURATION_VINT_INVALID_DATA->value, [
-                'position' => $pos,
-                'required_bytes' => $totalBytes,
-                'available_bytes' => count($vint),
-            ]);
-        }
-
-        $decodedValue = ($byte & 0x7F) >> $extraBytes;
-
-        for ($i = $pos + 1; $i < $pos + $totalBytes; $i++) {
-            $decodedValue <<= 8;
-            $decodedValue |= $vint[$i];
-        }
-
-        $pos += $totalBytes;
-
-        return $decodedValue;
-    }
-
-    protected static function encodeVint(int $number): string {
-        $extraBytes = [];
-        $extraBytesCount = 0;
-        $mask = 0x80;
-
-        while (true) {
-            $cur = $number & 0xFF;
-            $next = $number >> 8;
-
-            if ($next === 0 && ($cur & $mask) === 0) {
-                $number = $cur;
-
-                break;
-            }
-
-            if ($extraBytesCount === 8) {
-                break;
-            }
-
-            $extraBytes[] = $cur;
-            $extraBytesCount++;
-
-            $mask |= $mask >> 1;
-            $number = $next;
-        }
-
-        if ($extraBytesCount < 8) {
-            $mask <<= 1;
-        }
-
-        $firstByte = $mask | $number;
-
-        return pack('C*', $firstByte, ...array_reverse($extraBytes));
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 
     /**

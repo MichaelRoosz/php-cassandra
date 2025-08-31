@@ -1553,7 +1553,7 @@ final class DataTypeRoundtripTest extends TestCase {
             return;
         }
 
-        // test vector of 3 float values (data type with fixed size)
+        // test vector of 3 float values (data type with fixed length)
         $this->connection->querySync(
             'CREATE TABLE IF NOT EXISTS test_vector_float3 (id int PRIMARY KEY, value vector<float, 3>)'
         );
@@ -1600,7 +1600,7 @@ final class DataTypeRoundtripTest extends TestCase {
 
         $this->compareWithCqlsh('test_vector_float3', 'id', 'value', $testValues, 'vector');
 
-        // test vector of 4 varint values (data type with variable size)
+        // test vector of 4 varint values (data type with variable length)
         $this->connection->querySync(
             'CREATE TABLE IF NOT EXISTS test_vector_varint4 (id int PRIMARY KEY, value vector<varint, 4>)'
         );

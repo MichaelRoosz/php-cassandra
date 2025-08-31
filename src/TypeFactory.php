@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
+use Cassandra\Response\StreamReader;
 use Cassandra\Type\Exception;
 use Cassandra\Type as Types;
 use Cassandra\TypeInfo\CollectionListInfo;
@@ -23,7 +24,7 @@ final class TypeFactory {
      * @throws \Cassandra\Type\Exception
      */
     public static function getBinaryByTypeInfo(TypeInfo $typeInfo, mixed $value): string {
-        $type = self::getTypeObjectForValue($typeInfo, $value);
+        $type = self::getTypeObjectFromValue($typeInfo, $value);
         if ($type === null) {
             throw new Exception('Cannot get type object for value', ExceptionCode::TYPE_FACTORY_CANNOT_GET_TYPE_OBJECT_FOR_VALUE->value, [
                 'value_type' => gettype($value),
@@ -34,10 +35,13 @@ final class TypeFactory {
         return $type->getBinary();
     }
 
-    public static function getSerializedSizeOfType(Type $type): int {
-        $map = self::getTypesSerializedAsFixedSize();
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function getSerializedLengthOfType(Type $type): int {
+        $class = self::getClassForDataType($type);
 
-        return $map[$type->value] ?? -1;
+        return $class::fixedLength();
     }
 
     /**
@@ -122,7 +126,7 @@ final class TypeFactory {
     /**
     * @throws \Cassandra\Type\Exception
     */
-    public static function getTypeObjectForBinary(TypeInfo $typeInfo, string $binary): Types\TypeBase {
+    public static function getTypeObjectFromBinary(TypeInfo $typeInfo, string $binary): Types\TypeBase {
 
         $class = self::getClassForDataType($typeInfo->type);
 
@@ -130,11 +134,21 @@ final class TypeFactory {
     }
 
     /**
+    * @throws \Cassandra\Type\Exception
+    */
+    public static function getTypeObjectFromStream(TypeInfo $typeInfo, ?int $length, StreamReader $stream): Types\TypeBase {
+
+        $class = self::getClassForDataType($typeInfo->type);
+
+        return $class::fromStream($stream, $length, $typeInfo);
+    }
+
+    /**
      * @param mixed $value
      *
      * @throws \Cassandra\Type\Exception
      */
-    public static function getTypeObjectForValue(TypeInfo $typeInfo, mixed $value): ?Types\TypeBase {
+    public static function getTypeObjectFromValue(TypeInfo $typeInfo, mixed $value): ?Types\TypeBase {
         if ($value === null) {
             return null;
         }
@@ -144,16 +158,22 @@ final class TypeFactory {
         return $class::fromMixedValue($value, $typeInfo);
     }
 
-    public static function isSerializedAsFixedSize(Type $type): bool {
-        $map = self::getTypesSerializedAsFixedSize();
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    public static function isSerializedAsFixedLength(Type $type): bool {
+        $class = self::getClassForDataType($type);
 
-        return isset($map[$type->value]);
+        return $class::isSerializedAsFixedLength();
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     public static function isSimpleType(Type $type): bool {
-        $typesWithDefinition = self::getTypesWithDefinitionList();
+        $class = self::getClassForDataType($type);
 
-        return !isset($typesWithDefinition[$type->value]);
+        return !$class::requiresDefinition();
     }
 
     /**
@@ -211,47 +231,6 @@ final class TypeFactory {
             Type::TUPLE->value => Types\Tuple::class,
             Type::CUSTOM->value => Types\Custom::class,
             Type::VECTOR->value => Types\Vector::class,
-        ];
-    }
-
-    /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
-     * @return array<int, int>
-     */
-    protected static function getTypesSerializedAsFixedSize(): array {
-        return [
-            Type::BIGINT->value => 8,
-            Type::BOOLEAN->value => 1,
-            Type::COUNTER->value => 8,
-            Type::DATE->value => 8,
-            Type::DOUBLE->value => 8,
-            Type::FLOAT->value => 4,
-            Type::INT->value => 4,
-            Type::TIME->value => 8,
-            Type::TIMESTAMP->value => 8,
-            Type::TIMEUUID->value => 16,
-            Type::UUID->value => 16,
-
-            // note: logically smallint and tinyint are fixed size,
-            // but in cassandra they are defined as variable size
-        ];
-    }
-
-    /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
-     * @return array<int, bool>
-     */
-    protected static function getTypesWithDefinitionList(): array {
-        return [
-            Type::COLLECTION_LIST->value => true,
-            Type::COLLECTION_SET->value => true,
-            Type::COLLECTION_MAP->value => true,
-            Type::UDT->value => true,
-            Type::TUPLE->value => true,
-            Type::CUSTOM->value => true,
-            Type::VECTOR->value => true,
         ];
     }
 }

@@ -67,14 +67,14 @@ final class PreparedResult extends Result {
 
         if ($this->getVersion() >= 5) {
             $data = new PreparedData(
-                id: $this->stream->readString(),
-                resultMetadataId: $this->stream->readString(),
+                id: $this->stream->readShortBytes(),
+                resultMetadataId: $this->stream->readShortBytes(),
                 metadata: $this->readMetadata(isPrepareMetaData: true),
                 resultMetadata: $this->readMetadata(isPrepareMetaData: false),
             );
         } else {
             $data = new PreparedData(
-                id: $this->stream->readString(),
+                id: $this->stream->readShortBytes(),
                 metadata: $this->readMetadata(isPrepareMetaData: true),
                 resultMetadata: $this->readMetadata(isPrepareMetaData: false),
             );

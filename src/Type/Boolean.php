@@ -8,11 +8,16 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Boolean extends TypeBase {
+final class Boolean extends TypeWithFixedLength {
     protected readonly bool $value;
 
     final public function __construct(bool $value) {
         $this->value = $value;
+    }
+
+    #[\Override]
+    final public static function fixedLength(): int {
+        return 1;
     }
 
     #[\Override]
@@ -49,5 +54,15 @@ final class Boolean extends TypeBase {
     #[\Override]
     public function getValue(): bool {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function isSerializedAsFixedLength(): bool {
+        return true;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return false;
     }
 }

@@ -11,7 +11,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class Tuple extends TypeBase {
+final class Tuple extends TypeReadableWithoutLength {
     protected TupleInfo $typeInfo;
     /**
      * @var array<mixed> $value
@@ -48,17 +48,7 @@ final class Tuple extends TypeBase {
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
 
-        if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_TUPLE_TYPEINFO_REQUIRED->value);
-        }
-
-        if (!$typeInfo instanceof TupleInfo) {
-            throw new Exception('Invalid type info, TupleInfo expected', ExceptionCode::TYPE_TUPLE_INVALID_TYPEINFO->value, [
-                'given_type' => get_class($typeInfo),
-            ]);
-        }
-
-        return new static((new StreamReader($binary))->readTuple($typeInfo), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
     }
 
     /**
@@ -86,6 +76,32 @@ final class Tuple extends TypeBase {
         }
 
         return new static($value, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    #[\Override]
+    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+        if ($typeInfo === null) {
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_TUPLE_TYPEINFO_REQUIRED->value);
+        }
+
+        if (!$typeInfo instanceof TupleInfo) {
+            throw new Exception('Invalid type info, TupleInfo expected', ExceptionCode::TYPE_TUPLE_INVALID_TYPEINFO->value, [
+                'given_type' => get_class($typeInfo),
+            ]);
+        }
+
+        $tuple = [];
+        foreach ($typeInfo->valueTypes as $key => $type) {
+            /** @psalm-suppress MixedAssignment */
+            $tuple[$key] = $stream->readValue($type);
+        }
+
+        return new static($tuple, typeInfo: $typeInfo);
     }
 
     /**
@@ -122,5 +138,10 @@ final class Tuple extends TypeBase {
     #[\Override]
     public function getValue(): array {
         return $this->value;
+    }
+
+    #[\Override]
+    final public static function requiresDefinition(): bool {
+        return true;
     }
 }
