@@ -39,7 +39,6 @@ final class Connection {
     protected array $nodes;
 
     /**
-     * Connection options
      * @var array<string,string> $options
      */
     protected array $options;
