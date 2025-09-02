@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Cassandra\Request\Options;
 
+use Cassandra\SerialConsistency;
+
 final class ExecuteOptions extends QueryOptions {
     public function __construct(
         public readonly ?bool $skipMetadata = null,
         ?int $pageSize = null,
         ?string $pagingState = null,
-        ?int $serialConsistency = null,
+        ?SerialConsistency $serialConsistency = null,
         ?int $defaultTimestamp = null,
         ?bool $namesForValues = null,
         ?string $keyspace = null,
