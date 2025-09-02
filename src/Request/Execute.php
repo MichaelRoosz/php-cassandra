@@ -22,21 +22,6 @@ final class Execute extends Request {
     protected $values;
 
     /**
-     * EXECUTE
-     *
-     * Executes a prepared query. The body of the message must be:
-     * <id><n><value_1>....<value_n><consistency>
-     * where:
-     * - <id> is the prepared query ID. It's the [short bytes] returned as a
-     * response to a PREPARE message.
-     * - <n> is a [short] indicating the number of following values.
-     * - <value_1>...<value_n> are the [bytes] to use for bound variables in the
-     * prepared query.
-     * - <consistency> is the [consistency] level for the operation.
-     * Note that the consistency is ignored by some (prepared) queries (USE, CREATE,
-     * ALTER, TRUNCATE, ...).
-     * The response from the server will be a RESULT message.
-     *
      * @param array<mixed> $values
      * 
      * @throws \Cassandra\Request\Exception

@@ -10,17 +10,6 @@ use Cassandra\Consistency;
 
 final class Query extends Request {
     /**
-     * QUERY
-     *
-     * Performs a CQL query. The body of the message consists of a CQL query as a [long
-     * string] followed by the [consistency] for the operation.
-     *
-     * Note that the consistency is ignored by some queries (USE, CREATE, ALTER,
-     * TRUNCATE, ...).
-     *
-     * The server will respond to a QUERY message with a RESULT message, the content
-     * of which depends on the query.
-     *
      * @param array<mixed> $values
      */
     public function __construct(
