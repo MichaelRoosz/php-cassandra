@@ -42,13 +42,7 @@ final class Connection {
      * Connection options
      * @var array<string,string> $options
      */
-    protected array $options = [
-        'CQL_VERSION' => '3.0.0',
-        'DRIVER_NAME' => 'php-cassandra-client',
-        'DRIVER_VERSION' => '0.9.0',
-        // 'COMPRESSION' => 'lz4',
-        // 'THROW_ON_OVERLOAD' => '1',
-    ];
+    protected array $options;
 
     /**
      * @var SplQueue<int> $recycledStreams
@@ -65,19 +59,13 @@ final class Connection {
 
     /**
      * @param array<\Cassandra\Connection\NodeConfig> $nodes
-     * @param string $keyspace
-     * @param array<string,string> $options
      */
-    public function __construct(array $nodes, string $keyspace = '', array $options = []) {
+    public function __construct(array $nodes, string $keyspace = '', ConnectionOptions $options = new ConnectionOptions()) {
 
         $this->nodes = $nodes;
         $this->keyspace = $keyspace;
-
+        $this->options = $options->toArray();
         $this->lz4Decompressor = new Lz4Decompressor();
-
-        foreach ($options as $optname => $optvalue) {
-            $this->options[strtoupper($optname)] = $optvalue;
-        }
 
         /** @var SplQueue<int> $recycledStreams */
         $recycledStreams = new SplQueue();
