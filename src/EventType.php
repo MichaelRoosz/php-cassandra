@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Response;
+namespace Cassandra;
 
 enum EventType: string {
     case SCHEMA_CHANGE = 'SCHEMA_CHANGE';

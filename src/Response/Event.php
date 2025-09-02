@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use Cassandra\EventType;
 use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Event\Data\EventData;

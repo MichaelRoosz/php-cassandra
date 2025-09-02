@@ -8,7 +8,7 @@ use Cassandra\Protocol\Opcode;
 
 final class Register extends Request {
     /**
-     * @param array<string> $events
+     * @param array<\Cassandra\EventType> $events
      */
     public function __construct(protected array $events) {
         parent::__construct(Opcode::REQUEST_REGISTER);
@@ -19,7 +19,7 @@ final class Register extends Request {
         $body = pack('n', count($this->events));
 
         foreach ($this->events as $value) {
-            $body .= pack('n', strlen($value)) . $value;
+            $body .= pack('n', strlen($value->value)) . $value->value;
         }
 
         return $body;
