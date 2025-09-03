@@ -106,34 +106,29 @@ final class PreparedResult extends Result {
             $pkIndex = null;
         }
 
-        if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA)) {
-            $bindMarkers = [];
+        $bindMarkers = [];
 
-            if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC) {
-                $keyspace = $this->stream->readString();
-                $tableName = $this->stream->readString();
+        if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC) {
+            $keyspace = $this->stream->readString();
+            $tableName = $this->stream->readString();
 
-                for ($i = 0; $i < $bindMarkersCount; ++$i) {
-                    $bindMarkers[] = new ColumnInfo(
-                        keyspace: $keyspace,
-                        tableName: $tableName,
-                        name: $this->stream->readString(),
-                        type: $this->stream->readTypeInfo(),
-                    );
-                }
-            } else {
-                for ($i = 0; $i < $bindMarkersCount; ++$i) {
-                    $bindMarkers[] = new ColumnInfo(
-                        keyspace: $this->stream->readString(),
-                        tableName: $this->stream->readString(),
-                        name: $this->stream->readString(),
-                        type: $this->stream->readTypeInfo(),
-                    );
-                }
+            for ($i = 0; $i < $bindMarkersCount; ++$i) {
+                $bindMarkers[] = new ColumnInfo(
+                    keyspace: $keyspace,
+                    tableName: $tableName,
+                    name: $this->stream->readString(),
+                    type: $this->stream->readTypeInfo(),
+                );
             }
-
         } else {
-            $bindMarkers = null;
+            for ($i = 0; $i < $bindMarkersCount; ++$i) {
+                $bindMarkers[] = new ColumnInfo(
+                    keyspace: $this->stream->readString(),
+                    tableName: $this->stream->readString(),
+                    name: $this->stream->readString(),
+                    type: $this->stream->readTypeInfo(),
+                );
+            }
         }
 
         return new PrepareMetadata(

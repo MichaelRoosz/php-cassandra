@@ -27,7 +27,7 @@ final class Batch extends Request {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Request\Exception
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Exception
      */
@@ -37,18 +37,16 @@ final class Batch extends Request {
 
         $queryId = $prepareData->id;
 
-        if ($prepareData->prepareMetadata->bindMarkers !== null) {
-            $values = self::encodeValuesForBindMarkerTypes(
-                $values,
-                $prepareData->prepareMetadata->bindMarkers,
-                false
-            );
-        }
+        $values = self::encodeQueryValuesForBindMarkerTypes(
+            $values,
+            $prepareData->prepareMetadata->bindMarkers,
+            false
+        );
 
         $binary = chr(1);
 
         $binary .= pack('n', strlen($queryId)) . $queryId;
-        $binary .= self::valuesAsBinary($values, namesForValues: false);
+        $binary .= self::encodeQueryValuesAsBinary($values, namesForValues: false);
 
         $this->queryArray[] = $binary;
 
@@ -58,14 +56,14 @@ final class Batch extends Request {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Request\Exception
      */
     public function appendQuery(string $query, array $values = []): self {
 
         $binary = chr(0);
 
         $binary .= pack('N', strlen($query)) . $query;
-        $binary .= self::valuesAsBinary($values, namesForValues: false);
+        $binary .= self::encodeQueryValuesAsBinary($values, namesForValues: false);
 
         $this->queryArray[] = $binary;
 
@@ -79,16 +77,15 @@ final class Batch extends Request {
     public function getBody(): string {
         return chr($this->type->value)
             . pack('n', count($this->queryArray)) . implode('', $this->queryArray)
-            . self::batchParametersAsBinary($this->consistency, [], $this->options, $this->version);
+            . self::encodeBatchParametersAsBinary($this->consistency, [], $this->options, $this->version);
     }
 
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
-    protected function batchParametersAsBinary(
+    protected function encodeBatchParametersAsBinary(
         Consistency $consistency,
         array $values = [],
         BatchOptions $options = new BatchOptions(),
@@ -100,7 +97,7 @@ final class Batch extends Request {
 
         if ($values) {
             $flags |= QueryFlag::VALUES;
-            $optional .= self::valuesAsBinary($values, namesForValues: false);
+            $optional .= self::encodeQueryValuesAsBinary($values, namesForValues: false);
         }
 
         if ($options->serialConsistency !== null) {

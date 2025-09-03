@@ -115,46 +115,16 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
-     * @param array<\Cassandra\Response\Result\ColumnInfo> $bindMarkers
-     * @return array<mixed>
      *
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function encodeValuesForBindMarkerTypes(array $values, array $bindMarkers, bool $namesForValues): array {
-        $encodedValues = [];
-        foreach ($bindMarkers as $index => $bindMarker) {
-
-            if ($namesForValues) {
-                $key = $bindMarker->name;
-            } else {
-                $key = $index;
-            }
-
-            if (!isset($values[$key])) {
-                $encodedValues[$key] = null;
-            } elseif ($values[$key] instanceof Type\TypeBase) {
-                $encodedValues[$key] = $values[$key];
-            } else {
-                $encodedValues[$key] = TypeFactory::getTypeObjectFromValue($bindMarker->type, $values[$key]);
-            }
-        }
-
-        return $encodedValues;
-    }
-
-    /**
-     * @param array<mixed> $values
-     *
-     * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
-    protected function queryParametersAsBinary(Consistency $consistency, array $values = [], QueryOptions $options = new QueryOptions(), int $version = 3): string {
+    protected function encodeQueryParametersAsBinary(Consistency $consistency, array $values = [], QueryOptions $options = new QueryOptions(), int $version = 3): string {
         $flags = 0;
         $optional = '';
 
         if ($values) {
             $flags |= QueryFlag::VALUES;
-            $optional .= self::valuesAsBinary($values, $options->namesForValues === true);
+            $optional .= self::encodeQueryValuesAsBinary($values, $options->namesForValues === true);
         }
 
         if (($options instanceof ExecuteOptions) && $options->skipMetadata) {
@@ -233,9 +203,9 @@ abstract class Request implements Frame, Stringable {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Request\Exception
      */
-    protected function valuesAsBinary(array $values, bool $namesForValues = false): string {
+    protected function encodeQueryValuesAsBinary(array $values, bool $namesForValues = false): string {
         $valuesBinary = pack('n', count($values));
 
         /** @psalm-suppress MixedAssignment */
@@ -329,5 +299,34 @@ abstract class Request implements Frame, Stringable {
         }
 
         return $valuesBinary;
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @param array<\Cassandra\Response\Result\ColumnInfo> $bindMarkers
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    protected function encodeQueryValuesForBindMarkerTypes(array $values, array $bindMarkers, bool $namesForValues): array {
+        $encodedValues = [];
+        foreach ($bindMarkers as $index => $bindMarker) {
+
+            if ($namesForValues) {
+                $key = $bindMarker->name;
+            } else {
+                $key = $index;
+            }
+
+            if (!isset($values[$key])) {
+                $encodedValues[$key] = null;
+            } elseif ($values[$key] instanceof Type\TypeBase) {
+                $encodedValues[$key] = $values[$key];
+            } else {
+                $encodedValues[$key] = TypeFactory::getTypeObjectFromValue($bindMarker->type, $values[$key]);
+            }
+        }
+
+        return $encodedValues;
     }
 }

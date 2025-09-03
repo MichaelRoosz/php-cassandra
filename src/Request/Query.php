@@ -26,13 +26,12 @@ final class Query extends Request {
     }
 
     /**
-     * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
     #[\Override]
     public function getBody(): string {
         $body = pack('N', strlen($this->query)) . $this->query;
-        $body .= self::queryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version);
+        $body .= self::encodeQueryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version);
 
         return $body;
     }

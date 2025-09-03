@@ -26,7 +26,6 @@ final class Execute extends Request {
      * 
      * @throws \Cassandra\Request\Exception
      * @throws \Cassandra\Type\Exception
-     * 
      */
     public function __construct(
         protected Result $previousResult,
@@ -71,15 +70,11 @@ final class Execute extends Request {
         $this->queryId = $preparedData->id;
         $this->rowsMetadataId = $preparedData->rowsMetadataId;
 
-        if ($preparedData->prepareMetadata->bindMarkers !== null) {
-            $this->values = self::encodeValuesForBindMarkerTypes(
-                $values,
-                $preparedData->prepareMetadata->bindMarkers,
-                $this->options->namesForValues ?? false
-            );
-        } else {
-            $this->values = $values;
-        }
+        $this->values = self::encodeQueryValuesForBindMarkerTypes(
+            $values,
+            $preparedData->prepareMetadata->bindMarkers,
+            $this->options->namesForValues ?? false
+        );
 
         if (
             $this->options->skipMetadata === null
@@ -104,7 +99,6 @@ final class Execute extends Request {
     }
 
     /**
-     * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Request\Exception
      */
     #[\Override]
@@ -126,7 +120,7 @@ final class Execute extends Request {
             $body .= pack('n', strlen($this->rowsMetadataId)) . $this->rowsMetadataId;
         }
 
-        $body .= self::queryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version);
+        $body .= self::encodeQueryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version);
 
         return $body;
     }
