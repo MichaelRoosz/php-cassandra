@@ -106,10 +106,10 @@ final class PreparedResult extends Result {
             $pkIndex = null;
         }
 
-        if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA->value)) {
+        if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA)) {
             $bindMarkers = [];
 
-            if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC->value) {
+            if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC) {
                 $keyspace = $this->stream->readString();
                 $tableName = $this->stream->readString();
 

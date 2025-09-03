@@ -4,6 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-enum PrepareFlag: int {
-    case WITH_KEYSPACE = 0x01;
+final class PrepareFlag {
+    public const WITH_KEYSPACE = 0x01;
 }

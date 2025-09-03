@@ -122,15 +122,15 @@ abstract class Response implements Frame, Stringable {
     protected function readExtraData(): void {
         $flags = $this->header->flags;
 
-        if ($flags & Flag::TRACING->value) {
+        if ($flags & Flag::TRACING) {
             $this->tracingUuid = $this->stream->readUuid();
         }
 
-        if ($flags & Flag::WARNING->value) {
+        if ($flags & Flag::WARNING) {
             $this->warnings = $this->stream->readStringList();
         }
 
-        if ($flags & Flag::CUSTOM_PAYLOAD->value) {
+        if ($flags & Flag::CUSTOM_PAYLOAD) {
             $this->payload = $this->stream->readBytesMap();
         }
 

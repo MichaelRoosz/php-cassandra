@@ -28,7 +28,7 @@ final class Prepare extends Request {
 
         if ($this->options->keyspace !== null) {
             if ($this->version >= 5) {
-                $flags |= PrepareFlag::WITH_KEYSPACE->value;
+                $flags |= PrepareFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($this->options->keyspace)) . $this->options->keyspace;
             } else {
                 throw new Exception(

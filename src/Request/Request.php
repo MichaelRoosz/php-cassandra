@@ -32,9 +32,9 @@ abstract class Request implements Frame, Stringable {
     public function __toString(): string {
         $body = $this->getBody();
 
-        if ($this->flags & Flag::CUSTOM_PAYLOAD->value) {
+        if ($this->flags & Flag::CUSTOM_PAYLOAD) {
             if ($this->payload === null) {
-                $this->flags &= ~Flag::CUSTOM_PAYLOAD->value;
+                $this->flags &= ~Flag::CUSTOM_PAYLOAD;
             } else {
                 $payloadData = pack('n', count($this->payload));
 
@@ -58,7 +58,7 @@ abstract class Request implements Frame, Stringable {
     }
 
     public function enableTracing(): void {
-        $this->flags |= Flag::TRACING->value;
+        $this->flags |= Flag::TRACING;
     }
 
     #[\Override]
@@ -102,7 +102,7 @@ abstract class Request implements Frame, Stringable {
      */
     public function setPayload(array $payload): void {
         $this->payload = $payload;
-        $this->flags |= Flag::CUSTOM_PAYLOAD->value;
+        $this->flags |= Flag::CUSTOM_PAYLOAD;
     }
 
     public function setStream(int $stream): void {
@@ -153,41 +153,41 @@ abstract class Request implements Frame, Stringable {
         $optional = '';
 
         if ($values) {
-            $flags |= QueryFlag::VALUES->value;
+            $flags |= QueryFlag::VALUES;
             $optional .= self::valuesAsBinary($values, $options->namesForValues === true);
         }
 
         if (($options instanceof ExecuteOptions) && $options->skipMetadata) {
-            $flags |= QueryFlag::SKIP_METADATA->value;
+            $flags |= QueryFlag::SKIP_METADATA;
         }
 
         if ($options->pageSize !== null) {
-            $flags |= QueryFlag::PAGE_SIZE->value;
+            $flags |= QueryFlag::PAGE_SIZE;
             $optional .= pack('N', max(100, $options->pageSize));
         }
 
         if ($options->pagingState !== null) {
-            $flags |= QueryFlag::WITH_PAGING_STATE->value;
+            $flags |= QueryFlag::WITH_PAGING_STATE;
             $optional .= pack('N', strlen($options->pagingState)) . $options->pagingState;
         }
 
         if ($options->serialConsistency !== null) {
-            $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY->value;
-            $optional .= pack('n', $options->serialConsistency->value);
+            $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY;
+            $optional .= pack('n', $options->serialConsistency);
         }
 
         if ($options->defaultTimestamp !== null) {
-            $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP->value;
+            $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP;
             $optional .= (new Type\Bigint($options->defaultTimestamp))->getBinary();
         }
 
         if ($options->namesForValues === true) {
-            $flags |= QueryFlag::WITH_NAMES_FOR_VALUES->value;
+            $flags |= QueryFlag::WITH_NAMES_FOR_VALUES;
         }
 
         if ($options->keyspace !== null) {
             if ($version >= 5) {
-                $flags |= QueryFlag::WITH_KEYSPACE->value;
+                $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
                 throw new Exception(
@@ -206,7 +206,7 @@ abstract class Request implements Frame, Stringable {
 
         if ($options->nowInSeconds !== null) {
             if ($version >= 5) {
-                $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
+                $flags |= QueryFlag::WITH_NOW_IN_SECONDS;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
                 throw new Exception(

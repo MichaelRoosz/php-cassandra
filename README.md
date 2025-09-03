@@ -182,7 +182,7 @@ $r1 = $s1->getResult();
 Query options (`QueryOptions`):
 - `pageSize` (int)
 - `pagingState` (string)
-- `serialConsistency` (int; use `Consistency::SERIAL->value` or `Consistency::LOCAL_SERIAL->value`)
+- `serialConsistency` (`SerialConsistency::SERIAL` or `SerialConsistency::LOCAL_SERIAL`)
 - `defaultTimestamp` (ms since epoch)
 - `namesForValues` (bool): true to use associative binds
 - `keyspace` (string; protocol v5 only)
@@ -369,9 +369,9 @@ use Cassandra\Request\Register;
 use Cassandra\Response\EventType;
 
 $conn->syncRequest(new Register([
-    EventType::TOPOLOGY_CHANGE->value,
-    EventType::STATUS_CHANGE->value,
-    EventType::SCHEMA_CHANGE->value,
+    EventType::TOPOLOGY_CHANGE,
+    EventType::STATUS_CHANGE,
+    EventType::SCHEMA_CHANGE,
 ]));
 
 // process events (simplest possible loop)

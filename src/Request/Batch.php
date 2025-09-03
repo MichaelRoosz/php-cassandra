@@ -100,23 +100,23 @@ final class Batch extends Request {
         $optional = '';
 
         if ($values) {
-            $flags |= QueryFlag::VALUES->value;
+            $flags |= QueryFlag::VALUES;
             $optional .= self::valuesAsBinary($values, namesForValues: false);
         }
 
         if ($options->serialConsistency !== null) {
-            $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY->value;
+            $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY;
             $optional .= pack('n', $options->serialConsistency->value);
         }
 
         if ($options->defaultTimestamp !== null) {
-            $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP->value;
+            $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP;
             $optional .= (new Type\Bigint($options->defaultTimestamp))->getBinary();
         }
 
         if ($options->keyspace !== null) {
             if ($version >= 5) {
-                $flags |= QueryFlag::WITH_KEYSPACE->value;
+                $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
                 throw new Exception(
@@ -135,7 +135,7 @@ final class Batch extends Request {
 
         if ($options->nowInSeconds !== null) {
             if ($version >= 5) {
-                $flags |= QueryFlag::WITH_NOW_IN_SECONDS->value;
+                $flags |= QueryFlag::WITH_NOW_IN_SECONDS;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
                 throw new Exception(

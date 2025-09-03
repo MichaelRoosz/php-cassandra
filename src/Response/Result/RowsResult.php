@@ -425,15 +425,15 @@ final class RowsResult extends Result {
     }
 
     public function hasMetadataChanged(): bool {
-        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED->value);
+        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED);
     }
 
     public function hasMorePages(): bool {
-        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES->value);
+        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES);
     }
 
     public function hasNoMetadata(): bool {
-        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_NO_METADATA->value);
+        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_NO_METADATA);
     }
 
     public function isFetchObjectConfigurationSet(): bool {

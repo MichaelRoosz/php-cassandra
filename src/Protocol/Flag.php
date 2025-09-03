@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Protocol;
 
-enum Flag: int {
-    case COMPRESSION = 0x01; // deprecated in v5
-    case CUSTOM_PAYLOAD = 0x04;
-    case TRACING = 0x02;
-    case USE_BETA = 0x10;
-    case WARNING = 0x08;
+final class Flag {
+    public const COMPRESSION = 0x01; // deprecated in v5
+    public const CUSTOM_PAYLOAD = 0x04;
+    public const TRACING = 0x02;
+    public const USE_BETA = 0x10;
+    public const WARNING = 0x08;
 }

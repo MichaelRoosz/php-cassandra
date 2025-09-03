@@ -822,7 +822,7 @@ final class Connection {
 
         $body = $header->length === 0 ? '' : $this->node->read($header->length);
 
-        if ($this->version < 5 && $header->length > 0 && $header->flags & Flag::COMPRESSION->value) {
+        if ($this->version < 5 && $header->length > 0 && $header->flags & Flag::COMPRESSION) {
             $this->lz4Decompressor->setInput($body);
             $body = $this->lz4Decompressor->decompressBlock();
         }

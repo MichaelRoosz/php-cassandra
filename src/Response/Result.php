@@ -195,22 +195,22 @@ class Result extends Response implements IteratorAggregate {
         $flags = $this->stream->readInt();
         $columnsCount = $this->stream->readInt();
 
-        if ($flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES->value) {
+        if ($flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES) {
             $pagingState = $this->stream->readBytes();
         } else {
             $pagingState = null;
         }
 
-        if ($flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED->value) {
+        if ($flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED) {
             $newMetadataId = $this->stream->readShortBytes();
         } else {
             $newMetadataId = null;
         }
 
-        if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA->value)) {
+        if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA)) {
             $columns = [];
 
-            if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC->value) {
+            if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC) {
                 $keyspace = $this->stream->readString();
                 $tableName = $this->stream->readString();
 

@@ -6,8 +6,6 @@ Todo
 * remove unused exceptions codes
 * maybe remove usage of root exception 
 
-* better flag handling
-
 * Finish tests
   * test fromStream()
   * test frozen
