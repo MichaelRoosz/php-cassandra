@@ -34,7 +34,7 @@ final class StorageIntegrationTest extends TestCase {
                     [
                         new Type\Varchar($filename),
                         new Type\Varchar($ukey),
-                        new Type\CollectionMap(['id' => '4003578', 'title' => 'Christmas By The River (CD)'], Type::VARCHAR, Type::VARCHAR),
+                        new Type\MapCollection(['id' => '4003578', 'title' => 'Christmas By The River (CD)'], Type::VARCHAR, Type::VARCHAR),
                     ]
                 );
             }
@@ -59,7 +59,7 @@ final class StorageIntegrationTest extends TestCase {
             foreach ($rows as $_row) {
                 $count++;
             }
-            $pagingState = $rows->getMetadata()->pagingState;
+            $pagingState = $rows->getRowsMetadata()->pagingState;
             if ($pagingState === null) {
                 break;
             }
@@ -86,7 +86,7 @@ final class StorageIntegrationTest extends TestCase {
             foreach ($result as $_row) {
                 $count2++;
             }
-            $state = $result->getMetadata()->pagingState;
+            $state = $result->getRowsMetadata()->pagingState;
             if ($state === null) {
                 break;
             }

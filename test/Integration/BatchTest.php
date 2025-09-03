@@ -25,7 +25,7 @@ final class BatchTest extends TestCase {
                 [
                     new Type\Varchar($filename),
                     new Type\Varchar('k' . $i),
-                    new Type\CollectionMap(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
+                    new Type\MapCollection(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }

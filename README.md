@@ -213,7 +213,7 @@ do {
         // process row
     }
 
-    $pagingState = $result->getMetadata()->pagingState;
+    $pagingState = $result->getRowsMetadata()->pagingState;
     if ($pagingState === null) break;
 
     $options = new \Cassandra\Request\Options\ExecuteOptions(
@@ -318,16 +318,16 @@ new \Cassandra\Type\Varint(10000000000);
 \Cassandra\Type\Duration::fromString('89h4m48s');
 
 // Collections / Tuples / UDT
-new \Cassandra\Type\CollectionList([1, 2, 3], [\Cassandra\Type::INT]);
-new \Cassandra\Type\CollectionSet([1, 2, 3], [\Cassandra\Type::INT]);
-new \Cassandra\Type\CollectionMap(['a' => 1], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
+new \Cassandra\Type\ListCollection([1, 2, 3], [\Cassandra\Type::INT]);
+new \Cassandra\Type\SetCollection([1, 2, 3], [\Cassandra\Type::INT]);
+new \Cassandra\Type\MapCollection(['a' => 1], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
 new \Cassandra\Type\Tuple([1, 'x'], [\Cassandra\Type::INT, \Cassandra\Type::VARCHAR]);
 new \Cassandra\Type\UDT(['id' => 1, 'name' => 'n'], ['id' => \Cassandra\Type::INT, 'name' => \Cassandra\Type::VARCHAR]);
 ```
 
 Nested complex example (Set<UDT> inside a row):
 ```php
-new \Cassandra\Type\CollectionSet([
+new \Cassandra\Type\SetCollection([
     [
         'id' => 1,
         'name' => 'string',
@@ -342,8 +342,8 @@ new \Cassandra\Type\CollectionSet([
             'id' => \Cassandra\Type::INT,
             'name' => \Cassandra\Type::VARCHAR,
             'active' => \Cassandra\Type::BOOLEAN,
-            'friends' => ['type' => \Cassandra\Type::COLLECTION_LIST, 'value' => \Cassandra\Type::VARCHAR],
-            'drinks' => ['type' => \Cassandra\Type::COLLECTION_LIST, 'value' => [
+            'friends' => ['type' => \Cassandra\Type::LIST_COLLECTION, 'value' => \Cassandra\Type::VARCHAR],
+            'drinks' => ['type' => \Cassandra\Type::LIST_COLLECTION, 'value' => [
                 'type' => \Cassandra\Type::UDT,
                 'typeMap' => ['qty' => \Cassandra\Type::INT, 'brand' => \Cassandra\Type::VARCHAR],
             ]],
@@ -353,7 +353,7 @@ new \Cassandra\Type\CollectionSet([
 ```
 
 Special values:
-- `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET (distinct from NULL)
+- `new \Cassandra\Type\NotSet()` encodes a bind variable as NOT SET, not resulting in any change to the existing value. (distinct from NULL)
 
 ## Events
 

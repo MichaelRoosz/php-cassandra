@@ -13,7 +13,6 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
-use Cassandra\Value;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
@@ -116,17 +115,17 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
-     * @param array<\Cassandra\Response\Result\ColumnInfo> $columns
+     * @param array<\Cassandra\Response\Result\ColumnInfo> $bindMarkers
      * @return array<mixed>
      *
      * @throws \Cassandra\Type\Exception
      */
-    protected function encodeValuesForColumnType(array $values, array $columns, bool $namesForValues): array {
+    protected function encodeValuesForBindMarkerTypes(array $values, array $bindMarkers, bool $namesForValues): array {
         $encodedValues = [];
-        foreach ($columns as $index => $column) {
+        foreach ($bindMarkers as $index => $bindMarker) {
 
             if ($namesForValues) {
-                $key = $column->name;
+                $key = $bindMarker->name;
             } else {
                 $key = $index;
             }
@@ -136,7 +135,7 @@ abstract class Request implements Frame, Stringable {
             } elseif ($values[$key] instanceof Type\TypeBase) {
                 $encodedValues[$key] = $values[$key];
             } else {
-                $encodedValues[$key] = TypeFactory::getTypeObjectFromValue($column->type, $values[$key]);
+                $encodedValues[$key] = TypeFactory::getTypeObjectFromValue($bindMarker->type, $values[$key]);
             }
         }
 
@@ -247,7 +246,7 @@ abstract class Request implements Frame, Stringable {
 
                     break;
 
-                case $value instanceof Value\NotSet:
+                case $value instanceof Type\NotSet:
                     $binary = $value;
 
                     break;
@@ -291,6 +290,8 @@ abstract class Request implements Frame, Stringable {
 
             if ($namesForValues) {
                 if (is_string($name)) {
+                    // strtolower is okay to use here, since column names are defined
+                    // as identifiers, which consist of: [A-Za-z0-9_]+.
                     $valuesBinary .= pack('n', strlen($name)) . strtolower($name);
                 } else {
                     throw new Type\Exception(
@@ -320,7 +321,7 @@ abstract class Request implements Frame, Stringable {
 
             if ($binary === null) {
                 $valuesBinary .= "\xff\xff\xff\xff";
-            } elseif ($binary instanceof Value\NotSet) {
+            } elseif ($binary instanceof Type\NotSet) {
                 $valuesBinary .= "\xff\xff\xff\xfe";
             } else {
                 $valuesBinary .= pack('N', strlen($binary)) . $binary;

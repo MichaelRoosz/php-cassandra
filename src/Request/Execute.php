@@ -14,7 +14,7 @@ use Cassandra\Response\Result\RowsResult;
 
 final class Execute extends Request {
     protected string $queryId = '';
-    protected ?string $resultMetadataId = null;
+    protected ?string $rowsMetadataId = null;
 
     /**
      * @var array<mixed> $values
@@ -25,7 +25,6 @@ final class Execute extends Request {
      * @param array<mixed> $values
      * 
      * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      * 
      */
@@ -41,10 +40,24 @@ final class Execute extends Request {
             $this->options = $this->options->withNamesForValues(true);
         }
 
-        if (
-            !($previousResult instanceof PreparedResult)
-            && !($previousResult instanceof RowsResult)
-        ) {
+        if ($previousResult instanceof PreparedResult) {
+            $preparedData = $previousResult->getPreparedData();
+            $pagingStateOfPreviousResult = null;
+
+        } elseif ($previousResult instanceof RowsResult) {
+            $preparedData = $previousResult->getLastPreparedData();
+            if ($preparedData === null) {
+                throw new Exception(
+                    message: 'Prepared statement not found for resumption of execution',
+                    code: ExceptionCode::REQUEST_EXECUTE_PREPARED_STATEMENT_NOT_FOUND->value,
+                    context: [
+                        'previous_result_class' => get_class($previousResult),
+                        'hint' => 'Ensure the previous SELECT included metadata required for paging',
+                    ]
+                );
+            }
+            $pagingStateOfPreviousResult = $previousResult->getRowsMetadata()->pagingState;
+        } else {
             throw new Exception(
                 message: 'Execute request received an invalid previous result instance',
                 code: ExceptionCode::REQUEST_EXECUTE_INVALID_PREVIOUS_RESULT->value,
@@ -55,36 +68,13 @@ final class Execute extends Request {
             );
         }
 
-        if ($previousResult instanceof PreparedResult) {
-            $prepareData = $previousResult->getPreparedData();
-            $executeCallInfo = new ExecuteCallInfo(
-                id: $prepareData->id,
-                queryMetadata: $prepareData->metadata,
-                resultMetadataId: $prepareData->resultMetadataId,
-            );
-            $pagingStateOfPreviousResult = null;
-        } else {
-            $executeCallInfo = $previousResult->getNextExecuteCallInfo();
-            if ($executeCallInfo === null) {
-                throw new Exception(
-                    message: 'Prepared statement not found for resumption of execution',
-                    code: ExceptionCode::REQUEST_EXECUTE_PREPARED_STATEMENT_NOT_FOUND->value,
-                    context: [
-                        'previous_result_class' => get_class($previousResult),
-                        'hint' => 'Ensure the previous SELECT included metadata required for paging',
-                    ]
-                );
-            }
-            $pagingStateOfPreviousResult = $previousResult->getMetadata()->pagingState;
-        }
+        $this->queryId = $preparedData->id;
+        $this->rowsMetadataId = $preparedData->rowsMetadataId;
 
-        $this->queryId = $executeCallInfo->id;
-        $this->resultMetadataId = $executeCallInfo->resultMetadataId;
-
-        if ($executeCallInfo->queryMetadata->columns !== null) {
-            $this->values = self::encodeValuesForColumnType(
+        if ($preparedData->prepareMetadata->bindMarkers !== null) {
+            $this->values = self::encodeValuesForBindMarkerTypes(
                 $values,
-                $executeCallInfo->queryMetadata->columns,
+                $preparedData->prepareMetadata->bindMarkers,
                 $this->options->namesForValues ?? false
             );
         } else {
@@ -93,14 +83,14 @@ final class Execute extends Request {
 
         if (
             $this->options->skipMetadata === null
-            && $executeCallInfo->queryMetadata->columns !== null
+            && $preparedData->rowsMetadata->columns !== null
         ) {
             $this->options = $this->options->withSkipMetadata(true);
         }
 
         if (
             $this->options->skipMetadata
-            && $executeCallInfo->queryMetadata->columns === null
+            && $preparedData->rowsMetadata->columns === null
         ) {
             $this->options = $this->options->withSkipMetadata(false);
         }
@@ -122,7 +112,7 @@ final class Execute extends Request {
         $body = pack('n', strlen($this->queryId)) . $this->queryId;
 
         if ($this->version >= 5) {
-            if ($this->resultMetadataId === null) {
+            if ($this->rowsMetadataId === null) {
                 throw new Exception(
                     message: 'Missing result metadata id for protocol v5 execute request',
                     code: ExceptionCode::REQUEST_EXECUTE_MISSING_RESULT_METADATA_ID->value,
@@ -133,7 +123,7 @@ final class Execute extends Request {
                 );
             }
 
-            $body .= pack('n', strlen($this->resultMetadataId)) . $this->resultMetadataId;
+            $body .= pack('n', strlen($this->rowsMetadataId)) . $this->rowsMetadataId;
         }
 
         $body .= self::queryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version);

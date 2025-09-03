@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Value;
+namespace Cassandra\Type;
 
 final class NotSet {
 }

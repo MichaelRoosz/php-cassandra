@@ -8,11 +8,11 @@ use Cassandra\ExceptionCode;
 use Cassandra\TypeFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
-use Cassandra\TypeInfo\CollectionListInfo;
+use Cassandra\TypeInfo\SetCollectionInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class CollectionList extends TypeReadableWithoutLength {
-    protected CollectionListInfo $typeInfo;
+final class SetCollection extends TypeReadableWithoutLength {
+    protected SetCollectionInfo $typeInfo;
 
     /**
      * @var array<mixed> $value
@@ -21,7 +21,7 @@ final class CollectionList extends TypeReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
-     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)|null $valueDefinition
+     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)|null $valueDefinition 
      *
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\TypeInfo\Exception
@@ -30,22 +30,20 @@ final class CollectionList extends TypeReadableWithoutLength {
         array $value,
         Type|array|null $valueDefinition = null,
         bool $isFrozen = false,
-        ?CollectionListInfo $typeInfo = null,
+        ?SetCollectionInfo $typeInfo = null,
     ) {
         $this->value = $value;
 
-        if ($typeInfo !== null) {
-            $this->typeInfo = $typeInfo;
-
-        } elseif ($valueDefinition !== null) {
-            $this->typeInfo = CollectionListInfo::fromTypeDefinition([
-                'type' => Type::COLLECTION_LIST,
+        if ($valueDefinition !== null) {
+            $this->typeInfo = SetCollectionInfo::fromTypeDefinition([
+                'type' => Type::SET_COLLECTION,
                 'valueType' => $valueDefinition,
                 'isFrozen' => $isFrozen,
             ]);
-
+        } elseif ($typeInfo !== null) {
+            $this->typeInfo = $typeInfo;
         } else {
-            throw new Exception('Either valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_COLLECTION_LIST_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
+            throw new Exception('Either valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_SET_COLLECTION_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
         }
     }
 
@@ -56,6 +54,7 @@ final class CollectionList extends TypeReadableWithoutLength {
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+
         return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
     }
 
@@ -68,24 +67,23 @@ final class CollectionList extends TypeReadableWithoutLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new Exception('Invalid list value; expected array', ExceptionCode::TYPE_COLLECTION_LIST_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid set value; expected array', ExceptionCode::TYPE_SET_COLLECTION_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_LIST_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_SET_COLLECTION_TYPEINFO_REQUIRED->value);
         }
 
-        if (!$typeInfo instanceof CollectionListInfo) {
-            throw new Exception('Invalid type info, CollectionListInfo expected', ExceptionCode::TYPE_COLLECTION_LIST_INVALID_TYPEINFO->value, [
+        if (!$typeInfo instanceof SetCollectionInfo) {
+            throw new Exception('Invalid type info, SetCollectionInfo expected', ExceptionCode::TYPE_SET_COLLECTION_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
 
         return new static($value, typeInfo: $typeInfo);
     }
-
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
@@ -93,13 +91,12 @@ final class CollectionList extends TypeReadableWithoutLength {
      */
     #[\Override]
     final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
-
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_LIST_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_SET_COLLECTION_TYPEINFO_REQUIRED->value);
         }
 
-        if (!$typeInfo instanceof CollectionListInfo) {
-            throw new Exception('Invalid type info, CollectionListInfo expected', ExceptionCode::TYPE_COLLECTION_LIST_INVALID_TYPEINFO->value, [
+        if (!$typeInfo instanceof SetCollectionInfo) {
+            throw new Exception('Invalid type info, SetCollectionInfo expected', ExceptionCode::TYPE_SET_COLLECTION_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -132,7 +129,7 @@ final class CollectionList extends TypeReadableWithoutLength {
 
     #[\Override]
     public function getType(): Type {
-        return Type::COLLECTION_LIST;
+        return Type::SET_COLLECTION;
     }
 
     /**

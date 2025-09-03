@@ -25,7 +25,7 @@ final class ConnectionIntegrationTest extends TestCase {
                 [
                     new Type\Varchar('fileA'),
                     new Type\Varchar('k' . $i),
-                    new Type\CollectionMap(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
+                    new Type\MapCollection(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }
@@ -78,7 +78,7 @@ final class ConnectionIntegrationTest extends TestCase {
                 $this->assertArrayHasKey('name', $row);
                 $count++;
             }
-            $pagingState = $rows->getMetadata()->pagingState;
+            $pagingState = $rows->getRowsMetadata()->pagingState;
             if ($pagingState === null) {
                 break;
             }

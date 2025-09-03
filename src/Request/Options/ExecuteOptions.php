@@ -18,6 +18,7 @@ final class ExecuteOptions extends QueryOptions {
         ?int $nowInSeconds = null,
     ) {
         parent::__construct(
+            autoPrepare: false,
             pageSize: $pageSize,
             pagingState: $pagingState,
             serialConsistency: $serialConsistency,
@@ -25,6 +26,22 @@ final class ExecuteOptions extends QueryOptions {
             namesForValues: $namesForValues,
             keyspace: $keyspace,
             nowInSeconds: $nowInSeconds
+        );
+    }
+
+    public static function fromQueryOptions(
+        QueryOptions $options,
+        ?bool $skipMetadata = null,
+    ): self {
+        return new self(
+            skipMetadata: $skipMetadata,
+            pageSize: $options->pageSize,
+            pagingState: $options->pagingState,
+            serialConsistency: $options->serialConsistency,
+            defaultTimestamp: $options->defaultTimestamp,
+            namesForValues: $options->namesForValues,
+            keyspace: $options->keyspace,
+            nowInSeconds: $options->nowInSeconds,
         );
     }
 

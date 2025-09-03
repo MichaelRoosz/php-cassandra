@@ -52,7 +52,7 @@ use PHPUnit\Framework\TestCase;
  *      + tuple and vector are always frozen
  *  - test reversed where possible, if relevant
  */
-final class DataTypeRoundtripTest extends TestCase {
+final class DataTypeRoundtripTestNativeInput extends TestCase {
     private Connection $connection;
     private string $dumpFile = './table_dump.csv';
     private string $testKeyspace = 'datatype_test';
@@ -108,12 +108,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_ascii (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Ascii($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_ascii WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -146,12 +146,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_bigint (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Bigint($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_bigint WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -181,12 +181,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_blob (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Blob($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_blob WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -209,12 +209,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_boolean (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Boolean($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_boolean WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -245,12 +245,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($finalValues as $index => $delta) {
             $this->connection->querySync(
                 'UPDATE test_counter SET value = value + ? WHERE id = ?',
-                [new Type\Counter($delta), new Type\Integer($index)]
+                [$delta, $index]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_counter WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -280,12 +280,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $config) {
             $this->connection->querySync(
                 'INSERT INTO test_custom (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Custom($config['value'], $config['javaClass'])]
+                [$index, new Type\Custom($config['value'], $config['javaClass'])]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_custom WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -324,12 +324,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_date (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Date($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_date WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -364,12 +364,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($dateTimeValues as $index => $config) {
             $this->connection->querySync(
                 'INSERT INTO test_date (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Date($config['input'])]
+                [$index, $config['input']]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_date WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -418,12 +418,12 @@ final class DataTypeRoundtripTest extends TestCase {
 
             $this->connection->querySync(
                 'INSERT INTO test_decimal (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Decimal($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_decimal WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -457,12 +457,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_double (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Double($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_double WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -503,12 +503,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_duration (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Duration($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_duration WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -553,12 +553,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($dateIntervalValues as $index => $config) {
             $this->connection->querySync(
                 'INSERT INTO test_duration (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Duration($config['input'])]
+                [$index, $config['input']]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_duration WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -590,12 +590,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_float32 (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Float32($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_float32 WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -629,12 +629,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_inet (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Inet($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_inet WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -667,12 +667,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_integer (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Integer($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_integer WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -705,12 +705,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_list_varchar (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\ListCollection($testValue, Type::VARCHAR)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_list_varchar WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -749,12 +749,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($intTestValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_list_int (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\ListCollection($testValue, Type::INT)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_list_int WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -794,12 +794,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_map_varchar_int (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\MapCollection($testValue, Type::VARCHAR, Type::INT)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_map_varchar_int WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -837,12 +837,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($intStringTestValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_map_int_varchar (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\MapCollection($testValue, Type::INT, Type::VARCHAR)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_map_int_varchar WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -882,12 +882,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_set_varchar (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\SetCollection($testValue, Type::VARCHAR)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_set_varchar WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -925,12 +925,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($intTestValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_set_int (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\SetCollection($testValue, Type::INT)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_set_int WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -971,12 +971,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_smallint (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Smallint($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_smallint WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1009,12 +1009,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_time (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Time($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_time WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1042,12 +1042,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($dateTimeValues as $index => $config) {
             $this->connection->querySync(
                 'INSERT INTO test_time (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Time($config['input'])]
+                [$index, $config['input']]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_time WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1091,12 +1091,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Timestamp($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_timestamp WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1127,12 +1127,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($dateTimeValues as $index => $config) {
             $this->connection->querySync(
                 'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Timestamp($config['input'])]
+                [$index, $config['input']]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_timestamp WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1159,12 +1159,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_timeuuid (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Timeuuid($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_timeuuid WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1196,12 +1196,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_tinyint (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Tinyint($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_tinyint WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1232,12 +1232,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_tuple_varchar_int (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Tuple($testValue, [Type::VARCHAR, Type::INT])]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_tuple_varchar_int WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1265,12 +1265,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($tripleTestValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_tuple_int_varchar_boolean (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Tuple($testValue, [Type::INT, Type::VARCHAR, Type::BOOLEAN])]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_tuple_int_varchar_boolean WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1296,12 +1296,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($nullTestValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_tuple_with_nulls (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Tuple($testValue, [Type::VARCHAR, Type::INT])]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_tuple_with_nulls WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1338,18 +1338,14 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->connection->querySync(
                 'INSERT INTO test_udt_address (id, value) VALUES (?, ?)',
                 [
-                    new Type\Integer($index),
-                    new Type\UDT($testValue, [
-                        'street' => Type::VARCHAR,
-                        'city' => Type::VARCHAR,
-                        'zip' => Type::INT,
-                    ]),
+                    $index,
+                    $testValue,
                 ]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_udt_address WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1391,18 +1387,14 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->connection->querySync(
                 'INSERT INTO test_udt_person (id, value) VALUES (?, ?)',
                 [
-                    new Type\Integer($index),
-                    new Type\UDT($testValue, [
-                        'name' => Type::VARCHAR,
-                        'age' => Type::INT,
-                        'active' => Type::BOOLEAN,
-                    ]),
+                    $index,
+                    $testValue,
                 ]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_udt_person WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1431,12 +1423,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_uuid (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Uuid($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_uuid WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1476,12 +1468,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_varchar (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Varchar($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_varchar WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1525,12 +1517,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_varint (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Varint($testValue)]
+                [$index, $testValue]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_varint WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1570,14 +1562,14 @@ final class DataTypeRoundtripTest extends TestCase {
             $this->connection->querySync(
                 'INSERT INTO test_vector_float3 (id, value) VALUES (?, ?)',
                 [
-                    new Type\Integer($index),
-                    new Type\Vector($testValue, Type::FLOAT, 3),
+                    $index,
+                    $testValue,
                 ]
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_vector_float3 WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();
@@ -1623,12 +1615,12 @@ final class DataTypeRoundtripTest extends TestCase {
         foreach ($testValues as $index => $testValue) {
             $this->connection->querySync(
                 'INSERT INTO test_vector_varint4 (id, value) VALUES (?, ?)',
-                [new Type\Integer($index), new Type\Vector($testValue, Type::VARINT, 4)],
+                [$index, $testValue],
             );
 
             $result = $this->connection->querySync(
                 'SELECT value FROM test_vector_varint4 WHERE id = ?',
-                [new Type\Integer($index)]
+                [$index]
             )->asRowsResult();
 
             $row = $result->fetch();

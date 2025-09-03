@@ -8,6 +8,7 @@ use Cassandra\SerialConsistency;
 
 class QueryOptions extends RequestOptions {
     public function __construct(
+        public readonly bool $autoPrepare = true,
         public readonly ?int $pageSize = null,
         public readonly ?string $pagingState = null,
         public readonly ?SerialConsistency $serialConsistency = null,
@@ -20,6 +21,7 @@ class QueryOptions extends RequestOptions {
 
     public function withNamesForValues(bool $namesForValues): self {
         return new self(
+            autoPrepare: $this->autoPrepare,
             pageSize: $this->pageSize,
             pagingState: $this->pagingState,
             serialConsistency: $this->serialConsistency,

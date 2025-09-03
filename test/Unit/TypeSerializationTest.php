@@ -29,71 +29,6 @@ final class TypeSerializationTest extends TestCase {
         $this->assertSame(true, Type\Boolean::fromBinary((new Type\Boolean(true))->getBinary())->getValue());
     }
 
-    public function testCollectionList(): void {
-        $value = [
-            1,
-            1,
-            2,
-            2,
-        ];
-
-        $definition = Type::INT;
-
-        $this->assertSame(
-            $value,
-            Type\CollectionList::fromBinary(
-                (new Type\CollectionList($value, $definition))->getBinary(),
-                TypeFactory::getTypeInfoFromTypeDefinition([
-                    'type' => Type::COLLECTION_LIST,
-                    'valueType' => $definition,
-                ])
-            )->getValue()
-        );
-    }
-
-    public function testCollectionMap(): void {
-        $value = [
-            'a' => 1,
-            'b' => 2,
-        ];
-
-        $keyDefinition = Type::ASCII;
-        $valueDefinition = Type::INT;
-
-        $this->assertSame(
-            $value,
-            Type\CollectionMap::fromBinary(
-                (new Type\CollectionMap($value, $keyDefinition, $valueDefinition))->getBinary(),
-                TypeFactory::getTypeInfoFromTypeDefinition([
-                    'type' => Type::COLLECTION_MAP,
-                    'keyType' => $keyDefinition,
-                    'valueType' => $valueDefinition,
-                ])
-            )->getValue()
-        );
-    }
-
-    public function testCollectionSet(): void {
-        $value = [
-            1,
-            2,
-            3,
-        ];
-
-        $definition = Type::INT;
-
-        $this->assertSame(
-            $value,
-            Type\CollectionSet::fromBinary(
-                (new Type\CollectionSet($value, $definition))->getBinary(),
-                TypeFactory::getTypeInfoFromTypeDefinition([
-                    'type' => Type::COLLECTION_SET,
-                    'valueType' => $definition,
-                ])
-            )->getValue()
-        );
-    }
-
     public function testCounter(): void {
         $counter = 12345678901234;
         $this->assertSame($counter, Type\Counter::fromBinary((new Type\Counter($counter))->getBinary())->getValue());
@@ -317,6 +252,50 @@ final class TypeSerializationTest extends TestCase {
         $this->assertSame($int2, Type\Integer::fromBinary((new Type\Integer($int2))->getBinary())->getValue());
     }
 
+    public function testListCollection(): void {
+        $value = [
+            1,
+            1,
+            2,
+            2,
+        ];
+
+        $definition = Type::INT;
+
+        $this->assertSame(
+            $value,
+            Type\ListCollection::fromBinary(
+                (new Type\ListCollection($value, $definition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::LIST_COLLECTION,
+                    'valueType' => $definition,
+                ])
+            )->getValue()
+        );
+    }
+
+    public function testMapCollection(): void {
+        $value = [
+            'a' => 1,
+            'b' => 2,
+        ];
+
+        $keyDefinition = Type::ASCII;
+        $valueDefinition = Type::INT;
+
+        $this->assertSame(
+            $value,
+            Type\MapCollection::fromBinary(
+                (new Type\MapCollection($value, $keyDefinition, $valueDefinition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::MAP_COLLECTION,
+                    'keyType' => $keyDefinition,
+                    'valueType' => $valueDefinition,
+                ])
+            )->getValue()
+        );
+    }
+
     public function testNested(): void {
         $value = [
             [
@@ -358,11 +337,11 @@ final class TypeSerializationTest extends TestCase {
                 'name' => Type::VARCHAR,
                 'active' => Type::BOOLEAN,
                 'friends' => [
-                    'type' => Type::COLLECTION_LIST,
+                    'type' => Type::LIST_COLLECTION,
                     'valueType' => Type::VARCHAR,
                 ],
                 'drinks' => [
-                    'type' => Type::COLLECTION_LIST,
+                    'type' => Type::LIST_COLLECTION,
                     'valueType' => [
                         'type' => Type::UDT,
                         'valueTypes' => [
@@ -376,10 +355,31 @@ final class TypeSerializationTest extends TestCase {
 
         $this->assertSame(
             $value,
-            Type\CollectionSet::fromBinary(
-                (new Type\CollectionSet($value, $definition))->getBinary(),
+            Type\SetCollection::fromBinary(
+                (new Type\SetCollection($value, $definition))->getBinary(),
                 TypeFactory::getTypeInfoFromTypeDefinition([
-                    'type' => Type::COLLECTION_SET,
+                    'type' => Type::SET_COLLECTION,
+                    'valueType' => $definition,
+                ])
+            )->getValue()
+        );
+    }
+
+    public function testSetCollection(): void {
+        $value = [
+            1,
+            2,
+            3,
+        ];
+
+        $definition = Type::INT;
+
+        $this->assertSame(
+            $value,
+            Type\SetCollection::fromBinary(
+                (new Type\SetCollection($value, $definition))->getBinary(),
+                TypeFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::SET_COLLECTION,
                     'valueType' => $definition,
                 ])
             )->getValue()

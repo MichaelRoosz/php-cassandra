@@ -72,7 +72,7 @@ final class PreparedStatementTest extends TestCase {
                 $this->assertMatchesRegularExpression('/^u\\d+$/', (string) $row['name']);
                 $seen++;
             }
-            $state = $rows->getMetadata()->pagingState;
+            $state = $rows->getRowsMetadata()->pagingState;
             if ($state === null) {
                 break;
             }

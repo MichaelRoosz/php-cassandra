@@ -8,11 +8,11 @@ use Cassandra\ExceptionCode;
 use Cassandra\TypeFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
-use Cassandra\TypeInfo\CollectionMapInfo;
+use Cassandra\TypeInfo\MapCollectionInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
-final class CollectionMap extends TypeReadableWithoutLength {
-    protected CollectionMapInfo $typeInfo;
+final class MapCollection extends TypeReadableWithoutLength {
+    protected MapCollectionInfo $typeInfo;
 
     /**
      * @var array<mixed> $value
@@ -32,20 +32,20 @@ final class CollectionMap extends TypeReadableWithoutLength {
         Type|array|null $keyDefinition = null,
         Type|array|null $valueDefinition = null,
         bool $isFrozen = false,
-        ?CollectionMapInfo $typeInfo = null,
+        ?MapCollectionInfo $typeInfo = null,
     ) {
 
         if ($typeInfo !== null) {
             $this->typeInfo = $typeInfo;
         } elseif ($keyDefinition !== null && $valueDefinition !== null) {
-            $this->typeInfo = CollectionMapInfo::fromTypeDefinition([
-                'type' => Type::COLLECTION_MAP,
+            $this->typeInfo = MapCollectionInfo::fromTypeDefinition([
+                'type' => Type::MAP_COLLECTION,
                 'keyType' => $keyDefinition,
                 'valueType' => $valueDefinition,
                 'isFrozen' => $isFrozen,
             ]);
         } else {
-            throw new Exception('Either keyDefinition and valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_COLLECTION_MAP_KEY_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
+            throw new Exception('Either keyDefinition and valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_MAP_COLLECTION_KEY_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
         }
 
         $this->value = $value;
@@ -71,17 +71,17 @@ final class CollectionMap extends TypeReadableWithoutLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new Exception('Invalid map value; expected array', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid map value; expected array', ExceptionCode::TYPE_MAP_COLLECTION_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_MAP_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_MAP_COLLECTION_TYPEINFO_REQUIRED->value);
         }
 
-        if (!$typeInfo instanceof CollectionMapInfo) {
-            throw new Exception('Invalid type info, CollectionMapInfo expected', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_TYPEINFO->value, [
+        if (!$typeInfo instanceof MapCollectionInfo) {
+            throw new Exception('Invalid type info, MapCollectionInfo expected', ExceptionCode::TYPE_MAP_COLLECTION_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -98,11 +98,11 @@ final class CollectionMap extends TypeReadableWithoutLength {
     final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_COLLECTION_MAP_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::TYPE_MAP_COLLECTION_TYPEINFO_REQUIRED->value);
         }
 
-        if (!$typeInfo instanceof CollectionMapInfo) {
-            throw new Exception('Invalid type info, CollectionMapInfo expected', ExceptionCode::TYPE_COLLECTION_MAP_INVALID_TYPEINFO->value, [
+        if (!$typeInfo instanceof MapCollectionInfo) {
+            throw new Exception('Invalid type info, MapCollectionInfo expected', ExceptionCode::TYPE_MAP_COLLECTION_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -116,7 +116,7 @@ final class CollectionMap extends TypeReadableWithoutLength {
             if (!is_string($key) && !is_int($key)) {
                 throw new Exception(
                     message: 'Invalid map key type; expected string|int',
-                    code: ExceptionCode::TYPE_COLLECTION_MAP_INVALID_MAP_KEY_TYPE->value,
+                    code: ExceptionCode::TYPE_MAP_COLLECTION_INVALID_MAP_KEY_TYPE->value,
                     context: [
                         'method' => __METHOD__,
                         'key_php_type' => gettype($key),
@@ -155,7 +155,7 @@ final class CollectionMap extends TypeReadableWithoutLength {
 
     #[\Override]
     public function getType(): Type {
-        return Type::COLLECTION_MAP;
+        return Type::MAP_COLLECTION;
     }
 
     /**

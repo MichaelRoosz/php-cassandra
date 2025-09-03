@@ -32,9 +32,9 @@ final class RowsResult extends Result {
         'fetchType' => FetchType::ASSOC,
     ];
 
-    private Metadata $metadata;
-
     private int $rowCount = 0;
+
+    private RowsMetadata $rowsMetadata;
 
     /**
      * @throws \Cassandra\Response\Exception
@@ -47,7 +47,8 @@ final class RowsResult extends Result {
             stream: $stream,
         );
 
-        $this->metadata = $this->readRowsMetadata();
+        $this->stream->offset(4);
+        $this->rowsMetadata = $this->readRowsMetadata();
         $this->rowCount = $this->stream->readInt();
 
         $this->dataOffset = $this->stream->pos();
@@ -55,7 +56,7 @@ final class RowsResult extends Result {
     }
 
     public function columnCount(): int {
-        return $this->metadata->columnsCount;
+        return $this->rowsMetadata->columnsCount;
     }
 
     /**
@@ -158,7 +159,7 @@ final class RowsResult extends Result {
      */
     public function fetchAllKeyPairs(int $keyIndex = 0, int $valueIndex = 1, bool $mergeDuplicates = false): array {
 
-        if ($this->metadata->columns === null) {
+        if ($this->rowsMetadata->columns === null) {
             throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchAllKeyPairs',
                 'result_kind' => $this->kind->name,
@@ -177,7 +178,7 @@ final class RowsResult extends Result {
 
             $previousOffset = $this->stream->pos();
 
-            foreach ($this->metadata->columns as $j => $column) {
+            foreach ($this->rowsMetadata->columns as $j => $column) {
                 /** @psalm-suppress MixedAssignment */
                 $columnValue = $this->stream->readValue($column->type);
                 if ($j === $keyIndex) {
@@ -202,7 +203,7 @@ final class RowsResult extends Result {
                 throw new Exception('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                     'operation' => 'RowsResult::fetchAllKeyPairs',
                     'key_index' => $keyIndex,
-                    'column_count' => count($this->metadata->columns),
+                    'column_count' => count($this->rowsMetadata->columns),
                 ]);
             }
 
@@ -263,7 +264,7 @@ final class RowsResult extends Result {
             return false;
         }
 
-        if ($this->metadata->columns === null) {
+        if ($this->rowsMetadata->columns === null) {
             throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchColumn',
                 'result_kind' => $this->kind->name,
@@ -273,7 +274,7 @@ final class RowsResult extends Result {
         $previousOffset = $this->stream->pos();
 
         $value = null;
-        foreach ($this->metadata->columns as $j => $column) {
+        foreach ($this->rowsMetadata->columns as $j => $column) {
             /** @psalm-suppress MixedAssignment */
             $cell = $this->stream->readValue($column->type);
             if ($j === $index) {
@@ -301,7 +302,7 @@ final class RowsResult extends Result {
             return false;
         }
 
-        if ($this->metadata->columns === null) {
+        if ($this->rowsMetadata->columns === null) {
             throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchKeyPair',
                 'result_kind' => $this->kind->name,
@@ -313,7 +314,7 @@ final class RowsResult extends Result {
         $key = null;
         $value = null;
 
-        foreach ($this->metadata->columns as $j => $column) {
+        foreach ($this->rowsMetadata->columns as $j => $column) {
             /** @psalm-suppress MixedAssignment */
             $columnValue = $this->stream->readValue($column->type);
             if ($j === $keyIndex) {
@@ -337,7 +338,7 @@ final class RowsResult extends Result {
         if ($key === null) {
             throw new Exception('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                 'key_index' => $keyIndex,
-                'column_count' => count($this->metadata->columns),
+                'column_count' => count($this->rowsMetadata->columns),
             ]);
         }
 
@@ -396,11 +397,6 @@ final class RowsResult extends Result {
     }
 
     #[\Override]
-    public function getMetadata(): Metadata {
-        return $this->metadata;
-    }
-
-    #[\Override]
     public function getRowCount(): int {
         return $this->rowCount;
     }
@@ -424,25 +420,20 @@ final class RowsResult extends Result {
         return new RowsData(rows: $rows);
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
+    public function getRowsMetadata(): RowsMetadata {
+        return $this->rowsMetadata;
+    }
+
     public function hasMetadataChanged(): bool {
-        return (bool) ($this->getMetadata()->flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED->value);
+        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_METADATA_CHANGED->value);
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
     public function hasMorePages(): bool {
-        return (bool) ($this->getMetadata()->flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES->value);
+        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES->value);
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
     public function hasNoMetadata(): bool {
-        return (bool) ($this->getMetadata()->flags & ResultFlag::ROWS_FLAG_NO_METADATA->value);
+        return (bool) ($this->getRowsMetadata()->flags & ResultFlag::ROWS_FLAG_NO_METADATA->value);
     }
 
     public function isFetchObjectConfigurationSet(): bool {
@@ -477,20 +468,8 @@ final class RowsResult extends Result {
     }
 
     #[\Override]
-    protected function onPreviousResultUpdated(): void {
-        if ($this->metadataOfPreviousResult !== null) {
-            $this->metadata = $this->metadata->mergeWithPreviousMetadata($this->metadataOfPreviousResult);
-        }
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
-    protected function readRowsMetadata(): Metadata {
-        $this->stream->offset(4);
-
-        return $this->readMetadata(isPrepareMetaData: false);
+    protected function onPreviousRowsMetadataUpdated(RowsMetadata $previousRowsMetadata): void {
+        $this->rowsMetadata = $this->rowsMetadata->mergeWithPreviousMetadata($previousRowsMetadata);
     }
 
     /**
@@ -499,7 +478,7 @@ final class RowsResult extends Result {
      * @throws \Cassandra\Type\Exception
      */
     private function readNextRow(FetchType $mode = FetchType::ASSOC): array {
-        if ($this->metadata->columns === null) {
+        if ($this->rowsMetadata->columns === null) {
             throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::readNextRow',
                 'result_kind' => $this->kind->name,
@@ -510,7 +489,7 @@ final class RowsResult extends Result {
 
         switch ($mode) {
             case FetchType::ASSOC:
-                foreach ($this->metadata->columns as $column) {
+                foreach ($this->rowsMetadata->columns as $column) {
                     /** @psalm-suppress MixedAssignment */
                     $row[$column->name] = $this->stream->readValue($column->type);
                 }
@@ -518,7 +497,7 @@ final class RowsResult extends Result {
                 break;
 
             case FetchType::NUM:
-                foreach ($this->metadata->columns as $column) {
+                foreach ($this->rowsMetadata->columns as $column) {
                     /** @psalm-suppress MixedAssignment */
                     $row[] = $this->stream->readValue($column->type);
                 }
@@ -526,7 +505,7 @@ final class RowsResult extends Result {
                 break;
 
             case FetchType::BOTH:
-                foreach ($this->metadata->columns as $column) {
+                foreach ($this->rowsMetadata->columns as $column) {
                     /** @psalm-suppress MixedAssignment */
                     $value = $this->stream->readValue($column->type);
 

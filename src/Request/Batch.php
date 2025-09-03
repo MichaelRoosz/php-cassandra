@@ -38,10 +38,10 @@ final class Batch extends Request {
 
         $queryId = $prepareData->id;
 
-        if ($prepareData->metadata->columns !== null) {
-            $values = self::encodeValuesForColumnType(
+        if ($prepareData->prepareMetadata->bindMarkers !== null) {
+            $values = self::encodeValuesForBindMarkerTypes(
                 $values,
-                $prepareData->metadata->columns,
+                $prepareData->prepareMetadata->bindMarkers,
                 false
             );
         }

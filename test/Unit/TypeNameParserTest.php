@@ -8,9 +8,9 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeName;
 use Cassandra\TypeNameParser;
-use Cassandra\TypeInfo\CollectionListInfo;
-use Cassandra\TypeInfo\CollectionMapInfo;
-use Cassandra\TypeInfo\CollectionSetInfo;
+use Cassandra\TypeInfo\ListCollectionInfo;
+use Cassandra\TypeInfo\MapCollectionInfo;
+use Cassandra\TypeInfo\SetCollectionInfo;
 use Cassandra\TypeInfo\CustomInfo;
 use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
@@ -59,15 +59,15 @@ class TypeNameParserTest extends TestCase {
         foreach (self::SIMPLE_TYPES as [$typeName, $expectedType]) {
             // Test list
             $result = $this->parser->parse(TypeName::LIST->value . '(' . $typeName->value . ')');
-            $this->assertInstanceOf(CollectionListInfo::class, $result);
+            $this->assertInstanceOf(ListCollectionInfo::class, $result);
 
             // Test set
             $result = $this->parser->parse(TypeName::SET->value . '(' . $typeName->value . ')');
-            $this->assertInstanceOf(CollectionSetInfo::class, $result);
+            $this->assertInstanceOf(SetCollectionInfo::class, $result);
 
             // Test map
             $result = $this->parser->parse(TypeName::MAP->value . '(' . $typeName->value . ',' . TypeName::UTF8->value . ')');
-            $this->assertInstanceOf(CollectionMapInfo::class, $result);
+            $this->assertInstanceOf(MapCollectionInfo::class, $result);
 
             // Test tuple
             $result = $this->parser->parse(TypeName::TUPLE->value . '(' . $typeName->value . ')');
@@ -155,17 +155,17 @@ class TypeNameParserTest extends TestCase {
 
         $result = $this->parser->parse($complexType);
 
-        $this->assertInstanceOf(CollectionMapInfo::class, $result);
+        $this->assertInstanceOf(MapCollectionInfo::class, $result);
 
         $this->assertInstanceOf(TupleInfo::class, $result->keyType);
         $this->assertEquals(Type::VARCHAR, $result->keyType->valueTypes[0]->type);
         $this->assertEquals(Type::UUID, $result->keyType->valueTypes[1]->type);
 
-        $this->assertInstanceOf(CollectionListInfo::class, $result->valueType);
+        $this->assertInstanceOf(ListCollectionInfo::class, $result->valueType);
         $this->assertTrue($result->valueType->isFrozen);
 
         $listValueType = $result->valueType->valueType;
-        $this->assertInstanceOf(CollectionSetInfo::class, $listValueType);
+        $this->assertInstanceOf(SetCollectionInfo::class, $listValueType);
 
         $setValueType = $listValueType->valueType;
         $this->assertInstanceOf(UDTInfo::class, $setValueType);
@@ -187,7 +187,7 @@ class TypeNameParserTest extends TestCase {
         // Verify it's a deeply nested list structure
         $current = $result;
         for ($i = 0; $i < 20; $i++) {
-            $this->assertInstanceOf(CollectionListInfo::class, $current);
+            $this->assertInstanceOf(ListCollectionInfo::class, $current);
             $current = $current->valueType;
         }
 
@@ -197,9 +197,9 @@ class TypeNameParserTest extends TestCase {
 
     public function testEdgeCaseNestedTypes(): void {
         $testCases = [
-            [TypeName::LIST->value . '(' . TypeName::SET->value . '(' . TypeName::UTF8->value . '))', CollectionListInfo::class],
-            [TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::LIST->value . '(' . TypeName::INT32->value . '))', CollectionMapInfo::class],
-            [TypeName::SET->value . '(' . TypeName::MAP->value . '(' . TypeName::UUID->value . ',' . TypeName::UTF8->value . '))', CollectionSetInfo::class],
+            [TypeName::LIST->value . '(' . TypeName::SET->value . '(' . TypeName::UTF8->value . '))', ListCollectionInfo::class],
+            [TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::LIST->value . '(' . TypeName::INT32->value . '))', MapCollectionInfo::class],
+            [TypeName::SET->value . '(' . TypeName::MAP->value . '(' . TypeName::UUID->value . ',' . TypeName::UTF8->value . '))', SetCollectionInfo::class],
             [TypeName::TUPLE->value . '(' . TypeName::LIST->value . '(' . TypeName::UTF8->value . '),' . TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . '))', TupleInfo::class],
         ];
 
@@ -268,14 +268,14 @@ class TypeNameParserTest extends TestCase {
 
     public function testFrozenListType(): void {
         $result = $this->parser->parse(TypeName::LIST->value . '(' . TypeName::UTF8->value . ')', true);
-        $this->assertInstanceOf(CollectionListInfo::class, $result);
+        $this->assertInstanceOf(ListCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
         $this->assertEquals(Type::VARCHAR, $result->valueType->type);
     }
 
     public function testFrozenMapType(): void {
         $result = $this->parser->parse(TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ')', true);
-        $this->assertInstanceOf(CollectionMapInfo::class, $result);
+        $this->assertInstanceOf(MapCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
         $this->assertEquals(Type::VARCHAR, $result->keyType->type);
         $this->assertEquals(Type::INT, $result->valueType->type);
@@ -285,9 +285,9 @@ class TypeNameParserTest extends TestCase {
         $typeString = TypeName::FROZEN->value . '(' . TypeName::LIST->value . '(' . TypeName::FROZEN->value . '(' . TypeName::SET->value . '(' . TypeName::UTF8->value . '))))';
 
         $result = $this->parser->parse($typeString);
-        $this->assertInstanceOf(CollectionListInfo::class, $result);
+        $this->assertInstanceOf(ListCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
-        $this->assertInstanceOf(CollectionSetInfo::class, $result->valueType);
+        $this->assertInstanceOf(SetCollectionInfo::class, $result->valueType);
         $this->assertTrue($result->valueType->isFrozen);
     }
 
@@ -300,7 +300,7 @@ class TypeNameParserTest extends TestCase {
 
     public function testFrozenSetType(): void {
         $result = $this->parser->parse(TypeName::SET->value . '(' . TypeName::UTF8->value . ')', true);
-        $this->assertInstanceOf(CollectionSetInfo::class, $result);
+        $this->assertInstanceOf(SetCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
         $this->assertEquals(Type::VARCHAR, $result->valueType->type);
     }
@@ -368,7 +368,7 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedElementType, $isFrozen]) {
             $result = $this->parser->parse($typeString, $isFrozen);
-            $this->assertInstanceOf(CollectionListInfo::class, $result);
+            $this->assertInstanceOf(ListCollectionInfo::class, $result);
             $this->assertEquals($isFrozen, $result->isFrozen);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
             $this->assertEquals($expectedElementType, $result->valueType->type);
@@ -384,7 +384,7 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as $typeString) {
             $result = $this->parser->parse($typeString);
-            $this->assertInstanceOf(CollectionListInfo::class, $result);
+            $this->assertInstanceOf(ListCollectionInfo::class, $result);
             $this->assertEquals(Type::VARCHAR, $result->valueType->type);
         }
     }
@@ -430,7 +430,7 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedKeyType, $expectedValueType, $isFrozen]) {
             $result = $this->parser->parse($typeString, $isFrozen);
-            $this->assertInstanceOf(CollectionMapInfo::class, $result);
+            $this->assertInstanceOf(MapCollectionInfo::class, $result);
             $this->assertEquals($isFrozen, $result->isFrozen);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->keyType);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
@@ -596,7 +596,7 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedElementType, $isFrozen]) {
             $result = $this->parser->parse($typeString, $isFrozen);
-            $this->assertInstanceOf(CollectionSetInfo::class, $result);
+            $this->assertInstanceOf(SetCollectionInfo::class, $result);
             $this->assertEquals($isFrozen, $result->isFrozen);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
             $this->assertEquals($expectedElementType, $result->valueType->type);
@@ -689,7 +689,7 @@ class TypeNameParserTest extends TestCase {
         $typeString = "  \t\n  " . TypeName::LIST->value . "  \t\n  ( \t\n " . TypeName::UTF8->value . " \t\n ) \t\n  ";
         $result = $this->parser->parse($typeString);
 
-        $this->assertInstanceOf(CollectionListInfo::class, $result);
+        $this->assertInstanceOf(ListCollectionInfo::class, $result);
         $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
         $this->assertEquals(Type::VARCHAR, $result->valueType->type);
     }

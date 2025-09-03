@@ -8,18 +8,18 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
 
-final class CollectionMapInfo extends TypeInfo {
+final class MapCollectionInfo extends TypeInfo {
     public function __construct(
         public readonly TypeInfo $keyType,
         public readonly TypeInfo $valueType,
         public readonly bool $isFrozen,
     ) {
-        parent::__construct(Type::COLLECTION_MAP);
+        parent::__construct(Type::MAP_COLLECTION);
     }
 
     /**
      * @param array{
-     *  type: \Cassandra\Type::COLLECTION_MAP,
+     *  type: \Cassandra\Type::MAP_COLLECTION,
      *  keyType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
      *  valueType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
      *  isFrozen: bool,
@@ -31,8 +31,8 @@ final class CollectionMapInfo extends TypeInfo {
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
             throw new Exception(
-                "CollectionMap type definition is missing required 'type' property",
-                ExceptionCode::TYPEINFO_COLLECTION_MAP_MISSING_TYPE->value,
+                "MapCollection type definition is missing required 'type' property",
+                ExceptionCode::TYPEINFO_MAP_COLLECTION_MISSING_TYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'keyType', 'valueType'],
@@ -40,17 +40,17 @@ final class CollectionMapInfo extends TypeInfo {
             );
         }
 
-        if ($typeDefinition['type'] !== Type::COLLECTION_MAP) {
+        if ($typeDefinition['type'] !== Type::MAP_COLLECTION) {
             throw new Exception(
-                "Invalid type definition for CollectionMap: 'type' must be Type::COLLECTION_MAP",
-                ExceptionCode::TYPEINFO_COLLECTION_MAP_INVALID_TYPE->value,
+                "Invalid type definition for MapCollection: 'type' must be Type::MAP_COLLECTION",
+                ExceptionCode::TYPEINFO_MAP_COLLECTION_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['keyType'])) {
             throw new Exception(
-                "CollectionMap type definition is missing required 'keyType' property",
-                ExceptionCode::TYPEINFO_COLLECTION_MAP_MISSING_KEYTYPE->value,
+                "MapCollection type definition is missing required 'keyType' property",
+                ExceptionCode::TYPEINFO_MAP_COLLECTION_MISSING_KEYTYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'keyType', 'valueType'],
@@ -61,8 +61,8 @@ final class CollectionMapInfo extends TypeInfo {
 
         if (!isset($typeDefinition['valueType'])) {
             throw new Exception(
-                "CollectionMap type definition is missing required 'valueType' property",
-                ExceptionCode::TYPEINFO_COLLECTION_MAP_MISSING_VALUETYPE->value,
+                "MapCollection type definition is missing required 'valueType' property",
+                ExceptionCode::TYPEINFO_MAP_COLLECTION_MISSING_VALUETYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'keyType', 'valueType'],

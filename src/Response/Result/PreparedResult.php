@@ -11,13 +11,16 @@ use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
 use Cassandra\Response\Result\Data\PreparedData;
 use Cassandra\Response\Result\Data\ResultData;
+use Cassandra\Response\ResultFlag;
 use Cassandra\Response\ResultKind;
 use Cassandra\Response\StreamReader;
 use Iterator;
 
 final class PreparedResult extends Result {
+    private PreparedData $preparedData;
     /**
      * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -25,35 +28,33 @@ final class PreparedResult extends Result {
             header: $header,
             stream: $stream,
         );
+
+        $this->preparedData = $this->readPreparedData();
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
     public function getData(): ResultData {
-        return $this->getPreparedData();
+        return $this->preparedData;
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
-     */
     #[\Override]
     public function getIterator(): Iterator {
         return new ArrayIterator([
-            'id' => $this->getPreparedData()->id,
-            'result_metadata_id' => $this->getPreparedData()->resultMetadataId,
-            'metadata' => $this->getPreparedData()->metadata,
-            'result_metadata' => $this->getPreparedData()->resultMetadata,
+            'id' => $this->preparedData->id,
+            'rowsMetadataId' => $this->preparedData->rowsMetadataId,
+            'prepareMetadata' => $this->preparedData->prepareMetadata,
+            'rowsMetadata' => $this->preparedData->rowsMetadata,
         ]);
+    }
+
+    public function getPreparedData(): PreparedData {
+        return $this->preparedData;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    public function getPreparedData(): PreparedData {
+    private function readPreparedData(): PreparedData {
 
         if ($this->kind !== ResultKind::PREPARED) {
             throw new Exception('Unexpected result kind: ' . $this->kind->name, ExceptionCode::RESPONSE_PREPARED_UNEXPECTED_KIND->value, [
@@ -68,18 +69,79 @@ final class PreparedResult extends Result {
         if ($this->getVersion() >= 5) {
             $data = new PreparedData(
                 id: $this->stream->readShortBytes(),
-                resultMetadataId: $this->stream->readShortBytes(),
-                metadata: $this->readMetadata(isPrepareMetaData: true),
-                resultMetadata: $this->readMetadata(isPrepareMetaData: false),
+                rowsMetadataId: $this->stream->readShortBytes(),
+                prepareMetadata: $this->readPrepareMetadata(),
+                rowsMetadata: $this->readRowsMetadata(),
             );
         } else {
             $data = new PreparedData(
                 id: $this->stream->readShortBytes(),
-                metadata: $this->readMetadata(isPrepareMetaData: true),
-                resultMetadata: $this->readMetadata(isPrepareMetaData: false),
+                prepareMetadata: $this->readPrepareMetadata(),
+                rowsMetadata: $this->readRowsMetadata(),
             );
         }
 
         return $data;
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Type\Exception
+     */
+    private function readPrepareMetadata(): PrepareMetadata {
+        $flags = $this->stream->readInt();
+        $bindMarkersCount = $this->stream->readInt();
+
+        if ($this->getVersion() >= 4) {
+            $pkCount = $this->stream->readInt();
+            $pkIndex = [];
+
+            if ($pkCount > 0) {
+                for ($i = 0; $i < $pkCount; ++$i) {
+                    $pkIndex[] =  $this->stream->readShort();
+                }
+            }
+        } else {
+            $pkCount = null;
+            $pkIndex = null;
+        }
+
+        if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA->value)) {
+            $bindMarkers = [];
+
+            if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC->value) {
+                $keyspace = $this->stream->readString();
+                $tableName = $this->stream->readString();
+
+                for ($i = 0; $i < $bindMarkersCount; ++$i) {
+                    $bindMarkers[] = new ColumnInfo(
+                        keyspace: $keyspace,
+                        tableName: $tableName,
+                        name: $this->stream->readString(),
+                        type: $this->stream->readTypeInfo(),
+                    );
+                }
+            } else {
+                for ($i = 0; $i < $bindMarkersCount; ++$i) {
+                    $bindMarkers[] = new ColumnInfo(
+                        keyspace: $this->stream->readString(),
+                        tableName: $this->stream->readString(),
+                        name: $this->stream->readString(),
+                        type: $this->stream->readTypeInfo(),
+                    );
+                }
+            }
+
+        } else {
+            $bindMarkers = null;
+        }
+
+        return new PrepareMetadata(
+            flags: $flags,
+            bindMarkersCount: $bindMarkersCount,
+            bindMarkers: $bindMarkers,
+            pkCount: $pkCount,
+            pkIndex: $pkIndex,
+        );
     }
 }

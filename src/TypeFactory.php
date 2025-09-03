@@ -7,9 +7,9 @@ namespace Cassandra;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type\Exception;
 use Cassandra\Type as Types;
-use Cassandra\TypeInfo\CollectionListInfo;
-use Cassandra\TypeInfo\CollectionMapInfo;
-use Cassandra\TypeInfo\CollectionSetInfo;
+use Cassandra\TypeInfo\ListCollectionInfo;
+use Cassandra\TypeInfo\MapCollectionInfo;
+use Cassandra\TypeInfo\SetCollectionInfo;
 use Cassandra\TypeInfo\CustomInfo;
 use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
@@ -102,13 +102,13 @@ final class TypeFactory {
             Type::CUSTOM => CustomInfo::fromTypeDefinition($typeDefinition),
 
             /** @phpstan-ignore argument.type */
-            Type::COLLECTION_LIST => CollectionListInfo::fromTypeDefinition($typeDefinition),
+            Type::LIST_COLLECTION => ListCollectionInfo::fromTypeDefinition($typeDefinition),
 
             /** @phpstan-ignore argument.type */
-            Type::COLLECTION_SET => CollectionSetInfo::fromTypeDefinition($typeDefinition),
+            Type::SET_COLLECTION => SetCollectionInfo::fromTypeDefinition($typeDefinition),
 
             /** @phpstan-ignore argument.type */
-            Type::COLLECTION_MAP => CollectionMapInfo::fromTypeDefinition($typeDefinition),
+            Type::MAP_COLLECTION => MapCollectionInfo::fromTypeDefinition($typeDefinition),
 
             /** @phpstan-ignore argument.type */
             Type::UDT => UDTInfo::fromTypeDefinition($typeDefinition),
@@ -224,9 +224,9 @@ final class TypeFactory {
             Type::SMALLINT->value => Types\Smallint::class,
             Type::TINYINT->value => Types\Tinyint::class,
             Type::DURATION->value => Types\Duration::class,
-            Type::COLLECTION_LIST->value => Types\CollectionList::class,
-            Type::COLLECTION_SET->value => Types\CollectionSet::class,
-            Type::COLLECTION_MAP->value => Types\CollectionMap::class,
+            Type::LIST_COLLECTION->value => Types\ListCollection::class,
+            Type::SET_COLLECTION->value => Types\SetCollection::class,
+            Type::MAP_COLLECTION->value => Types\MapCollection::class,
             Type::UDT->value => Types\UDT::class,
             Type::TUPLE->value => Types\Tuple::class,
             Type::CUSTOM->value => Types\Custom::class,

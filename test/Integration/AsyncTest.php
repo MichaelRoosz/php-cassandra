@@ -26,7 +26,7 @@ final class AsyncTest extends TestCase {
                     [
                         new Type\Varchar($filename),
                         new Type\Varchar('k' . $j . '_' . $i),
-                        new Type\CollectionMap(['x' => 'y'], Type::VARCHAR, Type::VARCHAR),
+                        new Type\MapCollection(['x' => 'y'], Type::VARCHAR, Type::VARCHAR),
                     ]
                 );
             }

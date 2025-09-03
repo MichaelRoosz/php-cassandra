@@ -6,12 +6,12 @@ namespace Cassandra\Response;
 
 use ArrayIterator;
 use Cassandra\ExceptionCode;
-use Cassandra\Response\Result\ColumnInfo;
-use Cassandra\Response\Result\Metadata;
 use Cassandra\Protocol\Header;
-use Cassandra\Request\ExecuteCallInfo;
 use Cassandra\Request\Request;
+use Cassandra\Response\Result\ColumnInfo;
+use Cassandra\Response\Result\Data\PreparedData;
 use Cassandra\Response\Result\PreparedResult;
+use Cassandra\Response\Result\RowsMetadata;
 use Cassandra\Response\Result\RowsResult;
 use Cassandra\Response\Result\SchemaChangeResult;
 use Cassandra\Response\Result\SetKeyspaceResult;
@@ -27,9 +27,7 @@ use ValueError;
 class Result extends Response implements IteratorAggregate {
     protected int $dataOffset;
     protected ResultKind $kind;
-
-    protected ?Metadata $metadataOfPreviousResult = null;
-    protected ?ExecuteCallInfo $nextExecuteCallInfo = null;
+    protected ?PreparedData $lastPreparedData = null;
     protected ?Request $request = null;
 
     /**
@@ -121,8 +119,8 @@ class Result extends Response implements IteratorAggregate {
         return $this->kind;
     }
 
-    public function getNextExecuteCallInfo(): ?ExecuteCallInfo {
-        return $this->nextExecuteCallInfo;
+    public function getLastPreparedData(): ?PreparedData {
+        return $this->lastPreparedData;
     }
 
     public function getRequest(): ?Request {
@@ -150,46 +148,33 @@ class Result extends Response implements IteratorAggregate {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
      */
     public function setPreviousResult(Result $previousResult): static {
 
         if ($previousResult instanceof PreparedResult) {
-            $prepareData = $previousResult->getPreparedData();
-
-            $this->metadataOfPreviousResult = $prepareData->resultMetadata;
-            $this->onPreviousResultUpdated();
-
-            $this->nextExecuteCallInfo = new ExecuteCallInfo(
-                id: $prepareData->id,
-                queryMetadata: $prepareData->metadata,
-                resultMetadataId: $prepareData->resultMetadataId ?? null,
-            );
+            $this->lastPreparedData = $previousResult->getPreparedData();
+            $this->onPreviousRowsMetadataUpdated($this->lastPreparedData->rowsMetadata);
 
         } elseif ($previousResult instanceof RowsResult) {
 
-            // todo: verify this logic
-
-            $previousMetadata = $previousResult->getMetadata();
-
-            $this->metadataOfPreviousResult = $previousMetadata;
-            $this->onPreviousResultUpdated();
-
-            $lastExecuteCallInfo = $previousResult->getNextExecuteCallInfo();
-            if ($lastExecuteCallInfo === null) {
+            $lastPreparedData = $previousResult->getLastPreparedData();
+            if ($lastPreparedData === null) {
                 throw new Exception('Prepared statement context not found in previous result', ExceptionCode::RESPONSE_RES_PREPARED_CONTEXT_NOT_FOUND->value, [
                     'operation' => 'Result::setPreviousResult',
                     'previous_result_class' => get_class($previousResult),
                 ]);
             }
 
-            $resultMetadataId = $previousMetadata->newMetadataId ?? $lastExecuteCallInfo->resultMetadataId ?? null;
+            $lastRowsMetadata = $previousResult->getRowsMetadata();
 
-            $this->nextExecuteCallInfo = new ExecuteCallInfo(
-                id: $lastExecuteCallInfo->id,
-                queryMetadata: $lastExecuteCallInfo->queryMetadata,
-                resultMetadataId: $resultMetadataId,
+            $this->lastPreparedData = new PreparedData(
+                id: $lastPreparedData->id,
+                prepareMetadata: $lastPreparedData->prepareMetadata,
+                rowsMetadataId: $lastRowsMetadata->metadataId,
+                rowsMetadata: $lastRowsMetadata,
             );
+
+            $this->onPreviousRowsMetadataUpdated($lastRowsMetadata);
         }
 
         return $this;
@@ -199,41 +184,14 @@ class Result extends Response implements IteratorAggregate {
         $this->request = $request;
     }
 
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    protected function getMetadata(): Metadata {
-        throw new Exception('Result metadata is not available for this result kind', ExceptionCode::RESPONSE_RES_METADATA_NOT_AVAILABLE->value, [
-            'operation' => 'Result::getMetadata',
-            'result_kind' => $this->kind->name,
-        ]);
-    }
-
-    protected function onPreviousResultUpdated(): void {
-    }
-
-    /**
-     * @throws \Cassandra\Response\Exception
-     */
-    protected function readKind(): ResultKind {
-        $this->stream->offset(0);
-        $kindInt = $this->stream->readInt();
-
-        try {
-            return ResultKind::from($kindInt);
-        } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid result kind value', ExceptionCode::RESPONSE_RES_INVALID_KIND_VALUE->value, [
-                'operation' => 'Result::readKind',
-                'result_kind' => $kindInt,
-            ], $e);
-        }
+    protected function onPreviousRowsMetadataUpdated(RowsMetadata $previousRowsMetadata): void {
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    protected function readMetadata(bool $isPrepareMetaData = false): Metadata {
+    protected function readRowsMetadata(): RowsMetadata {
         $flags = $this->stream->readInt();
         $columnsCount = $this->stream->readInt();
 
@@ -247,20 +205,6 @@ class Result extends Response implements IteratorAggregate {
             $newMetadataId = $this->stream->readShortBytes();
         } else {
             $newMetadataId = null;
-        }
-
-        if ($this->getVersion() >= 4 && $isPrepareMetaData) {
-            $pkCount = $this->stream->readInt();
-            $pkIndex = [];
-
-            if ($pkCount > 0) {
-                for ($i = 0; $i < $pkCount; ++$i) {
-                    $pkIndex[] =  $this->stream->readShort();
-                }
-            }
-        } else {
-            $pkCount = null;
-            $pkIndex = null;
         }
 
         if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA->value)) {
@@ -293,14 +237,29 @@ class Result extends Response implements IteratorAggregate {
             $columns = null;
         }
 
-        return new Metadata(
+        return new RowsMetadata(
             flags: $flags,
             columnsCount: $columnsCount,
-            newMetadataId: $newMetadataId,
             pagingState: $pagingState,
-            pkCount: $pkCount,
-            pkIndex: $pkIndex,
+            metadataId: $newMetadataId,
             columns: $columns,
         );
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    private function readKind(): ResultKind {
+        $this->stream->offset(0);
+        $kindInt = $this->stream->readInt();
+
+        try {
+            return ResultKind::from($kindInt);
+        } catch (ValueError|TypeError $e) {
+            throw new Exception('Invalid result kind value', ExceptionCode::RESPONSE_RES_INVALID_KIND_VALUE->value, [
+                'operation' => 'Result::readKind',
+                'result_kind' => $kindInt,
+            ], $e);
+        }
     }
 }

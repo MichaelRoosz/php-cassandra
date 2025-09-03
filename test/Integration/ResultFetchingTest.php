@@ -23,7 +23,7 @@ final class ResultFetchingTest extends TestCase {
                 [
                     new Type\Varchar($filename),
                     new Type\Varchar('k' . $i),
-                    new Type\CollectionMap(['a' => (string) $i], Type::VARCHAR, Type::VARCHAR),
+                    new Type\MapCollection(['a' => (string) $i], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }

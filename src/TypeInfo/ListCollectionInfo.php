@@ -8,17 +8,17 @@ use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
 
-final class CollectionListInfo extends TypeInfo {
+final class ListCollectionInfo extends TypeInfo {
     public function __construct(
         public readonly TypeInfo $valueType,
         public readonly bool $isFrozen,
     ) {
-        parent::__construct(Type::COLLECTION_LIST);
+        parent::__construct(Type::LIST_COLLECTION);
     }
 
     /**
      * @param array{
-     *  type: \Cassandra\Type::COLLECTION_LIST,
+     *  type: \Cassandra\Type::LIST_COLLECTION,
      *  valueType: \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>),
      *  isFrozen: bool,
      * } $typeDefinition
@@ -29,8 +29,8 @@ final class CollectionListInfo extends TypeInfo {
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
             throw new Exception(
-                "CollectionList type definition is missing required 'type' property",
-                ExceptionCode::TYPEINFO_COLLECTION_LIST_MISSING_TYPE->value,
+                "ListCollection type definition is missing required 'type' property",
+                ExceptionCode::TYPEINFO_LIST_COLLECTION_MISSING_TYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueType'],
@@ -38,17 +38,17 @@ final class CollectionListInfo extends TypeInfo {
             );
         }
 
-        if ($typeDefinition['type'] !== Type::COLLECTION_LIST) {
+        if ($typeDefinition['type'] !== Type::LIST_COLLECTION) {
             throw new Exception(
-                "Invalid type definition for CollectionList: 'type' must be Type::COLLECTION_LIST",
-                ExceptionCode::TYPEINFO_COLLECTION_LIST_INVALID_TYPE->value,
+                "Invalid type definition for ListCollection: 'type' must be Type::LIST_COLLECTION",
+                ExceptionCode::TYPEINFO_LIST_COLLECTION_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['valueType'])) {
             throw new Exception(
-                "CollectionList type definition is missing required 'valueType' property",
-                ExceptionCode::TYPEINFO_COLLECTION_LIST_MISSING_VALUETYPE->value,
+                "ListCollection type definition is missing required 'valueType' property",
+                ExceptionCode::TYPEINFO_LIST_COLLECTION_MISSING_VALUETYPE->value,
                 [
                     'provided_keys' => array_keys($typeDefinition),
                     'required_keys' => ['type', 'valueType'],

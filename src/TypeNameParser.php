@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
-use Cassandra\TypeInfo\CollectionListInfo;
-use Cassandra\TypeInfo\CollectionMapInfo;
-use Cassandra\TypeInfo\CollectionSetInfo;
+use Cassandra\TypeInfo\ListCollectionInfo;
+use Cassandra\TypeInfo\MapCollectionInfo;
+use Cassandra\TypeInfo\SetCollectionInfo;
 use Cassandra\TypeInfo\CustomInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeInfo\SimpleTypeInfo;
@@ -303,7 +303,7 @@ final class TypeNameParser {
 
         $typeInfo = $this->parse($params[0]);
 
-        return new CollectionListInfo($typeInfo, $isFrozen);
+        return new ListCollectionInfo($typeInfo, $isFrozen);
     }
 
     /**
@@ -329,7 +329,7 @@ final class TypeNameParser {
         $keyType = $this->parse($params[0]);
         $valueType = $this->parse($params[1]);
 
-        return new CollectionMapInfo($keyType, $valueType, $isFrozen);
+        return new MapCollectionInfo($keyType, $valueType, $isFrozen);
     }
 
     /**
@@ -377,7 +377,7 @@ final class TypeNameParser {
 
         $typeInfo = $this->parse($params[0]);
 
-        return new CollectionSetInfo($typeInfo, $isFrozen);
+        return new SetCollectionInfo($typeInfo, $isFrozen);
     }
 
     /**

@@ -13,6 +13,8 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
+use Cassandra\Type\NotSet;
+use Cassandra\Type\TypeBase;
 use SplQueue;
 use TypeError;
 use ValueError;
@@ -309,6 +311,8 @@ final class Connection {
         $consistency = $consistency ?? $this->consistency;
         $request = new Request\Query($query, $values, $consistency, $options);
 
+        // todo: implement autoPrepare
+
         return $this->asyncRequest($request);
     }
 
@@ -319,6 +323,23 @@ final class Connection {
      */
     public function querySync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
         $consistency = $consistency ?? $this->consistency;
+
+        if (
+            $options->autoPrepare
+            && $values
+            && array_find($values, fn($v) => (
+                $v !== null
+                && !($v instanceof TypeBase)
+                && !($v instanceof NotSet)
+            )) !== null
+        ) {
+            $prepared = $this->prepareSync($query);
+            $executeOptions = ExecuteOptions::fromQueryOptions($options);
+            $response = $this->executeSync($prepared, $values, $consistency, $executeOptions);
+
+            return $response;
+        }
+
         $request = new Request\Query($query, $values, $consistency, $options);
 
         $response = $this->syncRequest($request);

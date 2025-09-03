@@ -6,12 +6,15 @@ Todo
 * remove unused exceptions codes
 * maybe remove usage of root exception 
 
+* better flag handling
+
 * Finish tests
   * test fromStream()
   * test frozen
   * test reversed
   * test with php native input for complex types
   * test streamreader
+  * named values auto-detection
 
 * Add to readme: 
   * BATCH does not support names for values

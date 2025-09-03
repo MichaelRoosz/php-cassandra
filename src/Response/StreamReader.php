@@ -8,9 +8,9 @@ use Cassandra\Consistency;
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeFactory;
-use Cassandra\TypeInfo\CollectionListInfo;
-use Cassandra\TypeInfo\CollectionMapInfo;
-use Cassandra\TypeInfo\CollectionSetInfo;
+use Cassandra\TypeInfo\ListCollectionInfo;
+use Cassandra\TypeInfo\MapCollectionInfo;
+use Cassandra\TypeInfo\SetCollectionInfo;
 use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
@@ -423,20 +423,20 @@ class StreamReader {
 
                 return $this->typeNameParser->parse($javaClassName);
 
-            case Type::COLLECTION_LIST:
-                return new CollectionListInfo(
+            case Type::LIST_COLLECTION:
+                return new ListCollectionInfo(
                     valueType: $this->readTypeInfo(),
                     isFrozen: false,
                 );
 
-            case Type::COLLECTION_SET:
-                return new CollectionSetInfo(
+            case Type::SET_COLLECTION:
+                return new SetCollectionInfo(
                     valueType: $this->readTypeInfo(),
                     isFrozen: false,
                 );
 
-            case Type::COLLECTION_MAP:
-                return new CollectionMapInfo(
+            case Type::MAP_COLLECTION:
+                return new MapCollectionInfo(
                     keyType: $this->readTypeInfo(),
                     valueType: $this->readTypeInfo(),
                     isFrozen: false,
