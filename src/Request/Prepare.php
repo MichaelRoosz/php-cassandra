@@ -52,6 +52,10 @@ final class Prepare extends Request {
         }
     }
 
+    public function getHash(): string {
+        return hash('sha256', $this->query . ($this->options->keyspace ?? ''));
+    }
+
     public function getOptions(): PrepareOptions {
         return $this->options;
     }

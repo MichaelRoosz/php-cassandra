@@ -1,7 +1,6 @@
 Todo
 =====
 
-* implement prepared query cache
 * rename *Sync() to *()
 * maybe rename Type\* to Value\*
   
@@ -14,7 +13,6 @@ Todo
   * test fromStream()
   * test frozen
   * test reversed
-  * test with php native input for complex types
   * test streamreader
   * named values auto-detection
 

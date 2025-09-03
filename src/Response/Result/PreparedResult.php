@@ -16,13 +16,13 @@ use Cassandra\Response\ResultKind;
 use Cassandra\Response\StreamReader;
 use Iterator;
 
-final class PreparedResult extends Result {
-    private PreparedData $preparedData;
+class PreparedResult extends Result {
+    protected PreparedData $preparedData;
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
      */
-    final public function __construct(Header $header, StreamReader $stream) {
+    public function __construct(Header $header, StreamReader $stream) {
 
         parent::__construct(
             header: $header,

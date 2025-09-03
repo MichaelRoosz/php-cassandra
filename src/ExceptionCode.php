@@ -9,7 +9,7 @@ namespace Cassandra;
  * Each exception class has its own prefix based on its namespace in uppercase.
  * Root exception codes use short names for the class using them.
  * 
- * Next free code: 1307
+ * Next free code: 1308
  */
 enum ExceptionCode: int {
     // Compression namespace (COMPRESSION_)
@@ -114,6 +114,7 @@ enum ExceptionCode: int {
     case RESPONSE_RES_NOT_SET_KEYSPACE_RESULT = 1107;
     case RESPONSE_RES_NOT_VOID_RESULT = 1108;
     case RESPONSE_RES_PREPARED_CONTEXT_NOT_FOUND = 1109;
+    case RESPONSE_RES_PREPARED_DATA_REQUIRED = 1307;
     case RESPONSE_ROWS_INVALID_KEY_INDEX = 1110;
     case RESPONSE_ROWS_INVALID_KEY_TYPE = 1111;
     case RESPONSE_ROWS_INVALID_ROWCLASS = 1112;

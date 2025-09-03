@@ -9,6 +9,8 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Response\Exception as ServerException;
+use Cassandra\Response\Result\CachedPreparedResult;
+use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Type;
 use PHPUnit\Framework\TestCase;
 
@@ -25,6 +27,15 @@ final class QueryTest extends TestCase {
         $this->assertSame(1, $rows->getRowCount());
         $this->assertSame(['key' => 'local'], $rows->fetch());
     }
+
+    public function testPreparedQueryCache(): void {
+        $conn = $this->newConnection();
+        $r1 = $conn->prepareSync('SELECT key FROM system.local WHERE key = ?');
+        $r2 = $conn->prepareSync('SELECT key FROM system.local WHERE key = ?');
+        $this->assertInstanceOf(PreparedResult::class, $r1);
+        $this->assertInstanceOf(CachedPreparedResult::class, $r2);
+    }
+
     public function testSimpleSelect(): void {
         $conn = $this->newConnection();
         $rows = $conn->querySync('SELECT key FROM system.local')->asRowsResult();

@@ -13,6 +13,7 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
+use Cassandra\Response\StreamReader;
 use Cassandra\Type\NotSet;
 use Cassandra\Type\TypeBase;
 use SplQueue;
@@ -20,6 +21,9 @@ use TypeError;
 use ValueError;
 
 final class Connection {
+    protected const PREPARED_RESULT_CACHE_SIZE = 150;
+    protected const PREPARED_RESULT_CACHE_SIZE_TO_TRIM = 100;
+
     protected Consistency $consistency = Consistency::ONE;
 
     /**
@@ -44,6 +48,11 @@ final class Connection {
      * @var array<string,string> $options
      */
     protected array $options;
+
+    /**
+     * @var array<string, \Cassandra\Response\Result\CachedPreparedResult> $preparedResultCache
+     */
+    protected array $preparedResultCache = [];
 
     /**
      * @var SplQueue<int> $recycledStreams
@@ -267,6 +276,10 @@ final class Connection {
      */
     public function getResponseForStatement(Statement $statement): Response\Response {
 
+        if ($statement->isResultReady()) {
+            return $statement->getResponse();
+        }
+
         return $this->getNextResponseForStream($statement->getStreamId());
     }
 
@@ -386,6 +399,13 @@ final class Connection {
 
         $request->setVersion($this->version);
 
+        if ($request instanceof Request\Prepare) {
+            $cachedResult = $this->getCachedPrepareResult($request);
+            if ($cachedResult !== null) {
+                return $cachedResult;
+            }
+        }
+
         $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
         if ($autoPrepareRequest !== null) {
 
@@ -428,6 +448,24 @@ final class Connection {
     }
 
     public function trigger(Response\Event $event): void {
+    }
+
+    /**
+     * @throws \Cassandra\Response\Exception
+     */
+    protected function cachePrepareResult(Request\Prepare $request, Response\Result\PreparedResult $result): void {
+
+        $cachedResult = new Response\Result\CachedPreparedResult(
+            new Header(version: 5, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
+            new StreamReader(''),
+            $result->getPreparedData(),
+        );
+
+        if (count($this->preparedResultCache) >= self::PREPARED_RESULT_CACHE_SIZE) {
+            $this->preparedResultCache = array_slice($this->preparedResultCache, -self::PREPARED_RESULT_CACHE_SIZE_TO_TRIM);
+        }
+
+        $this->preparedResultCache[$request->getHash()] = $cachedResult;
     }
 
     /**
@@ -635,6 +673,11 @@ final class Connection {
         return null;
     }
 
+    protected function getCachedPrepareResult(Request\Prepare $request): ?Response\Result\CachedPreparedResult {
+
+        return $this->preparedResultCache[$request->getHash()] ?? null;
+    }
+
     /**
      * @throws \Cassandra\Exception
      */
@@ -656,14 +699,7 @@ final class Connection {
     protected function getNextResponseForStream(int $streamId = 0): Response\Response {
         do {
             $response = $this->readResponse();
-        } while ($response !== null && $response->getStream() !== $streamId);
-
-        if ($response === null) {
-            throw new Exception('Received unexpected null response from server.', ExceptionCode::CON_GET_NEXT_NULL_RESPONSE->value, [
-                'operation' => 'getNextResponseForStream',
-                'stream_id' => $streamId,
-            ]);
-        }
+        } while ($response === null || $response->getStream() !== $streamId);
 
         return $response;
     }
@@ -818,9 +854,18 @@ final class Connection {
 
             if ($statement !== null) {
                 $statement->setStatus(StatementStatus::REPREPARING);
-                $this->chainAsyncRequest($newPrepareRequest, $statement);
 
-                return null;
+                $cachedResult = $this->getCachedPrepareResult($newPrepareRequest);
+                if ($cachedResult !== null) {
+                    $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
+
+                    return $this->handleReprepareResult($newPrepareRequest, $cachedResult, statement: $statement);
+
+                } else {
+                    $this->chainAsyncRequest($newPrepareRequest, $statement);
+
+                    return null;
+                }
             }
 
             $prepareResponse = $this->syncRequest($newPrepareRequest);
@@ -854,6 +899,13 @@ final class Connection {
     protected function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement): ?Response\Result {
 
         $result->setRequest($request);
+
+        if (
+            ($result instanceof Response\Result\PreparedResult)
+            && !($result instanceof Response\Result\CachedPreparedResult)
+        ) {
+            $this->cachePrepareResult($request, $result);
+        }
 
         if ($statement !== null) {
             if ($statement->isRepreparing()) {
@@ -1026,13 +1078,30 @@ final class Connection {
         $streamId = $streamId ?? $this->getNewStreamId();
         $request->setStream($streamId);
 
+        if ($request instanceof Request\Prepare) {
+            $cachedResult = $this->getCachedPrepareResult($request);
+            if ($cachedResult !== null) {
+                $statement = new Statement(
+                    connection: $this,
+                    streamId: $streamId,
+                    request: $request,
+                );
+
+                $response = $this->handleResponse($statement->getRequest(), $cachedResult, $statement);
+                if ($response !== null) {
+                    $statement->setResponse($response);
+                    $this->recycledStreams->enqueue($streamId);
+                }
+
+                return $statement;
+            }
+        }
+
         $originalRequest = $request;
         $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
         if ($autoPrepareRequest !== null) {
             $request = $autoPrepareRequest;
         }
-
-        $this->node->writeRequest($request);
 
         if (isset($this->statements[$streamId])) {
             throw new Exception('Stream ID already in use', ExceptionCode::CON_STREAM_ID_ALREADY_IN_USE->value, [
@@ -1040,6 +1109,8 @@ final class Connection {
                 'stream_id' => $streamId,
             ]);
         }
+
+        $this->node->writeRequest($request);
 
         $statement = new Statement(
             connection: $this,
