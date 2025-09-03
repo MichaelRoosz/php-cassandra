@@ -280,7 +280,7 @@ final class DataTypeRoundtripTestNativeInput extends TestCase {
         foreach ($testValues as $index => $config) {
             $this->connection->querySync(
                 'INSERT INTO test_custom (id, value) VALUES (?, ?)',
-                [$index, new Type\Custom($config['value'], $config['javaClass'])]
+                [$index, Type\Custom::fromValue($config['value'], $config['javaClass'])]
             );
 
             $result = $this->connection->querySync(
@@ -523,7 +523,7 @@ final class DataTypeRoundtripTestNativeInput extends TestCase {
 
             $this->assertSame(
                 $testValues[$testValue]['dateinterval'],
-                (new Type\Duration($retrievedValue))->asDateIntervalString(),
+                (Type\Duration::fromValue($retrievedValue))->asDateIntervalString(),
                 "Duration value $testValue should round-trip correctly as DateInterval string"
             );
         }

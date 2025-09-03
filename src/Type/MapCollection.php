@@ -21,40 +21,18 @@ final class MapCollection extends TypeReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
-     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)|null $keyDefinition
-     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)|null $valueDefinition
-     *
-     * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     final public function __construct(
         array $value,
-        Type|array|null $keyDefinition = null,
-        Type|array|null $valueDefinition = null,
-        bool $isFrozen = false,
-        ?MapCollectionInfo $typeInfo = null,
+        MapCollectionInfo $typeInfo,
     ) {
-
-        if ($typeInfo !== null) {
-            $this->typeInfo = $typeInfo;
-        } elseif ($keyDefinition !== null && $valueDefinition !== null) {
-            $this->typeInfo = MapCollectionInfo::fromTypeDefinition([
-                'type' => Type::MAP_COLLECTION,
-                'keyType' => $keyDefinition,
-                'valueType' => $valueDefinition,
-                'isFrozen' => $isFrozen,
-            ]);
-        } else {
-            throw new Exception('Either keyDefinition and valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_MAP_COLLECTION_KEY_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
-        }
-
+        $this->typeInfo = $typeInfo;
         $this->value = $value;
     }
 
     /**
      * @throws \Cassandra\Type\Exception
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
@@ -66,7 +44,6 @@ final class MapCollection extends TypeReadableWithoutLength {
      * @param mixed $value
      * 
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
@@ -92,7 +69,6 @@ final class MapCollection extends TypeReadableWithoutLength {
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
@@ -128,6 +104,29 @@ final class MapCollection extends TypeReadableWithoutLength {
         }
 
         return new static($map, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>) $keyDefinition
+     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>) $valueDefinition
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    final public static function fromValue(
+        array $value,
+        Type|array $keyDefinition,
+        Type|array $valueDefinition,
+        bool $isFrozen = false,
+    ): static {
+
+        return new static($value, MapCollectionInfo::fromTypeDefinition([
+            'type' => Type::MAP_COLLECTION,
+            'keyType' => $keyDefinition,
+            'valueType' => $valueDefinition,
+            'isFrozen' => $isFrozen,
+        ]));
     }
 
     /**

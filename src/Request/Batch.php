@@ -9,7 +9,6 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Consistency;
 use Cassandra\Response\Result\PreparedResult;
-use Cassandra\Type;
 
 final class Batch extends Request {
     /**
@@ -111,7 +110,7 @@ final class Batch extends Request {
 
         if ($options->defaultTimestamp !== null) {
             $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP;
-            $optional .= (new Type\Bigint($options->defaultTimestamp))->getBinary();
+            $optional .= pack('J', $options->defaultTimestamp);
         }
 
         if ($options->keyspace !== null) {

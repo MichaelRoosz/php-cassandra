@@ -83,6 +83,10 @@ final class Inet extends TypeReadableWithLength {
         return new static($inet);
     }
 
+    final public static function fromValue(string $value): static {
+        return new static($value);
+    }
+
     /**
      * @throws \Cassandra\Type\Exception
      */

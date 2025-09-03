@@ -20,25 +20,10 @@ final class Vector extends TypeReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
-     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)|null $valueDefinition
-     *
-     * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
-    final public function __construct(array $value, Type|array|null $valueDefinition = null, int|null $dimensions = null, ?VectorInfo $typeInfo = null) {
+    final public function __construct(array $value, VectorInfo $typeInfo) {
         $this->value = $value;
-
-        if ($valueDefinition !== null && $dimensions !== null) {
-            $this->typeInfo = VectorInfo::fromTypeDefinition([
-                'type' => Type::VECTOR,
-                'valueType' => $valueDefinition,
-                'dimensions' => $dimensions,
-            ]);
-        } elseif ($typeInfo !== null) {
-            $this->typeInfo = $typeInfo;
-        } else {
-            throw new Exception('Either valueDefinition and dimensions or typeInfo must be provided', ExceptionCode::TYPE_VECTOR_VALUEDEF_DIM_OR_TYPEINFO_REQUIRED->value);
-        }
+        $this->typeInfo = $typeInfo;
     }
 
     /**
@@ -57,7 +42,6 @@ final class Vector extends TypeReadableWithoutLength {
      * @param mixed $value
      * 
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
@@ -125,6 +109,26 @@ final class Vector extends TypeReadableWithoutLength {
         }
 
         return new static($vector, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>) $valueDefinition
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    final public static function fromValue(
+        array $value,
+        Type|array $valueDefinition,
+        int $dimensions,
+    ): static {
+
+        return new static($value, VectorInfo::fromTypeDefinition([
+            'type' => Type::VECTOR,
+            'valueType' => $valueDefinition,
+            'dimensions' => $dimensions,
+        ]));
     }
 
     /**

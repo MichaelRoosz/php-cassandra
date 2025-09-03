@@ -20,30 +20,15 @@ final class Tuple extends TypeReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
-     * @param list<\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)>|null $valueDefinition
-     *
-     * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
-    final public function __construct(array $value, array|null $valueDefinition = null, ?TupleInfo $typeInfo = null) {
+    final public function __construct(array $value, TupleInfo $typeInfo) {
         $this->value = $value;
-
-        if ($valueDefinition !== null) {
-            $this->typeInfo = TupleInfo::fromTypeDefinition([
-                'type' => Type::TUPLE,
-                'valueTypes' => $valueDefinition,
-            ]);
-        } elseif ($typeInfo !== null) {
-            $this->typeInfo = $typeInfo;
-        } else {
-            throw new Exception('Either valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_TUPLE_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
-        }
+        $this->typeInfo = $typeInfo;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
@@ -55,7 +40,6 @@ final class Tuple extends TypeReadableWithoutLength {
      * @param mixed $value
      * 
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
@@ -81,7 +65,6 @@ final class Tuple extends TypeReadableWithoutLength {
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
@@ -102,6 +85,25 @@ final class Tuple extends TypeReadableWithoutLength {
         }
 
         return new static($tuple, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @param list<\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)> $valueDefinition
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    final public static function fromValue(
+        array $value,
+        array $valueDefinition,
+    ): static {
+
+        return new static($value, TupleInfo::fromTypeDefinition([
+            'type' => Type::TUPLE,
+            'valueTypes' => $valueDefinition,
+        ]));
+
     }
 
     /**

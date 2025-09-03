@@ -21,16 +21,16 @@ final class ResultFetchingTest extends TestCase {
             $conn->querySync(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                 [
-                    new Type\Varchar($filename),
-                    new Type\Varchar('k' . $i),
-                    new Type\MapCollection(['a' => (string) $i], Type::VARCHAR, Type::VARCHAR),
+                    Type\Varchar::fromValue($filename),
+                    Type\Varchar::fromValue('k' . $i),
+                    Type\MapCollection::fromValue(['a' => (string) $i], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }
 
         $rows = $conn->querySync(
             'SELECT ukey FROM storage WHERE filename = ?',
-            [new Type\Varchar($filename)]
+            [Type\Varchar::fromValue($filename)]
         )->asRowsResult();
 
         // Iterator

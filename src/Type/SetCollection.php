@@ -21,36 +21,18 @@ final class SetCollection extends TypeReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
-     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)|null $valueDefinition 
-     *
-     * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     final public function __construct(
         array $value,
-        Type|array|null $valueDefinition = null,
-        bool $isFrozen = false,
-        ?SetCollectionInfo $typeInfo = null,
+        SetCollectionInfo $typeInfo,
     ) {
         $this->value = $value;
-
-        if ($valueDefinition !== null) {
-            $this->typeInfo = SetCollectionInfo::fromTypeDefinition([
-                'type' => Type::SET_COLLECTION,
-                'valueType' => $valueDefinition,
-                'isFrozen' => $isFrozen,
-            ]);
-        } elseif ($typeInfo !== null) {
-            $this->typeInfo = $typeInfo;
-        } else {
-            throw new Exception('Either valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_SET_COLLECTION_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
-        }
+        $this->typeInfo = $typeInfo;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
@@ -62,7 +44,6 @@ final class SetCollection extends TypeReadableWithoutLength {
      * @param mixed $value
      *
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
@@ -87,7 +68,6 @@ final class SetCollection extends TypeReadableWithoutLength {
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
@@ -109,6 +89,26 @@ final class SetCollection extends TypeReadableWithoutLength {
         }
 
         return new static($list, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @param \Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>) $valueDefinition 
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    final public static function fromValue(
+        array $value,
+        Type|array $valueDefinition,
+        bool $isFrozen = false,
+    ): static {
+
+        return new static($value, SetCollectionInfo::fromTypeDefinition([
+            'type' => Type::SET_COLLECTION,
+            'valueType' => $valueDefinition,
+            'isFrozen' => $isFrozen,
+        ]));
     }
 
     /**

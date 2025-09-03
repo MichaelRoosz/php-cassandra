@@ -102,6 +102,13 @@ final class Varint extends TypeReadableWithLength {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    final public static function fromValue(string|int $value): static {
+        return new static($value);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     #[\Override]
     public function getBinary(): string {
 

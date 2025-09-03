@@ -59,6 +59,10 @@ final class Float32 extends TypeWithFixedLength {
         return new static((float) $value);
     }
 
+    final public static function fromValue(float $value): static {
+        return new static($value);
+    }
+
     #[\Override]
     public function getBinary(): string {
         return pack('G', $this->value);

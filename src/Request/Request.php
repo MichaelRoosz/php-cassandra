@@ -178,7 +178,7 @@ abstract class Request implements Frame, Stringable {
 
         if ($options->defaultTimestamp !== null) {
             $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP;
-            $optional .= (new Type\Bigint($options->defaultTimestamp))->getBinary();
+            $optional .= pack('J', $options->defaultTimestamp);
         }
 
         if ($options->namesForValues === true) {
@@ -277,7 +277,7 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 default:
-                    throw new Type\Exception(
+                    throw new Exception(
                         message: 'Unsupported bound value type',
                         code: ExceptionCode::REQUEST_VALUES_UNSUPPORTED_VALUE_TYPE->value,
                         context: [
@@ -294,7 +294,7 @@ abstract class Request implements Frame, Stringable {
                     // as identifiers, which consist of: [A-Za-z0-9_]+.
                     $valuesBinary .= pack('n', strlen($name)) . strtolower($name);
                 } else {
-                    throw new Type\Exception(
+                    throw new Exception(
                         message: 'Invalid values format: sequential array provided while names_for_values=true expects associative array',
                         code: ExceptionCode::REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_ASSOCIATIVE->value,
                         context: [
@@ -308,7 +308,7 @@ abstract class Request implements Frame, Stringable {
                 /**
                 * @see https://github.com/duoshuo/php-cassandra/issues/29
                 */
-                throw new Type\Exception(
+                throw new Exception(
                     message: 'Invalid values format: associative array provided while names_for_values=false expects sequential array',
                     code: ExceptionCode::REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_SEQUENTIAL->value,
                     context: [

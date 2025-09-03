@@ -102,6 +102,13 @@ final class Decimal extends TypeReadableWithLength {
     /**
      * @throws \Cassandra\Type\Exception
      */
+    final public static function fromValue(string|int|float $value): static {
+        return new static($value);
+    }
+
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
     #[\Override]
     public function getBinary(): string {
 

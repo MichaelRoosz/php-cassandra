@@ -185,6 +185,13 @@ final class Date extends TypeWithFixedLength {
         return new static($value);
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    final public static function fromValue(int|string|DateTimeInterface $value): static {
+        return new static($value);
+    }
+
     #[\Override]
     public function getBinary(): string {
         return pack('N', $this->value);

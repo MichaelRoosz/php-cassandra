@@ -17,9 +17,9 @@ class Custom extends TypeReadableWithLength {
 
     protected readonly string $value;
 
-    final public function __construct(string $value, string $javaClassName) {
+    final public function __construct(string $value, CustomInfo $typeInfo) {
 
-        $this->typeInfo = new CustomInfo($javaClassName);
+        $this->typeInfo = $typeInfo;
         $this->value = $value;
     }
 
@@ -39,7 +39,7 @@ class Custom extends TypeReadableWithLength {
             ]);
         }
 
-        return new static($binary, $typeInfo->javaClassName);
+        return new static($binary, $typeInfo);
     }
 
     /**
@@ -64,7 +64,18 @@ class Custom extends TypeReadableWithLength {
             ]);
         }
 
-        return new static($value, $typeInfo->javaClassName);
+        return new static($value, $typeInfo);
+    }
+
+    /**
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    final public static function fromValue(string $value, string $javaClassName): static {
+
+        return new static($value, CustomInfo::fromTypeDefinition([
+            'type' => Type::CUSTOM,
+            'javaClassName' => $javaClassName,
+        ]));
     }
 
     #[\Override]

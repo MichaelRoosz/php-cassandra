@@ -32,9 +32,9 @@ final class StorageIntegrationTest extends TestCase {
                 $batch->appendQuery(
                     'INSERT INTO storage(filename, ukey, value) VALUES(?, ?, ?)',
                     [
-                        new Type\Varchar($filename),
-                        new Type\Varchar($ukey),
-                        new Type\MapCollection(['id' => '4003578', 'title' => 'Christmas By The River (CD)'], Type::VARCHAR, Type::VARCHAR),
+                        Type\Varchar::fromValue($filename),
+                        Type\Varchar::fromValue($ukey),
+                        Type\MapCollection::fromValue(['id' => '4003578', 'title' => 'Christmas By The River (CD)'], Type::VARCHAR, Type::VARCHAR),
                     ]
                 );
             }
@@ -76,7 +76,7 @@ final class StorageIntegrationTest extends TestCase {
         // Simple query with paging
         $result = $conn->querySync(
             'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
-            [new Type\Varchar($filename)],
+            [Type\Varchar::fromValue($filename)],
             Consistency::ONE,
             new QueryOptions(pageSize: 50)
         )->asRowsResult();
@@ -92,7 +92,7 @@ final class StorageIntegrationTest extends TestCase {
             }
             $result = $conn->querySync(
                 'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
-                [new Type\Varchar($filename)],
+                [Type\Varchar::fromValue($filename)],
                 Consistency::ONE,
                 new QueryOptions(pageSize: 50, pagingState: $state)
             )->asRowsResult();

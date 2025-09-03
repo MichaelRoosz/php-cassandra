@@ -23,9 +23,9 @@ final class BatchTest extends TestCase {
             $batch->appendQuery(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                 [
-                    new Type\Varchar($filename),
-                    new Type\Varchar('k' . $i),
-                    new Type\MapCollection(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
+                    Type\Varchar::fromValue($filename),
+                    Type\Varchar::fromValue('k' . $i),
+                    Type\MapCollection::fromValue(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }
@@ -35,7 +35,7 @@ final class BatchTest extends TestCase {
 
         $rows = $conn->querySync(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
-            [new Type\Varchar($filename)],
+            [Type\Varchar::fromValue($filename)],
             Consistency::ONE,
             new QueryOptions(namesForValues: false)
         )->asRowsResult();

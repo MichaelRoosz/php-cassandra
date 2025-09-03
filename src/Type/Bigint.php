@@ -65,6 +65,13 @@ class Bigint extends TypeWithFixedLength {
         return new static($value);
     }
 
+    /**
+     * @throws \Cassandra\Type\Exception
+     */
+    final public static function fromValue(int $value): static {
+        return new static($value);
+    }
+
     #[\Override]
     final public function getBinary(): string {
         return pack('J', $this->value);

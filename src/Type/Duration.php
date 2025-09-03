@@ -402,6 +402,15 @@ final class Duration extends TypeReadableWithoutLength {
     }
 
     /**
+     * @param array{ months: int, days: int, nanoseconds: int }|string|DateInterval $value
+     *
+     * @throws \Cassandra\Type\Exception
+     */
+    final public static function fromValue(array|string|DateInterval $value): static {
+        return new static($value);
+    }
+
+    /**
      * @throws \Cassandra\Exception
      */
     #[\Override]

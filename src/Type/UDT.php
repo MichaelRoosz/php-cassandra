@@ -20,36 +20,18 @@ final class UDT extends TypeReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
-     * @param array<string,\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)>|null $valueDefinition 
-     *
-     * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     final public function __construct(
         array $value,
-        array|null $valueDefinition = null,
-        bool $isFrozen = false,
-        ?UDTInfo $typeInfo = null,
+        UDTInfo $typeInfo ,
     ) {
         $this->value = $value;
-
-        if ($valueDefinition !== null) {
-            $this->typeInfo = UDTInfo::fromTypeDefinition([
-                'type' => Type::UDT,
-                'valueTypes' => $valueDefinition,
-                'isFrozen' => $isFrozen,
-            ]);
-        } elseif ($typeInfo !== null) {
-            $this->typeInfo = $typeInfo;
-        } else {
-            throw new Exception('Either valueDefinition or typeInfo must be provided', ExceptionCode::TYPE_UDT_VALUEDEF_OR_TYPEINFO_REQUIRED->value);
-        }
+        $this->typeInfo = $typeInfo;
     }
 
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
@@ -61,7 +43,6 @@ final class UDT extends TypeReadableWithoutLength {
      * @param mixed $value
      * 
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
@@ -87,7 +68,6 @@ final class UDT extends TypeReadableWithoutLength {
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Type\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      */
     #[\Override]
     final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
@@ -109,6 +89,27 @@ final class UDT extends TypeReadableWithoutLength {
         }
 
         return new static($udt, typeInfo: $typeInfo);
+    }
+
+    /**
+     * @param array<mixed> $value
+     * @param array<string,\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)> $valueDefinition 
+     *
+     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\TypeInfo\Exception
+     */
+    final public static function fromValue(
+        array $value,
+        array $valueDefinition,
+        bool $isFrozen = false,
+    ): static {
+
+        return new static($value, UDTInfo::fromTypeDefinition([
+            'type' => Type::UDT,
+            'valueTypes' => $valueDefinition,
+            'isFrozen' => $isFrozen,
+        ]));
+
     }
 
     /**

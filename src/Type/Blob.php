@@ -36,6 +36,10 @@ final class Blob extends TypeReadableWithLength {
         return new static($value);
     }
 
+    final public static function fromValue(string $value): static {
+        return new static($value);
+    }
+
     #[\Override]
     public function getBinary(): string {
         return $this->value;

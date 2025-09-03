@@ -24,9 +24,9 @@ final class AsyncTest extends TestCase {
                 $batch->appendQuery(
                     'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                     [
-                        new Type\Varchar($filename),
-                        new Type\Varchar('k' . $j . '_' . $i),
-                        new Type\MapCollection(['x' => 'y'], Type::VARCHAR, Type::VARCHAR),
+                        Type\Varchar::fromValue($filename),
+                        Type\Varchar::fromValue('k' . $j . '_' . $i),
+                        Type\MapCollection::fromValue(['x' => 'y'], Type::VARCHAR, Type::VARCHAR),
                     ]
                 );
             }
@@ -37,7 +37,7 @@ final class AsyncTest extends TestCase {
 
         $count = (int) $conn->querySync(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
-            [new Type\Varchar($filename)]
+            [Type\Varchar::fromValue($filename)]
         )->asRowsResult()->fetchColumn(0);
 
         $this->assertGreaterThanOrEqual(30, $count);

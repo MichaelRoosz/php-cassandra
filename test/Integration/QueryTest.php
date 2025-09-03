@@ -17,7 +17,7 @@ final class QueryTest extends TestCase {
         $conn = $this->newConnection();
         $rows = $conn->querySync(
             'SELECT key FROM system.local WHERE key = ?',
-            [new Type\Ascii('local')],
+            [Type\Ascii::fromValue('local')],
             Consistency::ONE,
             new QueryOptions()
         )->asRowsResult();

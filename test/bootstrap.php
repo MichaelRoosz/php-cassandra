@@ -37,7 +37,7 @@ try {
     // Fetch all base tables in the keyspace and truncate them
     $tablesResult = $connection->querySync(
         'SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?',
-        [new Type\Varchar($keyspace)]
+        [Type\Varchar::fromValue($keyspace)]
     )->asRowsResult();
 
     foreach ($tablesResult as $row) {

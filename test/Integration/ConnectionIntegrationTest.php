@@ -23,9 +23,9 @@ final class ConnectionIntegrationTest extends TestCase {
             $batch->appendQuery(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                 [
-                    new Type\Varchar('fileA'),
-                    new Type\Varchar('k' . $i),
-                    new Type\MapCollection(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
+                    Type\Varchar::fromValue('fileA'),
+                    Type\Varchar::fromValue('k' . $i),
+                    Type\MapCollection::fromValue(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }
@@ -34,7 +34,7 @@ final class ConnectionIntegrationTest extends TestCase {
 
         $rows = $conn->querySync(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
-            [new Type\Varchar('fileA')],
+            [Type\Varchar::fromValue('fileA')],
             Consistency::ONE,
             new QueryOptions(namesForValues: false)
         )->asRowsResult();
@@ -54,7 +54,7 @@ final class ConnectionIntegrationTest extends TestCase {
             $conn->executeSync(
                 $prepared,
                 [
-                    'id' => new Type\Uuid(self::uuidV4()),
+                    'id' => Type\Uuid::fromValue(self::uuidV4()),
                     'org_id' => 42,
                     'name' => 'u' . $i,
                     'age' => 20 + ($i % 10),

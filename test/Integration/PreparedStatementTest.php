@@ -21,7 +21,7 @@ final class PreparedStatementTest extends TestCase {
         $conn->executeSync(
             $prepared,
             [
-                'id' => new Type\Uuid(self::uuidV4()),
+                'id' => Type\Uuid::fromValue(self::uuidV4()),
                 'org_id' => 7,
                 'name' => 'alice',
                 'age' => 28,
@@ -46,7 +46,7 @@ final class PreparedStatementTest extends TestCase {
             $conn->executeSync(
                 $ins,
                 [
-                    'id' => new Type\Uuid(self::uuidV4()),
+                    'id' => Type\Uuid::fromValue(self::uuidV4()),
                     'org_id' => $orgId,
                     'name' => 'u' . $i,
                     'age' => 20 + ($i % 10),

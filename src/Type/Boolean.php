@@ -41,6 +41,10 @@ final class Boolean extends TypeWithFixedLength {
         return new static($value);
     }
 
+    final public static function fromValue(bool $value): static {
+        return new static($value);
+    }
+
     #[\Override]
     public function getBinary(): string {
         return $this->value ? "\1" : "\0";
