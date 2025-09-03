@@ -311,8 +311,6 @@ final class Connection {
         $consistency = $consistency ?? $this->consistency;
         $request = new Request\Query($query, $values, $consistency, $options);
 
-        // todo: implement autoPrepare
-
         return $this->asyncRequest($request);
     }
 
@@ -324,26 +322,9 @@ final class Connection {
     public function querySync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
         $consistency = $consistency ?? $this->consistency;
 
-        if (
-            $options->autoPrepare
-            && $values
-            && array_find($values, fn($v) => (
-                $v !== null
-                && !($v instanceof TypeBase)
-                && !($v instanceof NotSet)
-            )) !== null
-        ) {
-            $prepared = $this->prepareSync($query);
-            $executeOptions = ExecuteOptions::fromQueryOptions($options);
-            $response = $this->executeSync($prepared, $values, $consistency, $executeOptions);
-
-            return $response;
-        }
-
         $request = new Request\Query($query, $values, $consistency, $options);
 
         $response = $this->syncRequest($request);
-
         if (!($response instanceof Response\Result)) {
             throw new Exception('Unexpected response type during querySync', ExceptionCode::CON_QUERY_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
@@ -404,6 +385,29 @@ final class Connection {
         }
 
         $request->setVersion($this->version);
+
+        $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
+        if ($autoPrepareRequest !== null) {
+
+            $prepareResponse = $this->syncRequest($autoPrepareRequest);
+            if (!($prepareResponse instanceof Response\Result\PreparedResult)) {
+                throw new Exception('Unexpected response type during prepareSync', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
+                    'expected' => Response\Result::class,
+                    'received' => get_class($prepareResponse),
+                ]);
+            }
+
+            $response = $this->handleAutoPrepareResult($autoPrepareRequest, $prepareResponse, originalRequest: $request);
+            if ($response === null) {
+                throw new Exception('Unexpected null response during autoPrepare', ExceptionCode::CON_AUTO_PREPARE_UNEXPECTED_RESPONSE->value, [
+                    'expected' => Response\Result::class,
+                    'received' => 'null',
+                ]);
+            }
+
+            return $response;
+        }
+
         $this->node->writeRequest($request);
 
         $response = $this->getNextResponseForStream(streamId: 0);
@@ -424,6 +428,40 @@ final class Connection {
     }
 
     public function trigger(Response\Event $event): void {
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function chainAsyncRequest(Request\Request $request, Statement $statement): void {
+        if ($this->node === null) {
+            $this->connect();
+        }
+
+        if ($this->node === null) {
+            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
+                'operation' => 'sendAsyncRequest',
+            ]);
+        }
+
+        $request->setVersion($this->version);
+
+        $streamId = $statement->getStreamId();
+        $request->setStream($streamId);
+
+        if (isset($this->statements[$streamId])) {
+            throw new Exception('Stream ID already in use', ExceptionCode::CON_STREAM_ID_ALREADY_IN_USE->value, [
+                'operation' => 'sendAsyncRequest',
+                'stream_id' => $streamId,
+            ]);
+        }
+
+        $this->node->writeRequest($request);
+
+        $this->statements[$streamId] = $statement;
+
+        $statement->setRequest($request);
+        $statement->setResponse(null);
     }
 
     /**
@@ -567,6 +605,36 @@ final class Connection {
         return new $responseClass($header, $streamReader);
     }
 
+    protected function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {
+
+        // auto-prepare query if bind markers are used not all values defined with type
+        if (
+            ($request instanceof Request\Query)
+        ) {
+
+            $queryOptions = $request->getOptions();
+            $values = $request->getValues();
+
+            if (
+                $queryOptions->autoPrepare
+                && $values
+                && array_find($values, fn($v) => (
+                    $v !== null
+                    && !($v instanceof TypeBase)
+                    && !($v instanceof NotSet)
+                )) !== null
+            ) {
+
+                $prepareOptions = new PrepareOptions(keyspace: $queryOptions->keyspace);
+                $prepareRequest = new Request\Prepare($request->getQuery(), $prepareOptions);
+
+                return $prepareRequest;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @throws \Cassandra\Exception
      */
@@ -594,6 +662,56 @@ final class Connection {
             throw new Exception('Received unexpected null response from server.', ExceptionCode::CON_GET_NEXT_NULL_RESPONSE->value, [
                 'operation' => 'getNextResponseForStream',
                 'stream_id' => $streamId,
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    protected function handleAutoPrepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
+
+        if (!($result instanceof Response\Result\PreparedResult)) {
+            throw new Exception('Unexpected result type while handling auto-prepared statement', ExceptionCode::CON_AUTO_PREPARE_UNEXPECTED_RESULT_TYPE->value, [
+                'operation' => 'reprepare_result',
+                'expected' => Response\Result\PreparedResult::class,
+                'received' => get_class($result),
+            ]);
+        }
+
+        if ($statement !== null) {
+            $originalRequest = $statement->getOriginalRequest();
+        }
+
+        if (!($originalRequest instanceof Request\Query)) {
+            throw new Exception('Original request is not an query request', ExceptionCode::CON_AUTO_PREPARE_ORIGINAL_NOT_QUERY->value, [
+                'operation' => 'auto_prepare_execute',
+                'request_class' => $originalRequest ? get_class($originalRequest) : null,
+                'expected' => Request\Query::class,
+            ]);
+        }
+
+        $newExecuteRequest = new Request\Execute(
+            $result,
+            $originalRequest->getValues(),
+            $originalRequest->getConsistency(),
+            ExecuteOptions::fromQueryOptions($originalRequest->getOptions())
+        );
+
+        if ($statement !== null) {
+            $this->chainAsyncRequest($newExecuteRequest, $statement);
+
+            return null;
+        }
+
+        $response = $this->syncRequest($newExecuteRequest);
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('Unexpected response type during re-execute after auto-preparation', ExceptionCode::CON_AUTO_PREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
+                'operation' => 'auto_prepare_execute',
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
             ]);
         }
 
@@ -633,7 +751,7 @@ final class Connection {
         );
 
         if ($statement !== null) {
-            $this->sendAsyncRequest($newExecuteRequest, $result->getStream());
+            $this->chainAsyncRequest($newExecuteRequest, $statement);
 
             return null;
         }
@@ -699,8 +817,8 @@ final class Connection {
             $newPrepareRequest = new Request\Prepare($prevRequest->getQuery(), $prevRequest->getOptions());
 
             if ($statement !== null) {
-                $statement->setIsRepreparing(true);
-                $this->sendAsyncRequest($newPrepareRequest, $response->getStream());
+                $statement->setStatus(StatementStatus::REPREPARING);
+                $this->chainAsyncRequest($newPrepareRequest, $statement);
 
                 return null;
             }
@@ -737,9 +855,14 @@ final class Connection {
 
         $result->setRequest($request);
 
-        if ($statement !== null && $statement->isRepreparing()) {
-            $statement->setIsRepreparing(false);
-            $result = $this->handleReprepareResult($request, $result, statement: $statement);
+        if ($statement !== null) {
+            if ($statement->isRepreparing()) {
+                $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
+                $result = $this->handleReprepareResult($request, $result, statement: $statement);
+            } elseif ($statement->isAutoPreparing()) {
+                $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
+                $result = $this->handleAutoPrepareResult($request, $result, statement: $statement);
+            }
         }
 
         return $result;
@@ -832,10 +955,10 @@ final class Connection {
         $streamId = $header->stream;
         if ($streamId !== 0 && isset($this->statements[$streamId])) {
             $statement = $this->statements[$streamId];
+            unset($this->statements[$streamId]);
             $response = $this->handleResponse($statement->getRequest(), $response, $statement);
             if ($response !== null) {
                 $statement->setResponse($response);
-                unset($this->statements[$streamId]);
                 $this->recycledStreams->enqueue($streamId);
             }
         }
@@ -903,15 +1026,34 @@ final class Connection {
         $streamId = $streamId ?? $this->getNewStreamId();
         $request->setStream($streamId);
 
+        $originalRequest = $request;
+        $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
+        if ($autoPrepareRequest !== null) {
+            $request = $autoPrepareRequest;
+        }
+
         $this->node->writeRequest($request);
 
         if (isset($this->statements[$streamId])) {
-            $statement = $this->statements[$streamId];
-            $statement->setRequest($request);
-            $statement->setResponse(null);
+            throw new Exception('Stream ID already in use', ExceptionCode::CON_STREAM_ID_ALREADY_IN_USE->value, [
+                'operation' => 'sendAsyncRequest',
+                'stream_id' => $streamId,
+            ]);
+        }
+
+        $statement = new Statement(
+            connection: $this,
+            streamId: $streamId,
+            request: $request,
+            originalRequest: $originalRequest,
+        );
+
+        $this->statements[$streamId] = $statement;
+
+        if ($autoPrepareRequest !== null) {
+            $statement->setStatus(StatementStatus::AUTO_PREPARING);
         } else {
-            $statement = new Statement($this, $streamId, $request);
-            $this->statements[$streamId] = $statement;
+            $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
         }
 
         return $statement;

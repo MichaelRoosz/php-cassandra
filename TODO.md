@@ -1,6 +1,10 @@
 Todo
 =====
 
+* implement prepared query cache
+* rename *Sync() to *()
+* maybe rename Type\* to Value\*
+  
 * better handling for "not set"
 
 * remove unused exceptions codes
@@ -21,3 +25,4 @@ Todo
 * Add examples
 
 * Implement automatically re-connecting to nodes and load-balancing
+  * Improve connect() exception messages

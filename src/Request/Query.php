@@ -35,4 +35,23 @@ final class Query extends Request {
 
         return $body;
     }
+
+    public function getConsistency(): Consistency {
+        return $this->consistency;
+    }
+
+    public function getOptions(): QueryOptions {
+        return $this->options;
+    }
+
+    public function getQuery(): string {
+        return $this->query;
+    }
+
+    /**
+     * @return array<mixed> $values
+     */
+    public function getValues(): array {
+        return $this->values;
+    }
 }

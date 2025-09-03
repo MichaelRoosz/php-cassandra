@@ -13,6 +13,7 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
+use DateTimeInterface;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
@@ -243,6 +244,11 @@ abstract class Request implements Frame, Stringable {
 
                 case is_float($value):
                     $binary = pack('E', $value);
+
+                    break;
+
+                case $value instanceof DateTimeInterface:
+                    $binary = $value->format('Y-m-d H:i:s.vO');
 
                     break;
 

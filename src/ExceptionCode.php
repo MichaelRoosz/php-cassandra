@@ -9,7 +9,7 @@ namespace Cassandra;
  * Each exception class has its own prefix based on its namespace in uppercase.
  * Root exception codes use short names for the class using them.
  * 
- * Next free code: 1302
+ * Next free code: 1307
  */
 enum ExceptionCode: int {
     // Compression namespace (COMPRESSION_)
@@ -36,6 +36,10 @@ enum ExceptionCode: int {
     case CON_AUTH_FAILED = 1005;
     case CON_AUTH_INVALID_NODE_IMPLEMENTATION = 1006;
     case CON_AUTH_MISSING_CREDENTIALS = 1007;
+    case CON_AUTO_PREPARE_ORIGINAL_NOT_QUERY = 1303;
+    case CON_AUTO_PREPARE_UNEXPECTED_RESPONSE = 1306;
+    case CON_AUTO_PREPARE_UNEXPECTED_RESPONSE_REEXECUTE = 1304;
+    case CON_AUTO_PREPARE_UNEXPECTED_RESULT_TYPE = 1302;
     case CON_CANNOT_READ_RESPONSE_HEADER = 1008;
     case CON_COMPRESSION_NOT_SUPPORTED = 1009;
     case CON_EXECUTE_UNEXPECTED_RESPONSE = 1010;
@@ -54,6 +58,7 @@ enum ExceptionCode: int {
     case CON_SERVER_PROTOCOL_UNSUPPORTED = 1023;
     case CON_SET_KEYSPACE_UNEXPECTED_RESPONSE = 1024;
     case CON_STARTUP_UNEXPECTED_RESPONSE = 1025;
+    case CON_STREAM_ID_ALREADY_IN_USE = 1305;
     case CON_SYNC_NULL_RESPONSE = 1026;
     case CON_UNABLE_TO_CONNECT_ANY_NODE = 1027;
     case CON_UNEXPECTED_RESPONSE_BATCH_SYNC = 1028;

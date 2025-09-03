@@ -7,24 +7,25 @@ namespace Cassandra;
 final class Statement {
     protected Connection $connection;
 
-    protected bool $isRepreparing = false;
-
-    protected ?Request\Request $originalRequest = null;
+    protected Request\Request $originalRequest;
 
     protected Request\Request $request;
 
     protected ?Response\Response $response = null;
 
+    protected StatementStatus $status;
+
     protected int $streamId;
 
-    public function __construct(Connection $connection, int $streamId, Request\Request $request) {
+    public function __construct(Connection $connection, int $streamId, Request\Request $request, ?Request\Request $originalRequest = null) {
         $this->connection = $connection;
         $this->streamId = $streamId;
         $this->request = $request;
-        $this->originalRequest = $request;
+        $this->originalRequest = $originalRequest ?? $request;
+        $this->status = StatementStatus::CREATED;
     }
 
-    public function getOriginalRequest(): ?Request\Request {
+    public function getOriginalRequest(): Request\Request {
         return $this->originalRequest;
     }
 
@@ -142,12 +143,20 @@ final class Statement {
         return $this->streamId;
     }
 
-    public function isRepreparing(): bool {
-        return $this->isRepreparing;
+    public function isAutoPreparing(): bool {
+        return $this->status === StatementStatus::AUTO_PREPARING;
     }
 
-    public function setIsRepreparing(bool $isRepreparing): void {
-        $this->isRepreparing = $isRepreparing;
+    public function isRepreparing(): bool {
+        return $this->status === StatementStatus::REPREPARING;
+    }
+
+    public function isResultReady(): bool {
+        return $this->status === StatementStatus::RESULT_READY;
+    }
+
+    public function isWaitingForResult(): bool {
+        return $this->status === StatementStatus::WAITING_FOR_RESULT;
     }
 
     public function setRequest(Request\Request $request): void {
@@ -156,6 +165,14 @@ final class Statement {
 
     public function setResponse(?Response\Response $response): void {
         $this->response = $response;
+
+        if ($response !== null) {
+            $this->status = StatementStatus::RESULT_READY;
+        }
+    }
+
+    public function setStatus(StatementStatus $status): void {
+        $this->status = $status;
     }
 
     /**
