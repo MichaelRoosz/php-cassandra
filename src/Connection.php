@@ -361,12 +361,12 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function setKeyspace(string $keyspace): bool {
+    public function setKeyspace(string $keyspace): void {
 
         $this->keyspace = $keyspace;
 
         if (!$this->isConnected()) {
-            return true;
+            return;
         }
 
         $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
@@ -379,7 +379,7 @@ final class Connection {
             ]);
         }
 
-        return true;
+        return;
     }
 
     public function supportsKeyspaceRequestOption(): bool {
@@ -454,6 +454,21 @@ final class Connection {
     }
 
     public function trigger(Response\Event $event): void {
+    }
+
+    public function withConsistency(Consistency $consistency): self {
+        $this->setConsistency($consistency);
+
+        return $this;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    public function withKeyspace(string $keyspace): self {
+        $this->setKeyspace($keyspace);
+
+        return $this;
     }
 
     /**
