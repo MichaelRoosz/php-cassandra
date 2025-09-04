@@ -153,7 +153,14 @@ class Result extends Response implements IteratorAggregate {
 
         if ($previousResult instanceof PreparedResult) {
             $this->lastPreparedData = $previousResult->getPreparedData();
-            $this->onPreviousRowsMetadataUpdated($this->lastPreparedData->rowsMetadata);
+
+            $lastRowsMetadata = $this->lastPreparedData->rowsMetadata;
+
+            $rowsMetadata = $lastRowsMetadata->withMetadataId(
+                $lastRowsMetadata->metadataId ?? $this->lastPreparedData->rowsMetadataId
+            );
+
+            $this->onPreviousRowsMetadataUpdated($rowsMetadata);
 
         } elseif ($previousResult instanceof RowsResult) {
 

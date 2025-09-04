@@ -43,4 +43,14 @@ final class RowsMetadata {
             columns: $columns,
         );
     }
+
+    public function withMetadataId(string $metadataId): self {
+        return new self(
+            flags: $this->flags,
+            columnsCount: $this->columnsCount,
+            pagingState: $this->pagingState,
+            metadataId: $metadataId,
+            columns: $this->columns,
+        );
+    }
 }
