@@ -22,10 +22,6 @@ use TypeError;
 use ValueError;
 
 final class Connection {
-    protected const PREPARED_RESULT_CACHE_SIZE = 150;
-    protected const PREPARED_RESULT_CACHE_SIZE_TO_TRIM = 100;
-    protected const SUPPORTED_VERSIONS = ['3/v3', '4/v4', '5/v5'];
-
     protected Consistency $consistency = Consistency::ONE;
 
     /**
@@ -60,6 +56,9 @@ final class Connection {
      */
     protected array $preparedResultCache = [];
 
+    protected int $preparedResultCacheSize;
+    protected int $preparedResultCacheSizeToTrim;
+
     /**
      * @var SplQueue<int> $recycledStreams
      */
@@ -88,6 +87,9 @@ final class Connection {
         /** @var SplQueue<int> $recycledStreams */
         $recycledStreams = new SplQueue();
         $this->recycledStreams = $recycledStreams;
+
+        $this->preparedResultCacheSize = max(0, $options->preparedResultCacheSize);
+        $this->preparedResultCacheSizeToTrim = (int) ceil((float) $this->preparedResultCacheSize * 0.25);
     }
 
     public function addEventListener(EventListener $eventListener): void {
@@ -132,6 +134,8 @@ final class Connection {
         if ($this->node !== null) {
             return true;
         }
+
+        $this->preparedResultCache = [];
 
         $node = $this->node = $this->selectNodeAndOpenConnection();
 
@@ -540,14 +544,21 @@ final class Connection {
      */
     protected function cachePrepareResult(Request\Prepare $request, Response\Result\PreparedResult $result): void {
 
+        if ($this->preparedResultCacheSize < 1) {
+            return;
+        }
+
         $cachedResult = new Response\Result\CachedPreparedResult(
             new Header(version: 5, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
             new StreamReader(''),
             $result->getPreparedData(),
         );
 
-        if (count($this->preparedResultCache) >= self::PREPARED_RESULT_CACHE_SIZE) {
-            $this->preparedResultCache = array_slice($this->preparedResultCache, -self::PREPARED_RESULT_CACHE_SIZE_TO_TRIM);
+        if (count($this->preparedResultCache) >= $this->preparedResultCacheSize) {
+            $this->preparedResultCache = array_slice(
+                $this->preparedResultCache,
+                $this->preparedResultCacheSizeToTrim
+            );
         }
 
         $this->preparedResultCache[$request->getHash()] = $cachedResult;
@@ -604,7 +615,7 @@ final class Connection {
         } else {
             throw new Exception('Server does not support a compatible protocol version.', ExceptionCode::CON_SERVER_PROTOCOL_UNSUPPORTED->value, [
                 'server_versions' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
-                'client_supported' => self::SUPPORTED_VERSIONS,
+                'client_supported' => ReleaseConstants::PHP_CASSANDRA_SUPPORTED_PROTOCOL_VERSIONS,
             ]);
         }
 
@@ -1068,7 +1079,7 @@ final class Connection {
             throw new Exception('Unsupported or mismatched CQL binary protocol version received from server.', ExceptionCode::CON_PROTOCOL_VERSION_MISMATCH->value, [
                 'received_version' => $version,
                 'expected_version' => $this->versionIn,
-                'supported_versions' => self::SUPPORTED_VERSIONS,
+                'supported_versions' => ReleaseConstants::PHP_CASSANDRA_SUPPORTED_PROTOCOL_VERSIONS,
             ]);
         }
 

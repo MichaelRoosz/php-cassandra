@@ -11,6 +11,7 @@ final class ConnectionOptions {
         public readonly bool $enableCompression = false,
         public readonly bool $throwOnOverload = false,
         public readonly NodeSelectionStrategy $nodeSelectionStrategy = NodeSelectionStrategy::Random,
+        public readonly int $preparedResultCacheSize = 100,
     ) {
 
     }
