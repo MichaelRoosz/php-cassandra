@@ -57,7 +57,7 @@ final class Varint extends TypeReadableWithLength {
             } catch (StringMathException $e) {
                 throw new Exception('Failed to get decimal from binary', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
                     'binary' => $binary,
-                ]);
+                ], $e);
             }
 
             return new static($decimal);
@@ -121,7 +121,7 @@ final class Varint extends TypeReadableWithLength {
         } catch (StringMathException $e) {
             throw new Exception('Failed to get binary from decimal', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
                 'decimal' => $this->value,
-            ]);
+            ], $e);
         }
     }
 

@@ -11,9 +11,18 @@ interface Node {
 
     public function getConfig(): NodeConfig;
 
+    /**
+     * @throws \Cassandra\Connection\NodeException
+     */
     public function read(int $length): string;
 
+    /**
+     * @throws \Cassandra\Connection\NodeException
+     */
     public function readOnce(int $length): string;
 
+    /**
+     * @throws \Cassandra\Connection\NodeException
+     */
     public function writeRequest(Request $request): void;
 }

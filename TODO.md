@@ -19,6 +19,3 @@ Todo
   * QUERY and EXECUTE: namesForValues is auto-detected if not set explcitly
   
 * Add examples
-
-* Implement automatically re-connecting to nodes and load-balancing
-  * Improve connect() exception messages

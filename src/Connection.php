@@ -8,6 +8,7 @@ use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\Flag;
 use Cassandra\Compression\Lz4Decompressor;
+use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Protocol\Header;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
@@ -23,6 +24,7 @@ use ValueError;
 final class Connection {
     protected const PREPARED_RESULT_CACHE_SIZE = 150;
     protected const PREPARED_RESULT_CACHE_SIZE_TO_TRIM = 100;
+    protected const SUPPORTED_VERSIONS = ['3/v3', '4/v4', '5/v5'];
 
     protected Consistency $consistency = Consistency::ONE;
 
@@ -39,10 +41,14 @@ final class Connection {
 
     protected ?Connection\Node $node = null;
 
+    protected Connection\NodeHealth $nodeHealth;
+
     /**
      * @var array<\Cassandra\Connection\NodeConfig> $nodes
      */
     protected array $nodes;
+
+    protected Connection\NodeSelector $nodeSelector;
 
     /**
      * @var array<string,string> $options
@@ -75,6 +81,8 @@ final class Connection {
         $this->nodes = $nodes;
         $this->keyspace = $keyspace;
         $this->options = $options->toArray();
+        $this->nodeSelector = $options->nodeSelectionStrategy->createSelector();
+        $this->nodeHealth = new Connection\NodeHealth();
         $this->lz4Decompressor = new Lz4Decompressor();
 
         /** @var SplQueue<int> $recycledStreams */
@@ -125,19 +133,11 @@ final class Connection {
             return true;
         }
 
-        $this->selectNode();
-
-        if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
-                'operation' => 'connect',
-            ]);
-        }
-
-        $node = $this->node;
+        $node = $this->node = $this->selectNodeAndOpenConnection();
 
         $response = $this->syncRequest(new Request\Options());
         if (!($response instanceof Response\Supported)) {
-            $nodeConfig = $this->node->getConfig();
+            $nodeConfig = $node->getConfig();
 
             throw new Exception('OPTIONS handshake failed: unexpected response type', ExceptionCode::CON_OPTIONS_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'connect/options',
@@ -172,7 +172,7 @@ final class Connection {
                         'expected_interface' => Connection\NodeImplementation::class,
                     ]);
                 }
-                $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
+                $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
@@ -193,7 +193,7 @@ final class Connection {
                         'expected_interface' => Connection\NodeImplementation::class,
                     ]);
                 }
-                $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
+                $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
         } else {
             $nodeConfig = $node->getConfig();
@@ -215,10 +215,16 @@ final class Connection {
     }
 
     public function disconnect(): void {
-        if ($this->node !== null) {
-            $this->node->close();
-            $this->node = null;
+
+        $this->preparedResultCache = [];
+
+        if ($this->node === null) {
+            return;
         }
+
+        $node = $this->node;
+        $this->node = null;
+        $node->close();
     }
 
     /**
@@ -355,11 +361,12 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function setKeyspace(string $keyspace): ?Response\Result {
+    public function setKeyspace(string $keyspace): bool {
+
         $this->keyspace = $keyspace;
 
-        if ($this->node === null) {
-            return null;
+        if (!$this->isConnected()) {
+            return true;
         }
 
         $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
@@ -372,7 +379,7 @@ final class Connection {
             ]);
         }
 
-        return $response;
+        return true;
     }
 
     public function supportsKeyspaceRequestOption(): bool {
@@ -387,15 +394,8 @@ final class Connection {
      * @throws \Cassandra\Exception
      */
     public function syncRequest(Request\Request $request): Response\Response {
-        if ($this->node === null) {
-            $this->connect();
-        }
 
-        if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
-                'operation' => 'syncRequest',
-            ]);
-        }
+        $node = $this->getConnectedNode();
 
         $request->setVersion($this->version);
 
@@ -428,10 +428,16 @@ final class Connection {
             return $response;
         }
 
-        $this->node->writeRequest($request);
+        try {
+            $node->writeRequest($request);
+            $response = $this->getNextResponseForStream(streamId: 0);
+            $response = $this->handleResponse($request, $response);
+            $this->nodeHealth->recordSuccess($node->getConfig());
+        } catch (Connection\NodeException $e) {
+            $this->handleNodeException($node);
 
-        $response = $this->getNextResponseForStream(streamId: 0);
-        $response = $this->handleResponse($request, $response);
+            throw $e;
+        }
 
         if ($response === null) {
             throw new Exception('Received unexpected null response from server.', ExceptionCode::CON_SYNC_NULL_RESPONSE->value, [
@@ -472,15 +478,8 @@ final class Connection {
      * @throws \Cassandra\Exception
      */
     protected function chainAsyncRequest(Request\Request $request, Statement $statement): void {
-        if ($this->node === null) {
-            $this->connect();
-        }
 
-        if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
-                'operation' => 'sendAsyncRequest',
-            ]);
-        }
+        $node = $this->getConnectedNode();
 
         $request->setVersion($this->version);
 
@@ -494,7 +493,14 @@ final class Connection {
             ]);
         }
 
-        $this->node->writeRequest($request);
+        try {
+            $node->writeRequest($request);
+            $this->nodeHealth->recordSuccess($node->getConfig());
+        } catch (Connection\NodeException $e) {
+            $this->handleNodeException($node);
+
+            throw $e;
+        }
 
         $this->statements[$streamId] = $statement;
 
@@ -519,7 +525,7 @@ final class Connection {
         } else {
             throw new Exception('Server does not support a compatible protocol version.', ExceptionCode::CON_SERVER_PROTOCOL_UNSUPPORTED->value, [
                 'server_versions' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
-                'client_supported' => ['3/v3', '4/v4', '5/v5'],
+                'client_supported' => self::SUPPORTED_VERSIONS,
             ]);
         }
 
@@ -678,6 +684,26 @@ final class Connection {
         return $this->preparedResultCache[$request->getHash()] ?? null;
     }
 
+    /** 
+     * @throws \Cassandra\Exception
+     */
+    protected function getConnectedNode(): Connection\Node {
+
+        $node = $this->node;
+        if ($node === null) {
+            $this->connect();
+
+            $node = $this->node;
+            if ($node === null) {
+                throw new Exception('Client is not connected to any node. This should never happen.', ExceptionCode::CON_NOT_CONNECTED->value, [
+                    'operation' => 'getConnectedNode',
+                ]);
+            }
+        }
+
+        return $node;
+    }
+
     /**
      * @throws \Cassandra\Exception
      */
@@ -752,6 +778,11 @@ final class Connection {
         }
 
         return $response;
+    }
+
+    protected function handleNodeException(Connection\Node $node): void {
+        $this->nodeHealth->recordFailure($node->getConfig());
+        $this->disconnect();
     }
 
     /**
@@ -944,33 +975,42 @@ final class Connection {
      * @throws \Cassandra\Exception
      */
     protected function readResponse(): ?Response\Response {
-        if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
-                'operation' => 'readResponse',
-            ]);
-        }
+        $node = $this->getConnectedNode();
 
-        $version = ord($this->node->read(1));
+        try {
+            $version = ord($node->read(1));
+        } catch (Connection\NodeException $e) {
+            $this->handleNodeException($node);
+
+            throw $e;
+        }
 
         if ($version !== $this->versionIn) {
             throw new Exception('Unsupported or mismatched CQL binary protocol version received from server.', ExceptionCode::CON_PROTOCOL_VERSION_MISMATCH->value, [
                 'received_version' => $version,
                 'expected_version' => $this->versionIn,
-                'supported_versions' => ['3/v3', '4/v4', '5/v5'],
+                'supported_versions' => self::SUPPORTED_VERSIONS,
             ]);
         }
 
-        /**
-         * @var false|array{
-         *  flags: int,
-         *  stream: int,
-         *  opcode: int,
-         *  length: int
-         * } $headerData
-         */
-        $headerData = unpack('Cflags/nstream/Copcode/Nlength', $this->node->read(8));
+        try {
+            /**
+             * @var false|array{
+             *  flags: int,
+             *  stream: int,
+             *  opcode: int,
+             *  length: int
+             * } $headerData
+             */
+            $headerData = unpack('Cflags/nstream/Copcode/Nlength', $node->read(8));
+        } catch (Connection\NodeException $e) {
+            $this->handleNodeException($node);
+
+            throw $e;
+        }
+
         if ($headerData === false) {
-            $nodeConfig = $this->node->getConfig();
+            $nodeConfig = $node->getConfig();
 
             throw new Exception('Cannot read response header', ExceptionCode::CON_CANNOT_READ_RESPONSE_HEADER->value, [
                 'host' => $nodeConfig->host,
@@ -995,7 +1035,13 @@ final class Connection {
             ], $e);
         }
 
-        $body = $header->length === 0 ? '' : $this->node->read($header->length);
+        try {
+            $body = $header->length === 0 ? '' : $node->read($header->length);
+        } catch (Connection\NodeException $e) {
+            $this->handleNodeException($node);
+
+            throw $e;
+        }
 
         if ($this->version < 5 && $header->length > 0 && $header->flags & Flag::COMPRESSION) {
             $this->lz4Decompressor->setInput($body);
@@ -1019,32 +1065,38 @@ final class Connection {
             $this->onEvent($response);
         }
 
+        $this->nodeHealth->recordSuccess($node->getConfig());
+
         return $response;
     }
 
     /**
      * @throws \Cassandra\Exception
      */
-    protected function selectNode(): void {
+    protected function selectNodeAndOpenConnection(): Connection\Node {
 
-        if (count($this->nodes) > 1) {
-            shuffle($this->nodes);
-        }
+        $ordered = $this->nodeSelector->order($this->nodes);
+        $parts = $this->nodeHealth->partitionByAvailability($ordered);
+        $candidates = array_merge($parts['available'], $parts['unavailable']);
 
-        foreach ($this->nodes as $config) {
+        $socketException = null;
+
+        foreach ($candidates as $config) {
 
             $className = $config->getNodeClass();
 
             try {
-                /**
-                 *  @throws \Cassandra\Exception
-                */
-                $this->node = new $className($config);
-            } catch (Exception $e) {
+                $node = new $className($config);
+            } catch (Connection\NodeException $e) {
+                $socketException = $e;
+                $this->nodeHealth->recordFailure($config);
+
                 continue;
             }
 
-            return;
+            $this->nodeHealth->recordSuccess($config);
+
+            return $node;
         }
 
         $nodeConfigs = array_map(fn($config) => [
@@ -1053,25 +1105,23 @@ final class Connection {
             'class' => $config->getNodeClass(),
         ], $this->nodes);
 
-        throw new Exception('Unable to connect to any Cassandra node', ExceptionCode::CON_UNABLE_TO_CONNECT_ANY_NODE->value, [
-            'attempted_nodes' => $nodeConfigs,
-            'node_count' => count($this->nodes),
-        ]);
+        throw new Exception(
+            'Unable to connect to any Cassandra node',
+            ExceptionCode::CON_UNABLE_TO_CONNECT_ANY_NODE->value,
+            [
+                'attempted_nodes' => $nodeConfigs,
+                'node_count' => count($this->nodes),
+            ],
+            $socketException ?? null
+        );
     }
 
     /**
      * @throws \Cassandra\Exception
      */
     protected function sendAsyncRequest(Request\Request $request, ?int $streamId = null): Statement {
-        if ($this->node === null) {
-            $this->connect();
-        }
 
-        if ($this->node === null) {
-            throw new Exception('Client is not connected to any node. Call connect() before issuing requests.', ExceptionCode::CON_NOT_CONNECTED->value, [
-                'operation' => 'sendAsyncRequest',
-            ]);
-        }
+        $node = $this->getConnectedNode();
 
         $request->setVersion($this->version);
 
@@ -1110,7 +1160,14 @@ final class Connection {
             ]);
         }
 
-        $this->node->writeRequest($request);
+        try {
+            $node->writeRequest($request);
+            $this->nodeHealth->recordSuccess($node->getConfig());
+        } catch (Connection\NodeException $e) {
+            $this->handleNodeException($node);
+
+            throw $e;
+        }
 
         $statement = new Statement(
             connection: $this,

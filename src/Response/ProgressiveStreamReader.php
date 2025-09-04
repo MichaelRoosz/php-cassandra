@@ -35,6 +35,7 @@ final class ProgressiveStreamReader extends StreamReader {
 
     /**
      * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Connection\NodeException
      */
     #[\Override]
     public function read(int $length): string {

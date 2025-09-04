@@ -92,7 +92,8 @@ final class BCMath extends DecimalCalculator {
             throw new Exception(
                 'Division by zero',
                 ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_DIVISION_BY_ZERO->value,
-                ['decimal' => $decimal]
+                ['decimal' => $decimal],
+                $e
             );
         }
 

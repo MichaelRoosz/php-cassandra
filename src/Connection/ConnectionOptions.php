@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra;
+namespace Cassandra\Connection;
 
 final class ConnectionOptions {
     public const PHP_CASSANDRA_DRIVER_NAME = 'php-cassandra-client';
@@ -11,6 +11,7 @@ final class ConnectionOptions {
     public function __construct(
         public readonly bool $enableCompression = false,
         public readonly bool $throwOnOverload = false,
+        public readonly NodeSelectionStrategy $nodeSelectionStrategy = NodeSelectionStrategy::Random,
     ) {
 
     }
