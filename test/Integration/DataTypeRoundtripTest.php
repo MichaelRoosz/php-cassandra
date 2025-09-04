@@ -2026,7 +2026,7 @@ final class DataTypeRoundtripTest extends TestCase {
 
         $conn = new Connection($nodes, $keyspace);
         $conn->setConsistency(Consistency::ONE);
-        $this->assertTrue($conn->connect());
+        $conn->connect();
         $this->assertTrue($conn->isConnected());
 
         return $conn;

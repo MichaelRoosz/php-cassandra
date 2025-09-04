@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class ConnectionTest extends TestCase {
     public function testConnectAndProtocolNegotiation(): void {
         $conn = $this->newConnection();
-        $this->assertTrue($conn->connect());
+        $conn->connect();
         $this->assertTrue($conn->isConnected());
 
         $version = $conn->getVersion();

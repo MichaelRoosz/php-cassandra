@@ -130,9 +130,9 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function connect(): bool {
+    public function connect(): void {
         if ($this->node !== null) {
-            return true;
+            return;
         }
 
         $this->preparedResultCache = [];
@@ -214,8 +214,6 @@ final class Connection {
         if ($this->keyspace) {
             $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
         }
-
-        return true;
     }
 
     public function disconnect(): void {
