@@ -39,7 +39,10 @@ jobs:
 
     - name: PHPStan
       run: composer run phpstan
-    
+
+    - name: PHPStan tests
+      run: composer run phpstan:tests
+
     - name: Psalm
       run: composer run psalm
 

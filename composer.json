@@ -51,6 +51,7 @@
         "lint": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer check",
         "lint-fix": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer fix",
         "phpstan": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "phpstan:tests": "vendor/bin/phpstan analyse --memory-limit=1G --configuration phpstan.tests.neon",
         "psalm": "vendor/bin/psalm --no-cache",
         "phpunit": "XDEBUG_MODE=coverage vendor/bin/phpunit $@",
         "test:unit": "vendor/bin/phpunit --testsuite unit",
