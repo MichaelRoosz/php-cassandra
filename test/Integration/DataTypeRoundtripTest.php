@@ -46,11 +46,6 @@ use PHPUnit\Framework\TestCase;
  * - varchar                *Implemented
  * - varint                 *Implemented
  * - vector                 *Implemented
- * 
- * todo: 
- *  - test frozen where possible (list, set, map, udt)
- *      + tuple and vector are always frozen
- *  - test reversed where possible, if relevant
  */
 final class DataTypeRoundtripTest extends TestCase {
     private Connection $connection;
@@ -610,6 +605,186 @@ final class DataTypeRoundtripTest extends TestCase {
         $this->compareWithCqlsh('test_float32', 'id', 'value', $testValues, 'float');
     }
 
+    public function testFrozenListRoundtrip(): void {
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_frozen_list_varchar (id int PRIMARY KEY, value frozen<list<varchar>>)'
+        );
+
+        $testValues = [
+            [],
+            ['hello'],
+            ['hello', 'world'],
+            ['', 'test', '', 'empty'],
+            ['unicode', '🚀', '中文', 'العربية'],
+            array_fill(0, 25, 'repeated'),
+        ];
+
+        foreach ($testValues as $index => $testValue) {
+            $this->connection->querySync(
+                'INSERT INTO test_frozen_list_varchar (id, value) VALUES (?, ?)',
+                [
+                    Type\Integer::fromValue($index),
+                    Type\ListCollection::fromValue($testValue, Type::VARCHAR, isFrozen: true),
+                ]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_frozen_list_varchar WHERE id = ?',
+                [Type\Integer::fromValue($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $valueToCheck = $testValue;
+            if ($valueToCheck) {
+                sort($valueToCheck);
+            }
+            if ($retrievedValue) {
+                sort($retrievedValue);
+            }
+
+            $this->assertSame($valueToCheck, $retrievedValue, 'Frozen list<varchar> value should round-trip correctly');
+        }
+
+        $this->compareWithCqlsh('test_frozen_list_varchar', 'id', 'value', $testValues, 'list_frozen');
+    }
+
+    public function testFrozenMapRoundtrip(): void {
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_frozen_map_varchar_int (id int PRIMARY KEY, value frozen<map<varchar, int>>)'
+        );
+
+        $testValues = [
+            [],
+            ['hello' => 1],
+            ['hello' => 1, 'world' => 2],
+            ['empty' => 0, 'negative' => -42, 'max' => Type\Integer::VALUE_MAX],
+            ['unicode🚀' => 123, '中文' => 456, 'العربية' => 789],
+        ];
+
+        foreach ($testValues as $index => $testValue) {
+            $this->connection->querySync(
+                'INSERT INTO test_frozen_map_varchar_int (id, value) VALUES (?, ?)',
+                [
+                    Type\Integer::fromValue($index),
+                    Type\MapCollection::fromValue($testValue, Type::VARCHAR, Type::INT, isFrozen: true),
+                ]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_frozen_map_varchar_int WHERE id = ?',
+                [Type\Integer::fromValue($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $valueToCheck = $testValue;
+            if ($valueToCheck) {
+                sort($valueToCheck);
+            }
+            if ($retrievedValue) {
+                sort($retrievedValue);
+            }
+
+            $this->assertSame($valueToCheck, $retrievedValue, 'Frozen map<varchar,int> value should round-trip correctly');
+        }
+
+        $this->compareWithCqlsh('test_frozen_map_varchar_int', 'id', 'value', $testValues, 'map_frozen');
+    }
+
+    public function testFrozenSetRoundtrip(): void {
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_frozen_set_varchar (id int PRIMARY KEY, value frozen<set<varchar>>)'
+        );
+
+        $testValues = [
+            [],
+            ['hello'],
+            ['hello', 'world'],
+            ['unique', 'values', 'only'],
+            ['unicode', '🚀', '中文', 'العربية'],
+        ];
+
+        foreach ($testValues as $index => $testValue) {
+            $this->connection->querySync(
+                'INSERT INTO test_frozen_set_varchar (id, value) VALUES (?, ?)',
+                [
+                    Type\Integer::fromValue($index),
+                    Type\SetCollection::fromValue($testValue, Type::VARCHAR, isFrozen: true),
+                ]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_frozen_set_varchar WHERE id = ?',
+                [Type\Integer::fromValue($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $valueToCheck = $testValue;
+            if ($valueToCheck) {
+                sort($valueToCheck);
+            }
+            if ($retrievedValue) {
+                sort($retrievedValue);
+            }
+
+            $this->assertEquals($valueToCheck, $retrievedValue, 'Frozen set<varchar> value should round-trip correctly');
+        }
+
+        $this->compareWithCqlsh('test_frozen_set_varchar', 'id', 'value', $testValues, 'set_frozen');
+    }
+
+    public function testFrozenUdtRoundtrip(): void {
+        $this->connection->querySync(
+            'CREATE TYPE IF NOT EXISTS address_frozen (street varchar, city varchar, zip int)'
+        );
+
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_frozen_udt_address (id int PRIMARY KEY, value frozen<address_frozen>)'
+        );
+
+        $testValues = [
+            ['street' => '123 Main St', 'city' => 'New York', 'zip' => 10001],
+            ['street' => '', 'city' => 'Empty Street', 'zip' => 0],
+            ['street' => 'Unicode Street 🏠', 'city' => '中文市', 'zip' => 12345],
+            ['street' => 'Long Street Name That Goes On And On', 'city' => 'Very Long City Name', 'zip' => Type\Integer::VALUE_MAX],
+        ];
+
+        foreach ($testValues as $index => $testValue) {
+            $this->connection->querySync(
+                'INSERT INTO test_frozen_udt_address (id, value) VALUES (?, ?)',
+                [
+                    Type\Integer::fromValue($index),
+                    Type\UDT::fromValue($testValue, [
+                        'street' => Type::VARCHAR,
+                        'city' => Type::VARCHAR,
+                        'zip' => Type::INT,
+                    ], isFrozen: true),
+                ]
+            );
+
+            $result = $this->connection->querySync(
+                'SELECT value FROM test_frozen_udt_address WHERE id = ?',
+                [Type\Integer::fromValue($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertNotNull($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertSame($testValue, $retrievedValue, 'Frozen UDT address value should round-trip correctly');
+        }
+
+        $this->compareWithCqlsh('test_frozen_udt_address', 'id', 'value', $testValues, 'udt_frozen');
+    }
+
     public function testInetRoundtrip(): void {
         $this->connection->querySync(
             'CREATE TABLE IF NOT EXISTS test_inet (id int PRIMARY KEY, value inet)'
@@ -863,6 +1038,37 @@ final class DataTypeRoundtripTest extends TestCase {
         }
 
         $this->compareWithCqlsh('test_map_int_varchar', 'id', 'value', $intStringTestValues, 'map');
+    }
+
+    public function testReversedClusteringOrder(): void {
+        $this->connection->querySync(
+            'CREATE TABLE IF NOT EXISTS test_reversed (pk int, ck int, value int, PRIMARY KEY (pk, ck)) WITH CLUSTERING ORDER BY (ck DESC)'
+        );
+
+        $pk = 1;
+        $cks = [1, 2, 3];
+        foreach ($cks as $i => $ck) {
+            $this->connection->querySync(
+                'INSERT INTO test_reversed (pk, ck, value) VALUES (?, ?, ?)',
+                [
+                    Type\Integer::fromValue($pk),
+                    Type\Integer::fromValue($ck),
+                    Type\Integer::fromValue($ck),
+                ]
+            );
+        }
+
+        $result = $this->connection->querySync(
+            'SELECT ck, value FROM test_reversed WHERE pk = ?',
+            [Type\Integer::fromValue($pk)]
+        )->asRowsResult();
+
+        $retrieved = [];
+        while ($row = $result->fetch()) {
+            $retrieved[] = $row['ck'];
+        }
+
+        $this->assertSame([3, 2, 1], $retrieved, 'Rows should be returned in reversed clustering order (DESC)');
     }
 
     public function testSetRoundtrip(): void {
@@ -1675,9 +1881,13 @@ final class DataTypeRoundtripTest extends TestCase {
                 'float' => $this->assertEqualsWithDelta((float) $phpValue, (float) $cqlshValue, max($phpValue * 0.01, 0.0001), 'PHP float value should match cqlsh output'),
                 'double' => $this->assertEqualsWithDelta((float) $phpValue, (float) $cqlshValue, max($phpValue * 0.01, 0.000001), 'PHP float value should match cqlsh output'),
                 'list', 'vector' => $this->verifyCqlListMatchesPhpList($phpValue, $cqlshValue),
+                'list_frozen' => $this->verifyCqlListMatchesPhpList($phpValue, $cqlshValue, frozen: true),
                 'set' => $this->verifyCqlSetMatchesPhpSet($phpValue, $cqlshValue),
+                'set_frozen' => $this->verifyCqlSetMatchesPhpSet($phpValue, $cqlshValue, frozen: true),
                 'map' => $this->verifyCqlMapMatchesPhpMap($phpValue, $cqlshValue),
+                'map_frozen' => $this->verifyCqlMapMatchesPhpMap($phpValue, $cqlshValue, frozen: true),
                 'udt' => $this->verifyCqlUdtMatchesPhpUdt($phpValue, $cqlshValue),
+                'udt_frozen' => $this->verifyCqlUdtMatchesPhpUdt($phpValue, $cqlshValue, frozen: true),
                 'tuple' => $this->verifyCqlTupleMatchesPhpTuple($phpValue, $cqlshValue),
                 default => $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP value should match cqlsh output'),
             };
@@ -1821,10 +2031,10 @@ final class DataTypeRoundtripTest extends TestCase {
         return $conn;
     }
 
-    private function verifyCqlListMatchesPhpList(array $phpValue, string $cqlshValue): void {
+    private function verifyCqlListMatchesPhpList(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         if ($phpValue === []) {
-            $this->assertSame('', $cqlshValue, 'PHP list value should match cqlsh output');
+            $this->assertSame($frozen ? '[]' : '', $cqlshValue, 'PHP list value should match cqlsh output');
 
             return;
         }
@@ -1846,10 +2056,10 @@ final class DataTypeRoundtripTest extends TestCase {
         $this->assertSame($phpValue, $cqlshArray, 'PHP list value should match cqlsh output');
     }
 
-    private function verifyCqlMapMatchesPhpMap(array $phpValue, string $cqlshValue): void {
+    private function verifyCqlMapMatchesPhpMap(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         if ($phpValue === []) {
-            $this->assertSame('', $cqlshValue, 'PHP map value should match cqlsh output');
+            $this->assertSame($frozen ? '{}' : '', $cqlshValue, 'PHP map value should match cqlsh output');
 
             return;
         }
@@ -1875,10 +2085,10 @@ final class DataTypeRoundtripTest extends TestCase {
         $this->assertSame($phpValue, $cqlshArray, 'PHP map value should match cqlsh output');
     }
 
-    private function verifyCqlSetMatchesPhpSet(array $phpValue, string $cqlshValue): void {
+    private function verifyCqlSetMatchesPhpSet(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         if ($phpValue === []) {
-            $this->assertSame('', $cqlshValue, 'PHP set value should match cqlsh output');
+            $this->assertSame($frozen ? '{}' : '', $cqlshValue, 'PHP set value should match cqlsh output');
 
             return;
         }
@@ -1927,7 +2137,7 @@ final class DataTypeRoundtripTest extends TestCase {
         $this->assertSame($phpValue, $cqlshArray, 'PHP tuple value should match cqlsh output');
     }
 
-    private function verifyCqlUdtMatchesPhpUdt(array $phpValue, string $cqlshValue): void {
+    private function verifyCqlUdtMatchesPhpUdt(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         $allFieldsNull = true;
         foreach ($phpValue as $field) {
@@ -1939,7 +2149,7 @@ final class DataTypeRoundtripTest extends TestCase {
         }
 
         if ($allFieldsNull) {
-            $this->assertSame('', $cqlshValue, 'PHP UDT value should match cqlsh output');
+            $this->assertSame($frozen ? '{}' : '', $cqlshValue, 'PHP UDT value should match cqlsh output');
 
             return;
         }

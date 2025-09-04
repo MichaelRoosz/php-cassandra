@@ -11,8 +11,6 @@ Todo
 
 * Finish tests
   * test fromStream()
-  * test frozen
-  * test reversed
   * test streamreader
   * named values auto-detection
 
