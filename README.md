@@ -87,15 +87,15 @@ $conn->connect();
 $conn->setConsistency(Consistency::QUORUM);
 
 // Plain query (positional bind)
-$rows = $conn->querySync(
+$rows = $conn->query(
     'SELECT * FROM users WHERE id = ?',
     [new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]
 )->fetchAll();
 
 // Prepared statement (named bind + paging)
-$prepared = $conn->prepareSync('SELECT id, name FROM users WHERE org_id = :org_id');
+$prepared = $conn->prepare('SELECT id, name FROM users WHERE org_id = :org_id');
 
-$result = $conn->executeSync(
+$result = $conn->execute(
     $prepared,
     values: ['org_id' => 42],
     consistency: Consistency::LOCAL_QUORUM,
@@ -162,7 +162,7 @@ Apply per call or as default via `setConsistency()`.
 
 Synchronous:
 ```php
-$rowsResult = $conn->querySync(
+$rowsResult = $conn->query(
     'SELECT id, name FROM users WHERE id = ?',
     [new \Cassandra\Type\Uuid($id)],
     consistency: \Cassandra\Consistency::ONE,
@@ -191,9 +191,9 @@ Query options (`QueryOptions`):
 ## Prepared statements
 
 ```php
-$prepared = $conn->prepareSync('SELECT * FROM users WHERE email = :email');
+$prepared = $conn->prepare('SELECT * FROM users WHERE email = :email');
 
-$rowsResult = $conn->executeSync(
+$rowsResult = $conn->execute(
     $prepared,
     ['email' => 'jane@example.com'],
     options: new \Cassandra\Request\Options\ExecuteOptions(
@@ -206,7 +206,7 @@ $rowsResult = $conn->executeSync(
 Pagination with prepared statements:
 ```php
 $options = new \Cassandra\Request\Options\ExecuteOptions(pageSize: 100, namesForValues: true);
-$result = $conn->executeSync($prepared, ['org_id' => 1], options: $options);
+$result = $conn->execute($prepared, ['org_id' => 1], options: $options);
 
 do {
     foreach ($result as $row) {
@@ -221,7 +221,7 @@ do {
         namesForValues: true,
         pagingState: $pagingState
     );
-    $result = $conn->executeSync($result, [], options: $options); // reuse previous RowsResult for metadata id
+    $result = $conn->execute($result, [], options: $options); // reuse previous RowsResult for metadata id
 } while (true);
 ```
 
@@ -234,7 +234,7 @@ use Cassandra\Request\BatchType;
 $batch = new Batch(type: BatchType::LOGGED, consistency: Consistency::QUORUM);
 
 // Prepared in batch
-$prepared = $conn->prepareSync('UPDATE users SET age = :age WHERE id = :id');
+$prepared = $conn->prepare('UPDATE users SET age = :age WHERE id = :id');
 $batch->appendPreparedStatement($prepared, ['age' => 21, 'id' => 'c5419d81-499e-4c9c-ac0c-fa6ba3ebc2bc']);
 
 // Simple query in batch
@@ -247,14 +247,14 @@ $batch->appendQuery(
     ]
 );
 
-$conn->batchSync($batch);
+$conn->batch($batch);
 ```
 
 Batch options (`BatchOptions`): `serialConsistency`, `defaultTimestamp`, `keyspace` (v5), `nowInSeconds` (v5).
 
 ## Results and fetching
 
-`querySync()`/`executeSync()` return a `RowsResult` for row-returning queries. Supported methods:
+`query()`/`execute()` return a `RowsResult` for row-returning queries. Supported methods:
 - `fetch(FetchType::ASSOC|NUM|BOTH)` returns next row or false
 - `fetchAll(FetchType)` returns all remaining rows
 - `fetchColumn(int $index)`/`fetchAllColumns(int $index)`
@@ -265,7 +265,7 @@ Example:
 ```php
 use Cassandra\Response\Result\FetchType;
 
-$r = $conn->querySync('SELECT role FROM system_auth.roles');
+$r = $conn->query('SELECT role FROM system_auth.roles');
 foreach ($r as $i => $row) {
     echo $row['role'], "\n";
 }
@@ -284,7 +284,7 @@ final class UserRow implements \Cassandra\Response\Result\RowClassInterface {
     public function name(): string { return (string) $this->row['name']; }
 }
 
-$rows = $conn->querySync('SELECT id, name FROM users');
+$rows = $conn->query('SELECT id, name FROM users');
 $rows->configureFetchObject(UserRow::class);
 
 foreach ($rows as $user) {
@@ -410,10 +410,10 @@ All operations throw `\Cassandra\Exception` for client errors and `\Cassandra\Re
 - `Cassandra\Connection`
   - `connect()`, `disconnect()`
   - `setConsistency(Consistency)`
-  - `querySync(string, array = [], ?Consistency, QueryOptions)` / `queryAsync(...)`
-  - `prepareSync(string, PrepareOptions)` / `prepareAsync(...)`
-  - `executeSync(PreparedResult|RowsResult, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)`
-  - `batchSync(Batch)` / `batchAsync(Batch)`
+  - `query(string, array = [], ?Consistency, QueryOptions)` / `queryAsync(...)`
+  - `prepare(string, PrepareOptions)` / `prepareAsync(...)`
+  - `execute(PreparedResult|RowsResult, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)`
+  - `batch(Batch)` / `batchAsync(Batch)`
   - `syncRequest(Request)` / `asyncRequest(Request)`
   - `addEventListener(EventListener)`
 
