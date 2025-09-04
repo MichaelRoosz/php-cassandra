@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
-final class ConnectionOptions {
-    public const PHP_CASSANDRA_DRIVER_NAME = 'php-cassandra-client';
-    public const PHP_CASSANDRA_DRIVER_VERSION = '0.9.0';
+use Cassandra\ReleaseConstants;
 
+final class ConnectionOptions {
     public function __construct(
         public readonly bool $enableCompression = false,
         public readonly bool $throwOnOverload = false,
@@ -23,8 +22,8 @@ final class ConnectionOptions {
 
         $options = [
             'CQL_VERSION' => '3.0.0',
-            'DRIVER_NAME' => self::PHP_CASSANDRA_DRIVER_NAME,
-            'DRIVER_VERSION' => self::PHP_CASSANDRA_DRIVER_VERSION,
+            'DRIVER_NAME' => ReleaseConstants::PHP_CASSANDRA_DRIVER_NAME,
+            'DRIVER_VERSION' => ReleaseConstants::PHP_CASSANDRA_DRIVER_VERSION,
         ];
 
         if ($this->enableCompression) {
