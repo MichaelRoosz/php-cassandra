@@ -326,7 +326,10 @@ abstract class Request implements Frame, Stringable {
 
             if (!isset($values[$key])) {
                 $encodedValues[$key] = null;
-            } elseif ($values[$key] instanceof Type\TypeBase) {
+            } elseif (
+                ($values[$key] instanceof Type\TypeBase)
+                || ($values[$key] instanceof Type\NotSet)
+            ) {
                 $encodedValues[$key] = $values[$key];
             } else {
                 $encodedValues[$key] = TypeFactory::getTypeObjectFromValue($bindMarker->type, $values[$key]);
