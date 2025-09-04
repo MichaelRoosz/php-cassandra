@@ -205,7 +205,7 @@ final class TypeFactory {
         return [
             Type::ASCII->value => Types\Ascii::class,
             Type::VARCHAR->value => Types\Varchar::class,
-            Type::TEXT->value => Types\Varchar::class,  // deprecated in Protocol v3
+            Type::TEXT->value => Types\Varchar::class,  // deprecated in protocol v3
             Type::VARINT->value => Types\Varint::class,
             Type::BIGINT->value => Types\Bigint::class,
             Type::COUNTER->value => Types\Counter::class,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Protocol;
 
 final class Flag {
-    public const COMPRESSION = 0x01; // deprecated in v5
+    public const COMPRESSION = 0x01; // deprecated in protocol v5
     public const CUSTOM_PAYLOAD = 0x04;
     public const TRACING = 0x02;
     public const USE_BETA = 0x10;
