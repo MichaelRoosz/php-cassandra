@@ -26,7 +26,7 @@ final class ConnectionTest extends TestCase {
     public function testSetConsistencyAffectsDefault(): void {
         $conn = $this->newConnection();
         $conn->setConsistency(Consistency::ONE);
-        $rows = $conn->querySync('SELECT key FROM system.local')->asRowsResult();
+        $rows = $conn->query('SELECT key FROM system.local')->asRowsResult();
         $this->assertSame(1, $rows->getRowCount());
         $row = $rows->fetch();
         $this->assertSame(['key' => 'local'], $row);

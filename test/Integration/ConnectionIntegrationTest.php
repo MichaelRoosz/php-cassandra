@@ -29,10 +29,10 @@ final class ConnectionIntegrationTest extends TestCase {
                 ]
             );
         }
-        $r = $conn->batchSync($batch);
+        $r = $conn->batch($batch);
         $this->assertSame(0, $r->getStream()); // stream 0 for sync
 
-        $rows = $conn->querySync(
+        $rows = $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
             [Type\Varchar::fromValue('fileA')],
             Consistency::ONE,
@@ -49,9 +49,9 @@ final class ConnectionIntegrationTest extends TestCase {
         $conn = $this->newConnection();
 
         // insert multiple users
-        $prepared = $conn->prepareSync('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
+        $prepared = $conn->prepare('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
         for ($i = 0; $i < 150; $i++) {
-            $conn->executeSync(
+            $conn->execute(
                 $prepared,
                 [
                     'id' => Type\Uuid::fromValue(self::uuidV4()),
@@ -64,8 +64,8 @@ final class ConnectionIntegrationTest extends TestCase {
             );
         }
 
-        $prepSel = $conn->prepareSync('SELECT id, name FROM users WHERE org_id = :org_id');
-        $rows = $conn->executeSync(
+        $prepSel = $conn->prepare('SELECT id, name FROM users WHERE org_id = :org_id');
+        $rows = $conn->execute(
             $prepSel,
             ['org_id' => 42],
             Consistency::ONE,
@@ -83,7 +83,7 @@ final class ConnectionIntegrationTest extends TestCase {
                 break;
             }
 
-            $rows = $conn->executeSync(
+            $rows = $conn->execute(
                 $rows,
                 ['org_id' => 42],
                 Consistency::ONE,
@@ -98,14 +98,14 @@ final class ConnectionIntegrationTest extends TestCase {
 
     public function testSimpleQuery(): void {
         $conn = $this->newConnection();
-        $r = $conn->querySync('SELECT key FROM system.local');
+        $r = $conn->query('SELECT key FROM system.local');
         $this->assertSame(1, iterator_count($r));
     }
 
     public function testSyntaxErrorRaisesException(): void {
         $conn = $this->newConnection();
         $this->expectException(ServerException::class);
-        $conn->querySync('SELECT * FROM does_not_exist_123');
+        $conn->query('SELECT * FROM does_not_exist_123');
     }
     private static function getHost(): string {
         return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';

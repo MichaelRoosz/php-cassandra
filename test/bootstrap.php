@@ -35,7 +35,7 @@ try {
     }
 
     // Fetch all base tables in the keyspace and truncate them
-    $tablesResult = $connection->querySync(
+    $tablesResult = $connection->query(
         'SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?',
         [Type\Varchar::fromValue($keyspace)]
     )->asRowsResult();
@@ -46,7 +46,7 @@ try {
             continue;
         }
         // Using current keyspace, so simple table name is sufficient
-        $connection->querySync('TRUNCATE ' . $tableName);
+        $connection->query('TRUNCATE ' . $tableName);
     }
 } catch (\Throwable $_) {
     // Swallow errors to not break unit test runs or environments without Cassandra

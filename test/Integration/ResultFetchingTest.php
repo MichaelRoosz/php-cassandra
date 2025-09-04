@@ -18,7 +18,7 @@ final class ResultFetchingTest extends TestCase {
         // Seed a few simple rows
         $filename = 'itest_' . bin2hex(random_bytes(4));
         for ($i = 0; $i < 3; $i++) {
-            $conn->querySync(
+            $conn->query(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                 [
                     Type\Varchar::fromValue($filename),
@@ -28,7 +28,7 @@ final class ResultFetchingTest extends TestCase {
             );
         }
 
-        $rows = $conn->querySync(
+        $rows = $conn->query(
             'SELECT ukey FROM storage WHERE filename = ?',
             [Type\Varchar::fromValue($filename)]
         )->asRowsResult();

@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 final class QueryTest extends TestCase {
     public function testPositionalBindAndTypes(): void {
         $conn = $this->newConnection();
-        $rows = $conn->querySync(
+        $rows = $conn->query(
             'SELECT key FROM system.local WHERE key = ?',
             [Type\Ascii::fromValue('local')],
             Consistency::ONE,
@@ -30,15 +30,15 @@ final class QueryTest extends TestCase {
 
     public function testPreparedQueryCache(): void {
         $conn = $this->newConnection();
-        $r1 = $conn->prepareSync('SELECT key FROM system.local WHERE key = ?');
-        $r2 = $conn->prepareSync('SELECT key FROM system.local WHERE key = ?');
+        $r1 = $conn->prepare('SELECT key FROM system.local WHERE key = ?');
+        $r2 = $conn->prepare('SELECT key FROM system.local WHERE key = ?');
         $this->assertInstanceOf(PreparedResult::class, $r1);
         $this->assertInstanceOf(CachedPreparedResult::class, $r2);
     }
 
     public function testSimpleSelect(): void {
         $conn = $this->newConnection();
-        $rows = $conn->querySync('SELECT key FROM system.local')->asRowsResult();
+        $rows = $conn->query('SELECT key FROM system.local')->asRowsResult();
         $this->assertSame(1, $rows->getRowCount());
         $this->assertSame(['key' => 'local'], $rows->fetch());
     }
@@ -46,7 +46,7 @@ final class QueryTest extends TestCase {
     public function testSyntaxErrorRaisesServerException(): void {
         $conn = $this->newConnection();
         $this->expectException(ServerException::class);
-        $conn->querySync('SELECT * FROM does_not_exist_123');
+        $conn->query('SELECT * FROM does_not_exist_123');
     }
 
     private static function getHost(): string {

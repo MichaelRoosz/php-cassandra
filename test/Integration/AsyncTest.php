@@ -35,7 +35,7 @@ final class AsyncTest extends TestCase {
 
         $conn->flush();
 
-        $count = (int) $conn->querySync(
+        $count = (int) $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
             [Type\Varchar::fromValue($filename)]
         )->asRowsResult()->fetchColumn(0);

@@ -15,10 +15,10 @@ final class PreparedStatementTest extends TestCase {
     public function testPrepareAndExecuteWithNamedBinds(): void {
         $conn = $this->newConnection();
 
-        $conn->querySync('TRUNCATE users');
+        $conn->query('TRUNCATE users');
 
-        $prepared = $conn->prepareSync('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
-        $conn->executeSync(
+        $prepared = $conn->prepare('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
+        $conn->execute(
             $prepared,
             [
                 'id' => Type\Uuid::fromValue(self::uuidV4()),
@@ -30,8 +30,8 @@ final class PreparedStatementTest extends TestCase {
             new ExecuteOptions(namesForValues: true)
         );
 
-        $sel = $conn->prepareSync('SELECT count(*) FROM users WHERE org_id = :org_id');
-        $rows = $conn->executeSync($sel, ['org_id' => 7], Consistency::ONE, new ExecuteOptions(namesForValues: true))->asRowsResult();
+        $sel = $conn->prepare('SELECT count(*) FROM users WHERE org_id = :org_id');
+        $rows = $conn->execute($sel, ['org_id' => 7], Consistency::ONE, new ExecuteOptions(namesForValues: true))->asRowsResult();
         $this->assertSame(1, (int) $rows->fetchColumn(0));
     }
 
@@ -40,10 +40,10 @@ final class PreparedStatementTest extends TestCase {
 
         // Seed deterministic number of rows for a unique org_id
         $orgId = random_int(10000, 99999);
-        $ins = $conn->prepareSync('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
+        $ins = $conn->prepare('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
         $numRows = 60;
         for ($i = 0; $i < $numRows; $i++) {
-            $conn->executeSync(
+            $conn->execute(
                 $ins,
                 [
                     'id' => Type\Uuid::fromValue(self::uuidV4()),
@@ -57,8 +57,8 @@ final class PreparedStatementTest extends TestCase {
         }
 
         // Prepared select with paging, assert exact count
-        $prepared = $conn->prepareSync('SELECT id, name FROM users WHERE org_id = :org_id');
-        $rows = $conn->executeSync(
+        $prepared = $conn->prepare('SELECT id, name FROM users WHERE org_id = :org_id');
+        $rows = $conn->execute(
             $prepared,
             ['org_id' => $orgId],
             Consistency::ONE,
@@ -76,7 +76,7 @@ final class PreparedStatementTest extends TestCase {
             if ($state === null) {
                 break;
             }
-            $rows = $conn->executeSync(
+            $rows = $conn->execute(
                 $rows,
                 ['org_id' => $orgId],
                 Consistency::ONE,

@@ -56,11 +56,11 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         parent::setUp();
         $this->connection = $this->newConnection('system');
 
-        $this->connection->querySync(
+        $this->connection->query(
             "DROP KEYSPACE IF EXISTS {$this->testKeyspace}"
         );
 
-        $this->connection->querySync(
+        $this->connection->query(
             "CREATE KEYSPACE IF NOT EXISTS {$this->testKeyspace} WITH REPLICATION = " .
             "{'class': 'SimpleStrategy', 'replication_factor': 1}"
         );
@@ -70,7 +70,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
     protected function tearDown(): void {
         $this->connection = $this->newConnection('system');
-        $this->connection->querySync("DROP KEYSPACE IF EXISTS {$this->testKeyspace}");
+        $this->connection->query("DROP KEYSPACE IF EXISTS {$this->testKeyspace}");
 
         if (file_exists($this->dumpFile)) {
             unlink($this->dumpFile);
@@ -80,7 +80,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testAsciiRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_ascii (id int PRIMARY KEY, value varchar)'
         );
 
@@ -101,12 +101,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_ascii (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_ascii WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -122,7 +122,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testBigintRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_bigint (id int PRIMARY KEY, value bigint)'
         );
 
@@ -139,12 +139,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_bigint (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_bigint WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -160,7 +160,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testBlobRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_blob (id int PRIMARY KEY, value blob)'
         );
 
@@ -174,12 +174,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_blob (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_blob WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -195,19 +195,19 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testBooleanRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_boolean (id int PRIMARY KEY, value boolean)'
         );
 
         $testValues = [true, false];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_boolean (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_boolean WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -224,7 +224,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testCounterRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_counter (id int PRIMARY KEY, value counter)'
         );
 
@@ -238,12 +238,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($finalValues as $index => $delta) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'UPDATE test_counter SET value = value + ? WHERE id = ?',
                 [$delta, $index]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_counter WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -260,7 +260,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testCustomRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             "CREATE TABLE IF NOT EXISTS test_custom (id int PRIMARY KEY, value 'org.apache.cassandra.db.marshal.BytesType')"
         );
 
@@ -273,12 +273,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $config) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_custom (id, value) VALUES (?, ?)',
                 [$index, $config['value']]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_custom WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -294,7 +294,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testDateRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_date (id int PRIMARY KEY, value date)'
         );
 
@@ -317,12 +317,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         // test with string values
         foreach (array_keys($testValues) as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_date (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_date WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -357,12 +357,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         }
 
         foreach ($dateTimeValues as $index => $config) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_date (id, value) VALUES (?, ?)',
                 [$index, $config['input']]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_date WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -377,7 +377,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testDecimalRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_decimal (id int PRIMARY KEY, value decimal)'
         );
 
@@ -411,12 +411,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         foreach (array_keys($testValues) as $index => $testValue) {
 
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_decimal (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_decimal WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -433,7 +433,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testDoubleRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_double (id int PRIMARY KEY, value double)'
         );
 
@@ -450,12 +450,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_double (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_double WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -472,7 +472,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testDurationRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_duration (id int PRIMARY KEY, value duration)'
         );
 
@@ -496,12 +496,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         // test with string values
         foreach (array_keys($testValues) as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_duration (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_duration WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -546,12 +546,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         }
 
         foreach ($dateIntervalValues as $index => $config) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_duration (id, value) VALUES (?, ?)',
                 [$index, $config['input']]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_duration WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -566,7 +566,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testFloat32Roundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_float32 (id int PRIMARY KEY, value float)'
         );
 
@@ -583,12 +583,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_float32 (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_float32 WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -606,7 +606,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testFrozenListRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_frozen_list_varchar (id int PRIMARY KEY, value frozen<list<varchar>>)'
         );
 
@@ -620,12 +620,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_frozen_list_varchar (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_frozen_list_varchar WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -649,7 +649,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testFrozenMapRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_frozen_map_varchar_int (id int PRIMARY KEY, value frozen<map<varchar, int>>)'
         );
 
@@ -662,12 +662,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_frozen_map_varchar_int (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_frozen_map_varchar_int WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -691,7 +691,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testFrozenSetRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_frozen_set_varchar (id int PRIMARY KEY, value frozen<set<varchar>>)'
         );
 
@@ -704,12 +704,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_frozen_set_varchar (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_frozen_set_varchar WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -733,11 +733,11 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testFrozenUdtRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TYPE IF NOT EXISTS address_frozen (street varchar, city varchar, zip int)'
         );
 
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_frozen_udt_address (id int PRIMARY KEY, value frozen<address_frozen>)'
         );
 
@@ -749,12 +749,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_frozen_udt_address (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_frozen_udt_address WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -770,7 +770,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testInetRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_inet (id int PRIMARY KEY, value inet)'
         );
 
@@ -786,12 +786,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_inet (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_inet WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -807,7 +807,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testIntegerRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_integer (id int PRIMARY KEY, value int)'
         );
 
@@ -824,12 +824,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_integer (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_integer WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -848,7 +848,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
     public function testListRoundtrip(): void {
         // Test list<varchar>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_list_varchar (id int PRIMARY KEY, value list<varchar>)'
         );
 
@@ -862,12 +862,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_list_varchar (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_list_varchar WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -892,7 +892,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $this->compareWithCqlsh('test_list_varchar', 'id', 'value', $testValues, 'list');
 
         // Test list<int>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_list_int (id int PRIMARY KEY, value list<int>)'
         );
 
@@ -906,12 +906,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($intTestValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_list_int (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_list_int WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -938,7 +938,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
     public function testMapRoundtrip(): void {
         // Test map<varchar, int>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_map_varchar_int (id int PRIMARY KEY, value map<varchar, int>)'
         );
 
@@ -951,12 +951,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_map_varchar_int (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_map_varchar_int WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -981,7 +981,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $this->compareWithCqlsh('test_map_varchar_int', 'id', 'value', $testValues, 'map');
 
         // Test map<int, varchar>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_map_int_varchar (id int PRIMARY KEY, value map<int, varchar>)'
         );
 
@@ -994,12 +994,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($intStringTestValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_map_int_varchar (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_map_int_varchar WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1025,20 +1025,20 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testReversedClusteringOrder(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_reversed (pk int, ck int, value int, PRIMARY KEY (pk, ck)) WITH CLUSTERING ORDER BY (ck DESC)'
         );
 
         $pk = 1;
         $cks = [1, 2, 3];
         foreach ($cks as $ck) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_reversed (pk, ck, value) VALUES (?, ?, ?)',
                 [$pk, $ck, $ck]
             );
         }
 
-        $result = $this->connection->querySync(
+        $result = $this->connection->query(
             'SELECT ck, value FROM test_reversed WHERE pk = ?',
             [$pk]
         )->asRowsResult();
@@ -1053,7 +1053,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
     public function testSetRoundtrip(): void {
         // Test set<varchar>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_set_varchar (id int PRIMARY KEY, value set<varchar>)'
         );
 
@@ -1066,12 +1066,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_set_varchar (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_set_varchar WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1096,7 +1096,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $this->compareWithCqlsh('test_set_varchar', 'id', 'value', $testValues, 'set');
 
         // Test set<int>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_set_int (id int PRIMARY KEY, value set<int>)'
         );
 
@@ -1109,12 +1109,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($intTestValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_set_int (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_set_int WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1140,7 +1140,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testSmallintRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_smallint (id int PRIMARY KEY, value smallint)'
         );
 
@@ -1155,12 +1155,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_smallint (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_smallint WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1177,7 +1177,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testTimeRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_time (id int PRIMARY KEY, value time)'
         );
 
@@ -1193,12 +1193,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         // Test with integer and string values
         foreach (array_keys($testValues) as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_time (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_time WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1226,12 +1226,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($dateTimeValues as $index => $config) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_time (id, value) VALUES (?, ?)',
                 [$index, $config['input']]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_time WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1247,7 +1247,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testTimestampRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_timestamp (id int PRIMARY KEY, value timestamp)'
         );
 
@@ -1275,12 +1275,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         // Test with integer and string values
         foreach (array_keys($testValues) as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_timestamp WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1311,12 +1311,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         }
 
         foreach ($dateTimeValues as $index => $config) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
                 [$index, $config['input']]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_timestamp WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1331,7 +1331,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testTimeuuidRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_timeuuid (id int PRIMARY KEY, value timeuuid)'
         );
 
@@ -1343,12 +1343,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_timeuuid (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_timeuuid WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1365,7 +1365,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testTinyintRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_tinyint (id int PRIMARY KEY, value tinyint)'
         );
 
@@ -1380,12 +1380,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_tinyint (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_tinyint WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1403,7 +1403,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
     public function testTupleRoundtrip(): void {
         // Test tuple<varchar, int>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_tuple_varchar_int (id int PRIMARY KEY, value tuple<varchar, int>)'
         );
 
@@ -1416,12 +1416,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_tuple_varchar_int (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_tuple_varchar_int WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1436,7 +1436,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $this->compareWithCqlsh('test_tuple_varchar_int', 'id', 'value', $testValues, 'tuple');
 
         // Test tuple<int, varchar, boolean>
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_tuple_int_varchar_boolean (id int PRIMARY KEY, value tuple<int, varchar, boolean>)'
         );
 
@@ -1449,12 +1449,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($tripleTestValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_tuple_int_varchar_boolean (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_tuple_int_varchar_boolean WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1469,7 +1469,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $this->compareWithCqlsh('test_tuple_int_varchar_boolean', 'id', 'value', $tripleTestValues, 'tuple');
 
         // Test tuple with null values
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_tuple_with_nulls (id int PRIMARY KEY, value tuple<varchar, int>)'
         );
 
@@ -1480,12 +1480,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($nullTestValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_tuple_with_nulls (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_tuple_with_nulls WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1505,11 +1505,11 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
     public function testUdtRoundtrip(): void {
         // Create a User Defined Type in Cassandra
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TYPE IF NOT EXISTS address (street varchar, city varchar, zip int)'
         );
 
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_udt_address (id int PRIMARY KEY, value address)'
         );
 
@@ -1521,7 +1521,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_udt_address (id, value) VALUES (?, ?)',
                 [
                     $index,
@@ -1529,7 +1529,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 ]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_udt_address WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1544,11 +1544,11 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $this->compareWithCqlsh('test_udt_address', 'id', 'value', $testValues, 'udt');
 
         // Test UDT with null fields
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TYPE IF NOT EXISTS person (name varchar, age int, active boolean)'
         );
 
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_udt_person (id int PRIMARY KEY, value person)'
         );
 
@@ -1570,7 +1570,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 }
             }
 
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_udt_person (id, value) VALUES (?, ?)',
                 [
                     $index,
@@ -1578,7 +1578,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 ]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_udt_person WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1594,7 +1594,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testUuidRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_uuid (id int PRIMARY KEY, value uuid)'
         );
 
@@ -1607,12 +1607,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_uuid (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_uuid WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1630,7 +1630,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testVarcharRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_varchar (id int PRIMARY KEY, value varchar)'
         );
 
@@ -1652,12 +1652,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_varchar (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_varchar WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1673,7 +1673,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
     }
 
     public function testVarintRoundtrip(): void {
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_varint (id int PRIMARY KEY, value varint)'
         );
 
@@ -1701,12 +1701,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_varint (id, value) VALUES (?, ?)',
                 [$index, $testValue]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_varint WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1732,7 +1732,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         }
 
         // test vector of 3 float values (data type with fixed length)
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_vector_float3 (id int PRIMARY KEY, value vector<float, 3>)'
         );
 
@@ -1745,7 +1745,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_vector_float3 (id, value) VALUES (?, ?)',
                 [
                     $index,
@@ -1753,7 +1753,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 ]
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_vector_float3 WHERE id = ?',
                 [$index]
             )->asRowsResult();
@@ -1779,7 +1779,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $this->compareWithCqlsh('test_vector_float3', 'id', 'value', $testValues, 'vector');
 
         // test vector of 4 varint values (data type with variable length)
-        $this->connection->querySync(
+        $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_vector_varint4 (id int PRIMARY KEY, value vector<varint, 4>)'
         );
 
@@ -1799,12 +1799,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         ];
 
         foreach ($testValues as $index => $testValue) {
-            $this->connection->querySync(
+            $this->connection->query(
                 'INSERT INTO test_vector_varint4 (id, value) VALUES (?, ?)',
                 [$index, $testValue],
             );
 
-            $result = $this->connection->querySync(
+            $result = $this->connection->query(
                 'SELECT value FROM test_vector_varint4 WHERE id = ?',
                 [$index]
             )->asRowsResult();

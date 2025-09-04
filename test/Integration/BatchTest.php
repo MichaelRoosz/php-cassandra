@@ -30,10 +30,10 @@ final class BatchTest extends TestCase {
             );
         }
 
-        $r = $conn->batchSync($batch);
+        $r = $conn->batch($batch);
         $this->assertSame(0, $r->getStream());
 
-        $rows = $conn->querySync(
+        $rows = $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
             [Type\Varchar::fromValue($filename)],
             Consistency::ONE,

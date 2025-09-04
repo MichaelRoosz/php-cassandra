@@ -104,25 +104,25 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
-    public function batchAsync(Request\Batch $batchRequest): Statement {
-        return $this->asyncRequest($batchRequest);
-    }
-
-    /**
-     * @throws \Cassandra\Exception
-     */
-    public function batchSync(Request\Batch $batchRequest): Response\Result {
+    public function batch(Request\Batch $batchRequest): Response\Result {
         $response = $this->syncRequest($batchRequest);
 
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during batchSync', ExceptionCode::CON_UNEXPECTED_RESPONSE_BATCH_SYNC->value, [
-                'operation' => 'batchSync',
+            throw new Exception('Unexpected response type during batch', ExceptionCode::CON_UNEXPECTED_RESPONSE_BATCH_SYNC->value, [
+                'operation' => 'batch',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
             ]);
         }
 
         return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
+    public function batchAsync(Request\Batch $batchRequest): Statement {
+        return $this->asyncRequest($batchRequest);
     }
 
     /**
@@ -232,13 +232,20 @@ final class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
+    public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
         $consistency = $consistency ?? $this->consistency;
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
-        $statement = $this->asyncRequest($request);
+        $response = $this->syncRequest($request);
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('Unexpected response type during execute', ExceptionCode::CON_EXECUTE_UNEXPECTED_RESPONSE->value, [
+                'operation' => 'execute',
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
+        }
 
-        return $statement;
+        return $response;
     }
 
     /**
@@ -246,20 +253,13 @@ final class Connection {
      *
      * @throws \Cassandra\Exception
      */
-    public function executeSync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
+    public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
         $consistency = $consistency ?? $this->consistency;
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
-        $response = $this->syncRequest($request);
-        if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during executeSync', ExceptionCode::CON_EXECUTE_UNEXPECTED_RESPONSE->value, [
-                'operation' => 'executeSync',
-                'expected' => Response\Result::class,
-                'received' => get_class($response),
-            ]);
-        }
+        $statement = $this->asyncRequest($request);
 
-        return $response;
+        return $statement;
     }
 
     /**
@@ -300,6 +300,21 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception
      */
+    public function prepare(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
+        $response = $this->syncRequest(new Request\Prepare($query, $options));
+        if (!($response instanceof Response\Result\PreparedResult)) {
+            throw new Exception('Unexpected response type during prepare', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception
+     */
     public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions()): Statement {
         $request = new Request\Prepare($query, $options);
 
@@ -307,12 +322,18 @@ final class Connection {
     }
 
     /**
+     * @param array<mixed> $values
+     *
      * @throws \Cassandra\Exception
      */
-    public function prepareSync(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
-        $response = $this->syncRequest(new Request\Prepare($query, $options));
-        if (!($response instanceof Response\Result\PreparedResult)) {
-            throw new Exception('Unexpected response type during prepareSync', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
+    public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
+        $consistency = $consistency ?? $this->consistency;
+
+        $request = new Request\Query($query, $values, $consistency, $options);
+
+        $response = $this->syncRequest($request);
+        if (!($response instanceof Response\Result)) {
+            throw new Exception('Unexpected response type during query', ExceptionCode::CON_QUERY_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
             ]);
@@ -331,27 +352,6 @@ final class Connection {
         $request = new Request\Query($query, $values, $consistency, $options);
 
         return $this->asyncRequest($request);
-    }
-
-    /**
-     * @param array<mixed> $values
-     *
-     * @throws \Cassandra\Exception
-     */
-    public function querySync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
-        $consistency = $consistency ?? $this->consistency;
-
-        $request = new Request\Query($query, $values, $consistency, $options);
-
-        $response = $this->syncRequest($request);
-        if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during querySync', ExceptionCode::CON_QUERY_UNEXPECTED_RESPONSE->value, [
-                'expected' => Response\Result::class,
-                'received' => get_class($response),
-            ]);
-        }
-
-        return $response;
     }
 
     public function setConsistency(Consistency $consistency): void {
@@ -411,7 +411,7 @@ final class Connection {
 
             $prepareResponse = $this->syncRequest($autoPrepareRequest);
             if (!($prepareResponse instanceof Response\Result\PreparedResult)) {
-                throw new Exception('Unexpected response type during prepareSync', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
+                throw new Exception('Unexpected response type during prepare', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
                     'expected' => Response\Result::class,
                     'received' => get_class($prepareResponse),
                 ]);

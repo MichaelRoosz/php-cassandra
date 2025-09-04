@@ -46,8 +46,8 @@ final class StorageIntegrationTest extends TestCase {
         }
 
         // Prepared select with paging
-        $prepared = $conn->prepareSync('SELECT filename, ukey, value FROM storage WHERE filename = :filename');
-        $rows = $conn->executeSync(
+        $prepared = $conn->prepare('SELECT filename, ukey, value FROM storage WHERE filename = :filename');
+        $rows = $conn->execute(
             $prepared,
             ['filename' => $filename],
             Consistency::ONE,
@@ -63,7 +63,7 @@ final class StorageIntegrationTest extends TestCase {
             if ($pagingState === null) {
                 break;
             }
-            $rows = $conn->executeSync(
+            $rows = $conn->execute(
                 $rows,
                 ['filename' => $filename],
                 Consistency::ONE,
@@ -74,7 +74,7 @@ final class StorageIntegrationTest extends TestCase {
         $this->assertSame($numRows, $count, 'Prepared+paging should return all inserted rows');
 
         // Simple query with paging
-        $result = $conn->querySync(
+        $result = $conn->query(
             'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
             [Type\Varchar::fromValue($filename)],
             Consistency::ONE,
@@ -90,7 +90,7 @@ final class StorageIntegrationTest extends TestCase {
             if ($state === null) {
                 break;
             }
-            $result = $conn->querySync(
+            $result = $conn->query(
                 'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
                 [Type\Varchar::fromValue($filename)],
                 Consistency::ONE,
