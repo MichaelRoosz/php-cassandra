@@ -250,6 +250,37 @@ final class Connection {
 
     /**
      * @param array<mixed> $values
+     * @return array<\Cassandra\Response\Result\RowsResult>
+     *
+     * @throws \Cassandra\Exception
+     */
+    public function executeAll(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): array {
+
+        $responses = [];
+
+        $response = $this->execute($previousResult, $values, $consistency, $options)->asRowsResult();
+
+        $responses[] = $response;
+
+        $pagingState = $response->getRowsMetadata()->pagingState;
+        while ($pagingState !== null) {
+            $response = $this->execute(
+                previousResult: $previousResult,
+                values: $values,
+                consistency: $consistency,
+                options: $options->withPagingState($pagingState)
+            )->asRowsResult();
+
+            $responses[] = $response;
+
+            $pagingState = $response->getRowsMetadata()->pagingState;
+        }
+
+        return $responses;
+    }
+
+    /**
+     * @param array<mixed> $values
      *
      * @throws \Cassandra\Exception
      */
@@ -340,6 +371,39 @@ final class Connection {
         }
 
         return $response;
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @return array<\Cassandra\Response\Result\RowsResult>
+     *
+     * @throws \Cassandra\Exception
+     */
+    public function queryAll(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): array {
+
+        $responses = [];
+
+        $response = $this->query($query, $values, $consistency, $options)->asRowsResult();
+
+        $responses[] = $response;
+
+        $pagingState = $response->getRowsMetadata()->pagingState;
+        while ($pagingState !== null) {
+            $response = $this->query(
+                query: $query,
+                values: $values,
+                consistency: $consistency,
+                options: $options->withPagingState(
+                    $pagingState
+                )
+            )->asRowsResult();
+
+            $responses[] = $response;
+
+            $pagingState = $response->getRowsMetadata()->pagingState;
+        }
+
+        return $responses;
     }
 
     /**

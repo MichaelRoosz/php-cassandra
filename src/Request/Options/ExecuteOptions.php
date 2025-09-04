@@ -59,6 +59,7 @@ final class ExecuteOptions extends QueryOptions {
         );
     }
 
+    #[\Override]
     public function withPagingState(string $pagingState): self {
         return new self(
             skipMetadata: $this->skipMetadata,

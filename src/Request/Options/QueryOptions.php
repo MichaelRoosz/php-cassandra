@@ -31,4 +31,17 @@ class QueryOptions extends RequestOptions {
             nowInSeconds: $this->nowInSeconds,
         );
     }
+
+    public function withPagingState(string $pagingState): self {
+        return new self(
+            autoPrepare: $this->autoPrepare,
+            pageSize: $this->pageSize,
+            pagingState: $pagingState,
+            serialConsistency: $this->serialConsistency,
+            defaultTimestamp: $this->defaultTimestamp,
+            namesForValues: $this->namesForValues,
+            keyspace: $this->keyspace,
+            nowInSeconds: $this->nowInSeconds,
+        );
+    }
 }
