@@ -44,7 +44,7 @@ final class RowsMetadata {
         );
     }
 
-    public function withMetadataId(string $metadataId): self {
+    public function withMetadataId(?string $metadataId): self {
         return new self(
             flags: $this->flags,
             columnsCount: $this->columnsCount,
