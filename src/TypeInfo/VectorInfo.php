@@ -6,7 +6,7 @@ namespace Cassandra\TypeInfo;
 
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
-use Cassandra\TypeFactory;
+use Cassandra\ValueFactory;
 
 final class VectorInfo extends TypeInfo {
     public function __construct(
@@ -24,7 +24,7 @@ final class VectorInfo extends TypeInfo {
      * } $typeDefinition
      *
      * @throws \Cassandra\TypeInfo\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
@@ -56,7 +56,7 @@ final class VectorInfo extends TypeInfo {
             );
         }
 
-        $valueType = TypeFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
+        $valueType = ValueFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
 
         if (!isset($typeDefinition['dimensions'])) {
             throw new Exception(

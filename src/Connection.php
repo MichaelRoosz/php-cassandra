@@ -15,8 +15,8 @@ use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
 use Cassandra\Response\StreamReader;
-use Cassandra\Type\NotSet;
-use Cassandra\Type\TypeBase;
+use Cassandra\Value\NotSet;
+use Cassandra\Value\ValueBase;
 use SplQueue;
 use TypeError;
 use ValueError;
@@ -754,7 +754,7 @@ final class Connection {
                 && $values
                 && array_find($values, fn($v) => (
                     $v !== null
-                    && !($v instanceof TypeBase)
+                    && !($v instanceof ValueBase)
                     && !($v instanceof NotSet)
                 )) !== null
             ) {

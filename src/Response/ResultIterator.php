@@ -26,7 +26,7 @@ final class ResultIterator implements Iterator {
      * @return \Cassandra\Response\Result\RowClassInterface|array<array-key, mixed>|false
      *
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     #[\Override]
     public function current(): RowClassInterface|array|false {

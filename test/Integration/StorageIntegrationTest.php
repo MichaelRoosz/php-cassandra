@@ -12,6 +12,7 @@ use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
+use Cassandra\Value;
 use PHPUnit\Framework\TestCase;
 
 final class StorageIntegrationTest extends TestCase {
@@ -32,9 +33,9 @@ final class StorageIntegrationTest extends TestCase {
                 $batch->appendQuery(
                     'INSERT INTO storage(filename, ukey, value) VALUES(?, ?, ?)',
                     [
-                        Type\Varchar::fromValue($filename),
-                        Type\Varchar::fromValue($ukey),
-                        Type\MapCollection::fromValue(['id' => '4003578', 'title' => 'Christmas By The River (CD)'], Type::VARCHAR, Type::VARCHAR),
+                        Value\Varchar::fromValue($filename),
+                        Value\Varchar::fromValue($ukey),
+                        Value\MapCollection::fromValue(['id' => '4003578', 'title' => 'Christmas By The River (CD)'], Type::VARCHAR, Type::VARCHAR),
                     ]
                 );
             }
@@ -76,7 +77,7 @@ final class StorageIntegrationTest extends TestCase {
         // Simple query with paging
         $result = $conn->query(
             'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
-            [Type\Varchar::fromValue($filename)],
+            [Value\Varchar::fromValue($filename)],
             Consistency::ONE,
             new QueryOptions(pageSize: 50)
         )->asRowsResult();
@@ -92,7 +93,7 @@ final class StorageIntegrationTest extends TestCase {
             }
             $result = $conn->query(
                 'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
-                [Type\Varchar::fromValue($filename)],
+                [Value\Varchar::fromValue($filename)],
                 Consistency::ONE,
                 new QueryOptions(pageSize: 50, pagingState: $state)
             )->asRowsResult();

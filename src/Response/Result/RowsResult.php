@@ -38,7 +38,7 @@ final class RowsResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -87,7 +87,7 @@ final class RowsResult extends Result {
      *
      * @return array<string|int, mixed>|false
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetch(FetchType $mode = FetchType::ASSOC): array|false {
         if ($this->fetchedRows >= $this->rowCount) {
@@ -109,7 +109,7 @@ final class RowsResult extends Result {
      *
      * @return array<int, array<string|int, mixed>>
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetchAll(FetchType $mode = FetchType::ASSOC): array {
         $rows = [];
@@ -131,7 +131,7 @@ final class RowsResult extends Result {
      *
      * @return array<mixed>
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetchAllColumns(int $index = 0): array {
         $values = [];
@@ -155,7 +155,7 @@ final class RowsResult extends Result {
      *
      * @return array<int|string, mixed>
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetchAllKeyPairs(int $keyIndex = 0, int $valueIndex = 1, bool $mergeDuplicates = false): array {
 
@@ -235,7 +235,7 @@ final class RowsResult extends Result {
      * @return array<\Cassandra\Response\Result\RowClassInterface>
      *
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetchAllObjects(): array {
 
@@ -257,7 +257,7 @@ final class RowsResult extends Result {
      *
      * @return mixed|false
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetchColumn(int $index = 0): mixed {
         if ($this->fetchedRows >= $this->rowCount) {
@@ -295,7 +295,7 @@ final class RowsResult extends Result {
      *
      * @return array<int|string, mixed>|false
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetchKeyPair(int $keyIndex = 0, int $valueIndex = 1): array|false {
         if ($this->fetchedRows >= $this->rowCount) {
@@ -352,7 +352,7 @@ final class RowsResult extends Result {
      * @return \Cassandra\Response\Result\RowClassInterface|false
      * 
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function fetchObject(): RowClassInterface|false {
 
@@ -380,7 +380,7 @@ final class RowsResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function getData(): ResultData {
         return $this->getRowsData();
@@ -403,7 +403,7 @@ final class RowsResult extends Result {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function getRowsData(): RowsData {
 
@@ -475,7 +475,7 @@ final class RowsResult extends Result {
     /**
      * @return array<mixed>
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     private function readNextRow(FetchType $mode = FetchType::ASSOC): array {
         if ($this->rowsMetadata->columns === null) {

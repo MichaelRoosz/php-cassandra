@@ -1,9 +1,6 @@
 Todo
 =====
 
-* Rename value-holder classes
-  * Cassandra\Type\* → Cassandra\Value\*; TypeBase → ValueBase; TypeFactory → ValueFactory; Type\NotSet → Value\NotSet.
-
 * better handling for "not set" > is it really possible to be returned?
 
 * remove unused exceptions codes

@@ -89,7 +89,7 @@ $conn->setConsistency(Consistency::QUORUM);
 // Plain query (positional bind)
 $rows = $conn->query(
     'SELECT * FROM users WHERE id = ?',
-    [new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]
+    [new \Cassandra\Value\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]
 )->fetchAll();
 
 // Prepared statement (named bind + paging)
@@ -164,7 +164,7 @@ Synchronous:
 ```php
 $rowsResult = $conn->query(
     'SELECT id, name FROM users WHERE id = ?',
-    [new \Cassandra\Type\Uuid($id)],
+    [new \Cassandra\Value\Uuid($id)],
     consistency: \Cassandra\Consistency::ONE,
     options: new \Cassandra\Request\Options\QueryOptions(pageSize: 100)
 );
@@ -241,8 +241,8 @@ $batch->appendPreparedStatement($prepared, ['age' => 21, 'id' => 'c5419d81-499e-
 $batch->appendQuery(
     'INSERT INTO users (id, name, age) VALUES (?, ?, ?)',
     [
-        new \Cassandra\Type\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
-        new \Cassandra\Type\Varchar('Mark'),
+        new \Cassandra\Value\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc'),
+        new \Cassandra\Value\Varchar('Mark'),
         20,
     ]
 );
@@ -294,40 +294,40 @@ foreach ($rows as $user) {
 
 ## Data types
 
-All native Cassandra types are supported via classes in `Cassandra\Type\*`. You may pass either:
-- A concrete `Type\...` instance, or
+All native Cassandra types are supported via classes in `Cassandra\Value\*`. You may pass either:
+- A concrete `Value\...` instance, or
 - A PHP scalar/array matching the type; the driver will convert it when metadata is available
 
 Examples:
 ```php
 // Scalars
-new \Cassandra\Type\Ascii('hello');
-new \Cassandra\Type\Bigint(10_000_000_000);
-new \Cassandra\Type\Boolean(true);
-new \Cassandra\Type\Double(2.718281828459);
-new \Cassandra\Type\Float32(2.718);
-new \Cassandra\Type\Integer(123);
-new \Cassandra\Type\Smallint(2048);
-new \Cassandra\Type\Tinyint(12);
-new \Cassandra\Type\Varint(10000000000);
+new \Cassandra\Value\Ascii('hello');
+new \Cassandra\Value\Bigint(10_000_000_000);
+new \Cassandra\Value\Boolean(true);
+new \Cassandra\Value\Double(2.718281828459);
+new \Cassandra\Value\Float32(2.718);
+new \Cassandra\Value\Int32(123);
+new \Cassandra\Value\Smallint(2048);
+new \Cassandra\Value\Tinyint(12);
+new \Cassandra\Value\Varint(10000000000);
 
 // Temporal
-\Cassandra\Type\Date::fromString('2011-02-03');
-\Cassandra\Type\Time::fromString('08:12:54.123456789');
-\Cassandra\Type\Timestamp::fromString('2011-02-03T04:05:00.000+0000');
-\Cassandra\Type\Duration::fromString('89h4m48s');
+\Cassandra\Value\Date::fromValue('2011-02-03');
+\Cassandra\Value\Time::fromValue('08:12:54.123456789');
+\Cassandra\Value\Timestamp::fromValue('2011-02-03T04:05:00.000+0000');
+\Cassandra\Value\Duration::fromValue('89h4m48s');
 
 // Collections / Tuples / UDT
-new \Cassandra\Type\ListCollection([1, 2, 3], [\Cassandra\Type::INT]);
-new \Cassandra\Type\SetCollection([1, 2, 3], [\Cassandra\Type::INT]);
-new \Cassandra\Type\MapCollection(['a' => 1], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
-new \Cassandra\Type\Tuple([1, 'x'], [\Cassandra\Type::INT, \Cassandra\Type::VARCHAR]);
-new \Cassandra\Type\UDT(['id' => 1, 'name' => 'n'], ['id' => \Cassandra\Type::INT, 'name' => \Cassandra\Type::VARCHAR]);
+new \Cassandra\Value\ListCollection([1, 2, 3], [\Cassandra\Type::INT]);
+new \Cassandra\Value\SetCollection([1, 2, 3], [\Cassandra\Type::INT]);
+new \Cassandra\Value\MapCollection(['a' => 1], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
+new \Cassandra\Value\Tuple([1, 'x'], [\Cassandra\Type::INT, \Cassandra\Type::VARCHAR]);
+new \Cassandra\Value\UDT(['id' => 1, 'name' => 'n'], ['id' => \Cassandra\Type::INT, 'name' => \Cassandra\Type::VARCHAR]);
 ```
 
 Nested complex example (Set<UDT> inside a row):
 ```php
-new \Cassandra\Type\SetCollection([
+new \Cassandra\Value\SetCollection([
     [
         'id' => 1,
         'name' => 'string',
@@ -342,8 +342,8 @@ new \Cassandra\Type\SetCollection([
             'id' => \Cassandra\Type::INT,
             'name' => \Cassandra\Type::VARCHAR,
             'active' => \Cassandra\Type::BOOLEAN,
-            'friends' => ['type' => \Cassandra\Type::LIST_COLLECTION, 'value' => \Cassandra\Type::VARCHAR],
-            'drinks' => ['type' => \Cassandra\Type::LIST_COLLECTION, 'value' => [
+            'friends' => ['type' => \Cassandra\Type::LIST, 'value' => \Cassandra\Type::VARCHAR],
+            'drinks' => ['type' => \Cassandra\Type::LIST, 'value' => [
                 'type' => \Cassandra\Type::UDT,
                 'typeMap' => ['qty' => \Cassandra\Type::INT, 'brand' => \Cassandra\Type::VARCHAR],
             ]],
@@ -353,7 +353,7 @@ new \Cassandra\Type\SetCollection([
 ```
 
 Special values:
-- `new \Cassandra\Type\NotSet()` encodes a bind variable as NOT SET, not resulting in any change to the existing value. (distinct from NULL)
+- `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET, not resulting in any change to the existing value. (distinct from NULL)
 
 ## Events
 
@@ -422,7 +422,7 @@ All operations throw `\Cassandra\Exception` for client errors and `\Cassandra\Re
 - `Cassandra\Response\Result\RowsResult` (iterable, fetch helpers)
 - `Cassandra\Response\Result\RowClassInterface`, `RowClass`
 - `Cassandra\Consistency` (enum)
-- `Cassandra\Type` (enum) and `Cassandra\Type\*` classes
+- `Cassandra\Type` (enum) and `Cassandra\Value\*` classes
 
 ## License
 

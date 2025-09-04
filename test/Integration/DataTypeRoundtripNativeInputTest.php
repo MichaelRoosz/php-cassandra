@@ -7,7 +7,7 @@ namespace Cassandra\Test\Integration;
 use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
-use Cassandra\Type;
+use Cassandra\Value;
 use DateInterval;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
@@ -518,7 +518,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
             $this->assertSame(
                 $testValues[$testValue]['dateinterval'],
-                (Type\Duration::fromValue($retrievedValue))->asDateIntervalString(),
+                (Value\Duration::fromValue($retrievedValue))->asDateIntervalString(),
                 "Duration value $testValue should round-trip correctly as DateInterval string"
             );
         }
@@ -657,7 +657,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             [],
             ['hello' => 1],
             ['hello' => 1, 'world' => 2],
-            ['empty' => 0, 'negative' => -42, 'max' => Type\Integer::VALUE_MAX],
+            ['empty' => 0, 'negative' => -42, 'max' => Value\Int32::VALUE_MAX],
             ['unicode🚀' => 123, '中文' => 456, 'العربية' => 789],
         ];
 
@@ -745,7 +745,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             ['street' => '123 Main St', 'city' => 'New York', 'zip' => 10001],
             ['street' => '', 'city' => 'Empty Street', 'zip' => 0],
             ['street' => 'Unicode Street 🏠', 'city' => '中文市', 'zip' => 12345],
-            ['street' => 'Long Street Name That Goes On And On', 'city' => 'Very Long City Name', 'zip' => Type\Integer::VALUE_MAX],
+            ['street' => 'Long Street Name That Goes On And On', 'city' => 'Very Long City Name', 'zip' => Value\Int32::VALUE_MAX],
         ];
 
         foreach ($testValues as $index => $testValue) {
@@ -815,8 +815,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             0,
             1,
             -1,
-            Type\Integer::VALUE_MAX,
-            Type\Integer::VALUE_MIN,
+            Value\Int32::VALUE_MAX,
+            Value\Int32::VALUE_MIN,
             42,
             -42,
             1000000,
@@ -901,7 +901,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             [1],
             [1, 2, 3],
             [0, -1, 42, -42],
-            [Type\Integer::VALUE_MIN, Type\Integer::VALUE_MAX],
+            [Value\Int32::VALUE_MIN, Value\Int32::VALUE_MAX],
             array_fill(0, 50, 123),
         ];
 
@@ -946,7 +946,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             [],
             ['hello' => 1],
             ['hello' => 1, 'world' => 2],
-            ['empty' => 0, 'negative' => -42, 'max' => Type\Integer::VALUE_MAX],
+            ['empty' => 0, 'negative' => -42, 'max' => Value\Int32::VALUE_MAX],
             ['unicode🚀' => 123, '中文' => 456, 'العربية' => 789],
         ];
 
@@ -990,7 +990,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             [1 => 'one'],
             [1 => 'one', 2 => 'two', 3 => 'three'],
             [0 => 'zero', -1 => 'negative', 42 => 'answer'],
-            [Type\Integer::VALUE_MIN => 'min', Type\Integer::VALUE_MAX => 'max'],
+            [Value\Int32::VALUE_MIN => 'min', Value\Int32::VALUE_MAX => 'max'],
         ];
 
         foreach ($intStringTestValues as $index => $testValue) {
@@ -1105,7 +1105,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             [1],
             [1, 2, 3],
             [0, -1, 42, -42],
-            [Type\Integer::VALUE_MIN, Type\Integer::VALUE_MAX, 0],
+            [Value\Int32::VALUE_MIN, Value\Int32::VALUE_MAX, 0],
         ];
 
         foreach ($intTestValues as $index => $testValue) {
@@ -1411,8 +1411,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             ['hello', 42],
             ['', 0],
             ['world', -1],
-            ['unicode🚀', Type\Integer::VALUE_MAX],
-            ['test', Type\Integer::VALUE_MIN],
+            ['unicode🚀', Value\Int32::VALUE_MAX],
+            ['test', Value\Int32::VALUE_MIN],
         ];
 
         foreach ($testValues as $index => $testValue) {
@@ -1444,8 +1444,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             [1, 'one', true],
             [0, '', false],
             [-42, 'negative', true],
-            [Type\Integer::VALUE_MAX, 'max', false],
-            [Type\Integer::VALUE_MIN, 'min', true],
+            [Value\Int32::VALUE_MAX, 'max', false],
+            [Value\Int32::VALUE_MIN, 'min', true],
         ];
 
         foreach ($tripleTestValues as $index => $testValue) {
@@ -1517,7 +1517,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             ['street' => '123 Main St', 'city' => 'New York', 'zip' => 10001],
             ['street' => '', 'city' => 'Empty Street', 'zip' => 0],
             ['street' => 'Unicode Street 🏠', 'city' => '中文市', 'zip' => 12345],
-            ['street' => 'Long Street Name That Goes On And On', 'city' => 'Very Long City Name', 'zip' => Type\Integer::VALUE_MAX],
+            ['street' => 'Long Street Name That Goes On And On', 'city' => 'Very Long City Name', 'zip' => Value\Int32::VALUE_MAX],
         ];
 
         foreach ($testValues as $index => $testValue) {

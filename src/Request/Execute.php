@@ -25,7 +25,7 @@ final class Execute extends Request {
      * @param array<mixed> $values
      * 
      * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function __construct(
         protected Result $previousResult,

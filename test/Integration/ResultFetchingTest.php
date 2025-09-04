@@ -9,6 +9,7 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Response\Result\FetchType;
 use Cassandra\Type;
+use Cassandra\Value;
 use PHPUnit\Framework\TestCase;
 
 final class ResultFetchingTest extends TestCase {
@@ -21,16 +22,16 @@ final class ResultFetchingTest extends TestCase {
             $conn->query(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                 [
-                    Type\Varchar::fromValue($filename),
-                    Type\Varchar::fromValue('k' . $i),
-                    Type\MapCollection::fromValue(['a' => (string) $i], Type::VARCHAR, Type::VARCHAR),
+                    Value\Varchar::fromValue($filename),
+                    Value\Varchar::fromValue('k' . $i),
+                    Value\MapCollection::fromValue(['a' => (string) $i], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }
 
         $rows = $conn->query(
             'SELECT ukey FROM storage WHERE filename = ?',
-            [Type\Varchar::fromValue($filename)]
+            [Value\Varchar::fromValue($filename)]
         )->asRowsResult();
 
         // Iterator

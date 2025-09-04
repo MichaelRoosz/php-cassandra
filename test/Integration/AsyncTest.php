@@ -10,6 +10,7 @@ use Cassandra\Consistency;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Type;
+use Cassandra\Value;
 use PHPUnit\Framework\TestCase;
 
 final class AsyncTest extends TestCase {
@@ -24,9 +25,9 @@ final class AsyncTest extends TestCase {
                 $batch->appendQuery(
                     'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                     [
-                        Type\Varchar::fromValue($filename),
-                        Type\Varchar::fromValue('k' . $j . '_' . $i),
-                        Type\MapCollection::fromValue(['x' => 'y'], Type::VARCHAR, Type::VARCHAR),
+                        Value\Varchar::fromValue($filename),
+                        Value\Varchar::fromValue('k' . $j . '_' . $i),
+                        Value\MapCollection::fromValue(['x' => 'y'], Type::VARCHAR, Type::VARCHAR),
                     ]
                 );
             }
@@ -37,7 +38,7 @@ final class AsyncTest extends TestCase {
 
         $count = (int) $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
-            [Type\Varchar::fromValue($filename)]
+            [Value\Varchar::fromValue($filename)]
         )->asRowsResult()->fetchColumn(0);
 
         $this->assertGreaterThanOrEqual(30, $count);

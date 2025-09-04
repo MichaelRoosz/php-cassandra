@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
-use Cassandra\Type;
+use Cassandra\Value;
 
 // Only attempt truncation when integration environment variables are present.
 if (getenv('APP_CASSANDRA_HOST') === false && getenv('APP_CASSANDRA_PORT') === false) {
@@ -37,7 +37,7 @@ try {
     // Fetch all base tables in the keyspace and truncate them
     $tablesResult = $connection->query(
         'SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?',
-        [Type\Varchar::fromValue($keyspace)]
+        [Value\Varchar::fromValue($keyspace)]
     )->asRowsResult();
 
     foreach ($tablesResult as $row) {

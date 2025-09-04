@@ -7,11 +7,11 @@ namespace Cassandra\Test\Integration;
 use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
+use Cassandra\Value;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Response\Exception as ServerException;
 use Cassandra\Response\Result\CachedPreparedResult;
 use Cassandra\Response\Result\PreparedResult;
-use Cassandra\Type;
 use PHPUnit\Framework\TestCase;
 
 final class QueryTest extends TestCase {
@@ -19,7 +19,7 @@ final class QueryTest extends TestCase {
         $conn = $this->newConnection();
         $rows = $conn->query(
             'SELECT key FROM system.local WHERE key = ?',
-            [Type\Ascii::fromValue('local')],
+            [Value\Ascii::fromValue('local')],
             Consistency::ONE,
             new QueryOptions()
         )->asRowsResult();

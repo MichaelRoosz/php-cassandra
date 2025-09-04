@@ -6,7 +6,7 @@ namespace Cassandra\TypeInfo;
 
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
-use Cassandra\TypeFactory;
+use Cassandra\ValueFactory;
 
 final class UDTInfo extends TypeInfo {
     public function __construct(
@@ -31,7 +31,7 @@ final class UDTInfo extends TypeInfo {
      * } $typeDefinition
      * 
      * @throws \Cassandra\TypeInfo\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
 
@@ -78,7 +78,7 @@ final class UDTInfo extends TypeInfo {
 
         $valueTypes = [];
         foreach ($typeDefinition['valueTypes'] as $key => $valueTypeDefinition) {
-            $valueTypes[$key] = TypeFactory::getTypeInfoFromTypeDefinition($valueTypeDefinition);
+            $valueTypes[$key] = ValueFactory::getTypeInfoFromTypeDefinition($valueTypeDefinition);
         }
 
         /** @psalm-suppress RedundantConditionGivenDocblockType */

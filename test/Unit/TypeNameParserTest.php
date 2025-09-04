@@ -16,7 +16,7 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeInfo\VectorInfo;
-use Cassandra\Type\Exception;
+use Cassandra\Value\Exception;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -75,6 +75,10 @@ class TypeNameParserTest extends TestCase {
 
             // Test UDT
             $result = $this->parser->parse(TypeName::UDT->value . '(ks,typeName,field1:' . $typeName->value . ',field2:' . TypeName::UTF8->value . ')');
+            if (!($result instanceof UDTInfo)) {
+                $this->fail('Result is not a UDTInfo');
+            }
+
             $this->assertInstanceOf(UDTInfo::class, $result);
             $this->assertEquals('ks', $result->keyspace);
             $this->assertEquals('typeName', $result->name);
@@ -83,6 +87,10 @@ class TypeNameParserTest extends TestCase {
 
             // Test vector
             $result = $this->parser->parse(TypeName::VECTOR->value . '(' . $typeName->value . ',10)');
+            if (!($result instanceof VectorInfo)) {
+                $this->fail('Result is not a VectorInfo');
+            }
+
             $this->assertInstanceOf(VectorInfo::class, $result);
             $this->assertEquals(10, $result->dimensions);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
@@ -96,6 +104,10 @@ class TypeNameParserTest extends TestCase {
 
     public function testCustomTypeOnEmptyString(): void {
         $result = $this->parser->parse('');
+        if (!($result instanceof CustomInfo)) {
+            $this->fail('Result is not a CustomInfo');
+        }
+
         $this->assertInstanceOf(CustomInfo::class, $result);
         $this->assertEquals('', $result->javaClassName);
     }
@@ -114,6 +126,10 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as $typeString) {
             $result = $this->parser->parse($typeString);
+            if (!($result instanceof CustomInfo)) {
+                $this->fail('Result is not a CustomInfo');
+            }
+
             $this->assertInstanceOf(CustomInfo::class, $result);
             $this->assertEquals($typeString, $result->javaClassName);
         }
@@ -131,6 +147,10 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as $typeString) {
             $result = $this->parser->parse($typeString);
+            if (!($result instanceof CustomInfo)) {
+                $this->fail('Result is not a CustomInfo');
+            }
+
             $this->assertInstanceOf(CustomInfo::class, $result);
             $this->assertEquals($typeString, $result->javaClassName);
         }
@@ -154,20 +174,36 @@ class TypeNameParserTest extends TestCase {
         ')';
 
         $result = $this->parser->parse($complexType);
+        if (!($result instanceof MapCollectionInfo)) {
+            $this->fail('Result is not a MapCollectionInfo');
+        }
 
         $this->assertInstanceOf(MapCollectionInfo::class, $result);
 
+        if (!($result->keyType instanceof TupleInfo)) {
+            $this->fail('Result->keyType is not a TupleInfo');
+        }
         $this->assertInstanceOf(TupleInfo::class, $result->keyType);
+
         $this->assertEquals(Type::VARCHAR, $result->keyType->valueTypes[0]->type);
         $this->assertEquals(Type::UUID, $result->keyType->valueTypes[1]->type);
 
+        if (!($result->valueType instanceof ListCollectionInfo)) {
+            $this->fail('Result->valueType is not a ListCollectionInfo');
+        }
         $this->assertInstanceOf(ListCollectionInfo::class, $result->valueType);
         $this->assertTrue($result->valueType->isFrozen);
 
         $listValueType = $result->valueType->valueType;
+        if (!($listValueType instanceof SetCollectionInfo)) {
+            $this->fail('Result->valueType->valueType is not a SetCollectionInfo');
+        }
         $this->assertInstanceOf(SetCollectionInfo::class, $listValueType);
 
         $setValueType = $listValueType->valueType;
+        if (!($setValueType instanceof UDTInfo)) {
+            $this->fail('Result->valueType->valueType is not a UDTInfo');
+        }
         $this->assertInstanceOf(UDTInfo::class, $setValueType);
         $this->assertEquals('ks', $setValueType->keyspace);
         $this->assertEquals('typeName', $setValueType->name);
@@ -187,6 +223,9 @@ class TypeNameParserTest extends TestCase {
         // Verify it's a deeply nested list structure
         $current = $result;
         for ($i = 0; $i < 20; $i++) {
+            if (!($current instanceof ListCollectionInfo)) {
+                $this->fail('Current is not a ListCollectionInfo');
+            }
             $this->assertInstanceOf(ListCollectionInfo::class, $current);
             $current = $current->valueType;
         }
@@ -268,6 +307,10 @@ class TypeNameParserTest extends TestCase {
 
     public function testFrozenListType(): void {
         $result = $this->parser->parse(TypeName::LIST->value . '(' . TypeName::UTF8->value . ')', true);
+        if (!($result instanceof ListCollectionInfo)) {
+            $this->fail('Result is not a ListCollectionInfo');
+        }
+
         $this->assertInstanceOf(ListCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
         $this->assertEquals(Type::VARCHAR, $result->valueType->type);
@@ -275,6 +318,10 @@ class TypeNameParserTest extends TestCase {
 
     public function testFrozenMapType(): void {
         $result = $this->parser->parse(TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ')', true);
+        if (!($result instanceof MapCollectionInfo)) {
+            $this->fail('Result is not a MapCollectionInfo');
+        }
+
         $this->assertInstanceOf(MapCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
         $this->assertEquals(Type::VARCHAR, $result->keyType->type);
@@ -285,8 +332,16 @@ class TypeNameParserTest extends TestCase {
         $typeString = TypeName::FROZEN->value . '(' . TypeName::LIST->value . '(' . TypeName::FROZEN->value . '(' . TypeName::SET->value . '(' . TypeName::UTF8->value . '))))';
 
         $result = $this->parser->parse($typeString);
+        if (!($result instanceof ListCollectionInfo)) {
+            $this->fail('Result is not a ListCollectionInfo');
+        }
+
         $this->assertInstanceOf(ListCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
+
+        if (!($result->valueType instanceof SetCollectionInfo)) {
+            $this->fail('Result->valueType is not a SetCollectionInfo');
+        }
         $this->assertInstanceOf(SetCollectionInfo::class, $result->valueType);
         $this->assertTrue($result->valueType->isFrozen);
     }
@@ -300,6 +355,10 @@ class TypeNameParserTest extends TestCase {
 
     public function testFrozenSetType(): void {
         $result = $this->parser->parse(TypeName::SET->value . '(' . TypeName::UTF8->value . ')', true);
+        if (!($result instanceof SetCollectionInfo)) {
+            $this->fail('Result is not a SetCollectionInfo');
+        }
+
         $this->assertInstanceOf(SetCollectionInfo::class, $result);
         $this->assertTrue($result->isFrozen);
         $this->assertEquals(Type::VARCHAR, $result->valueType->type);
@@ -314,6 +373,10 @@ class TypeNameParserTest extends TestCase {
 
     public function testFrozenUDTType(): void {
         $result = $this->parser->parse(TypeName::UDT->value . '(ks,type,field1:' . TypeName::UTF8->value . ',field2:' . TypeName::INT32->value . ')', true);
+        if (!($result instanceof UDTInfo)) {
+            $this->fail('Result is not a UDTInfo');
+        }
+
         $this->assertInstanceOf(UDTInfo::class, $result);
         $this->assertTrue($result->isFrozen);
     }
@@ -368,6 +431,10 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedElementType, $isFrozen]) {
             $result = $this->parser->parse($typeString, $isFrozen);
+            if (!($result instanceof ListCollectionInfo)) {
+                $this->fail('Result is not a ListCollectionInfo');
+            }
+
             $this->assertInstanceOf(ListCollectionInfo::class, $result);
             $this->assertEquals($isFrozen, $result->isFrozen);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
@@ -384,6 +451,10 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as $typeString) {
             $result = $this->parser->parse($typeString);
+            if (!($result instanceof ListCollectionInfo)) {
+                $this->fail('Result is not a ListCollectionInfo');
+            }
+
             $this->assertInstanceOf(ListCollectionInfo::class, $result);
             $this->assertEquals(Type::VARCHAR, $result->valueType->type);
         }
@@ -430,8 +501,19 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedKeyType, $expectedValueType, $isFrozen]) {
             $result = $this->parser->parse($typeString, $isFrozen);
+            if (!($result instanceof MapCollectionInfo)) {
+                $this->fail('Result is not a MapCollectionInfo');
+            }
+
             $this->assertInstanceOf(MapCollectionInfo::class, $result);
             $this->assertEquals($isFrozen, $result->isFrozen);
+
+            if (!($result->keyType instanceof SimpleTypeInfo)) {
+                $this->fail('Result->keyType is not a SimpleTypeInfo');
+            }
+            if (!($result->valueType instanceof SimpleTypeInfo)) {
+                $this->fail('Result->valueType is not a SimpleTypeInfo');
+            }
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->keyType);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
             $this->assertEquals($expectedKeyType, $result->keyType->type);
@@ -596,8 +678,15 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedElementType, $isFrozen]) {
             $result = $this->parser->parse($typeString, $isFrozen);
+            if (!($result instanceof SetCollectionInfo)) {
+                $this->fail('Result is not a SetCollectionInfo');
+            }
             $this->assertInstanceOf(SetCollectionInfo::class, $result);
             $this->assertEquals($isFrozen, $result->isFrozen);
+
+            if (!($result->valueType instanceof SimpleTypeInfo)) {
+                $this->fail('Result->valueType is not a SimpleTypeInfo');
+            }
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
             $this->assertEquals($expectedElementType, $result->valueType->type);
         }
@@ -689,8 +778,16 @@ class TypeNameParserTest extends TestCase {
         $typeString = "  \t\n  " . TypeName::LIST->value . "  \t\n  ( \t\n " . TypeName::UTF8->value . " \t\n ) \t\n  ";
         $result = $this->parser->parse($typeString);
 
+        if (!($result instanceof ListCollectionInfo)) {
+            $this->fail('Result is not a ListCollectionInfo');
+        }
         $this->assertInstanceOf(ListCollectionInfo::class, $result);
+
+        if (!($result->valueType instanceof SimpleTypeInfo)) {
+            $this->fail('Result->valueType is not a SimpleTypeInfo');
+        }
         $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
+
         $this->assertEquals(Type::VARCHAR, $result->valueType->type);
     }
 
@@ -704,10 +801,17 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedTypes]) {
             $result = $this->parser->parse($typeString);
+            if (!($result instanceof TupleInfo)) {
+                $this->fail('Result is not a TupleInfo');
+            }
+
             $this->assertInstanceOf(TupleInfo::class, $result);
             $this->assertCount(count($expectedTypes), $result->valueTypes);
 
             foreach ($result->valueTypes as $index => $valueType) {
+                if (!($valueType instanceof SimpleTypeInfo)) {
+                    $this->fail('Value type is not a SimpleTypeInfo');
+                }
                 $this->assertInstanceOf(SimpleTypeInfo::class, $valueType);
                 $this->assertEquals($expectedTypes[$index], $valueType->type);
             }
@@ -764,6 +868,10 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedKeyspace, $expectedName, $expectedFieldTypes]) {
             $result = $this->parser->parse($typeString);
+            if (!($result instanceof UDTInfo)) {
+                $this->fail('Result is not a UDTInfo');
+            }
+
             $this->assertInstanceOf(UDTInfo::class, $result);
             $this->assertEquals($expectedKeyspace, $result->keyspace);
             $this->assertEquals($expectedName, $result->name);
@@ -771,7 +879,12 @@ class TypeNameParserTest extends TestCase {
 
             foreach ($expectedFieldTypes as $fieldName => $expectedType) {
                 $this->assertArrayHasKey($fieldName, $result->valueTypes);
+
+                if (!($result->valueTypes[$fieldName] instanceof SimpleTypeInfo)) {
+                    $this->fail('Result->valueTypes[$fieldName] is not a SimpleTypeInfo');
+                }
                 $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueTypes[$fieldName]);
+
                 $this->assertEquals($expectedType, $result->valueTypes[$fieldName]->type);
             }
         }
@@ -781,6 +894,10 @@ class TypeNameParserTest extends TestCase {
         $typeString = TypeName::UDT->value . '(foo,696e617070726f7072696174655f666565646261636a,617574686f725f66696e6765727072696e75:' . TypeName::UTF8->value . ',7375626d697373696f6e5f7473:' . TypeName::TIMESTAMP->value . ',726561736f6e5f74657874:' . TypeName::UTF8->value . ')';
 
         $result = $this->parser->parse($typeString);
+        if (!($result instanceof UDTInfo)) {
+            $this->fail('Result is not a UDTInfo');
+        }
+
         $this->assertInstanceOf(UDTInfo::class, $result);
         $this->assertEquals('foo', $result->keyspace);
         $this->assertEquals('696e617070726f7072696174655f666565646261636a', $result->name);
@@ -861,8 +978,17 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedElementType, $expectedDimensions]) {
             $result = $this->parser->parse($typeString);
+
+            if (!($result instanceof VectorInfo)) {
+                $this->fail('Result is not a VectorInfo');
+            }
             $this->assertInstanceOf(VectorInfo::class, $result);
+
+            if (!($result->valueType instanceof SimpleTypeInfo)) {
+                $this->fail('Result->valueType is not a SimpleTypeInfo');
+            }
             $this->assertInstanceOf(SimpleTypeInfo::class, $result->valueType);
+
             $this->assertEquals($expectedElementType, $result->valueType->type);
             $this->assertEquals($expectedDimensions, $result->dimensions);
         }
@@ -876,7 +1002,12 @@ class TypeNameParserTest extends TestCase {
 
         foreach ($testCases as [$typeString, $expectedDimensions]) {
             $result = $this->parser->parse($typeString);
+
+            if (!($result instanceof VectorInfo)) {
+                $this->fail('Result is not a VectorInfo');
+            }
             $this->assertInstanceOf(VectorInfo::class, $result);
+
             $this->assertEquals($expectedDimensions, $result->dimensions);
         }
     }

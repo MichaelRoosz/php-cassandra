@@ -6,7 +6,7 @@ namespace Cassandra\TypeInfo;
 
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
-use Cassandra\TypeFactory;
+use Cassandra\ValueFactory;
 
 final class TupleInfo extends TypeInfo {
     /**
@@ -25,7 +25,7 @@ final class TupleInfo extends TypeInfo {
      * } $typeDefinition
      * 
      * @throws \Cassandra\TypeInfo\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
 
@@ -72,7 +72,7 @@ final class TupleInfo extends TypeInfo {
 
         $valueTypes = [];
         foreach ($typeDefinition['valueTypes'] as $valueTypeDefinition) {
-            $valueTypes[] = TypeFactory::getTypeInfoFromTypeDefinition($valueTypeDefinition);
+            $valueTypes[] = ValueFactory::getTypeInfoFromTypeDefinition($valueTypeDefinition);
         }
 
         return new self($valueTypes);

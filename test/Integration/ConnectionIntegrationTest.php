@@ -13,6 +13,7 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Response\Exception as ServerException;
 use Cassandra\Type;
+use Cassandra\Value;
 use PHPUnit\Framework\TestCase;
 
 final class ConnectionIntegrationTest extends TestCase {
@@ -23,9 +24,9 @@ final class ConnectionIntegrationTest extends TestCase {
             $batch->appendQuery(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                 [
-                    Type\Varchar::fromValue('fileA'),
-                    Type\Varchar::fromValue('k' . $i),
-                    Type\MapCollection::fromValue(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
+                    Value\Varchar::fromValue('fileA'),
+                    Value\Varchar::fromValue('k' . $i),
+                    Value\MapCollection::fromValue(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }
@@ -34,7 +35,7 @@ final class ConnectionIntegrationTest extends TestCase {
 
         $rows = $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
-            [Type\Varchar::fromValue('fileA')],
+            [Value\Varchar::fromValue('fileA')],
             Consistency::ONE,
             new QueryOptions(namesForValues: false)
         )->asRowsResult();
@@ -54,7 +55,7 @@ final class ConnectionIntegrationTest extends TestCase {
             $conn->execute(
                 $prepared,
                 [
-                    'id' => Type\Uuid::fromValue(self::uuidV4()),
+                    'id' => Value\Uuid::fromValue(self::uuidV4()),
                     'org_id' => 42,
                     'name' => 'u' . $i,
                     'age' => 20 + ($i % 10),

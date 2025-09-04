@@ -8,11 +8,12 @@ use Cassandra\Consistency;
 use Cassandra\ExceptionCode;
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
-use Cassandra\TypeFactory;
+use Cassandra\ValueFactory;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
-use Cassandra\Type;
+use Cassandra\Value\NotSet;
+use Cassandra\Value\ValueBase;
 use DateTimeInterface;
 use Stringable;
 
@@ -212,12 +213,12 @@ abstract class Request implements Frame, Stringable {
         /** @psalm-suppress MixedAssignment */
         foreach ($values as $name => $value) {
             switch (true) {
-                case $value instanceof Type\TypeBase:
+                case $value instanceof ValueBase:
                     $binary = $value->getBinary();
 
                     break;
 
-                case $value instanceof Type\NotSet:
+                case $value instanceof NotSet:
                     $binary = $value;
 
                     break;
@@ -297,7 +298,7 @@ abstract class Request implements Frame, Stringable {
 
             if ($binary === null) {
                 $valuesBinary .= "\xff\xff\xff\xff";
-            } elseif ($binary instanceof Type\NotSet) {
+            } elseif ($binary instanceof NotSet) {
                 $valuesBinary .= "\xff\xff\xff\xfe";
             } else {
                 $valuesBinary .= pack('N', strlen($binary)) . $binary;
@@ -312,7 +313,7 @@ abstract class Request implements Frame, Stringable {
      * @param array<\Cassandra\Response\Result\ColumnInfo> $bindMarkers
      * @return array<mixed>
      *
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function encodeQueryValuesForBindMarkerTypes(array $values, array $bindMarkers, bool $namesForValues): array {
         $encodedValues = [];
@@ -327,12 +328,12 @@ abstract class Request implements Frame, Stringable {
             if (!isset($values[$key])) {
                 $encodedValues[$key] = null;
             } elseif (
-                ($values[$key] instanceof Type\TypeBase)
-                || ($values[$key] instanceof Type\NotSet)
+                ($values[$key] instanceof ValueBase)
+                || ($values[$key] instanceof NotSet)
             ) {
                 $encodedValues[$key] = $values[$key];
             } else {
-                $encodedValues[$key] = TypeFactory::getTypeObjectFromValue($bindMarker->type, $values[$key]);
+                $encodedValues[$key] = ValueFactory::getValueObjectFromValue($bindMarker->type, $values[$key]);
             }
         }
 

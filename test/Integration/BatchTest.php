@@ -11,6 +11,7 @@ use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
+use Cassandra\Value;
 use PHPUnit\Framework\TestCase;
 
 final class BatchTest extends TestCase {
@@ -23,9 +24,9 @@ final class BatchTest extends TestCase {
             $batch->appendQuery(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
                 [
-                    Type\Varchar::fromValue($filename),
-                    Type\Varchar::fromValue('k' . $i),
-                    Type\MapCollection::fromValue(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
+                    Value\Varchar::fromValue($filename),
+                    Value\Varchar::fromValue('k' . $i),
+                    Value\MapCollection::fromValue(['a' => 'b'], Type::VARCHAR, Type::VARCHAR),
                 ]
             );
         }
@@ -35,7 +36,7 @@ final class BatchTest extends TestCase {
 
         $rows = $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
-            [Type\Varchar::fromValue($filename)],
+            [Value\Varchar::fromValue($filename)],
             Consistency::ONE,
             new QueryOptions(namesForValues: false)
         )->asRowsResult();

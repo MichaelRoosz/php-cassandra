@@ -13,11 +13,11 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\VectorInfo;
-use Cassandra\Type\Exception;
+use Cassandra\Value\Exception;
 
 final class TypeNameParser {
     /**
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function parse(string $typeString, bool $isFrozen = false): TypeInfo {
 
@@ -105,7 +105,7 @@ final class TypeNameParser {
     /**
      * @return array<string|int,string>
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function extractParams(string $paramString): array {
 
@@ -261,7 +261,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseFrozenType(array $params, bool $isFrozen): TypeInfo {
 
@@ -284,7 +284,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseListType(array $params, bool $isFrozen): TypeInfo {
 
@@ -309,7 +309,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseMapType(array $params, bool $isFrozen): TypeInfo {
 
@@ -335,7 +335,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseReversedType(array $params, bool $isFrozen): TypeInfo {
 
@@ -358,7 +358,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseSetType(array $params, bool $isFrozen): TypeInfo {
 
@@ -383,7 +383,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseTupleType(array $params, bool $isFrozen): TypeInfo {
 
@@ -412,7 +412,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseUDTType(array $params, bool $isFrozen): TypeInfo {
 
@@ -458,7 +458,7 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function parseVectorType(array $params, bool $isFrozen): TypeInfo {
 

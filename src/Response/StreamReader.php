@@ -7,7 +7,7 @@ namespace Cassandra\Response;
 use Cassandra\Consistency;
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
-use Cassandra\TypeFactory;
+use Cassandra\ValueFactory;
 use Cassandra\TypeInfo\ListCollectionInfo;
 use Cassandra\TypeInfo\MapCollectionInfo;
 use Cassandra\TypeInfo\SetCollectionInfo;
@@ -397,7 +397,7 @@ class StreamReader {
      * The native protocol specification calls this an "option".
      * 
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     final public function readTypeInfo(): TypeInfo {
         $typeShort = $this->readShort();
@@ -423,19 +423,19 @@ class StreamReader {
 
                 return $this->typeNameParser->parse($javaClassName);
 
-            case Type::LIST_COLLECTION:
+            case Type::LIST:
                 return new ListCollectionInfo(
                     valueType: $this->readTypeInfo(),
                     isFrozen: false,
                 );
 
-            case Type::SET_COLLECTION:
+            case Type::SET:
                 return new SetCollectionInfo(
                     valueType: $this->readTypeInfo(),
                     isFrozen: false,
                 );
 
-            case Type::MAP_COLLECTION:
+            case Type::MAP:
                 return new MapCollectionInfo(
                     keyType: $this->readTypeInfo(),
                     valueType: $this->readTypeInfo(),
@@ -551,7 +551,7 @@ class StreamReader {
 
     /**
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Type\Exception
+     * @throws \Cassandra\Value\Exception
      */
     final public function readValue(TypeInfo $typeInfo): mixed {
 
@@ -578,7 +578,7 @@ class StreamReader {
             );
         }
 
-        $typeObject = TypeFactory::getTypeObjectFromStream($typeInfo, $length, $this);
+        $typeObject = ValueFactory::getValueObjectFromStream($typeInfo, $length, $this);
 
         return $typeObject->getValue();
     }

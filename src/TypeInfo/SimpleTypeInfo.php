@@ -6,7 +6,7 @@ namespace Cassandra\TypeInfo;
 
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
-use Cassandra\TypeFactory;
+use Cassandra\ValueFactory;
 
 final class SimpleTypeInfo extends TypeInfo {
     public function __construct(
@@ -21,7 +21,7 @@ final class SimpleTypeInfo extends TypeInfo {
      * } $typeDefinition
      * 
      *  @throws \Cassandra\TypeInfo\Exception
-     *  @throws \Cassandra\Type\Exception
+     *  @throws \Cassandra\Value\Exception
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
@@ -35,7 +35,7 @@ final class SimpleTypeInfo extends TypeInfo {
             );
         }
 
-        if (!TypeFactory::isSimpleType($typeDefinition['type'])) {
+        if (!ValueFactory::isSimpleType($typeDefinition['type'])) {
             throw new Exception(
                 'Invalid simple type definition: type must be a simple (non-complex) type',
                 ExceptionCode::TYPEINFO_SIMPLE_NOT_SIMPLE_TYPE->value,

@@ -11,6 +11,6 @@ parameters:
             tooWideThrowType: true
     ignoreErrors:
         -
-            path: src/Type/Date.php
+            path: src/Value/Date.php
             message: '#Dead catch - Exception is never thrown in the try block\.#'
             reportUnmatched: false

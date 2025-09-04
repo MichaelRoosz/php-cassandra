@@ -8,7 +8,7 @@ use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Request\Options\ExecuteOptions;
-use Cassandra\Type;
+use Cassandra\Value;
 use PHPUnit\Framework\TestCase;
 
 final class PreparedStatementTest extends TestCase {
@@ -21,7 +21,7 @@ final class PreparedStatementTest extends TestCase {
         $conn->execute(
             $prepared,
             [
-                'id' => Type\Uuid::fromValue(self::uuidV4()),
+                'id' => Value\Uuid::fromValue(self::uuidV4()),
                 'org_id' => 7,
                 'name' => 'alice',
                 'age' => 28,
@@ -46,7 +46,7 @@ final class PreparedStatementTest extends TestCase {
             $conn->execute(
                 $ins,
                 [
-                    'id' => Type\Uuid::fromValue(self::uuidV4()),
+                    'id' => Value\Uuid::fromValue(self::uuidV4()),
                     'org_id' => $orgId,
                     'name' => 'u' . $i,
                     'age' => 20 + ($i % 10),
