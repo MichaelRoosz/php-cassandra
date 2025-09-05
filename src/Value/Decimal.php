@@ -16,7 +16,7 @@ final class Decimal extends ValueReadableWithLength {
      */
     final public function __construct(string|int|float $value) {
         if (!is_numeric($value)) {
-            throw new Exception('Value must be a numeric value', ExceptionCode::TYPE_DECIMAL_NON_NUMERIC->value, [
+            throw new Exception('Value must be a numeric value', ExceptionCode::VALUE_DECIMAL_NON_NUMERIC->value, [
                 'value' => $value,
             ]);
         }
@@ -38,7 +38,7 @@ final class Decimal extends ValueReadableWithLength {
 
         $length = strlen($binary);
         if ($length < 4) {
-            throw new Exception('Cannot unpack decimal binary data', ExceptionCode::TYPE_DECIMAL_UNPACK_FAILED->value, [
+            throw new Exception('Cannot unpack decimal binary data', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
                 'binary_length' => $length,
                 'note' => 'expected >= 4 bytes (scale + varint)',
             ]);
@@ -48,7 +48,7 @@ final class Decimal extends ValueReadableWithLength {
          */
         $scaleUnpacked = unpack('N', substr($binary, 0, 4));
         if ($scaleUnpacked === false) {
-            throw new Exception('Cannot unpack decimal scale', ExceptionCode::TYPE_DECIMAL_UNPACK_FAILED->value, [
+            throw new Exception('Cannot unpack decimal scale', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
                 'binary_length' => $length,
             ]);
         }
@@ -91,7 +91,7 @@ final class Decimal extends ValueReadableWithLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value)) {
-            throw new Exception('Invalid decimal value; expected numeric value', ExceptionCode::TYPE_DECIMAL_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid decimal value; expected numeric value', ExceptionCode::VALUE_DECIMAL_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

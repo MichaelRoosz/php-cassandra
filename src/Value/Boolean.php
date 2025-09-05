@@ -33,7 +33,7 @@ final class Boolean extends ValueWithFixedLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_bool($value)) {
-            throw new Exception('Invalid boolean value; expected bool', ExceptionCode::TYPE_BOOLEAN_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid boolean value; expected bool', ExceptionCode::VALUE_BOOLEAN_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

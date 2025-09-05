@@ -30,11 +30,11 @@ class Custom extends ValueReadableWithLength {
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_CUSTOM_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::VALUE_CUSTOM_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::TYPE_CUSTOM_INVALID_TYPEINFO->value, [
+            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::VALUE_CUSTOM_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -49,17 +49,17 @@ class Custom extends ValueReadableWithLength {
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_CUSTOM_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::VALUE_CUSTOM_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::TYPE_CUSTOM_INVALID_TYPEINFO->value, [
+            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::VALUE_CUSTOM_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
 
         if (!is_string($value)) {
-            throw new Exception('Invalid custom value; expected string', ExceptionCode::TYPE_CUSTOM_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid custom value; expected string', ExceptionCode::VALUE_CUSTOM_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

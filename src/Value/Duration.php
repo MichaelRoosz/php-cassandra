@@ -168,7 +168,7 @@ final class Duration extends ValueReadableWithoutLength {
         if ($interval === false) {
             throw new Exception(
                 'Cannot convert Duration to DateInterval',
-                ExceptionCode::TYPE_DURATION_TO_DATEINTERVAL_FAILED->value, [
+                ExceptionCode::VALUE_DURATION_TO_DATEINTERVAL_FAILED->value, [
                     'duration_string' => $duration,
                     'value' => $this->value,
                 ]
@@ -346,7 +346,7 @@ final class Duration extends ValueReadableWithoutLength {
     /**
      * @throws \Cassandra\Value\Exception
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
@@ -366,7 +366,7 @@ final class Duration extends ValueReadableWithoutLength {
         if (!is_array($value) && !is_string($value) && !$value instanceof DateInterval) {
             throw new Exception(
                 'Invalid duration value; expected array, string or DateInterval',
-                ExceptionCode::TYPE_DURATION_INVALID_VALUE_TYPE->value,
+                ExceptionCode::VALUE_DURATION_INVALID_VALUE_TYPE->value,
                 [
                     'value_type' => gettype($value),
                     'value' => $value,
@@ -382,7 +382,7 @@ final class Duration extends ValueReadableWithoutLength {
     /**
      * @throws \Cassandra\Value\Exception
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
     public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
@@ -411,7 +411,7 @@ final class Duration extends ValueReadableWithoutLength {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
     public function getBinary(): string {
@@ -483,7 +483,7 @@ final class Duration extends ValueReadableWithoutLength {
         if (!$foundPattern) {
             throw new Exception(
                 'Invalid duration value; expected string in ISO 8601 format',
-                ExceptionCode::TYPE_DURATION_INVALID_VALUE_TYPE->value, [
+                ExceptionCode::VALUE_DURATION_INVALID_VALUE_TYPE->value, [
                     'givenValue' => $value,
                 ]
             );
@@ -552,7 +552,7 @@ final class Duration extends ValueReadableWithoutLength {
         if (PHP_INT_SIZE < 8) {
             throw new Exception(
                 'The Duration data type requires a 64-bit system',
-                ExceptionCode::TYPE_DURATION_64BIT_REQUIRED->value, [
+                ExceptionCode::VALUE_DURATION_64BIT_REQUIRED->value, [
                     'php_int_size_bytes' => PHP_INT_SIZE,
                     'php_int_size_bits' => PHP_INT_SIZE * 8,
                 ]
@@ -572,7 +572,7 @@ final class Duration extends ValueReadableWithoutLength {
         if (!isset($value['months']) || !is_int($value['months'])) {
             throw new Exception(
                 'Invalid duration value - "months" must be provided as int',
-                ExceptionCode::TYPE_DURATION_MONTHS_INVALID->value, [
+                ExceptionCode::VALUE_DURATION_MONTHS_INVALID->value, [
                     'provided' => $value['months'] ?? null,
                     'provided_type' => isset($value['months']) ? gettype($value['months']) : 'missing',
                 ]
@@ -583,7 +583,7 @@ final class Duration extends ValueReadableWithoutLength {
         if ($months < self::INT32_MIN || $months > self::INT32_MAX) {
             throw new Exception(
                 'Invalid duration value - "months" is out of int32 range',
-                ExceptionCode::TYPE_DURATION_MONTHS_OUT_OF_RANGE->value, [
+                ExceptionCode::VALUE_DURATION_MONTHS_OUT_OF_RANGE->value, [
                     'value' => $months,
                     'min' => self::INT32_MIN,
                     'max' => self::INT32_MAX,
@@ -595,7 +595,7 @@ final class Duration extends ValueReadableWithoutLength {
         if (!isset($value['days']) || !is_int($value['days'])) {
             throw new Exception(
                 'Invalid duration value - "days" must be provided as int',
-                ExceptionCode::TYPE_DURATION_DAYS_INVALID->value, [
+                ExceptionCode::VALUE_DURATION_DAYS_INVALID->value, [
                     'provided' => $value['days'] ?? null,
                     'provided_type' => isset($value['days']) ? gettype($value['days']) : 'missing',
                 ]
@@ -606,7 +606,7 @@ final class Duration extends ValueReadableWithoutLength {
         if ($days < self::INT32_MIN || $days > self::INT32_MAX) {
             throw new Exception(
                 'Invalid duration value - "days" is out of int32 range',
-                ExceptionCode::TYPE_DURATION_DAYS_OUT_OF_RANGE->value, [
+                ExceptionCode::VALUE_DURATION_DAYS_OUT_OF_RANGE->value, [
                     'value' => $days,
                     'min' => self::INT32_MIN,
                     'max' => self::INT32_MAX,
@@ -618,7 +618,7 @@ final class Duration extends ValueReadableWithoutLength {
         if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
             throw new Exception(
                 'Invalid duration value - "nanoseconds" must be provided as int',
-                ExceptionCode::TYPE_DURATION_NANOSECONDS_INVALID->value, [
+                ExceptionCode::VALUE_DURATION_NANOSECONDS_INVALID->value, [
                     'provided' => $value['nanoseconds'] ?? null,
                     'provided_type' => isset($value['nanoseconds']) ? gettype($value['nanoseconds']) : 'missing',
                 ]
@@ -632,7 +632,7 @@ final class Duration extends ValueReadableWithoutLength {
         ) {
             throw new Exception(
                 'Invalid duration value - sign mismatch across months, days and nanoseconds',
-                ExceptionCode::TYPE_DURATION_SIGN_MISMATCH->value, [
+                ExceptionCode::VALUE_DURATION_SIGN_MISMATCH->value, [
                     'months' => $months,
                     'days' => $days,
                     'nanoseconds' => $nanoseconds,

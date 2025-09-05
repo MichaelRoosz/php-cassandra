@@ -34,7 +34,7 @@ final class Float32 extends ValueWithFixedLength {
         $unpacked = unpack('G', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack float32 binary data', ExceptionCode::TYPE_FLOAT32_UNPACK_FAILED->value, [
+            throw new Exception('Cannot unpack float32 binary data', ExceptionCode::VALUE_FLOAT32_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 4,
             ]);
@@ -51,7 +51,7 @@ final class Float32 extends ValueWithFixedLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value)) {
-            throw new Exception('Invalid float32 value; expected numeric', ExceptionCode::TYPE_FLOAT32_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid float32 value; expected numeric', ExceptionCode::VALUE_FLOAT32_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

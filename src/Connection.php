@@ -9,6 +9,7 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\Flag;
 use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Connection\ConnectionOptions;
+use Cassandra\Connection\Exception;
 use Cassandra\Protocol\Header;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
@@ -97,14 +98,24 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function asyncRequest(Request\Request $request): Statement {
         return $this->sendAsyncRequest($request);
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function batch(Request\Batch $batchRequest): Response\Result {
         $response = $this->syncRequest($batchRequest);
@@ -121,14 +132,24 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function batchAsync(Request\Batch $batchRequest): Statement {
         return $this->asyncRequest($batchRequest);
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function connect(): void {
         if ($this->node !== null) {
@@ -232,7 +253,12 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
         $consistency = $consistency ?? $this->consistency;
@@ -254,7 +280,12 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function executeAll(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): array {
 
@@ -284,7 +315,12 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
         $consistency = $consistency ?? $this->consistency;
@@ -298,7 +334,12 @@ final class Connection {
     /**
      * Wait until all statements received response.
      *
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function flush(): void {
         while ($this->statements) {
@@ -311,7 +352,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function getResponseForStatement(Statement $statement): Response\Response {
 
@@ -331,7 +377,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function prepare(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
         $response = $this->syncRequest(new Request\Prepare($query, $options));
@@ -346,7 +397,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions()): Statement {
         $request = new Request\Prepare($query, $options);
@@ -357,7 +413,12 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
         $consistency = $consistency ?? $this->consistency;
@@ -379,7 +440,12 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function queryAll(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): array {
 
@@ -411,7 +477,12 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
         $consistency = $consistency ?? $this->consistency;
@@ -425,7 +496,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function setKeyspace(string $keyspace): void {
 
@@ -457,7 +533,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function syncRequest(Request\Request $request): Response\Response {
 
@@ -529,7 +610,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function withKeyspace(string $keyspace): self {
         $this->setKeyspace($keyspace);
@@ -563,7 +649,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function chainAsyncRequest(Request\Request $request, Statement $statement): void {
 
@@ -597,7 +688,8 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Response\Exception
      */
     protected function configureOptions(Response\Supported $supportedReponse): void {
         $serverOptions = $supportedReponse->getData();
@@ -657,7 +749,8 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Response\Exception
      */
     protected function createResponse(Header $header, string $body): Response\Response {
 
@@ -773,7 +866,12 @@ final class Connection {
     }
 
     /** 
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function getConnectedNode(): Connection\Node {
 
@@ -793,7 +891,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function getNewStreamId(): int {
         if ($this->lastStreamId < 32767) {
@@ -808,7 +911,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function getNextResponseForStream(int $streamId = 0): Response\Response {
         do {
@@ -819,7 +927,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function handleAutoPrepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
@@ -874,7 +987,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
@@ -924,7 +1042,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null): ?Response\Response {
 
@@ -936,7 +1059,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement): ?Response\Response {
 
@@ -1003,7 +1131,7 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
      */
     protected function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): Response\Result {
 
@@ -1013,7 +1141,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement): ?Response\Result {
 
@@ -1040,7 +1173,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function handleResponseResult(Request\Request $request, Response\Result $result, ?Statement $statement): ?Response\Result {
 
@@ -1060,7 +1198,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function readResponse(): ?Response\Response {
         $node = $this->getConnectedNode();
@@ -1159,7 +1302,7 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Connection\Exception
      */
     protected function selectNodeAndOpenConnection(): Connection\Node {
 
@@ -1205,7 +1348,12 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Value\Exception
      */
     protected function sendAsyncRequest(Request\Request $request, ?int $streamId = null): Statement {
 

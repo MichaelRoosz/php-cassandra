@@ -197,6 +197,7 @@ class Result extends Response implements IteratorAggregate {
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function readRowsMetadata(): RowsMetadata {
         $flags = $this->stream->readInt();

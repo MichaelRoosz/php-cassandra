@@ -26,7 +26,7 @@ final class ValueFactory {
     public static function getBinaryByTypeInfo(TypeInfo $typeInfo, mixed $value): string {
         $type = self::getValueObjectFromValue($typeInfo, $value);
         if ($type === null) {
-            throw new Exception('Cannot get type object for value', ExceptionCode::TYPE_FACTORY_CANNOT_GET_TYPE_OBJECT_FOR_VALUE->value, [
+            throw new Exception('Cannot get type object for value', ExceptionCode::VALUE_FACTORY_CANNOT_GET_TYPE_OBJECT_FOR_VALUE->value, [
                 'value_type' => gettype($value),
                 'type_info' => get_class($typeInfo),
             ]);
@@ -52,7 +52,7 @@ final class ValueFactory {
         $typeClassMap = self::getTypeToValueClassMap();
 
         if (!isset($typeClassMap[$type->value])) {
-            throw new Exception('Unknown data type', ExceptionCode::TYPE_FACTORY_UNKNOWN_DATA_TYPE->value, [
+            throw new Exception('Unknown data type', ExceptionCode::VALUE_FACTORY_UNKNOWN_DATA_TYPE->value, [
                 'type' => $type->value,
                 'type_name' => $type->name,
                 'supported_types' => array_keys($typeClassMap),
@@ -60,7 +60,7 @@ final class ValueFactory {
         }
 
         if (!self::isSimpleType($type)) {
-            throw new Exception('Cannot get type info from complex type without definition', ExceptionCode::TYPE_FACTORY_COMPLEX_TYPEINFO_REQUIRED->value, [
+            throw new Exception('Cannot get type info from complex type without definition', ExceptionCode::VALUE_FACTORY_COMPLEX_TYPEINFO_REQUIRED->value, [
                 'type' => $type->value,
                 'type_name' => $type->name,
                 'context' => 'complex_types_need_definition',
@@ -83,13 +83,13 @@ final class ValueFactory {
         }
 
         if (!isset($typeDefinition['type'])) {
-            throw new Exception('Type definition must have a type property', ExceptionCode::TYPE_FACTORY_TYPEDEF_MISSING_TYPE->value, [
+            throw new Exception('Type definition must have a type property', ExceptionCode::VALUE_FACTORY_TYPEDEF_MISSING_TYPE->value, [
                 'typeDefinition' => $typeDefinition,
             ]);
         }
 
         if (!($typeDefinition['type'] instanceof Type)) {
-            throw new Exception('Type property must be an instance of Type', ExceptionCode::TYPE_FACTORY_TYPEDEF_TYPE_NOT_INSTANCE->value, [
+            throw new Exception('Type property must be an instance of Type', ExceptionCode::VALUE_FACTORY_TYPEDEF_TYPE_NOT_INSTANCE->value, [
                 'typeDefinition' => $typeDefinition,
             ]);
         }
@@ -186,7 +186,7 @@ final class ValueFactory {
         $typeClassMap = self::getTypeToValueClassMap();
 
         if (!isset($typeClassMap[$type->value])) {
-            throw new Exception('Unknown data type', ExceptionCode::TYPE_FACTORY_CLASS_UNKNOWN_DATA_TYPE->value, [
+            throw new Exception('Unknown data type', ExceptionCode::VALUE_FACTORY_CLASS_UNKNOWN_DATA_TYPE->value, [
                 'type' => $type->value,
                 'type_name' => $type->name,
                 'supported_types' => array_keys($typeClassMap),

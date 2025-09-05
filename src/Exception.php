@@ -7,7 +7,7 @@ namespace Cassandra;
 use Exception as PhpException;
 use Throwable;
 
-class Exception extends PhpException {
+abstract class Exception extends PhpException {
     /**
      * @var array<mixed> $context
      */

@@ -33,7 +33,7 @@ class Uuid extends ValueWithFixedLength {
         if ($unpacked === false) {
             throw new Exception(
                 'Cannot unpack UUID binary data',
-                ExceptionCode::TYPE_UUID_UNPACK_FAILED->value,
+                ExceptionCode::VALUE_UUID_UNPACK_FAILED->value,
                 [
                     'binary_length' => strlen($binary),
                     'expected_length' => 16,
@@ -62,7 +62,7 @@ class Uuid extends ValueWithFixedLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid UUID value; expected string', ExceptionCode::TYPE_UUID_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid UUID value; expected string', ExceptionCode::VALUE_UUID_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'expected_format' => 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
             ]);

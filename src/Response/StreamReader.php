@@ -315,7 +315,7 @@ class StreamReader {
      * Reads a signed VInt with a maximum size of 32 bits
      * 
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function readSignedVint32(): int {
         return $this->vIntCodec->readSignedVint32($this);
@@ -326,7 +326,6 @@ class StreamReader {
      * This is named "vint" in the native protocol specification.
      * 
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
      */
     final public function readSignedVint64(): int {
         return $this->vIntCodec->readSignedVint64($this);
@@ -398,6 +397,7 @@ class StreamReader {
      * 
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     final public function readTypeInfo(): TypeInfo {
         $typeShort = $this->readShort();
@@ -495,7 +495,7 @@ class StreamReader {
      * Reads an unsigned VInt with a maximum size of 32 bits
      * 
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function readUnsignedVInt32(): int {
         return $this->vIntCodec->readUnsignedVint32($this);
@@ -506,7 +506,6 @@ class StreamReader {
      * This is named "unsigned vint" in the native protocol specification.
      * 
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
      */
     final public function readUnsignedVInt64(): int {
         return $this->vIntCodec->readUnsignedVint64($this);

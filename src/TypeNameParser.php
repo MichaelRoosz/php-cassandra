@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
+use Cassandra\Exception\TypeNameParserException;
 use Cassandra\TypeInfo\ListCollectionInfo;
 use Cassandra\TypeInfo\MapCollectionInfo;
 use Cassandra\TypeInfo\SetCollectionInfo;
@@ -13,11 +14,10 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\VectorInfo;
-use Cassandra\Value\Exception;
 
 final class TypeNameParser {
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     public function parse(string $typeString, bool $isFrozen = false): TypeInfo {
 
@@ -25,7 +25,7 @@ final class TypeNameParser {
         if ($firstBracketIndex === false) {
 
             if (str_contains($typeString, ')')) {
-                throw new Exception(
+                throw new TypeNameParserException(
                     'Invalid type string: contains closing bracket without opening bracket',
                     ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value,
                     [
@@ -43,7 +43,7 @@ final class TypeNameParser {
             $paramString = trim(mb_substr($typeString, $firstBracketIndex + 1));
 
             if (!str_ends_with($paramString, ')')) {
-                throw new Exception(
+                throw new TypeNameParserException(
                     'Invalid type string: missing closing bracket',
                     ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_MISSING_CLOSING->value,
                     [
@@ -64,7 +64,7 @@ final class TypeNameParser {
         if (isset($simpleTypeMap[$typeName])) {
 
             if ($params) {
-                throw new Exception(
+                throw new TypeNameParserException(
                     'Invalid type string: simple types cannot have parameters',
                     ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_WITH_PARAMETERS->value,
                     [
@@ -77,7 +77,7 @@ final class TypeNameParser {
             }
 
             if ($isFrozen) {
-                throw new Exception(
+                throw new TypeNameParserException(
                     'Invalid type for frozen: simple types cannot be frozen',
                     ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value,
                     [
@@ -105,7 +105,7 @@ final class TypeNameParser {
     /**
      * @return array<string|int,string>
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function extractParams(string $paramString): array {
 
@@ -132,7 +132,7 @@ final class TypeNameParser {
             if ($char === ')') {
 
                 if ($bracketsOpened === 0) {
-                    throw new Exception(
+                    throw new TypeNameParserException(
                         'Invalid type string: unmatched closing bracket',
                         ExceptionCode::TYPENAME_PARSER_INVALID_PARAM_BRACKETS_UNMATCHED_CLOSING->value,
                         [
@@ -155,7 +155,7 @@ final class TypeNameParser {
 
             if ($char === ':') {
                 if ($name !== null) {
-                    throw new Exception(
+                    throw new TypeNameParserException(
                         'Invalid UDT type params: multiple colons found in parameter',
                         ExceptionCode::TYPENAME_PARSER_UDT_PARAMS_MULTIPLE_COLONS->value,
                         [
@@ -186,7 +186,7 @@ final class TypeNameParser {
         }
 
         if ($bracketsOpened > 0) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid type string: unmatched opening bracket',
                 ExceptionCode::TYPENAME_PARSER_INVALID_PARAM_BRACKETS_UNMATCHED_OPENING->value,
                 [
@@ -261,12 +261,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseFrozenType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid frozen type params: exactly one parameter required',
                 ExceptionCode::TYPENAME_PARSER_FROZEN_INVALID_PARAM_COUNT->value,
                 [
@@ -284,12 +284,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseListType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid list type params: exactly one parameter required',
                 ExceptionCode::TYPENAME_PARSER_LIST_INVALID_PARAM_COUNT->value,
                 [
@@ -309,12 +309,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseMapType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 2) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid map type params: exactly two parameters required',
                 ExceptionCode::TYPENAME_PARSER_MAP_INVALID_PARAM_COUNT->value,
                 [
@@ -335,12 +335,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseReversedType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid reversed type params: exactly one parameter required',
                 ExceptionCode::TYPENAME_PARSER_REVERSED_INVALID_PARAM_COUNT->value,
                 [
@@ -358,12 +358,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseSetType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid set type params: exactly one parameter required',
                 ExceptionCode::TYPENAME_PARSER_SET_INVALID_PARAM_COUNT->value,
                 [
@@ -383,12 +383,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseTupleType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) < 1) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid tuple type params: at least one parameter required',
                 ExceptionCode::TYPENAME_PARSER_TUPLE_INVALID_PARAM_COUNT->value,
                 [
@@ -412,12 +412,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseUDTType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) < 3) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid UDT type params: at least three parameters required',
                 ExceptionCode::TYPENAME_PARSER_UDT_INVALID_PARAM_COUNT->value,
                 [
@@ -437,7 +437,7 @@ final class TypeNameParser {
         foreach ($udtParams as $key => $value) {
 
             if (!is_string($key)) {
-                throw new Exception(
+                throw new TypeNameParserException(
                     'Invalid UDT type params: field keys must be strings',
                     ExceptionCode::TYPENAME_PARSER_UDT_FIELD_KEY_NOT_STRING->value,
                     [
@@ -458,12 +458,12 @@ final class TypeNameParser {
     /**
      * @param array<string> $params
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function parseVectorType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 2) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid vector type params: exactly two parameters required',
                 ExceptionCode::TYPENAME_PARSER_VECTOR_INVALID_PARAM_COUNT->value,
                 [
@@ -478,7 +478,7 @@ final class TypeNameParser {
         $typeInfo = $this->parse($params[0]);
 
         if (!is_numeric($params[1])) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid vector type dimensions: must be numeric',
                 ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_NON_NUMERIC->value,
                 [
@@ -492,7 +492,7 @@ final class TypeNameParser {
         $dimensions = (int) $params[1];
 
         if ($dimensions < 0) {
-            throw new Exception(
+            throw new TypeNameParserException(
                 'Invalid vector type dimensions: must be non-negative',
                 ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value,
                 [

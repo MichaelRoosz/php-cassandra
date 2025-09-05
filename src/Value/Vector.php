@@ -29,8 +29,7 @@ final class Vector extends ValueReadableWithoutLength {
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\TypeInfo\Exception
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
@@ -46,17 +45,17 @@ final class Vector extends ValueReadableWithoutLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new Exception('Invalid tuple value; expected array', ExceptionCode::TYPE_VECTOR_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid tuple value; expected array', ExceptionCode::VALUE_VECTOR_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_VECTOR_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::VALUE_VECTOR_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof VectorInfo) {
-            throw new Exception('Invalid type info, VectorInfo expected', ExceptionCode::TYPE_VECTOR_INVALID_TYPEINFO->value, [
+            throw new Exception('Invalid type info, VectorInfo expected', ExceptionCode::VALUE_VECTOR_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -66,18 +65,17 @@ final class Vector extends ValueReadableWithoutLength {
 
     /**
      * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\TypeInfo\Exception
      * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
     final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::TYPE_VECTOR_TYPEINFO_REQUIRED->value);
+            throw new Exception('typeInfo is required', ExceptionCode::VALUE_VECTOR_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof VectorInfo) {
-            throw new Exception('Invalid type info, VectorInfo expected', ExceptionCode::TYPE_VECTOR_INVALID_TYPEINFO->value, [
+            throw new Exception('Invalid type info, VectorInfo expected', ExceptionCode::VALUE_VECTOR_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }

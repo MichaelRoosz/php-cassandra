@@ -28,8 +28,7 @@ final class Batch extends Request {
      * @param array<mixed> $values
      *
      * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Value\Exception
      */
     public function appendPreparedStatement(PreparedResult $prepareResult, array $values = []): self {
 
@@ -71,7 +70,7 @@ final class Batch extends Request {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Request\Exception
      */
     #[\Override]
     public function getBody(): string {

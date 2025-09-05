@@ -27,7 +27,7 @@ abstract class ValueReadableWithLength extends ValueBase {
     #[\Override]
     public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
         if ($length === null || $length < 0) {
-            throw new Exception('Invalid data length', ExceptionCode::TYPE_INVALID_DATA_LENGTH->value, [
+            throw new Exception('Invalid data length', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
                 'length' => $length,
             ]);
         }

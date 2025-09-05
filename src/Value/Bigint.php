@@ -38,7 +38,7 @@ class Bigint extends ValueWithFixedLength {
          */
         $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack bigint binary data', ExceptionCode::TYPE_BIGINT_UNPACK_FAILED->value, [
+            throw new Exception('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -57,7 +57,7 @@ class Bigint extends ValueWithFixedLength {
         self::require64Bit();
 
         if (!is_int($value)) {
-            throw new Exception('Invalid bigint value; expected int', ExceptionCode::TYPE_BIGINT_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid bigint value; expected int', ExceptionCode::VALUE_BIGINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -104,7 +104,7 @@ class Bigint extends ValueWithFixedLength {
         if (PHP_INT_SIZE < 8) {
             $className = (new ReflectionClass(static::class))->getShortName();
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::TYPE_BIGINT_64BIT_REQUIRED->value, [
+            throw new Exception('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::VALUE_BIGINT_64BIT_REQUIRED->value, [
                 'class' => $className,
                 'php_int_size_bytes' => PHP_INT_SIZE,
                 'php_int_size_bits' => PHP_INT_SIZE * 8,

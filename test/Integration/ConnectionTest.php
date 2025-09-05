@@ -18,9 +18,10 @@ final class ConnectionTest extends TestCase {
         $version = $conn->getVersion();
         $this->assertGreaterThanOrEqual(3, $version);
 
-        // On Cassandra 5+, v5 options should be supported
-        $this->assertIsBool($conn->supportsKeyspaceRequestOption());
-        $this->assertIsBool($conn->supportsNowInSecondsRequestOption());
+        if ($version >= 5) {
+            $this->assertTrue($conn->supportsKeyspaceRequestOption());
+            $this->assertTrue($conn->supportsNowInSecondsRequestOption());
+        }
     }
 
     public function testSetConsistencyAffectsDefault(): void {

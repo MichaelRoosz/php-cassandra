@@ -26,7 +26,7 @@ final class Varint extends ValueReadableWithLength {
 
         $isInteger = str_starts_with($value, '-') ? ctype_digit(substr($value, 1)) : ctype_digit($value);
         if (!$isInteger) {
-            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::VALUE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -55,7 +55,7 @@ final class Varint extends ValueReadableWithLength {
             try {
                 $decimal = DecimalCalculator::get()->fromBinary($binary);
             } catch (StringMathException $e) {
-                throw new Exception('Failed to get decimal from binary', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
+                throw new Exception('Failed to get decimal from binary', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
                     'binary' => $binary,
                 ], $e);
             }
@@ -68,7 +68,7 @@ final class Varint extends ValueReadableWithLength {
          */
         $unpacked = unpack('C*', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack varint binary data', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
+            throw new Exception('Cannot unpack varint binary data', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -91,7 +91,7 @@ final class Varint extends ValueReadableWithLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value) || is_float($value)) {
-            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::TYPE_VARINT_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::VALUE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -119,7 +119,7 @@ final class Varint extends ValueReadableWithLength {
         try {
             return DecimalCalculator::get()->toBinary($this->value);
         } catch (StringMathException $e) {
-            throw new Exception('Failed to get binary from decimal', ExceptionCode::TYPE_VARINT_UNPACK_FAILED->value, [
+            throw new Exception('Failed to get binary from decimal', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
                 'decimal' => $this->value,
             ], $e);
         }
@@ -142,7 +142,7 @@ final class Varint extends ValueReadableWithLength {
         if (!is_int($this->value)) {
             throw new Exception(
                 'Value of Varint is outside of possible integer range for this system',
-                ExceptionCode::TYPE_VARINT_OUT_OF_PHP_INT_RANGE->value,
+                ExceptionCode::VALUE_VARINT_OUT_OF_PHP_INT_RANGE->value,
                 [
                     'php_int_size_bits' => PHP_INT_SIZE * 8,
                     'value' => $this->value,

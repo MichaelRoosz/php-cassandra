@@ -34,7 +34,7 @@ final class Double extends ValueWithFixedLength {
         $unpacked = unpack('E', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack double binary data', ExceptionCode::TYPE_DOUBLE_UNPACK_FAILED->value, [
+            throw new Exception('Cannot unpack double binary data', ExceptionCode::VALUE_DOUBLE_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -51,7 +51,7 @@ final class Double extends ValueWithFixedLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value)) {
-            throw new Exception('Invalid double value; expected numeric', ExceptionCode::TYPE_DOUBLE_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid double value; expected numeric', ExceptionCode::VALUE_DOUBLE_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

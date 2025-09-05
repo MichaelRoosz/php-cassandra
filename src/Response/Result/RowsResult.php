@@ -39,6 +39,7 @@ final class RowsResult extends Result {
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeNameParserException
      */
     final public function __construct(Header $header, StreamReader $stream) {
 

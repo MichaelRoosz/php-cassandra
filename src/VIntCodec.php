@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
+use Cassandra\Exception\VIntCodecException;
 use Cassandra\Response\StreamReader;
 
 /**
@@ -18,13 +19,13 @@ final class VIntCodec {
     private const INT_MIN_UNSIGNED_32BIT = 0;
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function decodeSignedVint32(string $binary): int {
 
         $number = $this->zigZagDecode($this->decodeUnsignedVint64($binary));
         if ($number > self::INT_MAX_SIGNED_32BIT || $number < self::INT_MIN_SIGNED_32BIT) {
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE->value, [
+            throw new VIntCodecException('Integer value is outside of supported range', ExceptionCode::VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE->value, [
                 'value' => $number,
                 'min' => self::INT_MIN_SIGNED_32BIT,
                 'max' => self::INT_MAX_SIGNED_32BIT,
@@ -35,20 +36,20 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function decodeSignedVint64(string $binary): int {
         return $this->zigZagDecode($this->decodeUnsignedVint64($binary));
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function decodeUnsignedVint32(string $binary): int {
 
         $number = $this->decodeUnsignedVint64($binary);
         if ($number > self::INT_MAX_UNSIGNED_32BIT || $number < self::INT_MIN_UNSIGNED_32BIT) {
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::VINTCODEC_UNSIGNED_VINT32_OUT_OF_RANGE->value, [
+            throw new VIntCodecException('Integer value is outside of supported range', ExceptionCode::VINTCODEC_UNSIGNED_VINT32_OUT_OF_RANGE->value, [
                 'value' => $number,
                 'min' => self::INT_MIN_UNSIGNED_32BIT,
                 'max' => self::INT_MAX_UNSIGNED_32BIT,
@@ -59,12 +60,12 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function decodeUnsignedVint64(string $binary): int {
 
         if ($binary === '') {
-            throw new Exception('Binary vint data is empty', ExceptionCode::VINTCODEC_VINT64_UNPACK_FAILED->value);
+            throw new VIntCodecException('Binary vint data is empty', ExceptionCode::VINTCODEC_VINT64_UNPACK_FAILED->value);
         }
 
         /**
@@ -72,7 +73,7 @@ final class VIntCodec {
          */
         $data = unpack('C*', $binary);
         if ($data === false) {
-            throw new Exception('Cannot unpack vint binary data', ExceptionCode::VINTCODEC_VINT64_UNPACK_FAILED->value, [
+            throw new VIntCodecException('Cannot unpack vint binary data', ExceptionCode::VINTCODEC_VINT64_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -100,12 +101,12 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function encodeSignedVint32(int $number): string {
 
         if ($number > self::INT_MAX_SIGNED_32BIT || $number < self::INT_MIN_SIGNED_32BIT) {
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE->value, [
+            throw new VIntCodecException('Integer value is outside of supported range', ExceptionCode::VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE->value, [
                 'value' => $number,
                 'min' => self::INT_MIN_SIGNED_32BIT,
                 'max' => self::INT_MAX_SIGNED_32BIT,
@@ -121,13 +122,13 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function encodeUnsignedVint32(int $number): string {
 
         if ($number > self::INT_MAX_UNSIGNED_32BIT || $number < self::INT_MIN_UNSIGNED_32BIT) {
 
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::VINTCODEC_UNSIGNED_VINT32_OUT_OF_RANGE->value, [
+            throw new VIntCodecException('Integer value is outside of supported range', ExceptionCode::VINTCODEC_UNSIGNED_VINT32_OUT_OF_RANGE->value, [
                 'value' => $number,
                 'min' => self::INT_MIN_UNSIGNED_32BIT,
                 'max' => self::INT_MAX_UNSIGNED_32BIT,
@@ -178,13 +179,14 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
+     * @throws \Cassandra\Response\Exception
      */
     final public function readSignedVint32(StreamReader $stream): int {
 
         $number = $this->zigZagDecode($this->readUnsignedVint64($stream));
         if ($number > self::INT_MAX_SIGNED_32BIT || $number < self::INT_MIN_SIGNED_32BIT) {
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE->value, [
+            throw new VIntCodecException('Integer value is outside of supported range', ExceptionCode::VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE->value, [
                 'value' => $number,
                 'min' => self::INT_MIN_SIGNED_32BIT,
                 'max' => self::INT_MAX_SIGNED_32BIT,
@@ -195,20 +197,21 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
      */
     final public function readSignedVint64(StreamReader $stream): int {
         return $this->zigZagDecode($this->readUnsignedVint64($stream));
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Exception\VIntCodecException
+     * @throws \Cassandra\Response\Exception
      */
     final public function readUnsignedVint32(StreamReader $stream): int {
 
         $number = $this->readUnsignedVint64($stream);
         if ($number > self::INT_MAX_UNSIGNED_32BIT || $number < self::INT_MIN_UNSIGNED_32BIT) {
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::VINTCODEC_UNSIGNED_VINT32_OUT_OF_RANGE->value, [
+            throw new VIntCodecException('Integer value is outside of supported range', ExceptionCode::VINTCODEC_UNSIGNED_VINT32_OUT_OF_RANGE->value, [
                 'value' => $number,
                 'min' => self::INT_MIN_UNSIGNED_32BIT,
                 'max' => self::INT_MAX_UNSIGNED_32BIT,
@@ -219,7 +222,7 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Exception
+     * @throws \Cassandra\Response\Exception
      */
     final public function readUnsignedVint64(StreamReader $stream): int {
 

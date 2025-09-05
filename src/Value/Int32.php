@@ -20,7 +20,7 @@ final class Int32 extends ValueWithFixedLength {
      */
     final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::TYPE_INTEGER_OUT_OF_RANGE->value, [
+            throw new Exception('Integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
                 'value' => $value,
                 'min' => self::VALUE_MIN,
                 'max' => self::VALUE_MAX,
@@ -46,7 +46,7 @@ final class Int32 extends ValueWithFixedLength {
          */
         $unpacked = unpack('N', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack integer binary data', ExceptionCode::TYPE_INTEGER_UNPACK_FAILED->value, [
+            throw new Exception('Cannot unpack integer binary data', ExceptionCode::VALUE_INTEGER_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 4,
             ]);
@@ -67,7 +67,7 @@ final class Int32 extends ValueWithFixedLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_int($value)) {
-            throw new Exception('Invalid integer value; expected int', ExceptionCode::TYPE_INTEGER_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid integer value; expected int', ExceptionCode::VALUE_INTEGER_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'range' => [self::VALUE_MIN, self::VALUE_MAX],
             ]);

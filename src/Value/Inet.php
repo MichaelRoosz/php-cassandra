@@ -24,7 +24,7 @@ final class Inet extends ValueReadableWithLength {
         $inet = inet_ntop($binary);
 
         if ($inet === false) {
-            throw new Exception('Cannot convert inet binary to string', ExceptionCode::TYPE_INET_TO_STRING_FAILED->value, [
+            throw new Exception('Cannot convert inet binary to string', ExceptionCode::VALUE_INET_TO_STRING_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -40,7 +40,7 @@ final class Inet extends ValueReadableWithLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid inet value; expected string', ExceptionCode::TYPE_INET_INVALID_VALUE_TYPE->value, [
+            throw new Exception('Invalid inet value; expected string', ExceptionCode::VALUE_INET_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -58,7 +58,7 @@ final class Inet extends ValueReadableWithLength {
         if ($length !== 4 && $length !== 16) {
             throw new Exception(
                 message: 'Invalid inet length byte',
-                code: ExceptionCode::TYPE_INET_INVALID_LENGTH->value,
+                code: ExceptionCode::VALUE_INET_INVALID_LENGTH->value,
                 context: [
                     'method' => __METHOD__,
                     'address_length' => $length,
@@ -71,7 +71,7 @@ final class Inet extends ValueReadableWithLength {
         if ($inet === false) {
             throw new Exception(
                 message: 'Cannot parse inet address',
-                code: ExceptionCode::TYPE_INET_PARSE_FAIL->value,
+                code: ExceptionCode::VALUE_INET_PARSE_FAIL->value,
                 context: [
                     'method' => __METHOD__,
                     'address_length' => $length,
@@ -95,7 +95,7 @@ final class Inet extends ValueReadableWithLength {
         $binary = inet_pton($this->value);
 
         if ($binary === false) {
-            throw new Exception('Cannot convert inet string to binary', ExceptionCode::TYPE_INET_TO_BINARY_FAILED->value, [
+            throw new Exception('Cannot convert inet string to binary', ExceptionCode::VALUE_INET_TO_BINARY_FAILED->value, [
                 'value' => $this->value,
             ]);
         }
