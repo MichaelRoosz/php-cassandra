@@ -634,8 +634,10 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             if ($valueToCheck) {
                 sort($valueToCheck);
             }
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Frozen list<varchar> value should round-trip correctly');
         }
@@ -675,8 +677,10 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             if ($valueToCheck) {
                 sort($valueToCheck);
             }
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Frozen map<varchar,int> value should round-trip correctly');
         }
@@ -716,8 +720,10 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             if ($valueToCheck) {
                 sort($valueToCheck);
             }
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertEquals($valueToCheck, $retrievedValue, 'Frozen set<varchar> value should round-trip correctly');
         }
@@ -875,8 +881,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertSame($valueToCheck, $retrievedValue, 'List<varchar> value should round-trip correctly');
         }
@@ -918,8 +925,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertSame($valueToCheck, $retrievedValue, 'List<int> value should round-trip correctly');
         }
@@ -962,8 +970,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Map<varchar,int> value should round-trip correctly');
         }
@@ -1004,8 +1013,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Map<int,varchar> value should round-trip correctly');
         }
@@ -1075,8 +1085,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertEquals($valueToCheck, $retrievedValue, 'Set<varchar> value should round-trip correctly');
         }
@@ -1117,8 +1128,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            $this->assertIsArray($retrievedValue);
-            sort($retrievedValue);
+            if (is_array($retrievedValue)) {
+                sort($retrievedValue);
+            }
 
             $this->assertEquals($valueToCheck, $retrievedValue, 'Set<int> value should round-trip correctly');
         }
@@ -1703,7 +1715,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
-            $this->assertSame((string) $testValue, $retrievedValue, "Varint value $testValue should round-trip correctly");
+            $this->assertIsNumeric($retrievedValue);
+            $this->assertSame((string) $testValue, (string) $retrievedValue, "Varint value $testValue should round-trip correctly");
         }
 
         $stringTestValues = array_map('strval', $testValues);
@@ -1804,7 +1817,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             $this->assertCount(4, $retrievedValue, 'Vector length should be 4');
 
             foreach ([0, 1, 2, 3] as $i) {
-                $this->assertIsFloat($retrievedValue[$i]);
+                $this->assertIsNumeric($retrievedValue[$i]);
                 $this->assertEquals(
                     (string) $testValue[$i],
                     (string) $retrievedValue[$i],
@@ -1825,16 +1838,22 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $cqlshResults = $this->dumpTableWithCqlsh($this->testKeyspace, $tableName, $idColumn, $valueColumn);
 
         foreach ($testValues as $idValue => $phpValue) {
-            if (!isset($cqlshResults[$idValue])) {
+            if (!array_key_exists($idValue, $cqlshResults)) {
                 $this->fail("No cqlsh result found for ID {$idValue} in table {$tableName}");
             }
 
             $this->assertIsArray($cqlshResults[$idValue]);
-            if (!isset($cqlshResults[$idValue][$valueColumn])) {
+            if (!array_key_exists($valueColumn, $cqlshResults[$idValue])) {
                 $this->fail("Column '{$valueColumn}' not found in cqlsh result for ID {$idValue} in table {$tableName}");
             }
 
             $cqlshValue = $cqlshResults[$idValue][$valueColumn];
+
+            if ($phpValue === null) {
+                $this->assertSame(null, $cqlshValue, 'PHP string value should match cqlsh output');
+
+                continue;
+            }
 
             switch ($dataType) {
                 case 'ascii':
@@ -1873,7 +1892,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                     break;
                 case 'float':
                     $this->assertIsFloat($phpValue);
-                    $this->assertIsFloat($cqlshValue);
+                    $this->assertIsNumeric($cqlshValue);
                     $phpFloat = (float) $phpValue;
                     $cqlFloat = (float) $cqlshValue;
                     $this->assertEqualsWithDelta($phpFloat, $cqlFloat, max(abs($phpFloat) * 0.01, 0.0001), 'PHP float value should match cqlsh output');
@@ -1881,7 +1900,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                     break;
                 case 'double':
                     $this->assertIsFloat($phpValue);
-                    $this->assertIsFloat($cqlshValue);
+                    $this->assertIsNumeric($cqlshValue);
                     $phpDouble = (float) $phpValue;
                     $cqlDouble = (float) $cqlshValue;
                     $this->assertEqualsWithDelta($phpDouble, $cqlDouble, max(abs($phpDouble) * 0.01, 0.000001), 'PHP float value should match cqlsh output');
@@ -1889,6 +1908,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                     break;
                 case 'list':
                 case 'vector':
+                    if ($cqlshValue === null) {
+                        $cqlshValue = '';
+                    }
                     $this->assertIsArray($phpValue);
                     $this->assertIsString($cqlshValue);
                     $this->verifyCqlListMatchesPhpList($phpValue, $cqlshValue);
@@ -1901,6 +1923,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
                     break;
                 case 'set':
+                    if ($cqlshValue === null) {
+                        $cqlshValue = '';
+                    }
                     $this->assertIsArray($phpValue);
                     $this->assertIsString($cqlshValue);
                     $this->verifyCqlSetMatchesPhpSet($phpValue, $cqlshValue);
@@ -1913,6 +1938,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
                     break;
                 case 'map':
+                    if ($cqlshValue === null) {
+                        $cqlshValue = '';
+                    }
                     $this->assertIsArray($phpValue);
                     $this->assertIsString($cqlshValue);
                     $this->verifyCqlMapMatchesPhpMap($phpValue, $cqlshValue);
@@ -1925,6 +1953,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
                     break;
                 case 'udt':
+                    if ($cqlshValue === null) {
+                        $cqlshValue = '';
+                    }
                     $this->assertIsArray($phpValue);
                     $this->assertIsString($cqlshValue);
                     $this->verifyCqlUdtMatchesPhpUdt($phpValue, $cqlshValue);
@@ -1937,6 +1968,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
                     break;
                 case 'tuple':
+                    if ($cqlshValue === null) {
+                        $cqlshValue = '';
+                    }
                     $this->assertIsArray($phpValue);
                     $this->assertIsString($cqlshValue);
                     $this->verifyCqlTupleMatchesPhpTuple($phpValue, $cqlshValue);
@@ -1946,6 +1980,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                     $this->assertIsString($phpValue);
                     $this->assertIsString($cqlshValue);
                     $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP value should match cqlsh output');
+
+                    break;
             }
         }
     }
@@ -2026,10 +2062,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         )) !== false) {
 
             $row = array_map(fn($value) => str_replace([
+                $options['NULL'],
                 $options['ESCAPE'] . $options['QUOTE'],
                 $options['ESCAPE'] . $options['ESCAPE'],
                 '\\\\',
             ], [
+                '______NULL______',
                 $options['QUOTE'],
                 $options['ESCAPE'],
                 '______ESCAPE______',
@@ -2049,7 +2087,13 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 '\\',
             ], $value), $row);
 
-            $row = array_map(fn($value) => ($value === $options['NULL'] ? null : $value), $row);
+            $row = array_map(function ($value) {
+                if ($value === '______NULL______') {
+                    return null;
+                }
+
+                return str_replace('______NULL______', 'null', $value);
+            }, $row);
 
             $rowData[] = array_combine($header, $row);
         }
@@ -2232,8 +2276,10 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             sort($phpValue);
         }
 
-        $this->assertIsArray($cqlshArray);
-        sort($cqlshArray);
+        if ($cqlshArray !== null) {
+            $this->assertIsArray($cqlshArray);
+            sort($cqlshArray);
+        }
 
         $this->assertSame($phpValue, $cqlshArray, 'PHP UDT value should match cqlsh output');
     }

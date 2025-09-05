@@ -153,6 +153,10 @@ final class Varint extends ValueReadableWithLength {
         return $this->value;
     }
 
+    public function getValueAsString(): string {
+        return (string) $this->value;
+    }
+
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
