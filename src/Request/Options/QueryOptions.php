@@ -19,6 +19,19 @@ class QueryOptions extends RequestOptions {
     ) {
     }
 
+    public function withKeyspace(string $keyspace): self {
+        return new self(
+            autoPrepare: $this->autoPrepare,
+            pageSize: $this->pageSize,
+            pagingState: $this->pagingState,
+            serialConsistency: $this->serialConsistency,
+            defaultTimestamp: $this->defaultTimestamp,
+            namesForValues: $this->namesForValues,
+            keyspace: $keyspace,
+            nowInSeconds: $this->nowInSeconds,
+        );
+    }
+
     public function withNamesForValues(bool $namesForValues): self {
         return new self(
             autoPrepare: $this->autoPrepare,

@@ -235,13 +235,22 @@ final class Connection {
             ]);
         }
 
-        if ($this->keyspace) {
+        if ($this->keyspace && $this->version < 5) {
             $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
         }
     }
 
     public function createBatchRequest(BatchType $type = BatchType::LOGGED, ?Consistency $consistency = null, BatchOptions $options = new BatchOptions()): Request\Batch {
+
         $consistency = $consistency ?? $this->consistency;
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version >= 5
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
 
         return new Request\Batch($type, $consistency, $options);
     }
@@ -270,7 +279,17 @@ final class Connection {
      * @throws \Cassandra\Value\Exception
      */
     public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
+
         $consistency = $consistency ?? $this->consistency;
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version >= 5
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
+
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
         $response = $this->syncRequest($request);
@@ -332,7 +351,17 @@ final class Connection {
      * @throws \Cassandra\Value\Exception
      */
     public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
+
         $consistency = $consistency ?? $this->consistency;
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version >= 5
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
+
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
         $statement = $this->asyncRequest($request);
@@ -394,6 +423,15 @@ final class Connection {
      * @throws \Cassandra\Value\Exception
      */
     public function prepare(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version >= 5
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
+
         $response = $this->syncRequest(new Request\Prepare($query, $options));
         if (!($response instanceof Response\Result\PreparedResult)) {
             throw new Exception('Unexpected response type during prepare', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
@@ -414,6 +452,15 @@ final class Connection {
      * @throws \Cassandra\Value\Exception
      */
     public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions()): Statement {
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version >= 5
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
+
         $request = new Request\Prepare($query, $options);
 
         return $this->asyncRequest($request);
@@ -430,7 +477,16 @@ final class Connection {
      * @throws \Cassandra\Value\Exception
      */
     public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
+
         $consistency = $consistency ?? $this->consistency;
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version >= 5
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
 
         $request = new Request\Query($query, $values, $consistency, $options);
 
@@ -494,7 +550,17 @@ final class Connection {
      * @throws \Cassandra\Value\Exception
      */
     public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
+
         $consistency = $consistency ?? $this->consistency;
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version >= 5
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
+
         $request = new Request\Query($query, $values, $consistency, $options);
 
         return $this->asyncRequest($request);
@@ -528,17 +594,17 @@ final class Connection {
             return;
         }
 
-        $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
-        if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during setKeyspace', ExceptionCode::CON_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
-                'expected' => Response\Result::class,
-                'received' => get_class($response),
-                'operation' => 'setKeyspace',
-                'keyspace' => $this->keyspace,
-            ]);
+        if ($this->version < 5) {
+            $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
+            if (!($response instanceof Response\Result)) {
+                throw new Exception('Unexpected response type during setKeyspace', ExceptionCode::CON_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
+                    'expected' => Response\Result::class,
+                    'received' => get_class($response),
+                    'operation' => 'setKeyspace',
+                    'keyspace' => $this->keyspace,
+                ]);
+            }
         }
-
-        return;
     }
 
     public function supportsKeyspaceRequestOption(): bool {

@@ -9,4 +9,10 @@ final class PrepareOptions extends RequestOptions {
         public readonly ?string $keyspace = null,
     ) {
     }
+
+    public function withKeyspace(string $keyspace): self {
+        return new self(
+            keyspace: $keyspace,
+        );
+    }
 }

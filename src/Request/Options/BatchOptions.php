@@ -14,4 +14,13 @@ final class BatchOptions extends RequestOptions {
         public readonly ?int $nowInSeconds = null,
     ) {
     }
+
+    public function withKeyspace(string $keyspace): self {
+        return new self(
+            serialConsistency: $this->serialConsistency,
+            defaultTimestamp: $this->defaultTimestamp,
+            keyspace: $keyspace,
+            nowInSeconds: $this->nowInSeconds,
+        );
+    }
 }

@@ -46,6 +46,20 @@ final class ExecuteOptions extends QueryOptions {
     }
 
     #[\Override]
+    public function withKeyspace(string $keyspace): self {
+        return new self(
+            skipMetadata: $this->skipMetadata,
+            pageSize: $this->pageSize,
+            pagingState: $this->pagingState,
+            serialConsistency: $this->serialConsistency,
+            defaultTimestamp: $this->defaultTimestamp,
+            namesForValues: $this->namesForValues,
+            keyspace: $keyspace,
+            nowInSeconds: $this->nowInSeconds
+        );
+    }
+
+    #[\Override]
     public function withNamesForValues(bool $namesForValues): self {
         return new self(
             skipMetadata: $this->skipMetadata,
