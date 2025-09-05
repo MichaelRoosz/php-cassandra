@@ -11,6 +11,8 @@ use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\Exception;
 use Cassandra\Protocol\Header;
+use Cassandra\Request\BatchType;
+use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
@@ -235,6 +237,12 @@ final class Connection {
         if ($this->keyspace) {
             $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
         }
+    }
+
+    public function createBatchRequest(BatchType $type = BatchType::LOGGED, ?Consistency $consistency = null, BatchOptions $options = new BatchOptions()): Request\Batch {
+        $consistency = $consistency ?? $this->consistency;
+
+        return new Request\Batch($type, $consistency, $options);
     }
 
     public function disconnect(): void {

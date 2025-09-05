@@ -7,7 +7,6 @@ namespace Cassandra\Test\Integration;
 use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
-use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Type;
 use Cassandra\Value;
@@ -20,7 +19,7 @@ final class AsyncTest extends TestCase {
 
         $pending = [];
         for ($j = 0; $j < 3; $j++) {
-            $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE);
+            $batch = $conn->createBatchRequest(BatchType::UNLOGGED);
             for ($i = 0; $i < 10; $i++) {
                 $batch->appendQuery(
                     'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
