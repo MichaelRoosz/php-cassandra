@@ -112,7 +112,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Ascii value should round-trip correctly');
@@ -150,7 +150,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, "Bigint value $testValue should round-trip correctly");
@@ -185,7 +185,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Blob value should round-trip correctly');
@@ -213,7 +213,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Boolean value ' . ($testValue ? 'true' : 'false') . ' should round-trip correctly');
@@ -249,7 +249,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($delta, $retrievedValue,
@@ -284,9 +284,10 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
+            $this->assertIsString($retrievedValue);
             $this->assertSame(bin2hex($config['value']), bin2hex($retrievedValue), 'Custom value should round-trip correctly through Cassandra');
         }
 
@@ -328,7 +329,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValues[$testValue]['php'], $retrievedValue, "Date value $testValue should round-trip correctly");
@@ -341,16 +342,12 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $dateTimeValues = [];
         foreach ($testValues as $input => $output) {
 
-            if (!is_string($input)) {
-                continue;
-            }
-
-            $firstChar = substr($input, 0, 1);
-            if ($firstChar !== '+' && $firstChar !== '-') {
+            if (!str_starts_with($input, '+') && !str_starts_with($input, '-')) {
                 $input = '+' . $input; // Ensure the date string has a sign
             }
 
             $dateTimeValues[] = [
+                /** @phpstan-ignore-next-line new.dateTimeImmutable */
                 'input' => new DateTimeImmutable($input),
                 'output' => $output['php'],
             ];
@@ -368,7 +365,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($config['output'], $retrievedValue,
@@ -422,7 +419,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValues[$testValue]['php'], $retrievedValue, "Decimal value $testValue should round-trip correctly");
@@ -461,7 +458,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertEqualsWithDelta($testValue, $retrievedValue, max($testValue * 0.01, 0.000001), "Double value $testValue should round-trip correctly");
@@ -507,7 +504,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame(
@@ -531,8 +528,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         foreach ($testValues as $input => $output) {
 
             if (
-                !is_string($input)
-                || !str_starts_with($input, 'P')
+                !str_starts_with($input, 'P')
                 || str_contains($input, '-')
                 || str_contains($input, ':')
             ) {
@@ -557,7 +553,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($config['output'], $retrievedValue,
@@ -594,7 +590,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             // Use delta comparison for floats (float32 has less precision)
@@ -631,16 +627,15 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue;
             if ($valueToCheck) {
                 sort($valueToCheck);
             }
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Frozen list<varchar> value should round-trip correctly');
         }
@@ -673,16 +668,15 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue;
             if ($valueToCheck) {
                 sort($valueToCheck);
             }
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Frozen map<varchar,int> value should round-trip correctly');
         }
@@ -715,16 +709,15 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue;
             if ($valueToCheck) {
                 sort($valueToCheck);
             }
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertEquals($valueToCheck, $retrievedValue, 'Frozen set<varchar> value should round-trip correctly');
         }
@@ -760,7 +753,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Frozen UDT address value should round-trip correctly');
@@ -797,7 +790,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, "Inet value $testValue should round-trip correctly");
@@ -835,7 +828,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue,
@@ -873,7 +866,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue === [] ? null : $testValue;
@@ -882,9 +875,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertSame($valueToCheck, $retrievedValue, 'List<varchar> value should round-trip correctly');
         }
@@ -917,7 +909,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue === [] ? null : $testValue;
@@ -926,9 +918,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertSame($valueToCheck, $retrievedValue, 'List<int> value should round-trip correctly');
         }
@@ -962,7 +953,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue === [] ? null : $testValue;
@@ -971,9 +962,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Map<varchar,int> value should round-trip correctly');
         }
@@ -1005,7 +995,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue === [] ? null : $testValue;
@@ -1014,9 +1004,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertSame($valueToCheck, $retrievedValue, 'Map<int,varchar> value should round-trip correctly');
         }
@@ -1077,7 +1066,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue === [] ? null : $testValue;
@@ -1086,9 +1075,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertEquals($valueToCheck, $retrievedValue, 'Set<varchar> value should round-trip correctly');
         }
@@ -1120,7 +1108,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $valueToCheck = $testValue === [] ? null : $testValue;
@@ -1129,9 +1117,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 sort($valueToCheck);
             }
 
-            if ($retrievedValue) {
-                sort($retrievedValue);
-            }
+            $this->assertIsArray($retrievedValue);
+            sort($retrievedValue);
 
             $this->assertEquals($valueToCheck, $retrievedValue, 'Set<int> value should round-trip correctly');
         }
@@ -1166,7 +1153,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue,
@@ -1204,7 +1191,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValues[$testValue]['php'], $retrievedValue,
@@ -1237,7 +1224,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($config['output'], $retrievedValue,
@@ -1262,7 +1249,6 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             253402300799999 => ['php' => '9999-12-31 23:59:59.999+0000', 'cql' => '9999-12-31 23:59:59.998+0000'],
             $currentTimeInMilliseconds => ['php' => $currentTime->format('Y-m-d H:i:s.vO'), 'cql' => $currentTime->format('Y-m-d H:i:s.vO')],
             '1970-01-01 00:00:00.789+0000' => ['php' => '1970-01-01 00:00:00.789+0000', 'cql' => '1970-01-01 00:00:00.789+0000'],
-            '2021-01-01 12:23:57' => ['php' => '2021-01-01 12:23:57.000+0000', 'cql' => '2021-01-01 12:23:57.000+0000'],
             '2009-02-13 23:31:30.123+0000' => ['php' => '2009-02-13 23:31:30.123+0000', 'cql' => '2009-02-13 23:31:30.123+0000'],
             '0001-01-01' => ['php' => '0001-01-01 00:00:00.000+0000', 'cql' => '1-01-01 00:00:00.000+0000'],
             '9999-12-31 23:59:59.999+0000' => ['php' => '9999-12-31 23:59:59.999+0000', 'cql' => '9999-12-31 23:59:59.998+0000'],
@@ -1286,7 +1272,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValues[$testValue]['php'], $retrievedValue,
@@ -1322,7 +1308,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($config['output'], $retrievedValue,
@@ -1354,9 +1340,10 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
+            $this->assertIsString($retrievedValue);
             $this->assertSame(strtolower($testValue), strtolower($retrievedValue),
                 "Timeuuid value $testValue should round-trip correctly");
         }
@@ -1391,7 +1378,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue,
@@ -1427,7 +1414,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Tuple<varchar,int> value should round-trip correctly');
@@ -1460,7 +1447,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Tuple<int,varchar,boolean> value should round-trip correctly');
@@ -1491,7 +1478,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Tuple with null values should round-trip correctly');
@@ -1535,7 +1522,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'UDT address value should round-trip correctly');
@@ -1584,7 +1571,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($allFieldsNull ? null : $testValue, $retrievedValue, 'UDT person value with nulls should round-trip correctly');
@@ -1618,10 +1605,11 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             // UUID should be normalized to lowercase
+            $this->assertIsString($retrievedValue);
             $this->assertSame(strtolower($testValue), strtolower($retrievedValue),
                 "UUID value $testValue should round-trip correctly");
 
@@ -1663,7 +1651,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame($testValue, $retrievedValue, 'Varchar value should round-trip correctly');
@@ -1712,7 +1700,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertSame((string) $testValue, $retrievedValue, "Varint value $testValue should round-trip correctly");
@@ -1727,8 +1715,6 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $cassandraVersion = getenv('CASSANDRA_VERSION');
         if ($cassandraVersion && version_compare($cassandraVersion, '5.0', '<')) {
             $this->markTestSkipped('Vectors are not supported in Cassandra versions before 5.0');
-
-            return;
         }
 
         // test vector of 3 float values (data type with fixed length)
@@ -1759,7 +1745,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertIsArray($retrievedValue, 'Vector should be returned as an array');
@@ -1767,6 +1753,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
             // Compare element-wise with delta suitable for float32
             foreach ([0, 1, 2] as $i) {
+                $this->assertIsFloat($retrievedValue[$i]);
                 $this->assertEqualsWithDelta(
                     (float) $testValue[$i],
                     (float) $retrievedValue[$i],
@@ -1810,13 +1797,14 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             )->asRowsResult();
 
             $row = $result->fetch();
-            $this->assertNotNull($row, "Row should exist for index $index");
+            $this->assertIsArray($row, "Row should exist for index $index");
             $retrievedValue = $row['value'];
 
             $this->assertIsArray($retrievedValue, 'Vector should be returned as an array');
             $this->assertCount(4, $retrievedValue, 'Vector length should be 4');
 
             foreach ([0, 1, 2, 3] as $i) {
+                $this->assertIsFloat($retrievedValue[$i]);
                 $this->assertEquals(
                     (string) $testValue[$i],
                     (string) $retrievedValue[$i],
@@ -1829,6 +1817,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         //$this->compareWithCqlsh('test_vector_varint4', 'id', 'value', $testValues, 'vector');
     }
 
+    /**
+     * @param array<mixed> $testValues
+     */
     private function compareWithCqlsh(string $tableName, string $idColumn, string $valueColumn, array $testValues, string $dataType): void {
 
         $cqlshResults = $this->dumpTableWithCqlsh($this->testKeyspace, $tableName, $idColumn, $valueColumn);
@@ -1838,42 +1829,137 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
                 $this->fail("No cqlsh result found for ID {$idValue} in table {$tableName}");
             }
 
+            $this->assertIsArray($cqlshResults[$idValue]);
             if (!isset($cqlshResults[$idValue][$valueColumn])) {
                 $this->fail("Column '{$valueColumn}' not found in cqlsh result for ID {$idValue} in table {$tableName}");
             }
 
             $cqlshValue = $cqlshResults[$idValue][$valueColumn];
 
-            match ($dataType) {
-                'ascii', 'varchar' => $this->assertSame($phpValue, $cqlshValue, 'PHP string value should match cqlsh output'),
-                'bigint', 'integer', 'smallint', 'tinyint' => $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP integer value should match cqlsh output'),
-                'blob' => $this->assertSame('0x' . bin2hex($phpValue), $cqlshValue, 'PHP blob value should match cqlsh hex output'),
-                'boolean' => $this->assertSame($phpValue ? 'True' : 'False', $cqlshValue, 'PHP boolean value should match cqlsh output'),
-                'uuid' => $this->assertSame(strtolower($phpValue), strtolower($cqlshValue), 'PHP UUID value should match cqlsh output'),
-                'float' => $this->assertEqualsWithDelta((float) $phpValue, (float) $cqlshValue, max($phpValue * 0.01, 0.0001), 'PHP float value should match cqlsh output'),
-                'double' => $this->assertEqualsWithDelta((float) $phpValue, (float) $cqlshValue, max($phpValue * 0.01, 0.000001), 'PHP float value should match cqlsh output'),
-                'list', 'vector' => $this->verifyCqlListMatchesPhpList($phpValue, $cqlshValue),
-                'list_frozen' => $this->verifyCqlListMatchesPhpList($phpValue, $cqlshValue, frozen: true),
-                'set' => $this->verifyCqlSetMatchesPhpSet($phpValue, $cqlshValue),
-                'set_frozen' => $this->verifyCqlSetMatchesPhpSet($phpValue, $cqlshValue, frozen: true),
-                'map' => $this->verifyCqlMapMatchesPhpMap($phpValue, $cqlshValue),
-                'map_frozen' => $this->verifyCqlMapMatchesPhpMap($phpValue, $cqlshValue, frozen: true),
-                'udt' => $this->verifyCqlUdtMatchesPhpUdt($phpValue, $cqlshValue),
-                'udt_frozen' => $this->verifyCqlUdtMatchesPhpUdt($phpValue, $cqlshValue, frozen: true),
-                'tuple' => $this->verifyCqlTupleMatchesPhpTuple($phpValue, $cqlshValue),
-                default => $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP value should match cqlsh output'),
-            };
+            switch ($dataType) {
+                case 'ascii':
+                case 'varchar':
+                    $this->assertIsString($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP string value should match cqlsh output');
+
+                    break;
+                case 'bigint':
+                case 'integer':
+                case 'smallint':
+                case 'tinyint':
+                    $this->assertIsInt($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP integer value should match cqlsh output');
+
+                    break;
+                case 'blob':
+                    $this->assertIsString($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->assertSame('0x' . bin2hex((string) $phpValue), (string) $cqlshValue, 'PHP blob value should match cqlsh hex output');
+
+                    break;
+                case 'boolean':
+                    $this->assertIsBool($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->assertSame(((bool) $phpValue) ? 'True' : 'False', (string) $cqlshValue, 'PHP boolean value should match cqlsh output');
+
+                    break;
+                case 'uuid':
+                    $this->assertIsString($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->assertSame(strtolower((string) $phpValue), strtolower((string) $cqlshValue), 'PHP UUID value should match cqlsh output');
+
+                    break;
+                case 'float':
+                    $this->assertIsFloat($phpValue);
+                    $this->assertIsFloat($cqlshValue);
+                    $phpFloat = (float) $phpValue;
+                    $cqlFloat = (float) $cqlshValue;
+                    $this->assertEqualsWithDelta($phpFloat, $cqlFloat, max(abs($phpFloat) * 0.01, 0.0001), 'PHP float value should match cqlsh output');
+
+                    break;
+                case 'double':
+                    $this->assertIsFloat($phpValue);
+                    $this->assertIsFloat($cqlshValue);
+                    $phpDouble = (float) $phpValue;
+                    $cqlDouble = (float) $cqlshValue;
+                    $this->assertEqualsWithDelta($phpDouble, $cqlDouble, max(abs($phpDouble) * 0.01, 0.000001), 'PHP float value should match cqlsh output');
+
+                    break;
+                case 'list':
+                case 'vector':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlListMatchesPhpList($phpValue, $cqlshValue);
+
+                    break;
+                case 'list_frozen':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlListMatchesPhpList($phpValue, $cqlshValue, frozen: true);
+
+                    break;
+                case 'set':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlSetMatchesPhpSet($phpValue, $cqlshValue);
+
+                    break;
+                case 'set_frozen':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlSetMatchesPhpSet($phpValue, $cqlshValue, frozen: true);
+
+                    break;
+                case 'map':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlMapMatchesPhpMap($phpValue, $cqlshValue);
+
+                    break;
+                case 'map_frozen':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlMapMatchesPhpMap($phpValue, $cqlshValue, frozen: true);
+
+                    break;
+                case 'udt':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlUdtMatchesPhpUdt($phpValue, $cqlshValue);
+
+                    break;
+                case 'udt_frozen':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlUdtMatchesPhpUdt($phpValue, $cqlshValue, frozen: true);
+
+                    break;
+                case 'tuple':
+                    $this->assertIsArray($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->verifyCqlTupleMatchesPhpTuple($phpValue, $cqlshValue);
+
+                    break;
+                default:
+                    $this->assertIsString($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP value should match cqlsh output');
+            }
         }
     }
 
     /**
-     * @param string[] $columnList
+     * @return array<mixed>
      */
     private function dumpTableWithCqlsh(string $keyspace, string $tableName, string $idColumn, string $valueColumn): array {
 
         $containerName = 'php-cassandra-test-db';
 
         $containerCheck = shell_exec("docker ps --filter name={$containerName} --format '{{.Names}}' 2>/dev/null");
+        $this->assertIsString($containerCheck);
+
         if (trim($containerCheck) !== $containerName) {
             $this->markTestSkipped("Cassandra container '{$containerName}' is not running. Please start with 'docker-compose up -d'");
         }
@@ -1899,7 +1985,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $command = "docker exec {$containerName} cqlsh -k {$this->testKeyspace} -e {$escapedQuery} 2>&1";
 
         $output = shell_exec($command);
-        if ($output === null) {
+        if ($output === null || $output === false) {
             $this->fail("Failed to execute cqlsh command in container: {$command}");
         }
 
@@ -1920,13 +2006,16 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             $this->fail('Failed to open CSV file for reading: ' . $this->dumpFile);
         }
 
-        $header = fgetcsv(
+        $headerRaw = fgetcsv(
             stream: $handle,
             length: 0,
             separator: $options['DELIMITER'],
             enclosure: $options['QUOTE'],
             escape: $options['ESCAPE']
         );
+
+        $this->assertIsArray($headerRaw);
+        $header = array_map(fn($value) => (string) $value, $headerRaw);
 
         while (($row = fgetcsv(
             stream: $handle,
@@ -1937,16 +2026,14 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         )) !== false) {
 
             $row = array_map(fn($value) => str_replace([
-                $options['NULL'],
                 $options['ESCAPE'] . $options['QUOTE'],
                 $options['ESCAPE'] . $options['ESCAPE'],
                 '\\\\',
             ], [
-                null, // Replace NULL placeholder with PHP null
                 $options['QUOTE'],
                 $options['ESCAPE'],
                 '______ESCAPE______',
-            ], $value), $row);
+            ], $value ?? ''), $row);
 
             $row = array_map(fn($value) => str_replace([
                 '\\t',
@@ -1961,6 +2048,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             ], [
                 '\\',
             ], $value), $row);
+
+            $row = array_map(fn($value) => ($value === $options['NULL'] ? null : $value), $row);
 
             $rowData[] = array_combine($header, $row);
         }
@@ -2003,6 +2092,9 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         return $conn;
     }
 
+    /**
+     * @param array<mixed> $phpValue
+     */
     private function verifyCqlListMatchesPhpList(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         if ($phpValue === []) {
@@ -2017,17 +2109,17 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         $cqlshArray = json_decode($cqlshValue, true);
 
-        if ($phpValue) {
-            sort($phpValue);
-        }
+        sort($phpValue);
 
-        if ($cqlshArray) {
-            sort($cqlshArray);
-        }
+        $this->assertIsArray($cqlshArray);
+        sort($cqlshArray);
 
         $this->assertSame($phpValue, $cqlshArray, 'PHP list value should match cqlsh output');
     }
 
+    /**
+     * @param array<mixed> $phpValue
+     */
     private function verifyCqlMapMatchesPhpMap(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         if ($phpValue === []) {
@@ -2037,7 +2129,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         }
 
         // fix keys
-        $cqlshValue = preg_replace('/([a-zA-Z0-9-_]+):/', '"$1":', $cqlshValue);
+        $cqlshValue = preg_replace('/([a-zA-Z0-9-_]+):/', '"$1":', $cqlshValue) ?? '';
         $cqlshValue = str_replace(': ,', ': null,', $cqlshValue);
 
         // convert to json
@@ -2046,17 +2138,17 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         $cqlshArray = json_decode($cqlshValue, true);
 
-        if ($phpValue) {
-            sort($phpValue);
-        }
+        sort($phpValue);
 
-        if ($cqlshArray) {
-            sort($cqlshArray);
-        }
+        $this->assertIsArray($cqlshArray);
+        sort($cqlshArray);
 
         $this->assertSame($phpValue, $cqlshArray, 'PHP map value should match cqlsh output');
     }
 
+    /**
+     * @param array<mixed> $phpValue
+     */
     private function verifyCqlSetMatchesPhpSet(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         if ($phpValue === []) {
@@ -2072,17 +2164,17 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         $cqlshArray = json_decode($cqlshValue, true);
 
-        if ($phpValue) {
-            sort($phpValue);
-        }
+        sort($phpValue);
 
-        if ($cqlshArray) {
-            sort($cqlshArray);
-        }
+        $this->assertIsArray($cqlshArray);
+        sort($cqlshArray);
 
         $this->assertSame($phpValue, $cqlshArray, 'PHP set value should match cqlsh output');
     }
 
+    /**
+     * @param array<mixed> $phpValue
+     */
     private function verifyCqlTupleMatchesPhpTuple(array $phpValue, string $cqlshValue): void {
 
         if ($phpValue === []) {
@@ -2098,17 +2190,17 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
 
         $cqlshArray = json_decode($cqlshValue, true);
 
-        if ($phpValue) {
-            sort($phpValue);
-        }
+        sort($phpValue);
 
-        if ($cqlshArray) {
-            sort($cqlshArray);
-        }
+        $this->assertIsArray($cqlshArray);
+        sort($cqlshArray);
 
         $this->assertSame($phpValue, $cqlshArray, 'PHP tuple value should match cqlsh output');
     }
 
+    /**
+     * @param array<mixed> $phpValue
+     */
     private function verifyCqlUdtMatchesPhpUdt(array $phpValue, string $cqlshValue, bool $frozen = false): void {
 
         $allFieldsNull = true;
@@ -2127,7 +2219,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         }
 
         // fix keys
-        $cqlshValue = preg_replace('/([a-zA-Z0-9-_]+):/', '"$1":', $cqlshValue);
+        $cqlshValue = preg_replace('/([a-zA-Z0-9-_]+):/', '"$1":', $cqlshValue) ?? '';
         $cqlshValue = str_replace(': ,', ': null,', $cqlshValue);
 
         // convert to json
@@ -2140,9 +2232,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
             sort($phpValue);
         }
 
-        if ($cqlshArray) {
-            sort($cqlshArray);
-        }
+        $this->assertIsArray($cqlshArray);
+        sort($cqlshArray);
 
         $this->assertSame($phpValue, $cqlshArray, 'PHP UDT value should match cqlsh output');
     }

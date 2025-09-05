@@ -41,7 +41,9 @@ final class BatchTest extends TestCase {
             new QueryOptions(namesForValues: false)
         )->asRowsResult();
 
-        $this->assertSame(10, (int) $rows->fetchColumn(0));
+        $countValue = $rows->fetchColumn(0);
+        $count = is_int($countValue) ? $countValue : 0;
+        $this->assertSame(10, $count);
     }
 
     private static function getHost(): string {

@@ -40,7 +40,8 @@ final class ConnectionIntegrationTest extends TestCase {
             new QueryOptions(namesForValues: false)
         )->asRowsResult();
 
-        $count = (int) $rows->fetchColumn(0);
+        $countValue = $rows->fetchColumn(0);
+        $count = is_int($countValue) ? $countValue : 0;
 
         $this->assertGreaterThanOrEqual(10, $count);
     }
@@ -76,6 +77,7 @@ final class ConnectionIntegrationTest extends TestCase {
         $count = 0;
         do {
             foreach ($rows as $row) {
+                $this->assertIsArray($row);
                 $this->assertArrayHasKey('name', $row);
                 $count++;
             }

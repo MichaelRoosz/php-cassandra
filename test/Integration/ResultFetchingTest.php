@@ -37,6 +37,7 @@ final class ResultFetchingTest extends TestCase {
         // Iterator
         $all = [];
         foreach ($rows as $row) {
+            $this->assertIsArray($row);
             $all[] = $row['ukey'];
         }
         $sorted = $all;

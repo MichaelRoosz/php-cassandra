@@ -24,6 +24,7 @@ class DecimalCalculatorTest extends TestCase {
             ['999999999999999999', '1000000000000000000'],
         ];
 
+        /** @phpstan-ignore-next-line */
         return self::crossWithCalculators($cases);
     }
 
@@ -39,6 +40,7 @@ class DecimalCalculatorTest extends TestCase {
             ['123456789', 255, '123457044'],
         ];
 
+        /** @phpstan-ignore-next-line */
         return self::crossWithCalculators($cases);
     }
 
@@ -55,6 +57,7 @@ class DecimalCalculatorTest extends TestCase {
             ['65535', '255', 255],
         ];
 
+        /** @phpstan-ignore-next-line */
         return self::crossWithCalculators($cases);
     }
 
@@ -74,6 +77,7 @@ class DecimalCalculatorTest extends TestCase {
             ['\\x01\\x00', '256'],
         ];
 
+        /** @phpstan-ignore-next-line */
         return self::crossWithCalculators($cases);
     }
 
@@ -90,6 +94,7 @@ class DecimalCalculatorTest extends TestCase {
             ['123456', 255, '31481280'],
         ];
 
+        /** @phpstan-ignore-next-line */
         return self::crossWithCalculators($cases);
     }
 
@@ -104,6 +109,7 @@ class DecimalCalculatorTest extends TestCase {
             ['2001', '2000'],
         ];
 
+        /** @phpstan-ignore-next-line */
         return self::crossWithCalculators($cases);
     }
 
@@ -125,6 +131,7 @@ class DecimalCalculatorTest extends TestCase {
             ['-129', '\\xFF\\x7F'],
         ];
 
+        /** @phpstan-ignore-next-line */
         return self::crossWithCalculators($cases);
     }
 
@@ -143,14 +150,8 @@ class DecimalCalculatorTest extends TestCase {
     }
 
     public function testBcmathInvalidDecimalThrows(): void {
-        try {
-            $calc = new BcCalculator();
-        } catch (StringMathException) {
-            $this->markTestSkipped('BCMath not available');
 
-            return;
-        }
-
+        $calc = new BcCalculator();
         $this->expectException(StringMathException::class);
         $this->expectExceptionCode(ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value);
         $calc->add1('abc');
@@ -228,23 +229,15 @@ class DecimalCalculatorTest extends TestCase {
     private static function availableCalculators(): array {
         $calculators = [];
 
-        // GMP (optional)
-        try {
-            $gmp = new GmpCalculator();
-            $calculators[] = ['gmp', $gmp];
-        } catch (StringMathException) {
-            // skip if extension not loaded
-        }
+        // GMP
+        $gmp = new GmpCalculator();
+        $calculators[] = ['gmp', $gmp];
 
-        // BCMath (optional)
-        try {
-            $bcm = new BcCalculator();
-            $calculators[] = ['bcmath', $bcm];
-        } catch (StringMathException) {
-            // skip if extension not loaded
-        }
+        // BCMath
+        $bcm = new BcCalculator();
+        $calculators[] = ['bcmath', $bcm];
 
-        // Native (always available)
+        // Native
         $calculators[] = ['native', new NativeCalculator()];
 
         return $calculators;
@@ -274,6 +267,7 @@ class DecimalCalculatorTest extends TestCase {
             }
         }
 
+        /** @phpstan-ignore-next-line */
         return $data;
     }
 
@@ -289,7 +283,7 @@ class DecimalCalculatorTest extends TestCase {
             if ($part === '') {
                 continue;
             }
-            $bin .= chr(hexdec(substr($part, 0, 2)));
+            $bin .= chr((int) hexdec(substr($part, 0, 2)));
         }
 
         return $bin;

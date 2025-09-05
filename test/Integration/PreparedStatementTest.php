@@ -32,7 +32,9 @@ final class PreparedStatementTest extends TestCase {
 
         $sel = $conn->prepare('SELECT count(*) FROM users WHERE org_id = :org_id');
         $rows = $conn->execute($sel, ['org_id' => 7], Consistency::ONE, new ExecuteOptions(namesForValues: true))->asRowsResult();
-        $this->assertSame(1, (int) $rows->fetchColumn(0));
+        $countValue = $rows->fetchColumn(0);
+        $count = is_int($countValue) ? $countValue : 0;
+        $this->assertSame(1, $count);
     }
 
     public function testPreparedPagingUsingPreviousResult(): void {
@@ -68,8 +70,10 @@ final class PreparedStatementTest extends TestCase {
         $seen = 0;
         do {
             foreach ($rows as $row) {
+                $this->assertIsArray($row);
                 $this->assertArrayHasKey('name', $row);
-                $this->assertMatchesRegularExpression('/^u\\d+$/', (string) $row['name']);
+                $this->assertIsString($row['name']);
+                $this->assertMatchesRegularExpression('/^u\\d+$/', $row['name']);
                 $seen++;
             }
             $state = $rows->getRowsMetadata()->pagingState;

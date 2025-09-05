@@ -36,10 +36,11 @@ final class AsyncTest extends TestCase {
 
         $conn->flush();
 
-        $count = (int) $conn->query(
+        $countValue = $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',
             [Value\Varchar::fromValue($filename)]
         )->asRowsResult()->fetchColumn(0);
+        $count = is_int($countValue) ? $countValue : 0;
 
         $this->assertGreaterThanOrEqual(30, $count);
     }
