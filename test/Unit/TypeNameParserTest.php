@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
+use Cassandra\Exception\TypeNameParserException;
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeName;
@@ -16,7 +17,6 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeInfo\VectorInfo;
-use Cassandra\Value\Exception;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -253,35 +253,35 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testErrorInvalidTypeMissingClosingBracket(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_MISSING_CLOSING->value);
 
         $this->parser->parse('invalidtype(unclosed');
     }
 
     public function testErrorMalformedBracketClosingWithoutOpening(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value);
 
         $this->parser->parse('type)');
     }
 
     public function testErrorMalformedBracketMissingClosing(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_MISSING_CLOSING->value);
 
         $this->parser->parse('type(');
     }
 
     public function testErrorMalformedBracketUnbalanced1(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_PARAM_BRACKETS_UNMATCHED_OPENING->value);
 
         $this->parser->parse('type(()');
     }
 
     public function testErrorMalformedBracketUnbalanced2(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_PARAM_BRACKETS_UNMATCHED_CLOSING->value);
 
         $this->parser->parse('type())');
@@ -292,14 +292,14 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testFrozenBooleanTypeThrowsException(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value);
 
         $this->parser->parse(TypeName::BOOLEAN->value, true);
     }
 
     public function testFrozenInt32TypeThrowsException(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value);
 
         $this->parser->parse(TypeName::INT32->value, true);
@@ -347,7 +347,7 @@ class TypeNameParserTest extends TestCase {
     }
 
     public function testFrozenNoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_FROZEN_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::FROZEN->value . '()');
@@ -365,7 +365,7 @@ class TypeNameParserTest extends TestCase {
     }
 
     public function testFrozenTooManyParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_FROZEN_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::FROZEN->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ')');
@@ -382,14 +382,14 @@ class TypeNameParserTest extends TestCase {
     }
 
     public function testFrozenUTF8TypeThrowsException(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value);
 
         $this->parser->parse(TypeName::UTF8->value, true);
     }
 
     public function testFrozenUUIDTypeThrowsException(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value);
 
         $this->parser->parse(TypeName::UUID->value, true);
@@ -400,21 +400,21 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testListTypeErrorMissingClosingBracket(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_MISSING_CLOSING->value);
 
         $this->parser->parse(TypeName::LIST->value . '(' . TypeName::UTF8->value);
     }
 
     public function testListTypeErrorNoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_LIST_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::LIST->value . '()');
     }
 
     public function testListTypeErrorTooManyParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_LIST_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::LIST->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ')');
@@ -465,28 +465,28 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testMapTypeErrorMissingClosingBracket(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_MISSING_CLOSING->value);
 
         $this->parser->parse(TypeName::MAP->value . '(' . TypeName::UTF8->value . '(');
     }
 
     public function testMapTypeErrorNoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_MAP_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::MAP->value . '()');
     }
 
     public function testMapTypeErrorOneParam(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_MAP_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::MAP->value . '(' . TypeName::UTF8->value . ')');
     }
 
     public function testMapTypeErrorThreeParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_MAP_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ',' . TypeName::BOOLEAN->value . ')');
@@ -564,7 +564,7 @@ class TypeNameParserTest extends TestCase {
         $method = $reflection->getMethod('extractParams');
         $method->setAccessible(true);
 
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_UDT_PARAMS_MULTIPLE_COLONS->value);
 
         $method->invoke($this->parser, 'key:value:extra');
@@ -638,14 +638,14 @@ class TypeNameParserTest extends TestCase {
     }
 
     public function testReversedTypeErrorNoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_REVERSED_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::REVERSED->value . '()');
     }
 
     public function testReversedTypeErrorTooManyParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_REVERSED_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::REVERSED->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ')');
@@ -656,14 +656,14 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testSetTypeErrorNoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SET_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::SET->value . '()');
     }
 
     public function testSetTypeErrorTooManyParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SET_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::SET->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ')');
@@ -697,28 +697,28 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testSimpleTypeErrorBooleanWithInvalidParam(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_WITH_PARAMETERS->value);
 
         $this->parser->parse(TypeName::BOOLEAN->value . '(invalidParam)');
     }
 
     public function testSimpleTypeErrorInt32WithTwoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_WITH_PARAMETERS->value);
 
         $this->parser->parse(TypeName::INT32->value . '(param1,param2)');
     }
 
     public function testSimpleTypeErrorUTF8ClosingBracketWithoutOpening(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value);
 
         $this->parser->parse(TypeName::UTF8->value . ')');
     }
 
     public function testSimpleTypeErrorUTF8WithSomeParam(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_WITH_PARAMETERS->value);
 
         $this->parser->parse(TypeName::UTF8->value . '(someParam)');
@@ -761,14 +761,14 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testTupleTypeErrorClosingBracketWithoutOpening(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value);
 
         $this->parser->parse('type)');
     }
 
     public function testTupleTypeErrorInvalidParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_TUPLE_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::TUPLE->value . '()');
@@ -823,28 +823,28 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testUDTTypeErrorNonStringFieldKey(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_UDT_FIELD_KEY_NOT_STRING->value);
 
         $this->parser->parse(TypeName::UDT->value . '(mykeyspace,mytype,' . TypeName::UTF8->value . ')');
     }
 
     public function testUDTTypeErrorNoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_UDT_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::UDT->value . '()');
     }
 
     public function testUDTTypeErrorOneParam(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_UDT_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::UDT->value . '(ks)');
     }
 
     public function testUDTTypeErrorTwoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_UDT_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::UDT->value . '(ks,type)');
@@ -919,49 +919,49 @@ class TypeNameParserTest extends TestCase {
     // =============================================
 
     public function testVectorTypeErrorNegativeDimensions(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value);
 
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',-1)');
     }
 
     public function testVectorTypeErrorNegativeDimensionsMinusFive(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value);
 
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',-5)');
     }
 
     public function testVectorTypeErrorNonNumericDimensions(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_NON_NUMERIC->value);
 
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',abc)');
     }
 
     public function testVectorTypeErrorNonNumericDimensionsNotANumber(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_NON_NUMERIC->value);
 
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',not_a_number)');
     }
 
     public function testVectorTypeErrorNoParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_VECTOR_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::VECTOR->value . '()');
     }
 
     public function testVectorTypeErrorOneParam(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_VECTOR_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ')');
     }
 
     public function testVectorTypeErrorThreeParams(): void {
-        $this->expectException(Exception::class);
+        $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAME_PARSER_VECTOR_INVALID_PARAM_COUNT->value);
 
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',' . TypeName::INT32->value . ',' . TypeName::BOOLEAN->value . ')');
