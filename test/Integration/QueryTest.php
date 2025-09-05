@@ -11,7 +11,7 @@ use Cassandra\Response\Exception as ServerException;
 use Cassandra\Response\Result\CachedPreparedResult;
 use Cassandra\Response\Result\PreparedResult;
 
-final class QueryTest extends AbstractIntegrationTest {
+final class QueryTest extends AbstractIntegrationTestCase {
     public function testPositionalBindAndTypes(): void {
 
         $conn = $this->connection;

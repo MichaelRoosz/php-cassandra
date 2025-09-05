@@ -11,14 +11,15 @@ use Cassandra\Response\Response;
 use Cassandra\WarningsListener;
 use PHPUnit\Framework\TestCase;
 
-abstract class AbstractIntegrationTest extends TestCase implements WarningsListener {
+abstract class AbstractIntegrationTestCase extends TestCase implements WarningsListener {
     protected Connection $connection;
 
-    protected static string $keyspace = 'phpunit';
+    protected static string $defaultKeyspace = 'phpunit';
+    protected string $keyspace;
 
     public static function setUpBeforeClass(): void {
 
-        self::$keyspace = self::calculateKeyspaceName();
+        self::$defaultKeyspace = self::calculateKeyspaceName();
         self::setupKeyspace();
         static::setupTable();
     }
@@ -30,8 +31,9 @@ abstract class AbstractIntegrationTest extends TestCase implements WarningsListe
 
     protected function setUp(): void {
 
-        $this->connection = $this->newConnection(self::$keyspace);
+        $this->connection = $this->newConnection(self::$defaultKeyspace);
         $this->connection->registerWarningsListener($this);
+        $this->keyspace = self::$defaultKeyspace;
     }
 
     protected function tearDown(): void {
@@ -41,7 +43,7 @@ abstract class AbstractIntegrationTest extends TestCase implements WarningsListe
 
     public function onWarnings(Response $response, array $warnings): void {
 
-        // $this->fail('Received warnings: ' . implode(', ', $warnings));
+        $this->fail('Received warnings: ' . implode(', ', $warnings));
     }
 
     protected static function calculateKeyspaceName(): string {
@@ -88,7 +90,7 @@ abstract class AbstractIntegrationTest extends TestCase implements WarningsListe
 
     protected static function setupKeyspace(): void {
 
-        $keyspace = self::$keyspace;
+        $keyspace = self::$defaultKeyspace;
         $connection = self::newConnection('system');
         $connection->query("DROP KEYSPACE IF EXISTS {$keyspace}");
         $connection->query(
@@ -104,7 +106,7 @@ abstract class AbstractIntegrationTest extends TestCase implements WarningsListe
 
     protected static function teardownKeyspace(): void {
 
-        $keyspace = self::$keyspace;
+        $keyspace = self::$defaultKeyspace;
         $connection = self::newConnection('system');
         $connection->query("DROP KEYSPACE IF EXISTS {$keyspace}");
         $connection->disconnect();

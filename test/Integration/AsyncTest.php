@@ -8,7 +8,7 @@ use Cassandra\Request\BatchType;
 use Cassandra\Type;
 use Cassandra\Value;
 
-final class AsyncTest extends AbstractIntegrationTest {
+final class AsyncTest extends AbstractIntegrationTestCase {
     public function testAsyncBatchAndFlush(): void {
 
         $conn = $this->connection;
@@ -59,7 +59,7 @@ final class AsyncTest extends AbstractIntegrationTest {
     }
 
     protected static function setupTable(): void {
-        $conn = self::newConnection(self::$keyspace);
+        $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
         $conn->disconnect();
     }

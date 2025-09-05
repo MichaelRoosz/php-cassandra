@@ -8,13 +8,13 @@ use Cassandra\Consistency;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Value;
 
-final class PreparedStatementTest extends AbstractIntegrationTest {
+final class PreparedStatementTest extends AbstractIntegrationTestCase {
     public function testPrepareAndExecuteWithNamedBinds(): void {
-        $conn = $this->connection;
 
+        $conn = $this->connection;
         $conn->query('TRUNCATE users');
 
-        $prepared = $conn->prepare('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
+        $prepared = $conn->prepare("INSERT INTO {$this->keyspace}.users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)");
         $conn->execute(
             $prepared,
             [
@@ -27,7 +27,7 @@ final class PreparedStatementTest extends AbstractIntegrationTest {
             new ExecuteOptions(namesForValues: true)
         );
 
-        $sel = $conn->prepare('SELECT count(*) FROM users WHERE org_id = :org_id');
+        $sel = $conn->prepare("SELECT count(*) FROM {$this->keyspace}.users WHERE org_id = :org_id");
         $rows = $conn->execute($sel, ['org_id' => 7], Consistency::ONE, new ExecuteOptions(namesForValues: true))->asRowsResult();
         $countValue = $rows->fetchColumn(0);
         $count = is_int($countValue) ? $countValue : 0;
@@ -35,11 +35,13 @@ final class PreparedStatementTest extends AbstractIntegrationTest {
     }
 
     public function testPreparedPagingUsingPreviousResult(): void {
+
         $conn = $this->connection;
+        $conn->query('TRUNCATE users');
 
         // Seed deterministic number of rows for a unique org_id
         $orgId = random_int(10000, 99999);
-        $ins = $conn->prepare('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
+        $ins = $conn->prepare("INSERT INTO {$this->keyspace}.users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)");
         $numRows = 60;
         for ($i = 0; $i < $numRows; $i++) {
             $conn->execute(
@@ -56,7 +58,7 @@ final class PreparedStatementTest extends AbstractIntegrationTest {
         }
 
         // Prepared select with paging, assert exact count
-        $prepared = $conn->prepare('SELECT id, name FROM users WHERE org_id = :org_id');
+        $prepared = $conn->prepare("SELECT id, name FROM {$this->keyspace}.users WHERE org_id = :org_id");
         $rows = $conn->execute(
             $prepared,
             ['org_id' => $orgId],
@@ -89,7 +91,7 @@ final class PreparedStatementTest extends AbstractIntegrationTest {
     }
 
     protected static function setupTable(): void {
-        $conn = self::newConnection(self::$keyspace);
+        $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS users(org_id int, id uuid, name varchar, age int, PRIMARY KEY ((org_id), id))');
         $conn->disconnect();
     }

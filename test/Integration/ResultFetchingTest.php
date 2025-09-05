@@ -8,7 +8,7 @@ use Cassandra\Response\Result\FetchType;
 use Cassandra\Type;
 use Cassandra\Value;
 
-final class ResultFetchingTest extends AbstractIntegrationTest {
+final class ResultFetchingTest extends AbstractIntegrationTestCase {
     public function testFetchVariantsAndIterator(): void {
         $conn = $this->connection;
 
@@ -66,7 +66,7 @@ final class ResultFetchingTest extends AbstractIntegrationTest {
     }
 
     protected static function setupTable(): void {
-        $conn = self::newConnection(self::$keyspace);
+        $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
         $conn->disconnect();
     }

@@ -5,18 +5,17 @@ declare(strict_types=1);
 namespace Cassandra\Test\Integration;
 
 use Cassandra\Consistency;
-use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
 use Cassandra\Value;
 
-final class BatchTest extends AbstractIntegrationTest {
+final class BatchTest extends AbstractIntegrationTestCase {
     public function testUnloggedBatchInsert(): void {
         $conn = $this->connection;
 
         $filename = 'itest_' . bin2hex(random_bytes(6));
-        $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE);
+        $batch = $conn->createBatchRequest(BatchType::UNLOGGED, Consistency::ONE);
         for ($i = 0; $i < 10; $i++) {
             $batch->appendQuery(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
@@ -44,7 +43,7 @@ final class BatchTest extends AbstractIntegrationTest {
     }
 
     protected static function setupTable(): void {
-        $conn = self::newConnection(self::$keyspace);
+        $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
         $conn->disconnect();
     }

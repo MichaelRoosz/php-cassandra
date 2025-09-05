@@ -6,7 +6,7 @@ namespace Cassandra\Test\Integration;
 
 use Cassandra\Consistency;
 
-final class ConnectionTest extends AbstractIntegrationTest {
+final class ConnectionTest extends AbstractIntegrationTestCase {
     public function testConnectAndProtocolNegotiation(): void {
 
         $conn = $this->connection;

@@ -43,7 +43,7 @@ use DateTimeImmutable;
  * - varint                 *Implemented
  * - vector                 *Implemented
  */
-final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
+final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase {
     private string $dumpFile = './table_dump.csv';
 
     protected function tearDown(): void {
@@ -78,12 +78,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_ascii (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_ascii (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_ascii WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_ascii WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -116,12 +116,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_bigint (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_bigint (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_bigint WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_bigint WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -151,12 +151,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_blob (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_blob (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_blob WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_blob WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -179,12 +179,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_boolean (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_boolean (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_boolean WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_boolean WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -215,12 +215,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($finalValues as $index => $delta) {
             $this->connection->query(
-                'UPDATE test_counter SET value = value + ? WHERE id = ?',
+                "UPDATE {$this->keyspace}.test_counter SET value = value + ? WHERE id = ?",
                 [$delta, $index]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_counter WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_counter WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -250,12 +250,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $config) {
             $this->connection->query(
-                'INSERT INTO test_custom (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_custom (id, value) VALUES (?, ?)",
                 [$index, $config['value']]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_custom WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_custom WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -295,12 +295,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
         // test with string values
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_date (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_date (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_date WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_date WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -331,12 +331,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($dateTimeValues as $index => $config) {
             $this->connection->query(
-                'INSERT INTO test_date (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_date (id, value) VALUES (?, ?)",
                 [$index, $config['input']]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_date WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_date WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -385,12 +385,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
         foreach (array_keys($testValues) as $index => $testValue) {
 
             $this->connection->query(
-                'INSERT INTO test_decimal (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_decimal (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_decimal WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_decimal WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -424,12 +424,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_double (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_double (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_double WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_double WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -470,12 +470,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
         // test with string values
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_duration (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_duration (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_duration WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_duration WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -519,12 +519,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($dateIntervalValues as $index => $config) {
             $this->connection->query(
-                'INSERT INTO test_duration (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_duration (id, value) VALUES (?, ?)",
                 [$index, $config['input']]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_duration WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_duration WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -556,12 +556,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_float32 (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_float32 (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_float32 WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_float32 WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -593,12 +593,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_frozen_list_varchar (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_frozen_list_varchar (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_frozen_list_varchar WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_frozen_list_varchar WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -636,12 +636,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_frozen_map_varchar_int (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_frozen_map_varchar_int (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_frozen_map_varchar_int WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_frozen_map_varchar_int WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -679,12 +679,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_frozen_set_varchar (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_frozen_set_varchar (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_frozen_set_varchar WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_frozen_set_varchar WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -725,12 +725,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_frozen_udt_address (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_frozen_udt_address (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_frozen_udt_address WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_frozen_udt_address WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -762,12 +762,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_inet (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_inet (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_inet WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_inet WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -800,12 +800,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_integer (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_integer (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_integer WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_integer WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -838,12 +838,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_list_varchar (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_list_varchar (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_list_varchar WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_list_varchar WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -882,12 +882,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($intTestValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_list_int (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_list_int (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_list_int WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_list_int WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -927,12 +927,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_map_varchar_int (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_map_varchar_int (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_map_varchar_int WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_map_varchar_int WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -970,12 +970,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($intStringTestValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_map_int_varchar (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_map_int_varchar (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_map_int_varchar WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_map_int_varchar WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1008,13 +1008,13 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
         $cks = [1, 2, 3];
         foreach ($cks as $ck) {
             $this->connection->query(
-                'INSERT INTO test_reversed (pk, ck, value) VALUES (?, ?, ?)',
+                "INSERT INTO {$this->keyspace}.test_reversed (pk, ck, value) VALUES (?, ?, ?)",
                 [$pk, $ck, $ck]
             );
         }
 
         $result = $this->connection->query(
-            'SELECT ck, value FROM test_reversed WHERE pk = ?',
+            "SELECT ck, value FROM {$this->keyspace}.test_reversed WHERE pk = ?",
             [$pk]
         )->asRowsResult();
 
@@ -1042,12 +1042,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_set_varchar (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_set_varchar (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_set_varchar WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_set_varchar WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1085,12 +1085,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($intTestValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_set_int (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_set_int (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_set_int WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_set_int WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1131,12 +1131,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_smallint (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_smallint (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_smallint WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_smallint WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1169,12 +1169,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
         // Test with integer and string values
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_time (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_time (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_time WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_time WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1202,12 +1202,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($dateTimeValues as $index => $config) {
             $this->connection->query(
-                'INSERT INTO test_time (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_time (id, value) VALUES (?, ?)",
                 [$index, $config['input']]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_time WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_time WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1250,12 +1250,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
         // Test with integer and string values
         foreach (array_keys($testValues) as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_timestamp (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_timestamp WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_timestamp WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1286,12 +1286,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($dateTimeValues as $index => $config) {
             $this->connection->query(
-                'INSERT INTO test_timestamp (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_timestamp (id, value) VALUES (?, ?)",
                 [$index, $config['input']]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_timestamp WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_timestamp WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1318,12 +1318,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_timeuuid (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_timeuuid (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_timeuuid WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_timeuuid WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1356,12 +1356,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_tinyint (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_tinyint (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_tinyint WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_tinyint WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1392,12 +1392,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_tuple_varchar_int (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_tuple_varchar_int (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_tuple_varchar_int WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_tuple_varchar_int WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1425,12 +1425,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($tripleTestValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_tuple_int_varchar_boolean (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_tuple_int_varchar_boolean (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_tuple_int_varchar_boolean WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_tuple_int_varchar_boolean WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1456,12 +1456,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($nullTestValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_tuple_with_nulls (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_tuple_with_nulls (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_tuple_with_nulls WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_tuple_with_nulls WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1497,7 +1497,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_udt_address (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_udt_address (id, value) VALUES (?, ?)",
                 [
                     $index,
                     $testValue,
@@ -1505,7 +1505,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_udt_address WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_udt_address WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1546,7 +1546,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
             }
 
             $this->connection->query(
-                'INSERT INTO test_udt_person (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_udt_person (id, value) VALUES (?, ?)",
                 [
                     $index,
                     $testValue,
@@ -1554,7 +1554,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_udt_person WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_udt_person WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1583,12 +1583,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_uuid (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_uuid (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_uuid WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_uuid WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1629,12 +1629,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_varchar (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_varchar (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_varchar WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_varchar WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1678,12 +1678,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_varint (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_varint (id, value) VALUES (?, ?)",
                 [$index, $testValue]
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_varint WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_varint WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1721,7 +1721,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_vector_float3 (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_vector_float3 (id, value) VALUES (?, ?)",
                 [
                     $index,
                     $testValue,
@@ -1729,7 +1729,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_vector_float3 WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_vector_float3 WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1776,12 +1776,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
-                'INSERT INTO test_vector_varint4 (id, value) VALUES (?, ?)',
+                "INSERT INTO {$this->keyspace}.test_vector_varint4 (id, value) VALUES (?, ?)",
                 [$index, $testValue],
             );
 
             $result = $this->connection->query(
-                'SELECT value FROM test_vector_varint4 WHERE id = ?',
+                "SELECT value FROM {$this->keyspace}.test_vector_varint4 WHERE id = ?",
                 [$index]
             )->asRowsResult();
 
@@ -1811,7 +1811,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
      */
     private function compareWithCqlsh(string $tableName, string $idColumn, string $valueColumn, array $testValues, string $dataType): void {
 
-        $cqlshResults = $this->dumpTableWithCqlsh(self::$keyspace, $tableName, $idColumn, $valueColumn);
+        $cqlshResults = $this->dumpTableWithCqlsh($this->keyspace, $tableName, $idColumn, $valueColumn);
 
         foreach ($testValues as $idValue => $phpValue) {
             if (!array_key_exists($idValue, $cqlshResults)) {
@@ -1994,7 +1994,6 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
         $columnList = [$idColumn, $valueColumn];
         $query = "COPY {$keyspace}.\"{$tableName}\" (" . implode(',', $columnList) . ") TO '/tmp/table_dump.csv' WITH " . $optionsString . ' ;';
         $escapedQuery = escapeshellarg($query);
-        $keyspace = self::$keyspace;
         $command = "docker exec {$containerName} cqlsh -k {$keyspace} -e {$escapedQuery} 2>&1";
 
         $output = shell_exec($command);

@@ -44,7 +44,7 @@ use DateTimeImmutable;
  * - varint                 *Implemented
  * - vector                 *Implemented
  */
-final class DataTypeRoundtripTest extends AbstractIntegrationTest {
+final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
     private string $dumpFile = './table_dump.csv';
 
     protected function tearDown(): void {
@@ -1845,7 +1845,7 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTest {
      */
     private function compareWithCqlsh(string $tableName, string $idColumn, string $valueColumn, array $testValues, string $dataType): void {
 
-        $cqlshResults = $this->dumpTableWithCqlsh(self::$keyspace, $tableName, $idColumn, $valueColumn);
+        $cqlshResults = $this->dumpTableWithCqlsh($this->keyspace, $tableName, $idColumn, $valueColumn);
 
         foreach ($testValues as $idValue => $phpValue) {
             if (!array_key_exists($idValue, $cqlshResults)) {
@@ -2028,7 +2028,6 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTest {
         $columnList = [$idColumn, $valueColumn];
         $query = "COPY {$keyspace}.\"{$tableName}\" (" . implode(',', $columnList) . ") TO '/tmp/table_dump.csv' WITH " . $optionsString . ' ;';
         $escapedQuery = escapeshellarg($query);
-        $keyspace = self::$keyspace;
         $command = "docker exec {$containerName} cqlsh -k {$keyspace} -e {$escapedQuery} 2>&1";
 
         $output = shell_exec($command);

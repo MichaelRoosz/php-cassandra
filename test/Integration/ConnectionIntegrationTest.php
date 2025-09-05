@@ -7,17 +7,18 @@ namespace Cassandra\Test\Integration;
 use Cassandra\Consistency;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
+use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Response\Exception as ServerException;
 use Cassandra\Type;
 use Cassandra\Value;
 
-final class ConnectionIntegrationTest extends AbstractIntegrationTest {
+final class ConnectionIntegrationTest extends AbstractIntegrationTestCase {
     public function testBatchInsert(): void {
 
         $conn = $this->connection;
-        $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE);
+        $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE, new BatchOptions(keyspace: $this->keyspace));
         for ($i = 0; $i < 10; $i++) {
             $batch->appendQuery(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',
@@ -49,7 +50,7 @@ final class ConnectionIntegrationTest extends AbstractIntegrationTest {
         $conn = $this->connection;
 
         // insert multiple users
-        $prepared = $conn->prepare('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
+        $prepared = $conn->prepare("INSERT INTO {$this->keyspace}.users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)");
         for ($i = 0; $i < 150; $i++) {
             $conn->execute(
                 $prepared,
@@ -64,7 +65,7 @@ final class ConnectionIntegrationTest extends AbstractIntegrationTest {
             );
         }
 
-        $prepSel = $conn->prepare('SELECT id, name FROM users WHERE org_id = :org_id');
+        $prepSel = $conn->prepare("SELECT id, name FROM {$this->keyspace}.users WHERE org_id = :org_id");
         $rows = $conn->execute(
             $prepSel,
             ['org_id' => 42],
@@ -110,7 +111,7 @@ final class ConnectionIntegrationTest extends AbstractIntegrationTest {
     }
 
     protected static function setupTable(): void {
-        $conn = self::newConnection(self::$keyspace);
+        $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
         $conn->query('CREATE TABLE IF NOT EXISTS users(org_id int, id uuid, name varchar, age int, PRIMARY KEY ((org_id), id))');
         $conn->disconnect();

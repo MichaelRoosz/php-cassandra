@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace Cassandra\Test\Integration;
 
 use Cassandra\Consistency;
-use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
 use Cassandra\Value;
 
-final class StorageIntegrationTest extends AbstractIntegrationTest {
+final class StorageIntegrationTest extends AbstractIntegrationTestCase {
     public function testBatchAsyncAndPagingOnStorage(): void {
         $conn = $this->connection;
 
@@ -24,7 +23,7 @@ final class StorageIntegrationTest extends AbstractIntegrationTest {
         $pending = [];
 
         for ($offset = 0; $offset < $numRows; $offset += $batchSize) {
-            $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE);
+            $batch = $conn->createBatchRequest(BatchType::UNLOGGED, Consistency::ONE);
             for ($i = 0; $i < $batchSize && ($offset + $i) < $numRows; $i++) {
                 $ukey = 'k' . ($offset + $i + 1);
                 $batch->appendQuery(
@@ -44,7 +43,7 @@ final class StorageIntegrationTest extends AbstractIntegrationTest {
         }
 
         // Prepared select with paging
-        $prepared = $conn->prepare('SELECT filename, ukey, value FROM storage WHERE filename = :filename');
+        $prepared = $conn->prepare("SELECT filename, ukey, value FROM {$this->keyspace}.storage WHERE filename = :filename");
         $rows = $conn->execute(
             $prepared,
             ['filename' => $filename],
@@ -73,7 +72,7 @@ final class StorageIntegrationTest extends AbstractIntegrationTest {
 
         // Simple query with paging
         $result = $conn->query(
-            'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
+            "SELECT ukey FROM {$this->keyspace}.storage WHERE filename = ? ORDER BY ukey ASC",
             [Value\Varchar::fromValue($filename)],
             Consistency::ONE,
             new QueryOptions(pageSize: 50)
@@ -89,7 +88,7 @@ final class StorageIntegrationTest extends AbstractIntegrationTest {
                 break;
             }
             $result = $conn->query(
-                'SELECT ukey FROM storage WHERE filename = ? ORDER BY ukey ASC',
+                "SELECT ukey FROM {$this->keyspace}.storage WHERE filename = ? ORDER BY ukey ASC",
                 [Value\Varchar::fromValue($filename)],
                 Consistency::ONE,
                 new QueryOptions(pageSize: 50, pagingState: $state)
@@ -100,7 +99,7 @@ final class StorageIntegrationTest extends AbstractIntegrationTest {
     }
 
     protected static function setupTable(): void {
-        $conn = self::newConnection(self::$keyspace);
+        $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
         $conn->disconnect();
     }
