@@ -110,10 +110,14 @@ abstract class Response implements Frame, Stringable {
     }
 
     /**
-     * @return ?array<string>
+     * @return array<string>
      */
-    public function getWarnings(): ?array {
-        return $this->warnings;
+    public function getWarnings(): array {
+        return $this->warnings ?? [];
+    }
+
+    public function hasWarnings(): bool {
+        return $this->warnings !== null;
     }
 
     /**

@@ -76,6 +76,11 @@ final class Connection {
     protected int $versionIn = 0x83;
 
     /**
+     * @var array<WarningsListener> $warningsListeners
+     */
+    protected array $warningsListeners = [];
+
+    /**
      * @param array<\Cassandra\Connection\NodeConfig> $nodes
      */
     public function __construct(array $nodes, string $keyspace = '', ConnectionOptions $options = new ConnectionOptions()) {
@@ -93,10 +98,6 @@ final class Connection {
 
         $this->preparedResultCacheSize = max(0, $options->preparedResultCacheSize);
         $this->preparedResultCacheSizeToTrim = (int) ceil((float) $this->preparedResultCacheSize * 0.25);
-    }
-
-    public function addEventListener(EventListener $eventListener): void {
-        $this->eventListeners[] = $eventListener;
     }
 
     /**
@@ -499,6 +500,14 @@ final class Connection {
         return $this->asyncRequest($request);
     }
 
+    public function registerEventListener(EventListener $eventListener): void {
+        $this->eventListeners[] = $eventListener;
+    }
+
+    public function registerWarningsListener(WarningsListener $warningsListener): void {
+        $this->warningsListeners[] = $warningsListener;
+    }
+
     public function setConsistency(Consistency $consistency): void {
         $this->consistency = $consistency;
     }
@@ -608,7 +617,12 @@ final class Connection {
         return $response;
     }
 
-    public function trigger(Response\Event $event): void {
+    public function unregisterEventListener(EventListener $eventListener): void {
+        $this->eventListeners = array_filter($this->eventListeners, fn (EventListener $listener) => $listener !== $eventListener);
+    }
+
+    public function unregisterWarningsListener(WarningsListener $warningsListener): void {
+        $this->warningsListeners = array_filter($this->warningsListeners, fn (WarningsListener $listener) => $listener !== $warningsListener);
     }
 
     public function withConsistency(Consistency $consistency): self {
@@ -1198,10 +1212,19 @@ final class Connection {
     }
 
     protected function onEvent(Response\Event $event): void {
-        $this->trigger($event);
 
         foreach ($this->eventListeners as $listener) {
             $listener->onEvent($event);
+        }
+    }
+
+    /**
+     * @param array<string> $warnings
+     */
+    protected function onWarnings(Response\Response $response, array $warnings): void {
+
+        foreach ($this->warningsListeners as $listener) {
+            $listener->onWarnings($response, $warnings);
         }
     }
 
@@ -1288,6 +1311,12 @@ final class Connection {
         }
 
         $response = $this->createResponse($header, $body);
+
+        if ($response->hasWarnings()) {
+            foreach ($this->warningsListeners as $listener) {
+                $listener->onWarnings($response, $response->getWarnings());
+            }
+        }
 
         $streamId = $header->stream;
         if ($streamId !== 0 && isset($this->statements[$streamId])) {
