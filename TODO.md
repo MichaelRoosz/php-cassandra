@@ -2,7 +2,6 @@ Todo
 =====
 
 ## Code
-* remove unused exceptions codes
 * should query options really be nullable?
 
 ## Tests

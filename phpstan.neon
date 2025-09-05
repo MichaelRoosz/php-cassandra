@@ -1,6 +1,7 @@
 parameters:
     level: max
     paths:
+        - scripts
         - src
         - php-cassandra.php
     treatPhpDocTypesAsCertain: false
