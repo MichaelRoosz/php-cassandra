@@ -9,9 +9,9 @@ Package: https://packagist.org/packages/mroosz/php-cassandra
 - Protocol v3/v4/v5, auto-negotiated
 - Two transports: sockets and PHP streams (streams support SSL/TLS and persistent connections)
 - Synchronous and asynchronous requests
-- Prepared statements with named or positional binding
+- Prepared statements with named or positional binding (with auto-prepare)
 - Batches: logged, unlogged, counter
-- Full data type coverage (collections, tuples, UDTs, custom)
+- Full data type coverage (collections, tuples, UDTs, custom, vectors)
 - Iterators plus multiple fetch styles (ASSOC, NUM, BOTH) and object mapping
 - Events (schema/status/topology) with a simple listener interface
 - Optional LZ4 compression and server overload signalling
@@ -33,30 +33,6 @@ Or load the library without Composer:
 require __DIR__ . '/php-cassandra/php-cassandra.php';
 ```
 
-## Running tests
-
-- Unit tests:
-
-```bash
-composer install
-composer test:unit
-```
-
-- Integration tests (Dockerized Cassandra 5):
-
-```bash
-composer test:integration
-```
-
-You can manage steps manually:
-
-```bash
-composer test:integration:up
-composer test:integration:init
-composer test:integration:run
-composer test:integration:down
-```
-
 ## Quick start
 
 ```php
@@ -65,6 +41,7 @@ composer test:integration:down
 use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
+use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Consistency;
 
 // Choose one or more nodes and a transport
@@ -74,11 +51,11 @@ $nodes = [
     // new StreamNodeConfig(host: '127.0.0.1', port: 9042, username: 'cassandra', password: 'cassandra'),
 ];
 
-// Optional connection options (protocol STARTUP options)
-$options = [
-    // 'COMPRESSION' => 'lz4',
-    // 'THROW_ON_OVERLOAD' => '1', // protocol v4+
-];
+// Optional connection options
+$options = new ConnectionOptions(
+    enableCompression: true,   // LZ4 if server supports it
+    throwOnOverload: true,     // protocol v4+
+);
 
 $conn = new Connection($nodes, keyspace: 'my_keyspace', options: $options);
 $conn->connect();
@@ -90,7 +67,7 @@ $conn->setConsistency(Consistency::QUORUM);
 $rows = $conn->query(
     'SELECT * FROM users WHERE id = ?',
     [new \Cassandra\Value\Uuid('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]
-)->fetchAll();
+)->asRowsResult()->fetchAll();
 
 // Prepared statement (named bind + paging)
 $prepared = $conn->prepare('SELECT id, name FROM users WHERE org_id = :org_id');
@@ -103,7 +80,7 @@ $result = $conn->execute(
         pageSize: 100,
         namesForValues: true
     )
-);
+)->asRowsResult();
 
 foreach ($result as $row) {
     echo $row['name'], "\n";
@@ -119,8 +96,13 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection;
 
-$socketNode =new SocketNodeConfig(host: '10.0.0.10', port: 9042, username: 'user', password: 'secret',
-        socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]);
+$socketNode = new SocketNodeConfig(
+    host: '10.0.0.10',
+    port: 9042,
+    username: 'user',
+    password: 'secret',
+    socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]
+);
 
 // Streams transport with SSL/TLS and persistent connection
 $streamTlsNode = new StreamNodeConfig(
@@ -139,13 +121,15 @@ $streamTlsNode = new StreamNodeConfig(
     ]
 );
 
-$conn = new Connection([$socketNode, $tlsNode], keyspace: 'app');
+$conn = new Connection([$socketNode, $streamTlsNode], keyspace: 'app');
 $conn->connect();
 ```
 
-Startup options (third constructor argument) support:
-- `COMPRESSION` = `lz4` if enabled on server
-- `THROW_ON_OVERLOAD` = `'1'` or `'0'` (v4+)
+Connection options are provided via `ConnectionOptions`:
+- `enableCompression` = use LZ4 if enabled on server
+- `throwOnOverload` = `'true'` to ask server to throw on overload (v4+)
+- `nodeSelectionStrategy` = `Random` (default) or `RoundRobin`
+- `preparedResultCacheSize` = cache size for prepared metadata (default 100)
 
 Keyspace selection:
 - v5: can also be sent per-request via Query/Execute options (see below)
@@ -167,7 +151,7 @@ $rowsResult = $conn->query(
     [new \Cassandra\Value\Uuid($id)],
     consistency: \Cassandra\Consistency::ONE,
     options: new \Cassandra\Request\Options\QueryOptions(pageSize: 100)
-);
+)->asRowsResult();
 ```
 
 Asynchronous:
@@ -175,18 +159,30 @@ Asynchronous:
 $s1 = $conn->queryAsync('SELECT count(*) FROM t1');
 $s2 = $conn->queryAsync('SELECT count(*) FROM t2');
 
-$r2 = $s2->getResult();
-$r1 = $s1->getResult();
+$r2 = $s2->getResult()->asRowsResult();
+$r1 = $s1->getResult()->asRowsResult();
 ```
 
 Query options (`QueryOptions`):
-- `pageSize` (int)
+- `autoPrepare` (bool, default true): transparently prepare+execute when needed
+- `pageSize` (int, min 100 enforced by client)
 - `pagingState` (string)
 - `serialConsistency` (`SerialConsistency::SERIAL` or `SerialConsistency::LOCAL_SERIAL`)
 - `defaultTimestamp` (ms since epoch)
 - `namesForValues` (bool): true to use associative binds
 - `keyspace` (string; protocol v5 only)
 - `nowInSeconds` (int; protocol v5 only)
+
+Fetch all pages helpers:
+```php
+// For simple queries
+$pages = $conn->queryAll('SELECT * FROM ks.users WHERE org_id = ?', [$orgId]);
+foreach ($pages as $page) {
+    foreach ($page as $row) {
+        // ...
+    }
+}
+```
 
 ## Prepared statements
 
@@ -200,13 +196,13 @@ $rowsResult = $conn->execute(
         namesForValues: true,
         pageSize: 50
     )
-);
+)->asRowsResult();
 ```
 
 Pagination with prepared statements:
 ```php
 $options = new \Cassandra\Request\Options\ExecuteOptions(pageSize: 100, namesForValues: true);
-$result = $conn->execute($prepared, ['org_id' => 1], options: $options);
+$result = $conn->execute($prepared, ['org_id' => 1], options: $options)->asRowsResult();
 
 do {
     foreach ($result as $row) {
@@ -221,9 +217,16 @@ do {
         namesForValues: true,
         pagingState: $pagingState
     );
-    $result = $conn->execute($result, [], options: $options); // reuse previous RowsResult for metadata id
+    $result = $conn->execute($result, [], options: $options)->asRowsResult(); // reuse previous RowsResult for metadata id
 } while (true);
 ```
+
+Execute all pages helper:
+```php
+$pages = $conn->executeAll($prepared, ['org_id' => 1], options: new \Cassandra\Request\Options\ExecuteOptions(namesForValues: true));
+```
+
+`ExecuteOptions` adds `skipMetadata` for result metadata reuse.
 
 ## Batches
 
@@ -254,18 +257,18 @@ Batch options (`BatchOptions`): `serialConsistency`, `defaultTimestamp`, `keyspa
 
 ## Results and fetching
 
-`query()`/`execute()` return a `RowsResult` for row-returning queries. Supported methods:
+`query()`/`execute()` return a `Result`; call `asRowsResult()` for row-returning queries. Supported `RowsResult` methods:
 - `fetch(FetchType::ASSOC|NUM|BOTH)` returns next row or false
 - `fetchAll(FetchType)` returns all remaining rows
-- `fetchColumn(int $index)`/`fetchAllColumns(int $index)`
-- `fetchKeyPair(int $keyIndex, int $valueIndex)`/`fetchAllKeyPairs(...)`
+- `fetchColumn(int $index)` / `fetchAllColumns(int $index)`
+- `fetchKeyPair(int $keyIndex, int $valueIndex)` / `fetchAllKeyPairs(...)`
 - `getIterator()` returns a `ResultIterator` so you can `foreach ($rowsResult as $row)`
 
 Example:
 ```php
 use Cassandra\Response\Result\FetchType;
 
-$r = $conn->query('SELECT role FROM system_auth.roles');
+$r = $conn->query('SELECT role FROM system_auth.roles')->asRowsResult();
 foreach ($r as $i => $row) {
     echo $row['role'], "\n";
 }
@@ -284,7 +287,7 @@ final class UserRow implements \Cassandra\Response\Result\RowClassInterface {
     public function name(): string { return (string) $this->row['name']; }
 }
 
-$rows = $conn->query('SELECT id, name FROM users');
+$rows = $conn->query('SELECT id, name FROM users')->asRowsResult();
 $rows->configureFetchObject(UserRow::class);
 
 foreach ($rows as $user) {
@@ -317,12 +320,13 @@ new \Cassandra\Value\Varint(10000000000);
 \Cassandra\Value\Timestamp::fromValue('2011-02-03T04:05:00.000+0000');
 \Cassandra\Value\Duration::fromValue('89h4m48s');
 
-// Collections / Tuples / UDT
+// Collections / Tuples / UDT / Vector
 new \Cassandra\Value\ListCollection([1, 2, 3], [\Cassandra\Type::INT]);
 new \Cassandra\Value\SetCollection([1, 2, 3], [\Cassandra\Type::INT]);
 new \Cassandra\Value\MapCollection(['a' => 1], [\Cassandra\Type::ASCII, \Cassandra\Type::INT]);
 new \Cassandra\Value\Tuple([1, 'x'], [\Cassandra\Type::INT, \Cassandra\Type::VARCHAR]);
 new \Cassandra\Value\UDT(['id' => 1, 'name' => 'n'], ['id' => \Cassandra\Type::INT, 'name' => \Cassandra\Type::VARCHAR]);
+new \Cassandra\Value\Vector([0.12, -0.3, 0.9]);
 ```
 
 Nested complex example (Set<UDT> inside a row):
@@ -353,7 +357,7 @@ new \Cassandra\Value\SetCollection([
 ```
 
 Special values:
-- `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET, not resulting in any change to the existing value. (distinct from NULL)
+- `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET (distinct from NULL)
 
 ## Events
 
@@ -361,12 +365,12 @@ Register a listener and subscribe for events on the connection:
 ```php
 $conn->addEventListener(new class () implements \Cassandra\EventListener {
     public function onEvent(\Cassandra\Response\Event $event): void {
-        // inspect $event->getType() and $event->getData()
+        // Inspect $event->getType() and $event->getData()
     }
 });
 
 use Cassandra\Request\Register;
-use Cassandra\Response\EventType;
+use Cassandra\EventType;
 
 $conn->syncRequest(new Register([
     EventType::TOPOLOGY_CHANGE,
@@ -396,33 +400,141 @@ $result = $conn->syncRequest($req);
 
 ## Compression
 
-Enable LZ4 compression if supported by the server by passing the startup option:
+Enable LZ4 compression (if supported by the server) via `ConnectionOptions`:
 ```php
-$conn = new Cassandra\Connection($nodes, options: ['COMPRESSION' => 'lz4']);
+use Cassandra\Connection\ConnectionOptions;
+
+$conn = new Cassandra\Connection(
+    $nodes,
+    keyspace: 'app',
+    options: new ConnectionOptions(enableCompression: true)
+);
 ```
 
 ## Error handling
 
-All operations throw `\Cassandra\Exception` for client errors and `\Cassandra\Response\Exception` for server-side errors (e.g., invalid query, unavailable, timeouts). Prepared statements are transparently re-prepared when needed.
+- Client-side errors throw `\Cassandra\Exception` (e.g., connection issues, invalid input, unsupported options).
+- Server-side errors are raised as subclasses of `\Cassandra\Response\Exception` (e.g., `Unavailable`, `ReadTimeout`, `WriteTimeout`, `Invalid`, `Syntax`, `Unauthorized`, etc.).
+- Statement helpers throw `\Cassandra\Exception\StatementException` if the result type doesn’t match the getter you call.
+
+Recommended pattern:
+```php
+use Cassandra\Consistency;
+use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Response\Exception as ServerException;
+
+try {
+    $rows = $conn->query(
+        'SELECT id, name FROM users WHERE id = ?',
+        [$id],
+        Consistency::LOCAL_QUORUM,
+        new QueryOptions(pageSize: 500)
+    )->asRowsResult();
+
+    foreach ($rows as $row) {
+        // ...
+    }
+} catch (ServerException $e) {
+    // Handle server error (Cassandra responded with an error)
+} catch (\Cassandra\Connection\Exception $e) {
+    // Handle connection/transport error
+} catch (\Cassandra\Exception $e) {
+    // Handle other client-side errors
+}
+```
+
+## Asynchronous API
+
+```php
+// Fire two statements concurrently
+$s1 = $conn->queryAsync('SELECT count(*) FROM ks.t1');
+$s2 = $conn->queryAsync('SELECT count(*) FROM ks.t2');
+
+// Option A: block on each
+$r1 = $s1->getResult();
+$r2 = $s2->getResult();
+
+// Option B: pump until both complete
+$conn->flush();
+$r1 = $s1->getResult();
+$r2 = $s2->getResult();
+
+// Prepared + async
+$pStmt = $conn->prepareAsync('SELECT * FROM ks.users WHERE id = ?');
+$prepared = $pStmt->getPreparedResult();
+$s3 = $conn->executeAsync($prepared, [$id]);
+$rows = $s3->getRowsResult();
+```
+
+## Key features and options
+
+- Transports:
+  - **Sockets**: `SocketNodeConfig` (requires PHP sockets ext)
+  - **Streams**: `StreamNodeConfig` (supports SSL/TLS, persistent connections)
+- Connection options (`ConnectionOptions`):
+  - **enableCompression**: enable LZ4 if both client and server support it
+  - **throwOnOverload**: request server to throw on overload (protocol v4+)
+  - **nodeSelectionStrategy**: `Random` (default) or `RoundRobin`
+  - **preparedResultCacheSize**: cache size for prepared metadata (default 100)
+- Request options:
+  - `QueryOptions`: `autoPrepare` (default true), `pageSize`, `pagingState`, `serialConsistency`, `defaultTimestamp`, `namesForValues`, `keyspace` (v5), `nowInSeconds` (v5)
+  - `ExecuteOptions`: same as `QueryOptions` plus `skipMetadata`
+  - `PrepareOptions`: `keyspace` (v5)
+  - `BatchOptions`: `serialConsistency`, `defaultTimestamp`, `keyspace` (v5), `nowInSeconds` (v5)
+- Protocol v5 conveniences:
+  - Per-request `keyspace` and `now_in_seconds` are supported when the server negotiates v5.
+
+Notes:
+- `pageSize` is clamped to a minimum of 100 by the client for efficiency.
+- If you supply non-`Value\*` PHP values with `QueryOptions(autoPrepare: true)`, the driver auto-prepares + executes for correct typing.
+- On `UNPREPARED` server errors, the driver transparently re-prepares and retries the execution.
 
 ## API reference (essentials)
 
 - `Cassandra\Connection`
-  - `connect()`, `disconnect()`
-  - `setConsistency(Consistency)`
-  - `query(string, array = [], ?Consistency, QueryOptions)` / `queryAsync(...)`
+  - `connect()`, `disconnect()`, `isConnected()`, `getVersion()`
+  - `setConsistency(Consistency)`, `withConsistency(Consistency)`
+  - `setKeyspace(string)`, `withKeyspace(string)`, `supportsKeyspaceRequestOption()`, `supportsNowInSecondsRequestOption()`
+  - `query(string, array = [], ?Consistency, QueryOptions)` / `queryAsync(...)` / `queryAll(...)`
   - `prepare(string, PrepareOptions)` / `prepareAsync(...)`
-  - `execute(PreparedResult|RowsResult, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)`
+  - `execute(Result $previous, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)` / `executeAll(...)`
   - `batch(Batch)` / `batchAsync(Batch)`
-  - `syncRequest(Request)` / `asyncRequest(Request)`
+  - `syncRequest(Request)` / `asyncRequest(Request)` / `flush()`
   - `addEventListener(EventListener)`
 
-- `Cassandra\Request\Options\QueryOptions | ExecuteOptions | BatchOptions`
-- `Cassandra\Request\Batch`, `BatchType`
-- `Cassandra\Response\Result\RowsResult` (iterable, fetch helpers)
-- `Cassandra\Response\Result\RowClassInterface`, `RowClass`
-- `Cassandra\Consistency` (enum)
-- `Cassandra\Type` (enum) and `Cassandra\Value\*` classes
+- Results
+  - `RowsResult` (iterable): `fetch()`, `fetchAll()`, `fetchColumn()`, `fetchAllColumns()`, `fetchKeyPair()`, `fetchAllKeyPairs()`, `configureFetchObject()`, `fetchObject()`, `fetchAllObjects()`, `getRowsMetadata()`, `hasMorePages()`
+  - `PreparedResult` (for execute)
+  - `SchemaChangeResult`, `SetKeyspaceResult`, `VoidResult`
+
+- Types
+  - `Cassandra\Consistency` (enum)
+  - `Cassandra\SerialConsistency` (enum)
+  - `Cassandra\Type` (enum) and `Cassandra\Value\*` classes (Ascii, Bigint, Blob, Boolean, Counter, Date, Decimal, Double, Duration, Float32, Inet, Int32, ListCollection, MapCollection, NotSet, SetCollection, Smallint, Time, Timestamp, Timeuuid, Tinyint, Tuple, UDT, Uuid, Varchar, Varint, Vector, ...)
+
+## Running tests
+
+- Unit tests:
+
+```bash
+composer install
+composer test:unit
+```
+
+- Integration tests (Dockerized Cassandra 5):
+
+```bash
+composer test:integration
+```
+
+You can manage steps manually:
+
+```bash
+composer test:integration:up
+composer test:integration:init
+composer test:integration:run
+composer test:integration:down
+```
 
 ## License
 
@@ -433,3 +545,5 @@ MIT
 Inspired by and building upon work from:
 - duoshuo/php-cassandra
 - arnaud-lb/php-cassandra
+
+
