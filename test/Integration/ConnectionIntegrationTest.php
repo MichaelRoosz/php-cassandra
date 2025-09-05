@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
@@ -14,11 +12,11 @@ use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Response\Exception as ServerException;
 use Cassandra\Type;
 use Cassandra\Value;
-use PHPUnit\Framework\TestCase;
 
-final class ConnectionIntegrationTest extends TestCase {
+final class ConnectionIntegrationTest extends AbstractIntegrationTest {
     public function testBatchInsert(): void {
-        $conn = $this->newConnection();
+
+        $conn = $this->connection;
         $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE);
         for ($i = 0; $i < 10; $i++) {
             $batch->appendQuery(
@@ -48,7 +46,7 @@ final class ConnectionIntegrationTest extends TestCase {
 
     public function testInsertSelectPreparedAndPaging(): void {
 
-        $conn = $this->newConnection();
+        $conn = $this->connection;
 
         // insert multiple users
         $prepared = $conn->prepare('INSERT INTO users (id, org_id, name, age) VALUES (:id, :org_id, :name, :age)');
@@ -100,42 +98,22 @@ final class ConnectionIntegrationTest extends TestCase {
     }
 
     public function testSimpleQuery(): void {
-        $conn = $this->newConnection();
+        $conn = $this->connection;
         $r = $conn->query('SELECT key FROM system.local');
         $this->assertSame(1, iterator_count($r));
     }
 
     public function testSyntaxErrorRaisesException(): void {
-        $conn = $this->newConnection();
+        $conn = $this->connection;
         $this->expectException(ServerException::class);
         $conn->query('SELECT * FROM does_not_exist_123');
     }
-    private static function getHost(): string {
-        return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
-    }
 
-    private static function getPort(): int {
-        $port = getenv('APP_CASSANDRA_PORT') ?: '9042';
-
-        return (int) $port;
-    }
-
-    private function newConnection(string $keyspace = 'app'): Connection {
-        $nodes = [
-            new SocketNodeConfig(
-                host: self::getHost(),
-                port: self::getPort(),
-                username: '',
-                password: ''
-            ),
-        ];
-
-        $conn = new Connection($nodes, $keyspace);
-        $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
-        $this->assertTrue($conn->isConnected());
-
-        return $conn;
+    protected static function setupTable(): void {
+        $conn = self::newConnection(self::$keyspace);
+        $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
+        $conn->query('CREATE TABLE IF NOT EXISTS users(org_id int, id uuid, name varchar, age int, PRIMARY KEY ((org_id), id))');
+        $conn->disconnect();
     }
 
     private static function uuidV4(): string {

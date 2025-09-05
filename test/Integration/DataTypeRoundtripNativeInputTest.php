@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
-use Cassandra\Consistency;
 use Cassandra\Value;
 use DateInterval;
 use DateTimeImmutable;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Integration test to verify that data types round-trip correctly through Cassandra.
@@ -47,30 +43,10 @@ use PHPUnit\Framework\TestCase;
  * - varint                 *Implemented
  * - vector                 *Implemented
  */
-final class DataTypeRoundtripNativeInputTest extends TestCase {
-    private Connection $connection;
+final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTest {
     private string $dumpFile = './table_dump.csv';
-    private string $testKeyspace = 'datatype_test';
-
-    protected function setUp(): void {
-        parent::setUp();
-        $this->connection = $this->newConnection('system');
-
-        $this->connection->query(
-            "DROP KEYSPACE IF EXISTS {$this->testKeyspace}"
-        );
-
-        $this->connection->query(
-            "CREATE KEYSPACE IF NOT EXISTS {$this->testKeyspace} WITH REPLICATION = " .
-            "{'class': 'SimpleStrategy', 'replication_factor': 1}"
-        );
-
-        $this->connection = $this->newConnection($this->testKeyspace);
-    }
 
     protected function tearDown(): void {
-        $this->connection = $this->newConnection('system');
-        $this->connection->query("DROP KEYSPACE IF EXISTS {$this->testKeyspace}");
 
         if (file_exists($this->dumpFile)) {
             unlink($this->dumpFile);
@@ -1835,7 +1811,7 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
      */
     private function compareWithCqlsh(string $tableName, string $idColumn, string $valueColumn, array $testValues, string $dataType): void {
 
-        $cqlshResults = $this->dumpTableWithCqlsh($this->testKeyspace, $tableName, $idColumn, $valueColumn);
+        $cqlshResults = $this->dumpTableWithCqlsh(self::$keyspace, $tableName, $idColumn, $valueColumn);
 
         foreach ($testValues as $idValue => $phpValue) {
             if (!array_key_exists($idValue, $cqlshResults)) {
@@ -2018,7 +1994,8 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         $columnList = [$idColumn, $valueColumn];
         $query = "COPY {$keyspace}.\"{$tableName}\" (" . implode(',', $columnList) . ") TO '/tmp/table_dump.csv' WITH " . $optionsString . ' ;';
         $escapedQuery = escapeshellarg($query);
-        $command = "docker exec {$containerName} cqlsh -k {$this->testKeyspace} -e {$escapedQuery} 2>&1";
+        $keyspace = self::$keyspace;
+        $command = "docker exec {$containerName} cqlsh -k {$keyspace} -e {$escapedQuery} 2>&1";
 
         $output = shell_exec($command);
         if ($output === null || $output === false) {
@@ -2106,34 +2083,6 @@ final class DataTypeRoundtripNativeInputTest extends TestCase {
         }
 
         return $rows;
-    }
-
-    private static function getHost(): string {
-        return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
-    }
-
-    private static function getPort(): int {
-        $port = getenv('APP_CASSANDRA_PORT') ?: '9042';
-
-        return (int) $port;
-    }
-
-    private function newConnection(string $keyspace = 'app'): Connection {
-        $nodes = [
-            new SocketNodeConfig(
-                host: self::getHost(),
-                port: self::getPort(),
-                username: '',
-                password: ''
-            ),
-        ];
-
-        $conn = new Connection($nodes, $keyspace);
-        $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
-        $this->assertTrue($conn->isConnected());
-
-        return $conn;
     }
 
     /**

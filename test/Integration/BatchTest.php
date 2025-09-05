@@ -4,19 +4,16 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
 use Cassandra\Value;
-use PHPUnit\Framework\TestCase;
 
-final class BatchTest extends TestCase {
+final class BatchTest extends AbstractIntegrationTest {
     public function testUnloggedBatchInsert(): void {
-        $conn = $this->newConnection();
+        $conn = $this->connection;
 
         $filename = 'itest_' . bin2hex(random_bytes(6));
         $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE);
@@ -46,31 +43,9 @@ final class BatchTest extends TestCase {
         $this->assertSame(10, $count);
     }
 
-    private static function getHost(): string {
-        return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
-    }
-
-    private static function getPort(): int {
-        $port = getenv('APP_CASSANDRA_PORT') ?: '9042';
-
-        return (int) $port;
-    }
-
-    private function newConnection(string $keyspace = 'app'): Connection {
-        $nodes = [
-            new SocketNodeConfig(
-                host: self::getHost(),
-                port: self::getPort(),
-                username: '',
-                password: ''
-            ),
-        ];
-
-        $conn = new Connection($nodes, $keyspace);
-        $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
-        $this->assertTrue($conn->isConnected());
-
-        return $conn;
+    protected static function setupTable(): void {
+        $conn = self::newConnection(self::$keyspace);
+        $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
+        $conn->disconnect();
     }
 }

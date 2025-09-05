@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
@@ -13,11 +11,10 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Type;
 use Cassandra\Value;
-use PHPUnit\Framework\TestCase;
 
-final class StorageIntegrationTest extends TestCase {
+final class StorageIntegrationTest extends AbstractIntegrationTest {
     public function testBatchAsyncAndPagingOnStorage(): void {
-        $conn = $this->newConnection();
+        $conn = $this->connection;
 
         $filename = 'itest_' . bin2hex(random_bytes(6));
 
@@ -102,31 +99,9 @@ final class StorageIntegrationTest extends TestCase {
         $this->assertSame($numRows, $count2, 'Query+paging should return all inserted rows');
     }
 
-    private static function getHost(): string {
-        return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
-    }
-
-    private static function getPort(): int {
-        $port = getenv('APP_CASSANDRA_PORT') ?: '9042';
-
-        return (int) $port;
-    }
-
-    private function newConnection(string $keyspace = 'app'): Connection {
-        $nodes = [
-            new SocketNodeConfig(
-                host: self::getHost(),
-                port: self::getPort(),
-                username: '',
-                password: ''
-            ),
-        ];
-
-        $conn = new Connection($nodes, $keyspace);
-        $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
-        $this->assertTrue($conn->isConnected());
-
-        return $conn;
+    protected static function setupTable(): void {
+        $conn = self::newConnection(self::$keyspace);
+        $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
+        $conn->disconnect();
     }
 }

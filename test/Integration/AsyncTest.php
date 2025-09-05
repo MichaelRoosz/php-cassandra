@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
-use Cassandra\Consistency;
 use Cassandra\Request\BatchType;
 use Cassandra\Type;
 use Cassandra\Value;
-use PHPUnit\Framework\TestCase;
 
-final class AsyncTest extends TestCase {
+final class AsyncTest extends AbstractIntegrationTest {
     public function testAsyncBatchAndFlush(): void {
-        $conn = $this->newConnection();
+
+        $conn = $this->connection;
+
         $filename = 'itest_' . bin2hex(random_bytes(6));
 
         $pending = [];
@@ -43,8 +41,10 @@ final class AsyncTest extends TestCase {
 
         $this->assertGreaterThanOrEqual(30, $count);
     }
+
     public function testConcurrentAsyncQueries(): void {
-        $conn = $this->newConnection();
+
+        $conn = $this->connection;
 
         $s1 = $conn->queryAsync('SELECT key FROM system.local');
         $s2 = $conn->queryAsync('SELECT release_version FROM system.local');
@@ -58,31 +58,9 @@ final class AsyncTest extends TestCase {
         $this->assertIsString($r2->fetch()['release_version'] ?? null);
     }
 
-    private static function getHost(): string {
-        return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
-    }
-
-    private static function getPort(): int {
-        $port = getenv('APP_CASSANDRA_PORT') ?: '9042';
-
-        return (int) $port;
-    }
-
-    private function newConnection(string $keyspace = 'app'): Connection {
-        $nodes = [
-            new SocketNodeConfig(
-                host: self::getHost(),
-                port: self::getPort(),
-                username: '',
-                password: ''
-            ),
-        ];
-
-        $conn = new Connection($nodes, $keyspace);
-        $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
-        $this->assertTrue($conn->isConnected());
-
-        return $conn;
+    protected static function setupTable(): void {
+        $conn = self::newConnection(self::$keyspace);
+        $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
+        $conn->disconnect();
     }
 }

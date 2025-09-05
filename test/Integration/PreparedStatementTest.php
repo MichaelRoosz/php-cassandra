@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Value;
-use PHPUnit\Framework\TestCase;
 
-final class PreparedStatementTest extends TestCase {
+final class PreparedStatementTest extends AbstractIntegrationTest {
     public function testPrepareAndExecuteWithNamedBinds(): void {
-        $conn = $this->newConnection();
+        $conn = $this->connection;
 
         $conn->query('TRUNCATE users');
 
@@ -38,7 +35,7 @@ final class PreparedStatementTest extends TestCase {
     }
 
     public function testPreparedPagingUsingPreviousResult(): void {
-        $conn = $this->newConnection();
+        $conn = $this->connection;
 
         // Seed deterministic number of rows for a unique org_id
         $orgId = random_int(10000, 99999);
@@ -91,32 +88,10 @@ final class PreparedStatementTest extends TestCase {
         $this->assertSame($numRows, $seen);
     }
 
-    private static function getHost(): string {
-        return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
-    }
-
-    private static function getPort(): int {
-        $port = getenv('APP_CASSANDRA_PORT') ?: '9042';
-
-        return (int) $port;
-    }
-
-    private function newConnection(string $keyspace = 'app'): Connection {
-        $nodes = [
-            new SocketNodeConfig(
-                host: self::getHost(),
-                port: self::getPort(),
-                username: '',
-                password: ''
-            ),
-        ];
-
-        $conn = new Connection($nodes, $keyspace);
-        $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
-        $this->assertTrue($conn->isConnected());
-
-        return $conn;
+    protected static function setupTable(): void {
+        $conn = self::newConnection(self::$keyspace);
+        $conn->query('CREATE TABLE IF NOT EXISTS users(org_id int, id uuid, name varchar, age int, PRIMARY KEY ((org_id), id))');
+        $conn->disconnect();
     }
 
     private static function uuidV4(): string {

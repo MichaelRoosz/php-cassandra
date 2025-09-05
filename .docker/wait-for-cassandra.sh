@@ -12,10 +12,3 @@ until docker compose exec -T cassandra bash -lc "cqlsh ${host} ${port} -e \"DESC
 done
 
 echo "Cassandra is up"
-
-docker compose cp .docker/cql/init.cql cassandra:/init.cql
-docker compose exec -T cassandra bash -lc "cqlsh ${host} ${port} -f /init.cql"
-
-echo "Schema initialized"
-
-
