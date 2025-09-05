@@ -30,9 +30,6 @@
         }
     ],
     "homepage": "https://github.com/MichaelRoosz/php-cassandra",
-    "require": {
-        "php": ">=8.1"
-    },
     "autoload": {
         "psr-4": { "Cassandra\\": "src/" }
     },
@@ -41,15 +38,20 @@
             "Cassandra\\Test\\": "test/"
         }
     },
+    "require": {
+        "php": ">=8.1"
+    },
     "require-dev": {
-        "friendsofphp/php-cs-fixer": "^3.75.0",
-        "phpstan/phpstan": "^2.1.17",
-        "phpunit/phpunit": "^10.5.51",
-        "vimeo/psalm": "^6.12.0"
+        "ext-bcmath": "*",
+        "ext-gmp": "*",
+        "friendsofphp/php-cs-fixer": "^3.87.1",
+        "phpstan/phpstan": "^2.1.22",
+        "phpunit/phpunit": "^10.5.53",
+        "vimeo/psalm": "^6.13.1"
     },
     "scripts": {
-        "lint": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer check",
-        "lint-fix": "PHP_CS_FIXER_IGNORE_ENV=1 vendor/bin/php-cs-fixer fix",
+        "lint": "vendor/bin/php-cs-fixer check",
+        "lint-fix": "vendor/bin/php-cs-fixer fix",
         "phpstan": "vendor/bin/phpstan analyse --memory-limit=1G",
         "phpstan:tests": "vendor/bin/phpstan analyse --memory-limit=1G --configuration phpstan.tests.neon",
         "psalm": "vendor/bin/psalm --no-cache",
