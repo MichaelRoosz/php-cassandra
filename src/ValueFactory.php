@@ -28,7 +28,7 @@ final class ValueFactory {
         if ($type === null) {
             throw new Exception('Cannot get type object for value', ExceptionCode::VALUE_FACTORY_CANNOT_GET_TYPE_OBJECT_FOR_VALUE->value, [
                 'value_type' => gettype($value),
-                'type_info' => get_class($typeInfo),
+                'target_type' => $typeInfo->type->name,
             ]);
         }
 

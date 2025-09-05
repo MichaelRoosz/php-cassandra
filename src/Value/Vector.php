@@ -140,21 +140,16 @@ final class Vector extends ValueReadableWithoutLength {
         $isSerializedAsFixedLength = ValueFactory::isSerializedAsFixedLength($this->typeInfo->valueType->type);
 
         for ($i = 0; $i < $this->typeInfo->dimensions; ++$i) {
-            if ($value[$i] === null) {
-                // todo: test if this is possible
-                $binary .= "\xff\xff\xff\xff";
-            } else {
-                $valueBinary = $value[$i] instanceof ValueBase
-                    ? $value[$i]->getBinary()
-                    : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $value[$i]);
+            $valueBinary = $value[$i] instanceof ValueBase
+                ? $value[$i]->getBinary()
+                : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $value[$i]);
 
-                if ($isSerializedAsFixedLength) {
-                    $binary .= $valueBinary;
-                } else {
-                    $length = strlen($valueBinary);
-                    $lengthBinary = (new Varint($length))->getBinary();
-                    $binary .= $lengthBinary . $valueBinary;
-                }
+            if ($isSerializedAsFixedLength) {
+                $binary .= $valueBinary;
+            } else {
+                $length = strlen($valueBinary);
+                $lengthBinary = (new Varint($length))->getBinary();
+                $binary .= $lengthBinary . $valueBinary;
             }
         }
 
