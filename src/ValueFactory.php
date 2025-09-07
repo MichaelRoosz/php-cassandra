@@ -24,15 +24,15 @@ final class ValueFactory {
      * @throws \Cassandra\Value\Exception
      */
     public static function getBinaryByTypeInfo(TypeInfo $typeInfo, mixed $value): string {
-        $type = self::getValueObjectFromValue($typeInfo, $value);
-        if ($type === null) {
+        $valueObject = self::getValueObjectFromValue($typeInfo, $value);
+        if ($valueObject === null) {
             throw new Exception('Cannot get type object for value', ExceptionCode::VALUE_FACTORY_CANNOT_GET_TYPE_OBJECT_FOR_VALUE->value, [
                 'value_type' => gettype($value),
                 'target_type' => $typeInfo->type->name,
             ]);
         }
 
-        return $type->getBinary();
+        return $valueObject->getBinary();
     }
 
     /**

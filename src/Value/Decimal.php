@@ -56,7 +56,7 @@ final class Decimal extends ValueReadableWithLength {
 
         $varintBinary = substr($binary, 4);
         $unscaledVarint = Varint::fromBinary($varintBinary);
-        $unscaled = $unscaledVarint->getValueAsString();
+        $unscaled = $unscaledVarint->asString();
 
         if ($scale === 0) {
             $value = $unscaled;

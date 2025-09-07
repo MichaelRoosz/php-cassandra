@@ -577,9 +577,9 @@ class StreamReader {
             );
         }
 
-        $typeObject = ValueFactory::getValueObjectFromStream($typeInfo, $length, $this);
+        $valueObject = ValueFactory::getValueObjectFromStream($typeInfo, $length, $this);
 
-        return $typeObject->getValue();
+        return $valueObject->getValue();
     }
 
     public function reset(): void {

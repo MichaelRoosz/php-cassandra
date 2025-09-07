@@ -89,20 +89,20 @@ final class Vector extends ValueReadableWithoutLength {
         if ($serializedLength > 0) {
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
 
-                $typeObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
+                $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
 
                 /** @psalm-suppress MixedAssignment */
-                $vector[] = $typeObject->getValue();
+                $vector[] = $valueObject->getValue();
 
             }
         } else {
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
 
                 $serializedLength = $stream->readUnsignedVint32();
-                $typeObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
+                $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
 
                 /** @psalm-suppress MixedAssignment */
-                $vector[] = $typeObject->getValue();
+                $vector[] = $valueObject->getValue();
             }
         }
 

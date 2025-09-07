@@ -47,6 +47,28 @@ final class Varint extends ValueReadableWithLength {
     /**
      * @throws \Cassandra\Value\Exception
      */
+    public function asInt(): int {
+        if (!is_int($this->value)) {
+            throw new Exception(
+                'Value of Varint is outside of possible integer range for this system',
+                ExceptionCode::VALUE_VARINT_OUT_OF_PHP_INT_RANGE->value,
+                [
+                    'php_int_size_bits' => PHP_INT_SIZE * 8,
+                    'value' => $this->value,
+                ]
+            );
+        }
+
+        return $this->value;
+    }
+
+    public function asString(): string {
+        return (string) $this->value;
+    }
+
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
     #[\Override]
     public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
         $length = strlen($binary);
@@ -132,28 +154,6 @@ final class Varint extends ValueReadableWithLength {
 
     #[\Override]
     public function getValue(): string {
-        return (string) $this->value;
-    }
-
-    /**
-     * @throws \Cassandra\Value\Exception
-     */
-    public function getValueAsInt(): int {
-        if (!is_int($this->value)) {
-            throw new Exception(
-                'Value of Varint is outside of possible integer range for this system',
-                ExceptionCode::VALUE_VARINT_OUT_OF_PHP_INT_RANGE->value,
-                [
-                    'php_int_size_bits' => PHP_INT_SIZE * 8,
-                    'value' => $this->value,
-                ]
-            );
-        }
-
-        return $this->value;
-    }
-
-    public function getValueAsString(): string {
         return (string) $this->value;
     }
 
