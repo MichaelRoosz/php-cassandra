@@ -35,9 +35,13 @@ final class MapCollection extends ValueReadableWithoutLength {
      * @throws \Cassandra\Response\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
     }
 
     /**
@@ -71,7 +75,12 @@ final class MapCollection extends ValueReadableWithoutLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+    final public static function fromStream(
+        StreamReader $stream,
+        ?int $length = null,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
 
         if ($typeInfo === null) {
             throw new Exception('typeInfo is required', ExceptionCode::VALUE_MAP_TYPEINFO_REQUIRED->value);
@@ -83,12 +92,14 @@ final class MapCollection extends ValueReadableWithoutLength {
             ]);
         }
 
+        $valueEncodeConfig ??= ValueEncodeConfig::default();
+
         $map = [];
         $count = $stream->readInt();
 
         /** @psalm-suppress MixedAssignment */
         for ($i = 0; $i < $count; ++$i) {
-            $key = $stream->readValue($typeInfo->keyType);
+            $key = $stream->readValue($typeInfo->keyType, $valueEncodeConfig);
             if (!is_string($key) && !is_int($key)) {
                 throw new Exception(
                     message: 'Invalid map key type; expected string|int',
@@ -100,7 +111,7 @@ final class MapCollection extends ValueReadableWithoutLength {
                     ]
                 );
             }
-            $map[$key] = $stream->readValue($typeInfo->valueType);
+            $map[$key] = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
         }
 
         return new static($map, typeInfo: $typeInfo);

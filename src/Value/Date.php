@@ -7,12 +7,13 @@ namespace Cassandra\Value;
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\Value\EncodeOption\DateEncodeOption;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Exception as PhpException;
 
-final class Date extends ValueWithFixedLength {
+final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodings {
     final public const VALUE_INT_MAX = 4_294_967_295;
     final public const VALUE_INT_MIN = 0;
 
@@ -101,6 +102,18 @@ final class Date extends ValueWithFixedLength {
     /**
      * @throws \Cassandra\Value\Exception
      */
+    #[\Override]
+    public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
+        return match ($valueEncodeConfig->dateEncodeOption) {
+            DateEncodeOption::AS_DATETIME_IMMUTABLE => $this->asDateTime(),
+            DateEncodeOption::AS_INT => $this->asInteger(),
+            DateEncodeOption::AS_STRING => $this->asString(),
+        };
+    }
+
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
     public function asDateTime(): DateTimeImmutable {
         $baseDate = new DateTimeImmutable('1970-01-01');
         $daysSinceBaseDate = $this->value - self::VALUE_2_31;
@@ -148,7 +161,11 @@ final class Date extends ValueWithFixedLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
         /**
          * @var false|array<int> $unpacked
          */

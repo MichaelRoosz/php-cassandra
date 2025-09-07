@@ -7,12 +7,13 @@ namespace Cassandra\Value;
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\Value\EncodeOption\TimeEncodeOption;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Exception as PhpException;
 use ReflectionClass;
 
-final class Time extends ValueWithFixedLength {
+final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodings {
     final public const VALUE_MAX = 86399999999999;
 
     protected readonly int $value;
@@ -90,6 +91,18 @@ final class Time extends ValueWithFixedLength {
     /**
      * @throws \Cassandra\Value\Exception
      */
+    #[\Override]
+    public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
+        return match ($valueEncodeConfig->timeEncodeOption) {
+            TimeEncodeOption::AS_DATETIME_IMMUTABLE => $this->asDateTime(),
+            TimeEncodeOption::AS_INT => $this->asInteger(),
+            TimeEncodeOption::AS_STRING => $this->asString(),
+        };
+    }
+
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
     public function asDateTime(): DateTimeImmutable {
 
         try {
@@ -131,7 +144,11 @@ final class Time extends ValueWithFixedLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
         self::require64Bit();
 
         /**

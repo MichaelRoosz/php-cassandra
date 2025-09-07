@@ -32,9 +32,13 @@ final class Vector extends ValueReadableWithoutLength {
      * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
     }
 
     /**
@@ -69,7 +73,12 @@ final class Vector extends ValueReadableWithoutLength {
      * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
-    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+    final public static function fromStream(
+        StreamReader $stream,
+        ?int $length = null,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
         if ($typeInfo === null) {
             throw new Exception('typeInfo is required', ExceptionCode::VALUE_VECTOR_TYPEINFO_REQUIRED->value);
         }
@@ -79,6 +88,8 @@ final class Vector extends ValueReadableWithoutLength {
                 'given_type' => get_class($typeInfo),
             ]);
         }
+
+        $valueEncodeConfig ??= ValueEncodeConfig::default();
 
         $vector = [];
 
@@ -91,9 +102,13 @@ final class Vector extends ValueReadableWithoutLength {
 
                 $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
 
-                /** @psalm-suppress MixedAssignment */
-                $vector[] = $valueObject->getValue();
-
+                if ($valueObject instanceof ValueWithMultipleEncodings) {
+                    /** @psalm-suppress MixedAssignment */
+                    $vector[] = $valueObject->asConfigured($valueEncodeConfig);
+                } else {
+                    /** @psalm-suppress MixedAssignment */
+                    $vector[] = $valueObject->getValue();
+                }
             }
         } else {
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
@@ -101,8 +116,13 @@ final class Vector extends ValueReadableWithoutLength {
                 $serializedLength = $stream->readUnsignedVint32();
                 $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
 
-                /** @psalm-suppress MixedAssignment */
-                $vector[] = $valueObject->getValue();
+                if ($valueObject instanceof ValueWithMultipleEncodings) {
+                    /** @psalm-suppress MixedAssignment */
+                    $vector[] = $valueObject->asConfigured($valueEncodeConfig);
+                } else {
+                    /** @psalm-suppress MixedAssignment */
+                    $vector[] = $valueObject->getValue();
+                }
             }
         }
 

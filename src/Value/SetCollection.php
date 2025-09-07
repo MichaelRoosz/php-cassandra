@@ -35,9 +35,13 @@ final class SetCollection extends ValueReadableWithoutLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
     }
 
     /**
@@ -70,7 +74,12 @@ final class SetCollection extends ValueReadableWithoutLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+    final public static function fromStream(
+        StreamReader $stream,
+        ?int $length = null,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
         if ($typeInfo === null) {
             throw new Exception('typeInfo is required', ExceptionCode::VALUE_SET_TYPEINFO_REQUIRED->value);
         }
@@ -81,14 +90,16 @@ final class SetCollection extends ValueReadableWithoutLength {
             ]);
         }
 
-        $list = [];
+        $valueEncodeConfig ??= ValueEncodeConfig::default();
+
+        $set = [];
         $count = $stream->readInt();
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
-            $list[] = $stream->readValue($typeInfo->valueType);
+            $set[] = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
         }
 
-        return new static($list, typeInfo: $typeInfo);
+        return new static($set, typeInfo: $typeInfo);
     }
 
     /**

@@ -13,6 +13,7 @@ use Cassandra\Response\Result\Data\RowsData;
 use Cassandra\Response\ResultFlag;
 use Cassandra\Response\ResultIterator;
 use Cassandra\Response\StreamReader;
+use Cassandra\Value\ValueEncodeConfig;
 
 final class RowsResult extends Result {
     private int $dataOffsetOfPreviousRow;
@@ -36,6 +37,8 @@ final class RowsResult extends Result {
 
     private RowsMetadata $rowsMetadata;
 
+    private ValueEncodeConfig $valueEncodeConfig;
+
     /**
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Value\Exception
@@ -54,6 +57,8 @@ final class RowsResult extends Result {
 
         $this->dataOffset = $this->stream->pos();
         $this->dataOffsetOfPreviousRow = $this->dataOffset;
+
+        $this->valueEncodeConfig = ValueEncodeConfig::default();
     }
 
     public function columnCount(): int {
@@ -81,6 +86,10 @@ final class RowsResult extends Result {
             'constructorArgs' => $constructorArgs,
             'fetchType' => $fetchType,
         ];
+    }
+
+    public function configureValueEncoding(ValueEncodeConfig $config): void {
+        $this->valueEncodeConfig = $config;
     }
 
     /**
@@ -181,7 +190,7 @@ final class RowsResult extends Result {
 
             foreach ($this->rowsMetadata->columns as $j => $column) {
                 /** @psalm-suppress MixedAssignment */
-                $columnValue = $this->stream->readValue($column->type);
+                $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
                 if ($j === $keyIndex) {
                     /** @psalm-suppress MixedAssignment */
                     $key = $columnValue;
@@ -277,7 +286,7 @@ final class RowsResult extends Result {
         $value = null;
         foreach ($this->rowsMetadata->columns as $j => $column) {
             /** @psalm-suppress MixedAssignment */
-            $cell = $this->stream->readValue($column->type);
+            $cell = $this->stream->readValue($column->type, $this->valueEncodeConfig);
             if ($j === $index) {
                 /** @psalm-suppress MixedAssignment */
                 $value = $cell;
@@ -317,7 +326,7 @@ final class RowsResult extends Result {
 
         foreach ($this->rowsMetadata->columns as $j => $column) {
             /** @psalm-suppress MixedAssignment */
-            $columnValue = $this->stream->readValue($column->type);
+            $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
             if ($j === $keyIndex) {
                 /** @psalm-suppress MixedAssignment */
                 $key = $columnValue;
@@ -492,7 +501,7 @@ final class RowsResult extends Result {
             case FetchType::ASSOC:
                 foreach ($this->rowsMetadata->columns as $column) {
                     /** @psalm-suppress MixedAssignment */
-                    $row[$column->name] = $this->stream->readValue($column->type);
+                    $row[$column->name] = $this->stream->readValue($column->type, $this->valueEncodeConfig);
                 }
 
                 break;
@@ -500,7 +509,7 @@ final class RowsResult extends Result {
             case FetchType::NUM:
                 foreach ($this->rowsMetadata->columns as $column) {
                     /** @psalm-suppress MixedAssignment */
-                    $row[] = $this->stream->readValue($column->type);
+                    $row[] = $this->stream->readValue($column->type, $this->valueEncodeConfig);
                 }
 
                 break;
@@ -508,7 +517,7 @@ final class RowsResult extends Result {
             case FetchType::BOTH:
                 foreach ($this->rowsMetadata->columns as $column) {
                     /** @psalm-suppress MixedAssignment */
-                    $value = $this->stream->readValue($column->type);
+                    $value = $this->stream->readValue($column->type, $this->valueEncodeConfig);
 
                     /** @psalm-suppress MixedAssignment */
                     $row[$column->name] = $value;

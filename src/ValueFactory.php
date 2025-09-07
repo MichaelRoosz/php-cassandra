@@ -16,6 +16,7 @@ use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeInfo\VectorInfo;
+use Cassandra\Value\ValueEncodeConfig;
 
 final class ValueFactory {
     /**
@@ -126,21 +127,34 @@ final class ValueFactory {
     /**
     * @throws \Cassandra\Value\Exception
     */
-    public static function getValueObjectFromBinary(TypeInfo $typeInfo, string $binary): Values\ValueBase {
+    public static function getValueObjectFromBinary(
+        TypeInfo $typeInfo,
+        string $binary,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): Values\ValueBase {
 
         $class = self::getClassForDataType($typeInfo->type);
 
-        return $class::fromBinary($binary, $typeInfo);
+        $valueObject = $class::fromBinary($binary, $typeInfo, $valueEncodeConfig);
+
+        return $valueObject;
     }
 
     /**
     * @throws \Cassandra\Value\Exception
     */
-    public static function getValueObjectFromStream(TypeInfo $typeInfo, ?int $length, StreamReader $stream): Values\ValueBase {
+    public static function getValueObjectFromStream(
+        TypeInfo $typeInfo,
+        ?int $length,
+        StreamReader $stream,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): Values\ValueBase {
 
         $class = self::getClassForDataType($typeInfo->type);
 
-        return $class::fromStream($stream, $length, $typeInfo);
+        $valueObject = $class::fromStream($stream, $length, $typeInfo, $valueEncodeConfig);
+
+        return $valueObject;
     }
 
     /**

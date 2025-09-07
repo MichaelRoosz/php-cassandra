@@ -30,7 +30,12 @@ class Bigint extends ValueWithFixedLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    final public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    final public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
+
         self::require64Bit();
 
         /**

@@ -20,6 +20,7 @@ use Cassandra\Response\Result;
 use Cassandra\Response\StreamReader;
 use Cassandra\Value\NotSet;
 use Cassandra\Value\ValueBase;
+use Cassandra\Value\ValueEncodeConfig;
 use SplQueue;
 use TypeError;
 use ValueError;
@@ -71,6 +72,8 @@ final class Connection {
      * @var array<Statement> $statements
      */
     protected array $statements = [];
+
+    protected ?ValueEncodeConfig $valueEncodeConfig = null;
 
     protected int $version = 0x03;
     protected int $versionIn = 0x83;
@@ -144,6 +147,10 @@ final class Connection {
      */
     public function batchAsync(Request\Batch $batchRequest): Statement {
         return $this->asyncRequest($batchRequest);
+    }
+
+    public function configureValueEncoding(ValueEncodeConfig $config): void {
+        $this->valueEncodeConfig = $config;
     }
 
     /**
@@ -915,7 +922,13 @@ final class Connection {
             $streamReader->offset(0);
         }
 
-        return new $responseClass($header, $streamReader);
+        $response = new $responseClass($header, $streamReader);
+
+        if ($this->valueEncodeConfig !== null && ($response instanceof Response\Result\RowsResult)) {
+            $response->configureValueEncoding($this->valueEncodeConfig);
+        }
+
+        return $response;
     }
 
     protected function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {

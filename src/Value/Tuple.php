@@ -31,9 +31,13 @@ final class Tuple extends ValueReadableWithoutLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
     }
 
     /**
@@ -67,7 +71,12 @@ final class Tuple extends ValueReadableWithoutLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+    final public static function fromStream(
+        StreamReader $stream,
+        ?int $length = null,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
         if ($typeInfo === null) {
             throw new Exception('typeInfo is required', ExceptionCode::VALUE_TUPLE_TYPEINFO_REQUIRED->value);
         }
@@ -78,10 +87,12 @@ final class Tuple extends ValueReadableWithoutLength {
             ]);
         }
 
+        $valueEncodeConfig ??= ValueEncodeConfig::default();
+
         $tuple = [];
         foreach ($typeInfo->valueTypes as $key => $type) {
             /** @psalm-suppress MixedAssignment */
-            $tuple[$key] = $stream->readValue($type);
+            $tuple[$key] = $stream->readValue($type, $valueEncodeConfig);
         }
 
         return new static($tuple, typeInfo: $typeInfo);

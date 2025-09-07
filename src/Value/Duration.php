@@ -8,10 +8,11 @@ use Cassandra\ExceptionCode;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\Value\EncodeOption\DurationEncodeOption;
 use Cassandra\VIntCodec;
 use DateInterval;
 
-final class Duration extends ValueReadableWithoutLength {
+final class Duration extends ValueReadableWithoutLength implements ValueWithMultipleEncodings {
     final protected const INT32_MAX = 2147483647;
     final protected const INT32_MIN = -2147483648;
 
@@ -84,6 +85,19 @@ final class Duration extends ValueReadableWithoutLength {
 
     public function __toString(): string {
         return $this->asString();
+    }
+
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
+    #[\Override]
+    public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
+        return match ($valueEncodeConfig->durationEncodeOption) {
+            DurationEncodeOption::AS_DATEINTERVAL => $this->asDateInterval(),
+            DurationEncodeOption::AS_DATEINTERVAL_STRING => $this->asDateIntervalString(),
+            DurationEncodeOption::AS_NATIVE_VALUE => $this->asNativeValue(),
+            DurationEncodeOption::AS_STRING => $this->asString(),
+        };
     }
 
     /**
@@ -349,9 +363,13 @@ final class Duration extends ValueReadableWithoutLength {
      * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo);
+        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
     }
 
     /**
@@ -385,7 +403,13 @@ final class Duration extends ValueReadableWithoutLength {
      * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
-    public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+    final public static function fromStream(
+        StreamReader $stream,
+        ?int $length = null,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
+
         self::require64Bit();
 
         $months = $stream->readSignedVint32();

@@ -45,7 +45,11 @@ abstract class ValueBase implements Stringable {
     /**
      * @throws \Cassandra\Value\Exception
      */
-    abstract public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static;
+    abstract public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static;
 
     /**
      * @param mixed $value
@@ -57,7 +61,12 @@ abstract class ValueBase implements Stringable {
     /**
      * @throws \Cassandra\Value\Exception
      */
-    abstract public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static;
+    abstract public static function fromStream(
+        StreamReader $stream,
+        ?int $length = null,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static;
 
     abstract public function getBinary(): string;
 

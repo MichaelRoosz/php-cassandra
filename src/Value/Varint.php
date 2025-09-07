@@ -9,8 +9,9 @@ use Cassandra\StringMath\DecimalCalculator;
 use Cassandra\StringMath\Exception as StringMathException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\Value\EncodeOption\VarintEncodeOption;
 
-final class Varint extends ValueReadableWithLength {
+final class Varint extends ValueReadableWithLength implements ValueWithMultipleEncodings {
     protected readonly string|int $value;
 
     /**
@@ -47,6 +48,17 @@ final class Varint extends ValueReadableWithLength {
     /**
      * @throws \Cassandra\Value\Exception
      */
+    #[\Override]
+    public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
+        return match ($valueEncodeConfig->varintEncodeOption) {
+            VarintEncodeOption::AS_INT => $this->asInt(),
+            VarintEncodeOption::AS_STRING => $this->asString(),
+        };
+    }
+
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
     public function asInt(): int {
         if (!is_int($this->value)) {
             throw new Exception(
@@ -70,7 +82,11 @@ final class Varint extends ValueReadableWithLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
         $length = strlen($binary);
 
         if ($length > PHP_INT_SIZE) {

@@ -16,6 +16,8 @@ use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeNameParser;
+use Cassandra\Value\ValueEncodeConfig;
+use Cassandra\Value\ValueWithMultipleEncodings;
 use TypeError;
 use ValueError;
 use Cassandra\VIntCodec;
@@ -552,7 +554,7 @@ class StreamReader {
      * @throws \Cassandra\Response\Exception
      * @throws \Cassandra\Value\Exception
      */
-    final public function readValue(TypeInfo $typeInfo): mixed {
+    final public function readValue(TypeInfo $typeInfo, ValueEncodeConfig $valueEncodeConfig): mixed {
 
         $length = $this->readInt();
 
@@ -577,9 +579,13 @@ class StreamReader {
             );
         }
 
-        $valueObject = ValueFactory::getValueObjectFromStream($typeInfo, $length, $this);
+        $valueObject = ValueFactory::getValueObjectFromStream($typeInfo, $length, $this, $valueEncodeConfig);
 
-        return $valueObject->getValue();
+        if ($valueObject instanceof ValueWithMultipleEncodings) {
+            return $valueObject->asConfigured($valueEncodeConfig);
+        } else {
+            return $valueObject->getValue();
+        }
     }
 
     public function reset(): void {

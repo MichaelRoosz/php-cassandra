@@ -20,7 +20,11 @@ final class Inet extends ValueReadableWithLength {
      * @throws \Cassandra\Value\Exception
      */
     #[\Override]
-    public static function fromBinary(string $binary, ?TypeInfo $typeInfo = null): static {
+    public static function fromBinary(
+        string $binary,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
         $inet = inet_ntop($binary);
 
         if ($inet === false) {
@@ -53,7 +57,12 @@ final class Inet extends ValueReadableWithLength {
      * @throws \Cassandra\Response\Exception
      */
     #[\Override]
-    final public static function fromStream(StreamReader $stream, ?int $length = null, ?TypeInfo $typeInfo = null): static {
+    final public static function fromStream(
+        StreamReader $stream,
+        ?int $length = null,
+        ?TypeInfo $typeInfo = null,
+        ?ValueEncodeConfig $valueEncodeConfig = null
+    ): static {
 
         if ($length !== 4 && $length !== 16) {
             throw new Exception(
