@@ -1,7 +1,6 @@
 # Todo for the next release
 
 ## Features
-* warning events with requests
 * data selection for date, duration, time, timestamp, varint
 
 ## Tests

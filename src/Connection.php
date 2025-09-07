@@ -1139,6 +1139,12 @@ final class Connection {
      */
     protected function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null): ?Response\Response {
 
+        if ($response->hasWarnings()) {
+            foreach ($this->warningsListeners as $listener) {
+                $listener->onWarnings($response->getWarnings(), $request, $response);
+            }
+        }
+
         return match (true) {
             $response instanceof Response\Error => $this->handleResponseError($request, $response, $statement),
             $response instanceof Response\Result => $this->handleResponseResult($request, $response, $statement),
@@ -1287,10 +1293,10 @@ final class Connection {
     /**
      * @param array<string> $warnings
      */
-    protected function onWarnings(Response\Response $response, array $warnings): void {
+    protected function onWarnings(array $warnings, Request\Request $request, Response\Response $response, ): void {
 
         foreach ($this->warningsListeners as $listener) {
-            $listener->onWarnings($response, $warnings);
+            $listener->onWarnings($warnings, $request, $response);
         }
     }
 
@@ -1377,12 +1383,6 @@ final class Connection {
         }
 
         $response = $this->createResponse($header, $body);
-
-        if ($response->hasWarnings()) {
-            foreach ($this->warningsListeners as $listener) {
-                $listener->onWarnings($response, $response->getWarnings());
-            }
-        }
 
         $streamId = $header->stream;
         if ($streamId !== 0 && isset($this->statements[$streamId])) {

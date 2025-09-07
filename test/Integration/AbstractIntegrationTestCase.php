@@ -7,6 +7,7 @@ namespace Cassandra\Test\Integration;
 use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
+use Cassandra\Request\Request;
 use Cassandra\Response\Response;
 use Cassandra\WarningsListener;
 use PHPUnit\Framework\TestCase;
@@ -41,7 +42,7 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         $this->connection->disconnect();
     }
 
-    public function onWarnings(Response $response, array $warnings): void {
+    public function onWarnings(array $warnings, Request $request, Response $response): void {
 
         $this->fail('Received warnings: ' . implode(', ', $warnings));
     }
