@@ -3,13 +3,6 @@
 ## Features
 
 ## Tests
-* Finish tests
-  * value encode options
-  * test fromStream()
-  * test streamreader
-  * named values auto-detection
-  * Add stress tests for concurrent queryAsync() across many statements, fault‑injection for node failure and automatic reprepare paths, and paging stress with large result sets.
-
 
 ## Documentation
 * Add to readme:
