@@ -1,127 +1,301 @@
 php-cassandra: A modern Cassandra client for PHP
 ================================================
 
+[![Latest Stable Version](https://poser.pugx.org/mroosz/php-cassandra/v/stable)](https://packagist.org/packages/mroosz/php-cassandra)
+[![License](https://poser.pugx.org/mroosz/php-cassandra/license)](https://packagist.org/packages/mroosz/php-cassandra)
+[![PHP Version Require](https://poser.pugx.org/mroosz/php-cassandra/require/php)](https://packagist.org/packages/mroosz/php-cassandra)
+[![Total Downloads](https://poser.pugx.org/mroosz/php-cassandra/downloads)](https://packagist.org/packages/mroosz/php-cassandra)
+
 php-cassandra is a pure-PHP client for Apache Cassandra with support for CQL binary protocol v3, v4 and v5 (Cassandra 4.x/5.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.
 
-Package: https://packagist.org/packages/mroosz/php-cassandra
+**Package:** https://packagist.org/packages/mroosz/php-cassandra  
+**Repository:** https://github.com/MichaelRoosz/php-cassandra
 
 Table of contents
 -----------------
 
-- Introduction
-- Requirements
-- Installation
-- Quick start
-- Connecting (sockets vs streams, TLS, options)
-- Consistency levels
-- Queries (sync/async, options, auto-prepare)
-- Asynchronous API
-- Prepared statements (named vs positional, keyspace v5, pagination)
-- Batches
-- Results and fetching (iterators, fetch styles, object mapping)
-- Data types
-- Type definition syntax for complex values
-- Events
-- Tracing and custom payloads
-- Compression
-- Error handling
-- Key features and options
-- Best practices and tuning
-- Troubleshooting
- - Error-handling matrix
- - Type mapping reference
-- API reference (essentials)
-- Running tests
-- License and Credits
+- [php-cassandra: A modern Cassandra client for PHP](#php-cassandra-a-modern-cassandra-client-for-php)
+  - [Table of contents](#table-of-contents)
+  - [Introduction](#introduction)
+    - [Why choose php-cassandra?](#why-choose-php-cassandra)
+    - [Key Features](#key-features)
+  - [Requirements](#requirements)
+    - [System Requirements](#system-requirements)
+    - [PHP Extensions](#php-extensions)
+    - [Data Type Compatibility](#data-type-compatibility)
+  - [Installation](#installation)
+    - [Using Composer (Recommended)](#using-composer-recommended)
+    - [Without Composer](#without-composer)
+  - [Quick start](#quick-start)
+    - [Basic Connection and Query](#basic-connection-and-query)
+    - [Prepared statements](#prepared-statements)
+    - [Async Operations Example](#async-operations-example)
+    - [Error Handling Example](#error-handling-example)
+    - [SSL/TLS Connection Example](#ssltls-connection-example)
+  - [Connecting](#connecting)
+  - [Consistency levels](#consistency-levels)
+  - [Queries](#queries)
+  - [Prepared statements](#prepared-statements-1)
+  - [Batches](#batches)
+  - [Results and fetching](#results-and-fetching)
+  - [Object mapping](#object-mapping)
+  - [Data types](#data-types)
+  - [Type definition syntax for complex values](#type-definition-syntax-for-complex-values)
+  - [Events](#events)
+  - [Tracing and custom payloads (advanced)](#tracing-and-custom-payloads-advanced)
+  - [Asynchronous API](#asynchronous-api)
+  - [Compression](#compression)
+  - [Error handling](#error-handling)
+    - [Exception Hierarchy](#exception-hierarchy)
+    - [Error Handling Patterns](#error-handling-patterns)
+      - [Basic Error Handling](#basic-error-handling)
+      - [Specific Server Error Handling](#specific-server-error-handling)
+      - [Retry Logic with Exponential Backoff](#retry-logic-with-exponential-backoff)
+      - [Timeout Handling](#timeout-handling)
+    - [Error Information Access](#error-information-access)
+  - [Configuration Reference](#configuration-reference)
+    - [Connection Configuration](#connection-configuration)
+      - [Node Configuration](#node-configuration)
+      - [Connection Options](#connection-options)
+    - [Request Options](#request-options)
+      - [Query Options](#query-options)
+      - [Execute Options](#execute-options)
+      - [Prepare Options](#prepare-options)
+      - [Batch Options](#batch-options)
+    - [Advanced Configuration](#advanced-configuration)
+      - [Value Encoding Configuration](#value-encoding-configuration)
+      - [Event Listeners](#event-listeners)
+  - [Notes](#notes)
+  - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
+    - [General Questions](#general-questions)
+    - [Installation and Setup](#installation-and-setup)
+    - [Data Types and Modeling](#data-types-and-modeling)
+  - [Migration Guide](#migration-guide)
+    - [From DataStax PHP Driver](#from-datastax-php-driver)
+      - [Connection Setup](#connection-setup)
+      - [Query Execution](#query-execution)
+      - [Prepared Statements](#prepared-statements-2)
+      - [Data Types](#data-types-1)
+      - [Async Operations](#async-operations)
+    - [Migration Checklist](#migration-checklist)
+  - [Examples](#examples)
+  - [Connection tuning examples](#connection-tuning-examples)
+  - [Configuring value encoding](#configuring-value-encoding)
+  - [Warnings listener](#warnings-listener)
+  - [Event processing patterns](#event-processing-patterns)
+  - [v5 keyspace per request](#v5-keyspace-per-request)
+  - [Tracing notes](#tracing-notes)
+  - [Performance tips](#performance-tips)
+  - [Version support](#version-support)
+  - [API reference (essentials)](#api-reference-essentials)
+  - [Contributing](#contributing)
+    - [Development Setup](#development-setup)
+    - [Contribution Guidelines](#contribution-guidelines)
+      - [Code Standards](#code-standards)
+    - [Contributors](#contributors)
+    - [Supporting the Project](#supporting-the-project)
 
 Introduction
 ------------
 
-This library focuses on correctness, protocol coverage, and a pragmatic developer experience:
+php-cassandra is a modern PHP client for Apache Cassandra that prioritizes **correctness**, **performance**, and **developer experience**. This library aims to provide full protocol coverage and advanced features while maintaining simplicity.
 
-- Protocol v3/v4/v5, auto-negotiated at connect time
-- Two transports: sockets and PHP streams (streams support SSL/TLS and persistent connections)
-- Synchronous and asynchronous requests, with efficient pipelining
-- Prepared statements with positional or named binding; query auto-prepare for PHP scalars
-- Batches: logged, unlogged, counter
-- Full data type coverage (collections, tuples, UDTs, custom, vectors)
-- Iterators, multiple fetch styles, and object mapping
-- Events (schema/status/topology) with a simple listener interface
-- Optional LZ4 compression and server overload signalling
+### Why choose php-cassandra?
+
+**🚀 Modern Architecture**
+- Pure PHP implementation with no external dependencies
+- Support for latest Cassandra protocol versions (v3/v4/v5)
+- Built for PHP 8.1+ with modern language features
+
+**⚡ High Performance**
+- Asynchronous request pipelining for maximum throughput
+- LZ4 compression support for reduced bandwidth
+- Prepared statement caching and reuse
+
+**🎯 Developer Friendly**
+- Complete data type coverage including complex nested structures
+- Rich configuration options with sensible defaults
+- Object mapping with customizable row classes
+
+### Key Features
+
+- **Protocol Support**: v3/v4/v5 with automatic negotiation
+- **Transports**: Sockets and PHP streams (SSL/TLS, persistent connections)
+- **Request Types**: Synchronous, Asynchronous
+- **Statements**: Prepared statements with positional/named binding, auto-prepare
+- **Data Types**: Full coverage including collections, tuples, UDTs, custom types, vectors
+- **Results**: Iterators, multiple fetch styles, object mapping
+- **Events**: Schema/status/topology change notifications
+- **Advanced**: LZ4 compression, server overload signalling, tracing support
+
 
 Requirements
 ------------
 
-- PHP 8.1+
-- 64-bit PHP for 64-bit types like Bigint, Counter, Duration, Time, Timestamp
-- For socket transport: PHP sockets extension; streams require no extra extensions
+### System Requirements
+
+| Component | Minimum | Recommended | Notes |
+|-----------|---------|-------------|-------|
+| **PHP Version** | 8.1.0 | 8.3+ | Latest stable version recommended |
+| **Architecture** | 32-bit/64-bit | 64-bit | 64-bit required for full type support |
+|
+### PHP Extensions
+
+| Extension | Required | Purpose | Notes |
+|-----------|----------|---------|-------|
+| **sockets** | Optional | Socket transport | Required for sockets connection confiured with `SocketNodeConfig` |
+| **bcmath** or **gmp** | Optional | Provides performance improvement for large integer operations | For `Varint` and `Decimal` types |
+| **openssl** | Optional | SSL/TLS connections | Required for encrypted connections |
+|
+### Data Type Compatibility
+
+Some Cassandra data types require 64-bit PHP for proper handling:
+
+| Type | 32-bit PHP | 64-bit PHP | Notes |
+|------|------------|------------|-------|
+| `Bigint` | ⚠️ Limited | ✅ Full | Values > 2^31 may lose precision |
+| `Counter` | ⚠️ Limited | ✅ Full | Same as Bigint |
+| `Duration` | ⚠️ Limited | ✅ Full | Nanosecond precision requires 64-bit |
+| `Time` | ⚠️ Limited | ✅ Full | Nanosecond precision requires 64-bit |
+| `Timestamp` | ⚠️ Limited | ✅ Full | Millisecond precision may be affected |
 
 Installation
 ------------
 
-Using Composer:
+### Using Composer (Recommended)
+
 ```bash
 composer require mroosz/php-cassandra
 ```
 
-Or load the library without Composer:
+### Without Composer
+
+If you can't use Composer, you can load the library's own autoloader:
+
 ```php
+<?php
 require __DIR__ . '/php-cassandra/php-cassandra.php';
 ```
 
 Quick start
 -----------
 
+### Basic Connection and Query
+
 ```php
 <?php
 
 use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Consistency;
 
-// Choose one or more nodes and a transport
+// Connect to Cassandra
 $nodes = [
-    new SocketNodeConfig(host: '127.0.0.1', port: 9042, username: 'cassandra', password: 'cassandra'),
-    // or streams (supports SSL/TLS and persistent connections)
-    // new StreamNodeConfig(host: '127.0.0.1', port: 9042, username: 'cassandra', password: 'cassandra'),
+    new StreamNodeConfig(
+        host: '127.0.0.1', 
+        port: 9042, 
+        username: 'cassandra', 
+        password: 'cassandra'
+    ),
 ];
 
-// Optional connection options
-$options = new ConnectionOptions(
-    enableCompression: true,   // LZ4 if server supports it
-    throwOnOverload: true,     // protocol v4+
-);
-
-$conn = new Connection($nodes, keyspace: 'my_keyspace', options: $options);
+$conn = new Connection($nodes, keyspace: 'my_keyspace');
 $conn->connect();
-
-// Consistency default for subsequent requests
 $conn->setConsistency(Consistency::QUORUM);
 
-// Plain query (positional bind)
-$rows = $conn->query(
-    'SELECT * FROM ks.users WHERE id = ?',
-    [\Cassandra\Value\Uuid::fromValue('c5420d81-499e-4c9c-ac0c-fa6ba3ebc2bc')]
-)->asRowsResult()->fetchAll();
-
-// Prepared statement (named bind + paging)
-$prepared = $conn->prepare('SELECT id, name FROM ks.users WHERE org_id = :org_id');
-
-$result = $conn->execute(
-    $prepared,
-    values: ['org_id' => 42],
-    consistency: Consistency::LOCAL_QUORUM,
-    options: new \Cassandra\Request\Options\ExecuteOptions(
-        pageSize: 100,
-        namesForValues: true
-    )
-)->asRowsResult();
-
+// Simple query
+$result = $conn->query('SELECT * FROM system.local')->asRowsResult();
 foreach ($result as $row) {
-    echo $row['name'], "\n";
+    echo "Cluster: " . $row['cluster_name'] . "\n";
 }
+```
+
+### Prepared statements
+
+**todo**
+
+### Async Operations Example
+
+```php
+<?php
+use Cassandra\Request\Options\QueryOptions;
+
+// Fire multiple queries concurrently
+$statements = [];
+$statements[] = $conn->queryAsync(
+    'SELECT COUNT(*) FROM users', 
+    options: new QueryOptions(pageSize: 1000)
+);
+$statements[] = $conn->queryAsync(
+    'SELECT * FROM users LIMIT 10',
+    options: new QueryOptions(pageSize: 10)
+);
+
+// Process results as they become available
+$userCount = $statements[0]->getRowsResult()->fetch()['count'];
+$recentUsers = $statements[1]->getRowsResult()->fetchAll();
+
+echo "Total users: {$userCount}\n";
+echo "Recent users: " . count($recentUsers) . "\n";
+```
+
+### Error Handling Example
+
+```php
+<?php
+use Cassandra\Response\Exception as ServerException;
+use Cassandra\Connection\Exception as ConnectionException;
+use Cassandra\Exception as CassandraException;
+
+try {
+    $result = $conn->query(
+        'SELECT * FROM users WHERE email = ?',
+        ['john.doe@example.com'],
+        Consistency::LOCAL_QUORUM
+    )->asRowsResult();
+    
+    foreach ($result as $user) {
+        echo "Found user: {$user['name']}\n";
+    }
+    
+} catch (ServerException $e) {
+    echo "Server error: " . $e->getMessage() . "\n";
+    // Handle specific server errors (timeouts, unavailable nodes, etc.)
+    
+} catch (ConnectionException $e) {
+    echo "Connection error: " . $e->getMessage() . "\n";
+    // Handle network/connection issues
+    
+} catch (CassandraException $e) {
+    echo "Client error: " . $e->getMessage() . "\n";
+    // Handle client-side errors
+}
+```
+
+### SSL/TLS Connection Example
+
+```php
+<?php
+use Cassandra\Connection\StreamNodeConfig;
+
+// Secure connection with TLS
+$secureNode = new StreamNodeConfig(
+    host: 'tls://cassandra.example.com',
+    port: 9042,
+    username: 'secure_user',
+    password: 'secure_password',
+    sslOptions: [
+        'cafile' => '/path/to/ca.pem',
+        'verify_peer' => true,
+        'verify_peer_name' => true,
+    ]
+);
+
+$conn = new Connection([$secureNode], keyspace: 'production_app');
+$conn->connect();
+
+echo "Secure connection established!\n";
 ```
 
 Connecting
@@ -139,6 +313,7 @@ $socketNode = new SocketNodeConfig(
     port: 9042,
     username: 'user',
     password: 'secret',
+    // see https://www.php.net/manual/en/function.socket-get-option.php
     socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]
 );
 
@@ -205,7 +380,6 @@ use Cassandra\Request\Options\QueryOptions;
 $s1 = $conn->queryAsync('SELECT count(*) FROM ks.t1', options: new QueryOptions(pageSize: 1000));
 $s2 = $conn->queryAsync('SELECT count(*) FROM ks.t2', options: new QueryOptions(pageSize: 1000));
 
-// Option A: wait individually
 $r2 = $s2->getResult()->asRowsResult();
 $r1 = $s1->getResult()->asRowsResult();
 ```
@@ -339,9 +513,8 @@ $r = $conn->query('SELECT role FROM system_auth.roles')->asRowsResult();
 foreach ($r as $i => $row) {
     echo $row['role'], "\n";
 }
-
-$names = $r->fetchAllColumns(0); // remaining rows of first column
 ```
+**todo: add more examples here**
 
 Object mapping
 --------------
@@ -376,49 +549,65 @@ Examples:
 ```php
 use Cassandra\Value\Ascii;
 use Cassandra\Value\Bigint;
+use Cassandra\Value\Blob;
 use Cassandra\Value\Boolean;
-use Cassandra\Value\Double;
-use Cassandra\Value\Float32;
-use Cassandra\Value\Int32;
-use Cassandra\Value\Smallint;
-use Cassandra\Value\Tinyint;
-use Cassandra\Value\Varint;
+// counter
+// custom
 use Cassandra\Value\Date;
+use Cassandra\Value\Decimal;
+use Cassandra\Value\Double;
+use Cassandra\Value\Duration;
+use Cassandra\Value\Float32;
+use Cassandra\Value\Inet;
+use Cassandra\Value\Int32;
+use Cassandra\Value\ListCollection;
+use Cassandra\Value\MapCollection;
+use Cassandra\Value\SetCollection;
+use Cassandra\Value\Smallint;
 use Cassandra\Value\Time;
 use Cassandra\Value\Timestamp;
-use Cassandra\Value\Duration;
-use Cassandra\Value\ListCollection;
-use Cassandra\Value\SetCollection;
-use Cassandra\Value\MapCollection;
+use Cassandra\Value\Timeuuid;
+use Cassandra\Value\Tinyint;
 use Cassandra\Value\Tuple;
 use Cassandra\Value\UDT;
+use Cassandra\Value\Uuid;
+use Cassandra\Value\Varchar;
+use Cassandra\Value\Varint;
 use Cassandra\Value\Vector;
 use Cassandra\Type;
 
 // Scalars
 Ascii::fromValue('hello');
 Bigint::fromValue(10_000_000_000);
+Blob::fromValue("\xFF\xFF");
 Boolean::fromValue(true);
+// todo: counter
+// todo: custom
+// todo: decimal
 Double::fromValue(2.718281828459);
 Float32::fromValue(2.718);
-Int32::fromValue(123);
+// todo: inet
+Int32::fromValue(-123);
 Smallint::fromValue(2048);
+// todo: timeuuid
 Tinyint::fromValue(12);
+// todo: uuid
+// todo: varchar
 Varint::fromValue(10000000000);
 
 // Temporal
 Date::fromValue('2011-02-03');
+Duration::fromValue('89h4m48s');
 Time::fromValue('08:12:54.123456789');
 Timestamp::fromValue('2011-02-03T04:05:00.000+0000');
-Duration::fromValue('89h4m48s');
 
 // Collections / Tuples / UDT / Vector
-ListCollection::fromValue([1, 2, 3], [Type::INT]);
-SetCollection::fromValue([1, 2, 3], [Type::INT]);
+ListCollection::fromValue([1, 2, 3], Type::INT);
 MapCollection::fromValue(['a' => 1], Type::ASCII, Type::INT);
+SetCollection::fromValue([1, 2, 3], Type::INT);
 Tuple::fromValue([1, 'x'], [Type::INT, Type::VARCHAR]);
 UDT::fromValue(['id' => 1, 'name' => 'n'], ['id' => Type::INT, 'name' => Type::VARCHAR]);
-Vector::fromValue([0.12, -0.3, 0.9]);
+Vector::fromValue([0.12, -0.3, 0.9], Type::FLOAT, dimensions: 3);
 ```
 
 Type definition syntax for complex values
@@ -431,6 +620,7 @@ For complex types, the driver needs a type definition to encode PHP values. Wher
 - Map: `['type' => Type::MAP, 'keyType' => <keyType>, 'valueType' => <valueType>, 'isFrozen' => bool]`
 - Tuple: `['type' => Type::TUPLE, 'valueTypes' => [<t1>, <t2>, ...]]`
 - UDT: `['type' => Type::UDT, 'valueTypes' => ['field' => <type>, ...], 'isFrozen' => bool, 'keyspace' => 'ks', 'name' => 'udt_name']`
+**todo: add vector**
 
 Examples
 ```php
@@ -548,15 +738,24 @@ SetCollection::fromValue([
 ], [
     [
         'type' => Type::UDT,
-        'definition' => [
+        'valueTypes' => [
             'id' => Type::INT,
             'name' => Type::VARCHAR,
             'active' => Type::BOOLEAN,
-            'friends' => ['type' => Type::LIST, 'value' => Type::VARCHAR],
-            'drinks' => ['type' => Type::LIST, 'value' => [
-                'type' => Type::UDT,
-                'typeMap' => ['qty' => Type::INT, 'brand' => Type::VARCHAR],
-            ]],
+            'friends' => [
+                'type' => Type::LIST, 
+                'valueType' => Type::VARCHAR
+            ],
+            'drinks' => [
+                'type' => Type::LIST, 
+                'valueType' => [
+                    'type' => Type::UDT,
+                    'valueTypes' => [
+                        'qty' => Type::INT,
+                        'brand' => Type::VARCHAR
+                    ],
+                ]
+            ],
         ],
     ],
 ]);
@@ -694,54 +893,372 @@ $conn = new Connection(
 Error handling
 --------------
 
-- Client-side errors throw `\Cassandra\Exception` (e.g., connection issues, invalid input, unsupported options).
-- Server-side errors are raised as subclasses of `\Cassandra\Response\Exception` (e.g., `Unavailable`, `ReadTimeout`, `WriteTimeout`, `Invalid`, `Syntax`, `Unauthorized`, etc.).
-- Statement helpers throw `\Cassandra\Exception\StatementException` if the result type doesn’t match the getter you call.
+php-cassandra provides comprehensive error handling with a well-structured exception hierarchy. Understanding these exceptions helps you build robust applications with proper error recovery.
 
-Recommended pattern:
+### Exception Hierarchy
+
+```
+\Exception
+├── \Cassandra\Exception (base client exception)
+│   ├── \Cassandra\Connection\Exception (connection/transport errors)
+│   │   ├── \Cassandra\Connection\SocketException
+│   │   ├── \Cassandra\Connection\StreamException
+│   │   └── \Cassandra\Connection\NodeException
+│   ├── \Cassandra\Exception\StatementException (result type mismatches)
+│   ├── \Cassandra\Exception\TypeNameParserException (type parsing errors)
+│   └── \Cassandra\Exception\VIntCodecException (variable integer codec errors)
+└── \Cassandra\Response\Exception (server-side errors)
+    ├── \Cassandra\Response\Error\ServerError (5xxx errors)
+    ├── \Cassandra\Response\Error\ProtocolError (protocol violations)
+    ├── \Cassandra\Response\Error\AuthenticationError (authentication failures)
+    ├── \Cassandra\Response\Error\Unavailable (insufficient replicas)
+    ├── \Cassandra\Response\Error\Overloaded (server overloaded)
+    ├── \Cassandra\Response\Error\IsBootstrapping (node bootstrapping)
+    ├── \Cassandra\Response\Error\Truncate (truncation errors)
+    ├── \Cassandra\Response\Error\WriteTimeout (write timeout)
+    ├── \Cassandra\Response\Error\ReadTimeout (read timeout)
+    ├── \Cassandra\Response\Error\ReadFailure (read failure)
+    ├── \Cassandra\Response\Error\FunctionFailure (UDF/UDA failures)
+    ├── \Cassandra\Response\Error\WriteFailure (write failure)
+    ├── \Cassandra\Response\Error\Syntax (CQL syntax errors)
+    ├── \Cassandra\Response\Error\Unauthorized (permission denied)
+    ├── \Cassandra\Response\Error\Invalid (invalid query)
+    ├── \Cassandra\Response\Error\Config (configuration errors)
+    ├── \Cassandra\Response\Error\AlreadyExists (keyspace/table exists)
+    └── \Cassandra\Response\Error\Unprepared (prepared statement not found)
+```
+
+### Error Handling Patterns
+
+#### Basic Error Handling
 ```php
-use Cassandra\Consistency;
-use Cassandra\Request\Options\QueryOptions;
-use Cassandra\Response\Exception as ServerException;
+use Cassandra\Exception\StatementException;
+use Cassandra\Response\ServerException;
+use Cassandra\Connection\Exception as ConnectionException;
 
 try {
-    $rows = $conn->query(
-        'SELECT id, name FROM ks.users WHERE id = ?',
-        [$id],
-        Consistency::LOCAL_QUORUM,
-        new QueryOptions(pageSize: 500)
-    )->asRowsResult();
-
-    foreach ($rows as $row) {
-        // ...
+    $result = $conn->query('SELECT * FROM users WHERE id = ?', [$userId])
+        ->asRowsResult();
+    
+    foreach ($result as $row) {
+        // Process row
     }
+    
 } catch (ServerException $e) {
-    // Handle server error (Cassandra responded with an error)
-} catch (\Cassandra\Connection\Exception $e) {
-    // Handle connection/transport error
+    // Server returned an error response
+    error_log("Server error: " . $e->getMessage());
+    
+} catch (ConnectionException $e) {
+    // Network/connection issues
+    error_log("Connection error: " . $e->getMessage());
+    
+} catch (StatementException $e) {
+    // Wrong result type access (e.g., calling asRowsResult() on non-rows result)
+    error_log("Statement error: " . $e->getMessage());
+    
 } catch (\Cassandra\Exception $e) {
-    // Handle other client-side errors
+    // Other client-side errors
+    error_log("Client error: " . $e->getMessage());
 }
 ```
 
-Key features and options
-------------------------
+#### Specific Server Error Handling
+```php
+use Cassandra\Response\Error\{
+    Unavailable, ReadTimeout, WriteTimeout, Overloaded,
+    Syntax, Invalid, Unauthorized, AlreadyExists
+};
 
-- Transports:
-  - Sockets: `SocketNodeConfig` (requires PHP sockets ext)
-  - Streams: `StreamNodeConfig` (supports SSL/TLS, persistent connections)
-- Connection options (`ConnectionOptions`):
-  - enableCompression: enable LZ4 if both client and server support it
-  - throwOnOverload: request server to throw on overload (protocol v4+)
-  - nodeSelectionStrategy: `Random` (default) or `RoundRobin`
-  - preparedResultCacheSize: cache size for prepared metadata (default 100)
-- Request options:
-  - QueryOptions: `autoPrepare` (default true), `pageSize`, `pagingState`, `serialConsistency`, `defaultTimestamp`, `namesForValues` (auto-detected if not set), `keyspace` (v5), `nowInSeconds` (v5)
-  - ExecuteOptions: same as QueryOptions plus `skipMetadata`
-  - PrepareOptions: `keyspace` (v5)
-  - BatchOptions: `serialConsistency`, `defaultTimestamp`, `keyspace` (v5), `nowInSeconds` (v5)
-- Protocol v5 conveniences:
-  - Per-request `keyspace` and `now_in_seconds` are supported when the server negotiates v5.
+try {
+    $conn->query('CREATE TABLE users (id UUID PRIMARY KEY, name TEXT)');
+    
+} catch (AlreadyExists $e) {
+    // Table already exists - this might be OK
+    echo "Table already exists, continuing...\n";
+    
+} catch (Unauthorized $e) {
+    // Permission denied
+    throw new \RuntimeException("Insufficient permissions: " . $e->getMessage());
+    
+} catch (Syntax $e) {
+    // CQL syntax error
+    throw new \RuntimeException("Invalid CQL syntax: " . $e->getMessage());
+    
+} catch (Invalid $e) {
+    // Invalid query (e.g., wrong types)
+    throw new \RuntimeException("Invalid query: " . $e->getMessage());
+}
+```
+
+#### Retry Logic with Exponential Backoff
+```php
+function executeWithRetry(callable $operation, int $maxRetries = 3): mixed
+{
+    $attempt = 0;
+    $delay = 100; // Start with 100ms
+    
+    while ($attempt < $maxRetries) {
+        try {
+            return $operation();
+            
+        } catch (Unavailable | ReadTimeout | WriteTimeout | Overloaded $e) {
+            $attempt++;
+            
+            if ($attempt >= $maxRetries) {
+                throw $e; // Re-throw on final attempt
+            }
+            
+            // Exponential backoff with jitter
+            $jitter = rand(0, $delay / 2);
+            usleep(($delay + $jitter) * 1000);
+            $delay *= 2;
+            
+            error_log("Retrying operation (attempt {$attempt}/{$maxRetries}) after error: " . $e->getMessage());
+            
+        } catch (ServerException $e) {
+            // Don't retry non-transient errors
+            throw $e;
+        }
+    }
+}
+
+// Usage
+$result = executeWithRetry(function() use ($conn, $userId) {
+    return $conn->query('SELECT * FROM users WHERE id = ?', [$userId])
+        ->asRowsResult();
+});
+```
+
+#### Timeout Handling
+```php
+use Cassandra\Response\Error\{ReadTimeout, WriteTimeout};
+
+try {
+    $result = $conn->query(
+        'SELECT * FROM large_table WHERE complex_condition = ?',
+        [$condition],
+        Consistency::QUORUM
+    )->asRowsResult();
+    
+} catch (ReadTimeout $e) {
+    // Handle read timeout
+    $consistency = $e->getConsistency();
+    $received = $e->getReceived();
+    $required = $e->getRequired();
+    $dataPresent = $e->isDataPresent();
+    
+    error_log("Read timeout: got {$received}/{$required} responses at {$consistency}, data_present: " . 
+              ($dataPresent ? 'yes' : 'no'));
+    
+    // Maybe retry with lower consistency
+    return $conn->query(
+        'SELECT * FROM large_table WHERE complex_condition = ?',
+        [$condition],
+        Consistency::ONE
+    )->asRowsResult();
+    
+} catch (WriteTimeout $e) {
+    // Handle write timeout
+    $consistency = $e->getConsistency();
+    $received = $e->getReceived();
+    $required = $e->getRequired();
+    $writeType = $e->getWriteType();
+    
+    error_log("Write timeout: got {$received}/{$required} responses at {$consistency}, write_type: {$writeType}");
+    
+    // For BATCH_LOG writes, the operation might have succeeded
+    if ($writeType === 'BATCH_LOG') {
+        error_log("Batch log write timeout - operation may have succeeded");
+    }
+}
+```
+
+### Error Information Access
+
+Most server exceptions provide additional context:
+
+```php
+try {
+    $conn->query('SELECT * FROM users');
+    
+} catch (Unavailable $e) {
+    echo "Consistency: " . $e->getConsistency() . "\n";
+    echo "Required: " . $e->getRequired() . "\n";
+    echo "Alive: " . $e->getAlive() . "\n";
+    
+} catch (ReadTimeout $e) {
+    echo "Consistency: " . $e->getConsistency() . "\n";
+    echo "Received: " . $e->getReceived() . "\n";
+    echo "Required: " . $e->getRequired() . "\n";
+    echo "Data present: " . ($e->isDataPresent() ? 'yes' : 'no') . "\n";
+    
+} catch (WriteTimeout $e) {
+    echo "Write type: " . $e->getWriteType() . "\n";
+    echo "Consistency: " . $e->getConsistency() . "\n";
+    echo "Received: " . $e->getReceived() . "\n";
+    echo "Required: " . $e->getRequired() . "\n";
+}
+```
+
+Configuration Reference
+-----------------------
+
+### Connection Configuration
+
+#### Node Configuration
+
+**SocketNodeConfig** (requires `ext-sockets`)
+```php
+use Cassandra\Connection\SocketNodeConfig;
+
+$node = new SocketNodeConfig(
+    host: '127.0.0.1',                    // Cassandra host
+    port: 9042,                           // Cassandra port (default: 9042)
+    username: 'cassandra',                // Username (optional)
+    password: 'cassandra',                // Password (optional)
+    socketOptions: [                      // Socket-specific options
+        SO_RCVTIMEO => ['sec' => 10, 'usec' => 0],  // Receive timeout
+        SO_SNDTIMEO => ['sec' => 10, 'usec' => 0],  // Send timeout
+        SO_KEEPALIVE => 1,                // Keep-alive
+    ]
+);
+```
+
+**StreamNodeConfig** (supports SSL/TLS, persistent connections)
+```php
+use Cassandra\Connection\StreamNodeConfig;
+
+$node = new StreamNodeConfig(
+    host: 'cassandra.example.com',        // Can include protocol (tls://)
+    port: 9042,                           // Port number
+    username: 'user',                     // Username (optional)
+    password: 'secret',                   // Password (optional)
+    connectTimeoutInSeconds: 10,          // Connection timeout (default: 5)
+    timeoutInSeconds: 30,                 // I/O timeout (default: 30)
+    persistent: true,                     // Use persistent connections
+    sslOptions: [                         // SSL/TLS options (see PHP SSL context)
+        'verify_peer' => true,            // Verify peer certificate
+        'verify_peer_name' => true,       // Verify peer name
+        'cafile' => '/path/to/ca.pem',    // CA certificate file
+        'local_cert' => '/path/to/cert.pem', // Client certificate
+        'local_pk' => '/path/to/key.pem', // Client private key
+        'passphrase' => 'cert_password',  // Private key passphrase
+        'ciphers' => 'HIGH:!aNULL',       // Cipher list
+        'crypto_method' => STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT,
+    ]
+);
+```
+
+#### Connection Options
+
+```php
+use Cassandra\Connection\ConnectionOptions;
+use Cassandra\Connection\NodeSelectionStrategy;
+
+$options = new ConnectionOptions(
+    enableCompression: true,              // Enable LZ4 compression (default: false)
+    throwOnOverload: true,                // Throw on server overload (v4+, default: false)
+    nodeSelectionStrategy: NodeSelectionStrategy::RoundRobin, // Node selection (default: Random)
+    preparedResultCacheSize: 200,         // Prepared statement cache size (default: 100)
+);
+```
+
+### Request Options
+
+#### Query Options
+```php
+use Cassandra\Request\Options\QueryOptions;
+use Cassandra\SerialConsistency;
+
+$queryOptions = new QueryOptions(
+    autoPrepare: true,                    // Auto-prepare for type safety (default: true)
+    pageSize: 1000,                       // Page size (min 100, default: 5000)
+    pagingState: $previousPagingState,    // For pagination (default: null)
+    serialConsistency: SerialConsistency::SERIAL, // Serial consistency (default: null)
+    defaultTimestamp: 1640995200000,      // Default timestamp (microseconds, default: null)
+    namesForValues: true,                 // Use named parameters (auto-detected if null)
+    keyspace: 'my_keyspace',              // Per-request keyspace (v5 only, default: null)
+    nowInSeconds: time(),                 // Current time override (v5 only, default: null)
+);
+```
+
+#### Execute Options
+```php
+use Cassandra\Request\Options\ExecuteOptions;
+
+$executeOptions = new ExecuteOptions(
+    // All QueryOptions properties plus:
+    skipMetadata: true,                   // Skip result metadata (default: false)
+    autoPrepare: false,                   // Not applicable for execute
+    pageSize: 500,
+    namesForValues: true,
+    // ... other QueryOptions
+);
+```
+
+#### Prepare Options
+```php
+use Cassandra\Request\Options\PrepareOptions;
+
+$prepareOptions = new PrepareOptions(
+    keyspace: 'my_keyspace',              // Keyspace for preparation (v5 only)
+);
+```
+
+#### Batch Options
+```php
+use Cassandra\Request\Options\BatchOptions;
+use Cassandra\SerialConsistency;
+
+$batchOptions = new BatchOptions(
+    serialConsistency: SerialConsistency::LOCAL_SERIAL,
+    defaultTimestamp: 1640995200000,      // Microseconds since epoch
+    keyspace: 'my_keyspace',              // v5 only
+    nowInSeconds: time(),                 // v5 only
+);
+```
+
+### Advanced Configuration
+
+#### Value Encoding Configuration
+```php
+use Cassandra\Value\ValueEncodeConfig;
+use Cassandra\Value\EncodeOption\DateEncodeOption;
+use Cassandra\Value\EncodeOption\DurationEncodeOption;
+use Cassandra\Value\EncodeOption\TimeEncodeOption;
+use Cassandra\Value\EncodeOption\TimestampEncodeOption;
+use Cassandra\Value\EncodeOption\VarintEncodeOption;
+
+$conn->configureValueEncoding(new ValueEncodeConfig(
+    dateEncodeOption: DateEncodeOption::AS_DATETIME_IMMUTABLE,
+    durationEncodeOption: DurationEncodeOption::AS_DATEINTERVAL,
+    timeEncodeOption: TimeEncodeOption::AS_DATETIME_IMMUTABLE,
+    timestampEncodeOption: TimestampEncodeOption::AS_DATETIME_IMMUTABLE,
+    varintEncodeOption: VarintEncodeOption::AS_STRING,
+));
+```
+
+#### Event Listeners
+```php
+use Cassandra\EventListener;
+use Cassandra\WarningsListener;
+
+// Event listener
+$conn->addEventListener(new class implements EventListener {
+    public function onEvent(\Cassandra\Response\Event $event): void {
+        error_log("Cassandra event: " . $event->getType());
+    }
+});
+
+// Warnings listener
+$conn->registerWarningsListener(new class implements WarningsListener {
+    public function onWarnings(array $warnings, $request, $response): void {
+        foreach ($warnings as $warning) {
+            error_log("Cassandra warning: $warning");
+        }
+    }
+});
+```
 
 Notes
 -----
@@ -751,15 +1268,210 @@ Notes
 - On `UNPREPARED` server errors, the driver transparently re-prepares and retries the execution.
 - Always use fully-qualified table names in `PREPARE` statements.
 
-Best practices and tuning
--------------------------
+```php
+class SecurityAuditLogger
+{
+    private string $logFile;
+    
+    public function __construct(string $logFile = '/var/log/cassandra-audit.log')
+    {
+        $this->logFile = $logFile;
+    }
+    
+    public function logQuery(string $cql, array $values = [], ?string $user = null): void
+    {
+        $entry = [
+            'timestamp' => date('c'),
+            'user' => $user ?? $_SERVER['USER'] ?? 'unknown',
+            'query' => $cql,
+            'parameter_count' => count($values),
+            'client_ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+        ];
+        
+        file_put_contents($this->logFile, json_encode($entry) . "\n", FILE_APPEND | LOCK_EX);
+    }
+    
+    public function logSecurityEvent(string $event, array $context = []): void
+    {
+        $entry = [
+            'timestamp' => date('c'),
+            'event' => $event,
+            'context' => $context,
+            'client_ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+        ];
+        
+        file_put_contents($this->logFile, json_encode($entry) . "\n", FILE_APPEND | LOCK_EX);
+    }
+}
+```
 
-- Retries and idempotency: only retry idempotent reads/writes; avoid retrying non-idempotent mutations.
-- Paging: prefer page sizes 100–1000; iterate with `RowsResult` rather than `fetchAll()` for large results.
-- Timeouts: set socket/stream timeouts appropriate to workload; use LOCAL_QUORUM for low-latency reads.
-- Prepared statements: reuse prepared metadata (`ExecuteOptions::skipMetadata`) across pages.
-- Batches: use for atomicity of related partitions; do not batch across many partitions for throughput.
-- Keyspace (v5): prefer per-request keyspace for multi-tenant use; otherwise set once at connect.
+Frequently Asked Questions (FAQ)
+--------------------------------
+
+### General Questions
+
+**Q: What's the difference between this library and the DataStax PHP Driver?**
+
+A: The main differences are:
+- **Pure PHP**: No C extensions required, easier deployment
+- **Protocol v5 Support**: Full support for latest Cassandra protocol features
+- **Active Development**: Actively maintained with regular updates
+- **Modern PHP**: Built for PHP 8.1+ with modern language features
+
+**Q: Can I use this with older versions of Cassandra?**
+
+A: Yes! The library supports protocol versions v3, v4, and v5:
+- Cassandra 2.1+: Protocol v3
+- Cassandra 2.2+: Protocol v4 (recommended)
+- Cassandra 4.0+: Protocol v5 (recommended for new deployments)
+
+### Installation and Setup
+
+**Q: Do I need any PHP extensions?**
+
+A: The library works with standard PHP, but some extensions enhance functionality:
+- `ext-sockets`: Required for SocketNodeConfig (alternative: StreamNodeConfig)
+- `ext-bcmath` or `ext-gmp`: Improves performance for large integer operations (Varint, Decimal)
+- `ext-openssl`: For SSL/TLS connections
+
+**Q: Can I run this on 32-bit PHP?**
+
+A: Yes, but with limitations. Some data types (Bigint, Counter, Duration, Time, Timestamp) may lose precision on 32-bit systems. 64-bit PHP is recommended for full compatibility.
+
+### Data Types and Modeling
+
+**Q: How do I handle complex data structures?**
+
+A: Use collections and UDTs:
+```php
+// Map
+$profile = MapCollection::fromValue(['role' => 'admin', 'level' => 'senior'], Type::VARCHAR, Type::VARCHAR);
+
+// List
+$tags = ListCollection::fromValue(['php', 'cassandra', 'database'], Type::VARCHAR);
+
+// UDT
+$address = UDT::fromValue(
+    ['street' => '123 Main St', 'city' => 'New York', 'zip' => '10001'],
+    ['street' => Type::VARCHAR, 'city' => Type::VARCHAR, 'zip' => Type::VARCHAR]
+);
+```
+
+**Q: How do I work with timestamps?**
+
+A: Use the Timestamp value class:
+```php
+use Cassandra\Value\Timestamp;
+
+// Current time
+$now = Timestamp::now();
+
+// From string
+$timestamp = Timestamp::fromValue('2024-01-15T10:30:00Z');
+
+// From Unix timestamp
+$timestamp = Timestamp::fromValue(1705312200);
+```
+
+Migration Guide
+---------------
+
+### From DataStax PHP Driver
+
+If you're migrating from the DataStax PHP Driver, here are the key differences and migration steps:
+
+#### Connection Setup
+```php
+// DataStax Driver (old)
+$cluster = Cassandra::cluster()
+    ->withContactPoints('127.0.0.1')
+    ->withPort(9042)
+    ->withCredentials('username', 'password')
+    ->build();
+$session = $cluster->connect('keyspace_name');
+
+// php-cassandra (new)
+use Cassandra\Connection;
+use Cassandra\Connection\SocketNodeConfig;
+
+$conn = new Connection([
+    new SocketNodeConfig('127.0.0.1', 9042, 'username', 'password')
+], keyspace: 'keyspace_name');
+$conn->connect();
+```
+
+#### Query Execution
+```php
+// DataStax Driver (old)
+$statement = new Cassandra\SimpleStatement('SELECT * FROM users WHERE id = ?');
+$result = $session->execute($statement, ['arguments' => [$userId]]);
+
+// php-cassandra (new)
+$result = $conn->query('SELECT * FROM users WHERE id = ?', [$userId])->asRowsResult();
+```
+
+#### Prepared Statements
+```php
+// DataStax Driver (old)
+$statement = $session->prepare('SELECT * FROM users WHERE id = ?');
+$result = $session->execute($statement, ['arguments' => [$userId]]);
+
+// php-cassandra (new)
+$prepared = $conn->prepare('SELECT * FROM users WHERE id = ?');
+$result = $conn->execute($prepared, [$userId])->asRowsResult();
+```
+
+#### Data Types
+```php
+// DataStax Driver (old)
+$uuid = new Cassandra\Uuid('550e8400-e29b-41d4-a716-446655440000');
+$timestamp = new Cassandra\Timestamp(time());
+
+// php-cassandra (new)
+use Cassandra\Value\Uuid;
+use Cassandra\Value\Timestamp;
+
+$uuid = Uuid::fromValue('550e8400-e29b-41d4-a716-446655440000');
+$timestamp = Timestamp::fromValue(time() * 1000);
+```
+
+#### Async Operations
+```php
+// DataStax Driver (old)
+$future = $session->executeAsync($statement);
+$result = $future->get();
+
+// php-cassandra (new)
+$statement = $conn->queryAsync('SELECT * FROM users');
+$result = $statement->getRowsResult();
+```
+
+### Migration Checklist
+
+- [ ] **Update connection setup** - Replace cluster builder with Connection and NodeConfig
+- [ ] **Update query methods** - Replace execute() with query() and asRowsResult()
+- [ ] **Update data types** - Replace Cassandra\* types with Cassandra\Value\* types
+- [ ] **Update prepared statements** - Use new prepare/execute pattern
+- [ ] **Update async operations** - Replace futures with statement handles
+- [ ] **Update error handling** - Use new exception hierarchy
+- [ ] **Update batch operations** - Use new Batch class
+- [ ] **Test thoroughly** - Verify all functionality works as expected
+
+Examples
+--------
+
+This library includes comprehensive examples in the [`examples/`](examples/) directory:
+
+- **[basic_usage.php](examples/basic_usage.php)** - Essential operations and getting started
+- **[async_operations.php](examples/async_operations.php)** - Asynchronous request handling
+- **[data_types.php](examples/data_types.php)** - Working with all Cassandra data types
+- **[batch_operations.php](examples/batch_operations.php)** - Batch processing patterns
+- **[ssl_connection.php](examples/ssl_connection.php)** - Secure SSL/TLS connections
+- **[event_handling.php](examples/event_handling.php)** - Event system usage
+- **[object_mapping.php](examples/object_mapping.php)** - Object-oriented result handling
+- **[configuration.php](examples/configuration.php)** - Advanced configuration options
+
+See the [examples README](examples/README.md) for detailed information about running and using the examples.
 
 Connection tuning examples
 --------------------------
@@ -858,14 +1570,6 @@ v5 keyspace per request
 - When the server negotiates protocol v5, you can set `keyspace` on `QueryOptions`, `ExecuteOptions`, and `PrepareOptions`.
 - If you also call `setKeyspace()`, the per-request option takes precedence for that request.
 
-Batch guidance
---------------
-
-- Logged batch: atomic across partitions; higher coordination cost.
-- Unlogged batch: for same-partition groups; lower overhead.
-- Counter batch: only for counter tables.
-- Keep batches small (dozens of statements, not thousands).
-
 Tracing notes
 -------------
 
@@ -877,111 +1581,12 @@ Performance tips
 
 - Prefer prepared statements for hot paths; the driver caches prepared metadata.
 - Iterate results instead of materializing large arrays.
-- Avoid large `IN (...)` sets; model for efficient partition reads.
-
-Troubleshooting
----------------
-
-- Protocol mismatch: ensure server supports v3/v4/v5; the driver negotiates automatically. Check `getVersion()`.
-- Authentication failures: set `username`/`password` on `NodeConfig`.
-- Compression errors: only enable LZ4 when the server advertises it in `OPTIONS`.
-- Timeout/transport errors: adjust socket/stream timeouts; verify network and DC latency.
 
 Version support
 ---------------
 
 - Cassandra 4.x/5.x tested. Protocols v3/v4/v5 supported; features like per-request keyspace/now_in_seconds require v5.
 
-Security
---------
-
-- Validate TLS certificates (`verify_peer`, `verify_peer_name`).
-- Avoid embedding credentials in code; use environment variables or secrets management.
-- Do not disable TLS verification in production.
-
-Type mapping quick reference
-----------------------------
-
-```php
-// PHP -> Cassandra examples
-use Cassandra\Value\Uuid;
-use Cassandra\Value\Varchar;
-use Cassandra\Value\Int32;
-
-Uuid::fromValue('...');       // uuid
-Varchar::fromValue('text');   // text/varchar
-Int32::fromValue(123);        // int
-```
-
-Error-handling matrix
----------------------
-
-- Client connection/transport issues: throw `Cassandra\Connection\Exception`
-  - Examples: DNS/socket failures, timeouts, protocol mismatch
-  - Action: verify node reachability, credentials, protocol support, compression settings
-- Server-side errors: throw subclasses of `Cassandra\Response\Exception`
-  - Examples: `Unavailable`, `ReadTimeout`, `WriteTimeout`, `Overloaded`, `Truncate`, `Syntax`, `Invalid`, `Unauthorized`
-  - Action: catch as `Cassandra\Response\Exception` (or specific subclass) and handle per your retry/policy
-- Statement result mismatches: throw `Cassandra\Exception\StatementException`
-  - Examples: calling `getRowsResult()` on a non-rows result
-  - Action: adjust query or use correct result accessor
-
-Type mapping reference
-----------------------
-
-```php
-// Common Cassandra <-> PHP mappings (constructor via ::fromValue)
-use Cassandra\Type;
-use Cassandra\Value\Ascii;      // ascii
-use Cassandra\Value\Varchar;    // text/varchar
-use Cassandra\Value\Blob;       // blob (binary string)
-use Cassandra\Value\Boolean;    // boolean
-use Cassandra\Value\Int32;      // int
-use Cassandra\Value\Bigint;     // bigint
-use Cassandra\Value\Varint;     // varint
-use Cassandra\Value\Smallint;   // smallint
-use Cassandra\Value\Tinyint;    // tinyint
-use Cassandra\Value\Float32;    // float
-use Cassandra\Value\Double;     // double
-use Cassandra\Value\Inet;       // inet
-use Cassandra\Value\Uuid;       // uuid
-use Cassandra\Value\Timeuuid;   // timeuuid
-use Cassandra\Value\Date;       // date
-use Cassandra\Value\Time;       // time
-use Cassandra\Value\Timestamp;  // timestamp
-use Cassandra\Value\Duration;   // duration
-use Cassandra\Value\ListCollection; // list
-use Cassandra\Value\SetCollection;  // set
-use Cassandra\Value\MapCollection;  // map
-use Cassandra\Value\Tuple;          // tuple
-use Cassandra\Value\UDT;            // user-defined type
-use Cassandra\Value\Vector;         // vector
-
-Ascii::fromValue('a');
-Varchar::fromValue('hello');
-Blob::fromValue("\x01\x02");
-Boolean::fromValue(true);
-Int32::fromValue(1);
-Bigint::fromValue(10_000_000_000);
-Varint::fromValue('12345678901234567890');
-Smallint::fromValue(1000);
-Tinyint::fromValue(12);
-Float32::fromValue(1.23);
-Double::fromValue(2.34);
-Inet::fromValue('192.168.0.1');
-Uuid::fromValue('00000000-0000-0000-0000-000000000000');
-Timeuuid::fromValue('f47ac10b-58cc-11cf-a447-00100d4b9e00');
-Date::fromValue('2011-02-03');
-Time::fromValue('08:12:54.123456789');
-Timestamp::fromValue('2011-02-03T04:05:00.000+0000');
-Duration::fromValue('1d2h3m');
-ListCollection::fromValue([1,2,3], [Type::INT]);
-SetCollection::fromValue([1,2,3], [Type::INT]);
-MapCollection::fromValue(['a' => 1], Type::ASCII, Type::INT);
-Tuple::fromValue([1, 'x'], [Type::INT, Type::VARCHAR]);
-UDT::fromValue(['id' => 1, 'name' => 'n'], ['id' => Type::INT, 'name' => Type::VARCHAR]);
-Vector::fromValue([0.1, 0.2, -0.3]);
-```
 
 API reference (essentials)
 -------------------------
@@ -1007,40 +1612,62 @@ API reference (essentials)
   - `Cassandra\SerialConsistency` (enum)
   - `Cassandra\Type` (enum) and `Cassandra\Value\*` classes (Ascii, Bigint, Blob, Boolean, Counter, Date, Decimal, Double, Duration, Float32, Inet, Int32, ListCollection, MapCollection, NotSet, SetCollection, Smallint, Time, Timestamp, Timeuuid, Tinyint, Tuple, UDT, Uuid, Varchar, Varint, Vector, ...)
 
-Running tests
--------------
 
-- Unit tests:
+Contributing
+------------
 
-```bash
-composer install
-composer test:unit
-```
+Contributions are welcome! Here's how to get started:
 
-- Integration tests (Dockerized Cassandra 5):
+### Development Setup
 
-```bash
-composer test:integration
-```
+1. **Fork and Clone**
+   ```bash
+   git clone https://github.com/your-username/php-cassandra.git
+   cd php-cassandra
+   ```
 
-You can manage steps manually:
+2. **Install Dependencies**
+   ```bash
+   composer install
+   ```
 
-```bash
-composer test:integration:up
-composer test:integration:init
-composer test:integration:run
-composer test:integration:down
-```
+3. **Start Development Environment**
+   ```bash
+   docker compose up -d
+   composer test:integration:init
+   ```
 
-License
--------
+4. **Run Tests**
+   ```bash
+   composer test:unit
+   composer test:integration:run
+   ```
 
-MIT
+### Contribution Guidelines
 
-Credits
--------
+#### Code Standards
+- **PHP 8.1+**: Use modern PHP features and syntax
+- **PSR-12**: Follow PHP-FIG coding standards
+- **Type Hints**: Use strict typing everywhere possible
+- **Documentation**: Document all public methods and classes
+- **Tests**: Include tests for all new functionality
 
-Inspired by and building upon work from:
-- duoshuo/php-cassandra
-- arnaud-lb/php-cassandra
+### Contributors
 
+- **Michael Roosz** - Current maintainer and lead developer
+- **Shen Zhenyu** - Original driver development
+- **Evseev Nikolay** - Foundation and early development
+
+Special thanks to all contributors who have helped make this library better.
+
+### Supporting the Project
+
+If you find this library useful, consider:
+
+- ⭐ **Starring the repository** on GitHub
+- 🐛 **Reporting bugs** and suggesting features
+- 📝 **Contributing code** or documentation
+- 💬 **Sharing your experience** with the community
+- 📚 **Writing tutorials** or blog posts
+
+Your support helps keep this project active and improving!
