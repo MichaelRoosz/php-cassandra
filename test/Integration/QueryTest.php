@@ -15,7 +15,7 @@ use Cassandra\Response\Result\PreparedResult;
 final class QueryTest extends AbstractIntegrationTestCase {
     public function testMissingTableRaisesException(): void {
         $conn = $this->connection;
-        $this->expectException(SyntaxErrorException::class);
+        $this->expectException(InvalidException::class);
         $conn->query('SELECT * FROM does_not_exist_123');
     }
     public function testPositionalBindAndTypes(): void {
@@ -51,7 +51,7 @@ final class QueryTest extends AbstractIntegrationTestCase {
 
     public function testSyntaxErrorRaisesException(): void {
         $conn = $this->connection;
-        $this->expectException(InvalidException::class);
+        $this->expectException(SyntaxErrorException::class);
         $conn->query('SEELECT * FROM system.local');
     }
 }
