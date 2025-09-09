@@ -7,11 +7,17 @@ namespace Cassandra\Test\Integration;
 use Cassandra\Consistency;
 use Cassandra\Value;
 use Cassandra\Request\Options\QueryOptions;
-use Cassandra\Exception\ResponseException as ServerException;
+use Cassandra\Exception\ServerException\InvalidException;
+use Cassandra\Exception\ServerException\SyntaxErrorException;
 use Cassandra\Response\Result\CachedPreparedResult;
 use Cassandra\Response\Result\PreparedResult;
 
 final class QueryTest extends AbstractIntegrationTestCase {
+    public function testMissingTableRaisesException(): void {
+        $conn = $this->connection;
+        $this->expectException(SyntaxErrorException::class);
+        $conn->query('SELECT * FROM does_not_exist_123');
+    }
     public function testPositionalBindAndTypes(): void {
 
         $conn = $this->connection;
@@ -43,10 +49,9 @@ final class QueryTest extends AbstractIntegrationTestCase {
         $this->assertSame(['key' => 'local'], $rows->fetch());
     }
 
-    public function testSyntaxErrorRaisesServerException(): void {
-
+    public function testSyntaxErrorRaisesException(): void {
         $conn = $this->connection;
-        $this->expectException(ServerException::class);
-        $conn->query('SELECT * FROM does_not_exist_123');
+        $this->expectException(InvalidException::class);
+        $conn->query('SEELECT * FROM system.local');
     }
 }

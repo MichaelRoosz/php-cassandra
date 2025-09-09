@@ -10,7 +10,6 @@ use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
-use Cassandra\Exception\ResponseException as ServerException;
 use Cassandra\Type;
 use Cassandra\Value;
 
@@ -96,18 +95,6 @@ final class ConnectionIntegrationTest extends AbstractIntegrationTestCase {
 
         $this->assertGreaterThanOrEqual(150, $count);
 
-    }
-
-    public function testSimpleQuery(): void {
-        $conn = $this->connection;
-        $r = $conn->query('SELECT key FROM system.local');
-        $this->assertSame(1, iterator_count($r));
-    }
-
-    public function testSyntaxErrorRaisesException(): void {
-        $conn = $this->connection;
-        $this->expectException(ServerException::class);
-        $conn->query('SELECT * FROM does_not_exist_123');
     }
 
     protected static function setupTable(): void {

@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Response\Result\RowClassInterface;
 use Cassandra\Response\Result\FetchType;
+use Cassandra\Response\Result\RowClass;
+use Cassandra\Test\Integration\Data\TestRow;
 use Cassandra\Type;
 use Cassandra\Value;
 
@@ -72,12 +73,19 @@ final class ResultObjectMappingTest extends AbstractIntegrationTestCase {
         )->asRowsResult();
 
         // Without configureFetchObject() iterator yields arrays; set configuration then iterator yields objects
-        $rows->configureFetchObject(\Cassandra\Response\Result\RowClass::class, [], FetchType::ASSOC);
+        $rows->configureFetchObject(RowClass::class, [], FetchType::ASSOC);
 
         $seen = [];
         foreach ($rows as $rowObj) {
-            $this->assertInstanceOf(RowClassInterface::class, $rowObj);
-            $seen[] = $rowObj->ukey;
+            $this->assertInstanceOf(RowClass::class, $rowObj);
+
+            $ukey = $rowObj->ukey ?? '';
+
+            if (!is_string($ukey)) {
+                $this->fail('ukey must be a string');
+            }
+
+            $seen[] = $ukey;
         }
 
         sort($seen, SORT_STRING);
@@ -87,8 +95,15 @@ final class ResultObjectMappingTest extends AbstractIntegrationTestCase {
         $rows->rewind();
         $collected = [];
         while (($obj = $rows->fetchObject()) !== false) {
-            $this->assertInstanceOf(RowClassInterface::class, $obj);
-            $collected[] = $obj->ukey;
+            $this->assertInstanceOf(RowClass::class, $obj);
+
+            $ukey = $obj->ukey ?? '';
+
+            if (!is_string($ukey)) {
+                $this->fail('ukey must be a string');
+            }
+
+            $collected[] = $ukey;
         }
         sort($collected, SORT_STRING);
         $this->assertSame(['k0', 'k1', 'k2'], $collected);
@@ -131,35 +146,5 @@ final class ResultObjectMappingTest extends AbstractIntegrationTestCase {
         $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');
         $conn->disconnect();
-    }
-}
-
-final class TestRow implements RowClassInterface {
-    /** @var array<string,mixed> */
-    private array $args;
-    /** @var array<string,mixed> */
-    private array $row;
-
-    /**
-     * @param array<mixed> $rowData
-     * @param array<mixed> $additionalArguments
-     */
-    public function __construct(array $rowData, array $additionalArguments = []) {
-        $this->row = $rowData;
-        $this->args = $additionalArguments;
-    }
-
-    public function __get(string $name): mixed {
-        return $this->row[$name] ?? null;
-    }
-
-    public function filename(): string {
-        return (string) ($this->row['filename'] ?? '');
-    }
-
-    public function ukey(): string {
-        $suffix = (string) ($this->args['suffix'] ?? '');
-
-        return (string) ($this->row['ukey'] ?? '') . $suffix;
     }
 }

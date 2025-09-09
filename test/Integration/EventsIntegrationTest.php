@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\EventListener;
 use Cassandra\EventType;
 use Cassandra\Request\Register;
-use Cassandra\Response\Event as ResponseEvent;
 use Cassandra\Response\Event\SchemaChangeEvent;
 use Cassandra\Response\Event\Data\SchemaChangeTarget;
 use Cassandra\Response\Event\Data\SchemaChangeType;
 use Cassandra\Response\Ready;
+use Cassandra\Test\Integration\Data\EventListener;
 
 final class EventsIntegrationTest extends AbstractIntegrationTestCase {
     public function testRegisterAllReturnsReady(): void {
@@ -34,20 +33,7 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
         // Only subscribe to schema events for this test
         $conn->syncRequest(new Register([EventType::SCHEMA_CHANGE]));
 
-        $captured = [];
-        $listener = new class($captured) implements EventListener {
-            /** @var array<int, ResponseEvent> */
-            private $events;
-
-            public function __construct(array &$events) {
-                $this->events =& $events;
-            }
-
-            public function onEvent(ResponseEvent $event): void {
-                $this->events[] = $event;
-            }
-        };
-
+        $listener = new EventListener();
         $conn->registerEventListener($listener);
 
         $table = 'evt_' . substr(bin2hex(random_bytes(6)), 0, 12);
@@ -56,7 +42,7 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
         // Create a new table to trigger SCHEMA_CHANGE CREATED
         $conn->query("CREATE TABLE {$fqtn}(id int PRIMARY KEY, v int)");
 
-        $created = $this->waitForSchemaChange($captured, $table, SchemaChangeType::CREATED);
+        $created = $this->waitForSchemaChange($listener, $table, SchemaChangeType::CREATED);
         $this->assertNotNull($created, 'Expected SCHEMA_CHANGE CREATED event for table creation');
         $this->assertSame($this->keyspace, $created->getSchemaChangeData()->keyspace);
         $this->assertSame($table, $created->getSchemaChangeData()->name);
@@ -65,11 +51,13 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
         // Drop the table to trigger SCHEMA_CHANGE DROPPED
         $conn->query("DROP TABLE {$fqtn}");
 
-        $dropped = $this->waitForSchemaChange($captured, $table, SchemaChangeType::DROPPED);
+        $dropped = $this->waitForSchemaChange($listener, $table, SchemaChangeType::DROPPED);
         $this->assertNotNull($dropped, 'Expected SCHEMA_CHANGE DROPPED event for table drop');
         $this->assertSame($this->keyspace, $dropped->getSchemaChangeData()->keyspace);
         $this->assertSame($table, $dropped->getSchemaChangeData()->name);
         $this->assertSame(SchemaChangeTarget::TABLE, $dropped->getSchemaChangeData()->target);
+
+        $conn->unregisterEventListener($listener);
     }
 
     public function testUnregisterEventListenerPreventsCallbacks(): void {
@@ -78,28 +66,19 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
 
         $conn->syncRequest(new Register([EventType::SCHEMA_CHANGE]));
 
-        $captured = [];
-        $listener = new class($captured) implements EventListener {
-            private $events;
-            public function __construct(array &$events) {
-                $this->events =& $events;
-            }
-            public function onEvent(ResponseEvent $event): void {
-                $this->events[] = $event;
-            }
-        };
+        $listener = new EventListener();
 
         $conn->registerEventListener($listener);
 
         $table1 = 'evt_' . substr(bin2hex(random_bytes(6)), 0, 12);
         $fqtn1 = $this->keyspace . '.' . $table1;
         $conn->query("CREATE TABLE {$fqtn1}(id int PRIMARY KEY, v int)");
-        $this->waitForSchemaChange($captured, $table1, SchemaChangeType::CREATED);
+        $this->waitForSchemaChange($listener, $table1, SchemaChangeType::CREATED);
 
         // Now stop listening and perform another schema change
         $conn->unregisterEventListener($listener);
 
-        $before = count($captured);
+        $before = count($listener->getEvents());
 
         $table2 = 'evt_' . substr(bin2hex(random_bytes(6)), 0, 12);
         $fqtn2 = $this->keyspace . '.' . $table2;
@@ -109,7 +88,7 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
         // but since we unregistered the listener, the callback array must not change.
         $this->pumpFor(1500);
 
-        $after = count($captured);
+        $after = count($listener->getEvents());
         $this->assertSame($before, $after, 'Listener should not receive events after unregister');
 
         // Cleanup
@@ -125,14 +104,14 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
         } while (microtime(true) < $deadline);
     }
 
-    private function waitForSchemaChange(array &$captured, string $table, SchemaChangeType $expectedType, int $timeoutMs = 5000): ?SchemaChangeEvent {
+    private function waitForSchemaChange(EventListener $listener, string $table, SchemaChangeType $expectedType, int $timeoutMs = 5000): ?SchemaChangeEvent {
 
         $deadline = microtime(true) + ($timeoutMs / 1000);
         do {
             // Issue a lightweight query to drive the socket and dispatch any pending events
             $this->connection->query('SELECT key FROM system.local');
 
-            foreach ($captured as $event) {
+            foreach ($listener->getEvents() as $event) {
                 if (!($event instanceof SchemaChangeEvent)) {
                     continue;
                 }
