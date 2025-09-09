@@ -138,15 +138,15 @@ Requirements
 |-----------|---------|-------------|-------|
 | **PHP Version** | 8.1.0 | 8.3+ | Latest stable version recommended |
 | **Architecture** | 32-bit/64-bit | 64-bit | 64-bit required for full type support |
-|
+
 ### PHP Extensions
 
 | Extension | Required | Purpose | Notes |
 |-----------|----------|---------|-------|
-| **sockets** | Optional | Socket transport | Required for sockets connection confiured with `SocketNodeConfig` |
-| **bcmath** or **gmp** | Optional | Provides performance improvement for large integer operations | For `Varint` and `Decimal` types |
+| **sockets** | Optional | Socket transport | Required for sockets connection configured with `SocketNodeConfig` |
+| **bcmath** or **gmp** | Optional | Performance improvement for large integer operations | Used by `Varint` and `Decimal` types |
 | **openssl** | Optional | SSL/TLS connections | Required for encrypted connections |
-|
+
 ### Data Type Compatibility
 
 Some Cassandra data types require 64-bit PHP for proper handling:
@@ -654,8 +654,8 @@ use Cassandra\Value\Ascii;
 use Cassandra\Value\Bigint;
 use Cassandra\Value\Blob;
 use Cassandra\Value\Boolean;
-// counter
-// custom
+use Cassandra\Value\Counter;
+use Cassandra\Value\Custom;
 use Cassandra\Value\Date;
 use Cassandra\Value\Decimal;
 use Cassandra\Value\Double;
@@ -823,6 +823,12 @@ UDT::fromValue(
         ],
     ]
 );
+
+// Vector<float> with 3 dimensions
+Vector::fromValue([0.1, -0.5, 0.8], Type::FLOAT, dimensions: 3);
+
+// Vector<double> with 128 dimensions (common for embeddings)
+Vector::fromValue(array_fill(0, 128, 0.0), Type::DOUBLE, dimensions: 128);
 ```
 
 Nested complex example (Set<UDT> inside a row):
@@ -862,12 +868,6 @@ SetCollection::fromValue([
         ],
     ],
 ]);
-
-// Vector<float> with 3 dimensions
-Vector::fromValue([0.1, -0.5, 0.8], Type::FLOAT, dimensions: 3);
-
-// Vector<double> with 128 dimensions (common for embeddings)
-Vector::fromValue(array_fill(0, 128, 0.0), Type::DOUBLE, dimensions: 128);
 ```
 
 Special values:
@@ -1377,42 +1377,6 @@ Notes
 - On `UNPREPARED` server errors, the driver transparently re-prepares and retries the execution.
 - Always use fully-qualified table names in `PREPARE` statements.
 
-```php
-class SecurityAuditLogger
-{
-    private string $logFile;
-    
-    public function __construct(string $logFile = '/var/log/cassandra-audit.log')
-    {
-        $this->logFile = $logFile;
-    }
-    
-    public function logQuery(string $cql, array $values = [], ?string $user = null): void
-    {
-        $entry = [
-            'timestamp' => date('c'),
-            'user' => $user ?? $_SERVER['USER'] ?? 'unknown',
-            'query' => $cql,
-            'parameter_count' => count($values),
-            'client_ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
-        ];
-        
-        file_put_contents($this->logFile, json_encode($entry) . "\n", FILE_APPEND | LOCK_EX);
-    }
-    
-    public function logSecurityEvent(string $event, array $context = []): void
-    {
-        $entry = [
-            'timestamp' => date('c'),
-            'event' => $event,
-            'context' => $context,
-            'client_ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
-        ];
-        
-        file_put_contents($this->logFile, json_encode($entry) . "\n", FILE_APPEND | LOCK_EX);
-    }
-}
-```
 
 Frequently Asked Questions (FAQ)
 --------------------------------
