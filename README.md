@@ -213,7 +213,38 @@ foreach ($result as $row) {
 
 ### Prepared statements
 
-**todo**
+```php
+<?php
+use Cassandra\Request\Options\ExecuteOptions;
+use Cassandra\Value\Uuid;
+use Cassandra\Consistency;
+
+// Prepare a statement
+$prepared = $conn->prepare('SELECT * FROM users WHERE id = ? AND status = ?');
+
+// Execute with positional parameters
+$result = $conn->execute(
+    $prepared, 
+    [
+        Uuid::fromValue('550e8400-e29b-41d4-a716-446655440000'),
+        'active'
+    ],
+    consistency: Consistency::LOCAL_QUORUM,
+    options: new ExecuteOptions(pageSize: 100)
+)->asRowsResult();
+
+foreach ($result as $user) {
+    echo "User: {$user['name']} ({$user['email']})\n";
+}
+
+// Execute with named parameters
+$namedPrepared = $conn->prepare('SELECT * FROM users WHERE email = :email AND org_id = :org_id');
+$result = $conn->execute(
+    $namedPrepared,
+    ['email' => 'john@example.com', 'org_id' => 123],
+    options: new ExecuteOptions(namesForValues: true)
+)->asRowsResult();
+```
 
 ### Async Operations Example
 
@@ -514,7 +545,79 @@ foreach ($r as $i => $row) {
     echo $row['role'], "\n";
 }
 ```
-**todo: add more examples here**
+
+**Advanced fetching examples:**
+
+```php
+// Fetch single row
+$result = $conn->query('SELECT id, name, email FROM users WHERE id = ?', [$userId])->asRowsResult();
+$user = $result->fetch(FetchType::ASSOC);
+if ($user) {
+    echo "User: {$user['name']} <{$user['email']}>\n";
+}
+
+// Fetch all rows at once
+$allUsers = $result->fetchAll(FetchType::ASSOC);
+foreach ($allUsers as $user) {
+    echo "User: {$user['name']}\n";
+}
+
+// Fetch specific column values
+$result = $conn->query('SELECT name FROM users WHERE org_id = ?', [123])->asRowsResult();
+$names = $result->fetchAllColumns(0); // Get all values from first column
+print_r($names);
+
+// Fetch key-value pairs
+$result = $conn->query('SELECT id, name FROM users WHERE active = true')->asRowsResult();
+$userMap = $result->fetchAllKeyPairs(0, 1); // id => name mapping
+print_r($userMap);
+
+// Different fetch types
+$result = $conn->query('SELECT id, name, email FROM users LIMIT 5')->asRowsResult();
+
+// Associative array (default)
+$row = $result->fetch(FetchType::ASSOC);
+// Returns: ['id' => '...', 'name' => '...', 'email' => '...']
+
+// Numeric array
+$row = $result->fetch(FetchType::NUM);
+// Returns: [0 => '...', 1 => '...', 2 => '...']
+
+// Both associative and numeric
+$row = $result->fetch(FetchType::BOTH);
+// Returns: ['id' => '...', 0 => '...', 'name' => '...', 1 => '...', ...]
+```
+
+**Pagination example:**
+
+```php
+use Cassandra\Request\Options\QueryOptions;
+
+$pageSize = 100;
+$options = new QueryOptions(pageSize: $pageSize);
+$result = $conn->query('SELECT * FROM large_table', [], options: $options)->asRowsResult();
+
+$totalProcessed = 0;
+do {
+    foreach ($result as $row) {
+        // Process each row
+        echo "Processing: {$row['id']}\n";
+        $totalProcessed++;
+    }
+    
+    $pagingState = $result->getRowsMetadata()->pagingState;
+    if ($pagingState === null) {
+        break; // No more pages
+    }
+    
+    // Fetch next page
+    $options = new QueryOptions(pageSize: $pageSize, pagingState: $pagingState);
+    $result = $conn->query('SELECT * FROM large_table', [], options: $options)->asRowsResult();
+    
+} while (true);
+
+echo "Total processed: {$totalProcessed} rows\n";
+```
 
 Object mapping
 --------------
@@ -579,20 +682,20 @@ use Cassandra\Type;
 // Scalars
 Ascii::fromValue('hello');
 Bigint::fromValue(10_000_000_000);
-Blob::fromValue("\xFF\xFF");
+Blob::fromValue("\x01\x02");
 Boolean::fromValue(true);
-// todo: counter
-// todo: custom
-// todo: decimal
+Counter::fromValue(1000);
+Custom::fromValue('custom_data', 'my.custom.Type');
+Decimal::fromValue('123.456');
 Double::fromValue(2.718281828459);
 Float32::fromValue(2.718);
-// todo: inet
+Inet::fromValue('192.168.0.1');
 Int32::fromValue(-123);
 Smallint::fromValue(2048);
-// todo: timeuuid
+Timeuuid::fromValue('f47ac10b-58cc-11cf-a447-00100d4b9e00');
 Tinyint::fromValue(12);
-// todo: uuid
-// todo: varchar
+Uuid::fromValue('00000000-0000-0000-0000-000000000000');
+Varchar::fromValue('hello ✅');
 Varint::fromValue(10000000000);
 
 // Temporal
@@ -620,7 +723,7 @@ For complex types, the driver needs a type definition to encode PHP values. Wher
 - Map: `['type' => Type::MAP, 'keyType' => <keyType>, 'valueType' => <valueType>, 'isFrozen' => bool]`
 - Tuple: `['type' => Type::TUPLE, 'valueTypes' => [<t1>, <t2>, ...]]`
 - UDT: `['type' => Type::UDT, 'valueTypes' => ['field' => <type>, ...], 'isFrozen' => bool, 'keyspace' => 'ks', 'name' => 'udt_name']`
-**todo: add vector**
+- Vector: `['type' => Type::VECTOR, 'valueType' => <elementType>, 'dimensions' => int]`
 
 Examples
 ```php
@@ -759,6 +862,12 @@ SetCollection::fromValue([
         ],
     ],
 ]);
+
+// Vector<float> with 3 dimensions
+Vector::fromValue([0.1, -0.5, 0.8], Type::FLOAT, dimensions: 3);
+
+// Vector<double> with 128 dimensions (common for embeddings)
+Vector::fromValue(array_fill(0, 128, 0.0), Type::DOUBLE, dimensions: 128);
 ```
 
 Special values:
