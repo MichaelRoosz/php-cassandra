@@ -137,7 +137,7 @@ Requirements
 | Component | Minimum | Recommended | Notes |
 |-----------|---------|-------------|-------|
 | **PHP Version** | 8.1.0 | 8.3+ | Latest stable version recommended |
-| **Architecture** | 32-bit/64-bit | 64-bit | 64-bit required for full type support |
+| **Architecture** | 32-bit/64-bit | 64-bit | 64-bit required for Bigint/Counter/Duration/Time/Timestamp types and defaultTimestamp request option (unsupported on 32-bit) |
 
 ### PHP Extensions
 
@@ -149,15 +149,17 @@ Requirements
 
 ### Data Type Compatibility
 
-Some Cassandra data types require 64-bit PHP for proper handling:
+Some Cassandra data types require 64-bit PHP and are unsupported on 32-bit:
 
 | Type | 32-bit PHP | 64-bit PHP | Notes |
 |------|------------|------------|-------|
-| `Bigint` | ⚠️ Limited | ✅ Full | Values > 2^31 may lose precision |
-| `Counter` | ⚠️ Limited | ✅ Full | Same as Bigint |
-| `Duration` | ⚠️ Limited | ✅ Full | Nanosecond precision requires 64-bit |
-| `Time` | ⚠️ Limited | ✅ Full | Nanosecond precision requires 64-bit |
-| `Timestamp` | ⚠️ Limited | ✅ Full | Millisecond precision may be affected |
+| `Bigint` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
+| `Counter` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
+| `Duration` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
+| `Time` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
+| `Timestamp` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
+
+Additionally, the `defaultTimestamp` request option (in `QueryOptions` and `BatchOptions`) requires 64-bit PHP and is unsupported on 32-bit.
 
 Installation
 ------------
@@ -419,6 +421,7 @@ Query options (`QueryOptions`):
 - `pagingState` (string)
 - `serialConsistency` (`SerialConsistency::SERIAL` or `SerialConsistency::LOCAL_SERIAL`)
 - `defaultTimestamp` (ms since epoch)
+  - Requires 64-bit PHP; unsupported on 32-bit
 - `namesForValues` (bool): true to use associative binds; if not explicitly set, it is auto-detected for queries and executes
 - `keyspace` (string; protocol v5 only)
 - `nowInSeconds` (int; protocol v5 only)
@@ -522,7 +525,7 @@ $conn->batch($batch);
 
 Batch notes:
 - BATCH does not support names for values at the protocol level for simple queries; use positional values for `appendQuery`. For prepared entries, provide values consistent with the prepared statement (associative for named markers).
-- `BatchOptions`: `serialConsistency`, `defaultTimestamp`, `keyspace` (v5), `nowInSeconds` (v5).
+- `BatchOptions`: `serialConsistency`, `defaultTimestamp` (64-bit PHP only), `keyspace` (v5), `nowInSeconds` (v5).
 
 Results and fetching
 --------------------
@@ -1426,7 +1429,7 @@ A: The library works with standard PHP, but some extensions enhance functionalit
 
 **Q: Can I run this on 32-bit PHP?**
 
-A: Yes, but with limitations. Some data types (Bigint, Counter, Duration, Time, Timestamp) may lose precision on 32-bit systems. 64-bit PHP is recommended for full compatibility.
+A: Limited support. The following features are unsupported on 32-bit PHP: value types `Bigint`, `Counter`, `Duration`, `Time`, `Timestamp`, and the `defaultTimestamp` request option. Use 64-bit PHP for full compatibility.
 
 ### Data Types and Modeling
 
