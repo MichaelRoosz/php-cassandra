@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\DateEncodeOption;
@@ -24,13 +25,13 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
     /**
      * @param int|string|DateTimeInterface $value 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(int|string|DateTimeInterface $value) {
 
         if (is_int($value)) {
             if ($value > self::VALUE_INT_MAX || $value < self::VALUE_INT_MIN) {
-                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
+                throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $value,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,
@@ -42,7 +43,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
         } elseif (is_string($value)) {
 
             if (!preg_match('/^[+-]?\d{4,}-\d{1,2}-\d{1,2}$/', $value)) {
-                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
+                throw new ValueException('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
                     'value' => $value,
                 ]);
             }
@@ -55,7 +56,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             try {
                 $valueAsDate = new DateTimeImmutable($value);
             } catch (PhpException $e) {
-                throw new Exception('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
+                throw new ValueException('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
                     'value' => $value,
                     'note' => 'This may happen if the date is out of range for DateTimeImmutable',
                 ], $e);
@@ -67,7 +68,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
-                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
+                throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $valueAsInt,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,
@@ -84,7 +85,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
-                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
+                throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $valueAsInt,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,
@@ -100,7 +101,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
@@ -112,7 +113,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public function asDateTime(): DateTimeImmutable {
         $baseDate = new DateTimeImmutable('1970-01-01');
@@ -121,7 +122,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
         try {
             $interval = new DateInterval('P' . abs($daysSinceBaseDate) . 'D');
         } catch (PhpException $e) {
-            throw new Exception('Invalid date value; cannot create DateInterval', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
+            throw new ValueException('Invalid date value; cannot create DateInterval', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',
             ], $e);
@@ -134,7 +135,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
                 return $baseDate->add($interval);
             }
         } catch (PhpException $e) {
-            throw new Exception('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
+            throw new ValueException('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',
             ], $e);
@@ -146,7 +147,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public function asString(): string {
         return $this->getValue();
@@ -158,7 +159,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -171,7 +172,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
          */
         $unpacked = unpack('N', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack unsigned integer binary data', ExceptionCode::VALUE_INTEGER_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack unsigned integer binary data', ExceptionCode::VALUE_INTEGER_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 4,
             ]);
@@ -183,13 +184,13 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
 
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid date value; expected number of days since 1970-01-01 as integer, date in format YYYY-mm-dd as string, or DateTimeInterface'
                 , ExceptionCode::VALUE_DATE_INVALID_VALUE_TYPE->value,
                 [
@@ -203,7 +204,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(int|string|DateTimeInterface $value): static {
         return new static($value);
@@ -220,7 +221,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function getValue(): string {
@@ -242,14 +243,14 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public static function today(): static {
         return new static(new DateTimeImmutable());
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     protected function getDayCountFromInterval(DateInterval $interval): int {
         $dayCount = $interval->format('%r%a');
@@ -258,7 +259,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             if ($dayCount === '--2147483648') {
                 $dayCount = '-2147483648'; // Special case for minimum date
             } else {
-                throw new Exception('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
+                throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
                     'value' => $dayCount,
                     'min' => self::VALUE_INT_MIN,
                     'max' => self::VALUE_INT_MAX,

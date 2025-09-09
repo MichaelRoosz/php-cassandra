@@ -6,7 +6,7 @@ namespace Cassandra\Response;
 
 final class Authenticate extends Response {
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function getData(): string {
         $this->stream->offset(0);

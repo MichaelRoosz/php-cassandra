@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -16,11 +17,11 @@ final class Int32 extends ValueWithFixedLength {
     protected readonly int $value;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
+            throw new ValueException('Integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
                 'value' => $value,
                 'min' => self::VALUE_MIN,
                 'max' => self::VALUE_MAX,
@@ -36,7 +37,7 @@ final class Int32 extends ValueWithFixedLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -50,7 +51,7 @@ final class Int32 extends ValueWithFixedLength {
          */
         $unpacked = unpack('N', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack integer binary data', ExceptionCode::VALUE_INTEGER_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack integer binary data', ExceptionCode::VALUE_INTEGER_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 4,
             ]);
@@ -66,12 +67,12 @@ final class Int32 extends ValueWithFixedLength {
     /**
      * @param mixed $value
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_int($value)) {
-            throw new Exception('Invalid integer value; expected int', ExceptionCode::VALUE_INTEGER_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid integer value; expected int', ExceptionCode::VALUE_INTEGER_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'range' => [self::VALUE_MIN, self::VALUE_MAX],
             ]);
@@ -81,7 +82,7 @@ final class Int32 extends ValueWithFixedLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(int $value): static {
         return new static($value);

@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Cassandra\StringMath\DecimalCalculator;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
-use Cassandra\StringMath\Exception;
 use DivisionByZeroError;
 
 final class BCMath extends DecimalCalculator {
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     public function __construct() {
         if (!extension_loaded('bcmath')) {
-            throw new Exception(
+            throw new StringMathException(
                 'BCMath extension is required',
                 ExceptionCode::STRINGMATH_BCMATH_EXTENSION_NOT_LOADED->value
             );
@@ -23,13 +23,13 @@ final class BCMath extends DecimalCalculator {
     }
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function add1(string $decimal): string {
 
         if (!is_numeric($decimal)) {
-            throw new Exception(
+            throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
@@ -43,7 +43,7 @@ final class BCMath extends DecimalCalculator {
     }
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function addUnsignedInt8(string $decimal, int $addend): string {
@@ -52,7 +52,7 @@ final class BCMath extends DecimalCalculator {
         }
 
         if (!is_numeric($decimal)) {
-            throw new Exception(
+            throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
@@ -66,7 +66,7 @@ final class BCMath extends DecimalCalculator {
     }
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function divideBy256(string $decimal): array {
@@ -78,7 +78,7 @@ final class BCMath extends DecimalCalculator {
         }
 
         if (!is_numeric($decimal)) {
-            throw new Exception(
+            throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
@@ -89,7 +89,7 @@ final class BCMath extends DecimalCalculator {
             $remainder = (int) bcmod($decimal, '256');
             $quotient = bcdiv($decimal, '256', 0);
         } catch (DivisionByZeroError $e) {
-            throw new Exception(
+            throw new StringMathException(
                 'Division by zero',
                 ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_DIVISION_BY_ZERO->value,
                 ['decimal' => $decimal],
@@ -137,7 +137,7 @@ final class BCMath extends DecimalCalculator {
     }
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function multiplyByUnsignedInt8(string $decimal, int $multiplier): string {
@@ -149,7 +149,7 @@ final class BCMath extends DecimalCalculator {
         }
 
         if (!is_numeric($decimal)) {
-            throw new Exception(
+            throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
@@ -163,7 +163,7 @@ final class BCMath extends DecimalCalculator {
     }
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function sub1(string $decimal): string {
@@ -172,7 +172,7 @@ final class BCMath extends DecimalCalculator {
         }
 
         if (!is_numeric($decimal)) {
-            throw new Exception(
+            throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
@@ -186,7 +186,7 @@ final class BCMath extends DecimalCalculator {
     }
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function toBinary(string $decimal): string {

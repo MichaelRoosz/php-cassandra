@@ -9,7 +9,9 @@ use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\Flag;
 use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Connection\ConnectionOptions;
-use Cassandra\Connection\Exception;
+use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\NodeException;
 use Cassandra\Protocol\Header;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\BatchOptions;
@@ -104,30 +106,34 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function asyncRequest(Request\Request $request): Statement {
         return $this->sendAsyncRequest($request);
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function batch(Request\Batch $batchRequest): Response\Result {
         $response = $this->syncRequest($batchRequest);
 
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during batch', ExceptionCode::CON_UNEXPECTED_RESPONSE_BATCH_SYNC->value, [
+            throw new ConnectionException('Unexpected response type during batch', ExceptionCode::CONNECTION_UNEXPECTED_RESPONSE_BATCH_SYNC->value, [
                 'operation' => 'batch',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -138,12 +144,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function batchAsync(Request\Batch $batchRequest): Statement {
         return $this->asyncRequest($batchRequest);
@@ -154,12 +162,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function connect(): void {
         if ($this->node !== null) {
@@ -174,7 +184,7 @@ final class Connection {
         if (!($response instanceof Response\Supported)) {
             $nodeConfig = $node->getConfig();
 
-            throw new Exception('OPTIONS handshake failed: unexpected response type', ExceptionCode::CON_OPTIONS_UNEXPECTED_RESPONSE->value, [
+            throw new ConnectionException('OPTIONS handshake failed: unexpected response type', ExceptionCode::CONNECTION_OPTIONS_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'connect/options',
                 'expected' => Response\Supported::class,
                 'received' => get_class($response),
@@ -191,7 +201,7 @@ final class Connection {
             $nodeConfig = $node->getConfig();
 
             if (!$nodeConfig->username || !$nodeConfig->password) {
-                throw new Exception('Username and password must not be empty.', ExceptionCode::CON_AUTH_MISSING_CREDENTIALS->value, [
+                throw new ConnectionException('Username and password must not be empty.', ExceptionCode::CONNECTION_AUTH_MISSING_CREDENTIALS->value, [
                     'operation' => 'connect/authenticate',
                     'host' => $nodeConfig->host,
                     'port' => $nodeConfig->port,
@@ -201,7 +211,7 @@ final class Connection {
 
             if ($this->version >= 5) {
                 if (!($node instanceof Connection\NodeImplementation)) {
-                    throw new Exception('Invalid node implementation: expected NodeImplementation', ExceptionCode::CON_AUTH_INVALID_NODE_IMPLEMENTATION->value, [
+                    throw new ConnectionException('Invalid node implementation: expected NodeImplementation', ExceptionCode::CONNECTION_AUTH_INVALID_NODE_IMPLEMENTATION->value, [
                         'operation' => 'connect/authenticate',
                         'node_class' => get_class($node),
                         'expected_interface' => Connection\NodeImplementation::class,
@@ -212,7 +222,7 @@ final class Connection {
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
             if (!($authResult instanceof Response\AuthSuccess)) {
-                throw new Exception('Authentication failed.', ExceptionCode::CON_AUTH_FAILED->value, [
+                throw new ConnectionException('Authentication failed.', ExceptionCode::CONNECTION_AUTH_FAILED->value, [
                     'operation' => 'connect/authenticate',
                     'host' => $nodeConfig->host,
                     'port' => $nodeConfig->port,
@@ -222,7 +232,7 @@ final class Connection {
         } elseif ($response instanceof Response\Ready) {
             if ($this->version >= 5) {
                 if (!($node instanceof Connection\NodeImplementation)) {
-                    throw new Exception('Invalid node implementation: expected NodeImplementation', ExceptionCode::CON_READY_INVALID_NODE_IMPLEMENTATION->value, [
+                    throw new ConnectionException('Invalid node implementation: expected NodeImplementation', ExceptionCode::CONNECTION_READY_INVALID_NODE_IMPLEMENTATION->value, [
                         'operation' => 'connect/ready',
                         'node_class' => get_class($node),
                         'expected_interface' => Connection\NodeImplementation::class,
@@ -233,7 +243,7 @@ final class Connection {
         } else {
             $nodeConfig = $node->getConfig();
 
-            throw new Exception('Connection startup failed: unexpected response type', ExceptionCode::CON_STARTUP_UNEXPECTED_RESPONSE->value, [
+            throw new ConnectionException('Connection startup failed: unexpected response type', ExceptionCode::CONNECTION_STARTUP_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'connect/startup',
                 'expected' => [Response\Authenticate::class, Response\Ready::class],
                 'received' => get_class($response),
@@ -278,12 +288,14 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
 
@@ -301,7 +313,7 @@ final class Connection {
 
         $response = $this->syncRequest($request);
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during execute', ExceptionCode::CON_EXECUTE_UNEXPECTED_RESPONSE->value, [
+            throw new ConnectionException('Unexpected response type during execute', ExceptionCode::CONNECTION_EXECUTE_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'execute',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -315,12 +327,14 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function executeAll(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): array {
 
@@ -350,12 +364,14 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
 
@@ -379,12 +395,14 @@ final class Connection {
     /**
      * Wait until all statements received response.
      *
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function flush(): void {
         while ($this->statements) {
@@ -397,12 +415,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function getResponseForStatement(Statement $statement): Response\Response {
 
@@ -422,12 +442,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function prepare(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
 
@@ -441,7 +463,7 @@ final class Connection {
 
         $response = $this->syncRequest(new Request\Prepare($query, $options));
         if (!($response instanceof Response\Result\PreparedResult)) {
-            throw new Exception('Unexpected response type during prepare', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
+            throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
             ]);
@@ -451,12 +473,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions()): Statement {
 
@@ -476,12 +500,14 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
 
@@ -499,7 +525,7 @@ final class Connection {
 
         $response = $this->syncRequest($request);
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during query', ExceptionCode::CON_QUERY_UNEXPECTED_RESPONSE->value, [
+            throw new ConnectionException('Unexpected response type during query', ExceptionCode::CONNECTION_QUERY_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
             ]);
@@ -512,12 +538,14 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function queryAll(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): array {
 
@@ -549,13 +577,15 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
-     */
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+    */
     public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
 
         $consistency = $consistency ?? $this->consistency;
@@ -586,12 +616,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function setKeyspace(string $keyspace): void {
 
@@ -604,7 +636,7 @@ final class Connection {
         if ($this->version < 5) {
             $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
             if (!($response instanceof Response\Result)) {
-                throw new Exception('Unexpected response type during setKeyspace', ExceptionCode::CON_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
+                throw new ConnectionException('Unexpected response type during setKeyspace', ExceptionCode::CONNECTION_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
                     'expected' => Response\Result::class,
                     'received' => get_class($response),
                     'operation' => 'setKeyspace',
@@ -623,12 +655,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function syncRequest(Request\Request $request): Response\Response {
 
@@ -648,7 +682,7 @@ final class Connection {
 
             $prepareResponse = $this->syncRequest($autoPrepareRequest);
             if (!($prepareResponse instanceof Response\Result\PreparedResult)) {
-                throw new Exception('Unexpected response type during prepare', ExceptionCode::CON_PREPARE_UNEXPECTED_RESPONSE->value, [
+                throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
                     'expected' => Response\Result::class,
                     'received' => get_class($prepareResponse),
                 ]);
@@ -656,7 +690,7 @@ final class Connection {
 
             $response = $this->handleAutoPrepareResult($autoPrepareRequest, $prepareResponse, originalRequest: $request);
             if ($response === null) {
-                throw new Exception('Unexpected null response during autoPrepare', ExceptionCode::CON_AUTO_PREPARE_UNEXPECTED_RESPONSE->value, [
+                throw new ConnectionException('Unexpected null response during autoPrepare', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESPONSE->value, [
                     'expected' => Response\Result::class,
                     'received' => 'null',
                 ]);
@@ -670,14 +704,14 @@ final class Connection {
             $response = $this->getNextResponseForStream(streamId: 0);
             $response = $this->handleResponse($request, $response);
             $this->nodeHealth->recordSuccess($node->getConfig());
-        } catch (Connection\NodeException $e) {
+        } catch (NodeException $e) {
             $this->handleNodeException($node);
 
             throw $e;
         }
 
         if ($response === null) {
-            throw new Exception('Received unexpected null response from server.', ExceptionCode::CON_SYNC_NULL_RESPONSE->value, [
+            throw new ConnectionException('Received unexpected null response from server.', ExceptionCode::CONNECTION_SYNC_NULL_RESPONSE->value, [
                 'operation' => 'syncRequest',
                 'request_class' => get_class($request),
             ]);
@@ -705,12 +739,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     public function withKeyspace(string $keyspace): self {
         $this->setKeyspace($keyspace);
@@ -719,7 +755,7 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function cachePrepareResult(Request\Prepare $request, Response\Result\PreparedResult $result): void {
 
@@ -744,12 +780,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function chainAsyncRequest(Request\Request $request, Statement $statement): void {
 
@@ -761,7 +799,7 @@ final class Connection {
         $request->setStream($streamId);
 
         if (isset($this->statements[$streamId])) {
-            throw new Exception('Stream ID already in use', ExceptionCode::CON_STREAM_ID_ALREADY_IN_USE->value, [
+            throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
                 'operation' => 'sendAsyncRequest',
                 'stream_id' => $streamId,
             ]);
@@ -770,7 +808,7 @@ final class Connection {
         try {
             $node->writeRequest($request);
             $this->nodeHealth->recordSuccess($node->getConfig());
-        } catch (Connection\NodeException $e) {
+        } catch (NodeException $e) {
             $this->handleNodeException($node);
 
             throw $e;
@@ -783,8 +821,8 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function configureOptions(Response\Supported $supportedReponse): void {
         $serverOptions = $supportedReponse->getData();
@@ -798,7 +836,7 @@ final class Connection {
         } elseif (in_array('3/v3', $serverOptions['PROTOCOL_VERSIONS'])) {
             $this->version = 3;
         } else {
-            throw new Exception('Server does not support a compatible protocol version.', ExceptionCode::CON_SERVER_PROTOCOL_UNSUPPORTED->value, [
+            throw new ConnectionException('Server does not support a compatible protocol version.', ExceptionCode::CONNECTION_SERVER_PROTOCOL_UNSUPPORTED->value, [
                 'server_versions' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
                 'client_supported' => ReleaseConstants::PHP_CASSANDRA_SUPPORTED_PROTOCOL_VERSIONS,
             ]);
@@ -812,7 +850,7 @@ final class Connection {
             if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
                 $nodeConfig = $this->node?->getConfig();
 
-                throw new Exception('Compression "' . $compressionAlgo . '" not supported by server.', ExceptionCode::CON_COMPRESSION_NOT_SUPPORTED->value, [
+                throw new ConnectionException('Compression "' . $compressionAlgo . '" not supported by server.', ExceptionCode::CONNECTION_COMPRESSION_NOT_SUPPORTED->value, [
                     'host' => $nodeConfig->host ?? null,
                     'port' => $nodeConfig->port ?? null,
                     'compression' => $compressionAlgo,
@@ -844,14 +882,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function createResponse(Header $header, string $body): Response\Response {
 
         $responseClassMap = Response\Response::getResponseClassMap();
         if (!isset($responseClassMap[$header->opcode->value])) {
-            throw new Exception('Unknown response type: ' . $header->opcode->value, ExceptionCode::CON_UNKNOWN_RESPONSE_TYPE->value, [
+            throw new ConnectionException('Unknown response type: ' . $header->opcode->value, ExceptionCode::CONNECTION_UNKNOWN_RESPONSE_TYPE->value, [
                 'expected' => array_keys($responseClassMap),
                 'received' => $header->opcode->value,
             ]);
@@ -871,7 +909,7 @@ final class Connection {
                 if (isset($resultClassMap[$resultKind->value])) {
                     $responseClass = $resultClassMap[$resultKind->value];
                 } else {
-                    throw new Exception('Unknown result kind: ' . $resultKind->value, ExceptionCode::CON_UNKNOWN_RESULT_KIND->value, [
+                    throw new ConnectionException('Unknown result kind: ' . $resultKind->value, ExceptionCode::CONNECTION_UNKNOWN_RESULT_KIND->value, [
                         'expected' => array_keys($resultClassMap),
                         'received' => $resultKind->value,
                     ]);
@@ -887,7 +925,7 @@ final class Connection {
                 if (isset($eventClassMap[$eventType->value])) {
                     $responseClass = $eventClassMap[$eventType->value];
                 } else {
-                    throw new Exception('Unknown event type: ' . $eventType->value, ExceptionCode::CON_UNKNOWN_EVENT_TYPE->value, [
+                    throw new ConnectionException('Unknown event type: ' . $eventType->value, ExceptionCode::CONNECTION_UNKNOWN_EVENT_TYPE->value, [
                         'expected' => array_keys($eventClassMap),
                         'received' => $eventType->value,
                     ]);
@@ -903,7 +941,7 @@ final class Connection {
                 if (isset($errorClassMap[$errorCode])) {
                     $responseClass = $errorClassMap[$errorCode];
                 } else {
-                    throw new Exception('Unknown error code: ' . $errorCode, ExceptionCode::CON_UNKNOWN_ERROR_CODE->value, [
+                    throw new ConnectionException('Unknown error code: ' . $errorCode, ExceptionCode::CONNECTION_UNKNOWN_ERROR_CODE->value, [
                         'expected' => array_keys($errorClassMap),
                         'received' => $errorCode,
                     ]);
@@ -967,12 +1005,14 @@ final class Connection {
     }
 
     /** 
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function getConnectedNode(): Connection\Node {
 
@@ -982,7 +1022,7 @@ final class Connection {
 
             $node = $this->node;
             if ($node === null) {
-                throw new Exception('Client is not connected to any node. This should never happen.', ExceptionCode::CON_NOT_CONNECTED->value, [
+                throw new ConnectionException('Client is not connected to any node. This should never happen.', ExceptionCode::CONNECTION_NOT_CONNECTED->value, [
                     'operation' => 'getConnectedNode',
                 ]);
             }
@@ -992,12 +1032,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function getNewStreamId(): int {
         if ($this->lastStreamId < 32767) {
@@ -1012,12 +1054,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function getNextResponseForStream(int $streamId = 0): Response\Response {
         do {
@@ -1028,17 +1072,19 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function handleAutoPrepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
-            throw new Exception('Unexpected result type while handling auto-prepared statement', ExceptionCode::CON_AUTO_PREPARE_UNEXPECTED_RESULT_TYPE->value, [
+            throw new ConnectionException('Unexpected result type while handling auto-prepared statement', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESULT_TYPE->value, [
                 'operation' => 'reprepare_result',
                 'expected' => Response\Result\PreparedResult::class,
                 'received' => get_class($result),
@@ -1050,7 +1096,7 @@ final class Connection {
         }
 
         if (!($originalRequest instanceof Request\Query)) {
-            throw new Exception('Original request is not an query request', ExceptionCode::CON_AUTO_PREPARE_ORIGINAL_NOT_QUERY->value, [
+            throw new ConnectionException('Original request is not an query request', ExceptionCode::CONNECTION_AUTO_PREPARE_ORIGINAL_NOT_QUERY->value, [
                 'operation' => 'auto_prepare_execute',
                 'request_class' => $originalRequest ? get_class($originalRequest) : null,
                 'expected' => Request\Query::class,
@@ -1072,7 +1118,7 @@ final class Connection {
 
         $response = $this->syncRequest($newExecuteRequest);
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during re-execute after auto-preparation', ExceptionCode::CON_AUTO_PREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
+            throw new ConnectionException('Unexpected response type during re-execute after auto-preparation', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
                 'operation' => 'auto_prepare_execute',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -1088,17 +1134,19 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
-            throw new Exception('Unexpected result type while handling reprepared statement', ExceptionCode::CON_REPREPARE_UNEXPECTED_RESULT_TYPE->value, [
+            throw new ConnectionException('Unexpected result type while handling reprepared statement', ExceptionCode::CONNECTION_REPREPARE_UNEXPECTED_RESULT_TYPE->value, [
                 'operation' => 'reprepare_result',
                 'expected' => Response\Result\PreparedResult::class,
                 'received' => get_class($result),
@@ -1110,7 +1158,7 @@ final class Connection {
         }
 
         if (!($originalRequest instanceof Request\Execute)) {
-            throw new Exception('Original request is not an execute request', ExceptionCode::CON_REPREPARE_ORIGINAL_NOT_EXECUTE->value, [
+            throw new ConnectionException('Original request is not an execute request', ExceptionCode::CONNECTION_REPREPARE_ORIGINAL_NOT_EXECUTE->value, [
                 'operation' => 'reprepare_execute',
                 'request_class' => $originalRequest ? get_class($originalRequest) : null,
                 'expected' => Request\Execute::class,
@@ -1132,7 +1180,7 @@ final class Connection {
 
         $response = $this->syncRequest($newExecuteRequest);
         if (!($response instanceof Response\Result)) {
-            throw new Exception('Unexpected response type during re-execute after repreparation', ExceptionCode::CON_REPREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
+            throw new ConnectionException('Unexpected response type during re-execute after repreparation', ExceptionCode::CONNECTION_REPREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
                 'operation' => 'reprepare_execute',
                 'expected' => Response\Result::class,
                 'received' => get_class($response),
@@ -1143,12 +1191,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null): ?Response\Response {
 
@@ -1166,12 +1216,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement): ?Response\Response {
 
@@ -1183,7 +1235,7 @@ final class Connection {
 
             $prevResult = $request->getPreviousResult();
             if (!($prevResult instanceof Response\Result\PreparedResult)) {
-                throw new Exception('Unexpected previous result type for UNPREPARED error', ExceptionCode::CON_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE->value, [
+                throw new ConnectionException('Unexpected previous result type for UNPREPARED error', ExceptionCode::CONNECTION_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE->value, [
                     'operation' => 'unprepared_error_handling',
                     'expected' => Response\Result\PreparedResult::class,
                     'received' => get_class($prevResult),
@@ -1192,12 +1244,12 @@ final class Connection {
 
             $prevRequest = $prevResult->getRequest();
             if ($prevRequest === null) {
-                throw new Exception('Previous prepared result has no associated request', ExceptionCode::CON_UNPREPARED_PREV_NO_REQUEST->value, [
+                throw new ConnectionException('Previous prepared result has no associated request', ExceptionCode::CONNECTION_UNPREPARED_PREV_NO_REQUEST->value, [
                     'operation' => 'unprepared_error_handling',
                 ]);
             }
             if (!($prevRequest instanceof Request\Prepare)) {
-                throw new Exception('Previous result is not a prepare request', ExceptionCode::CON_UNPREPARED_PREV_NOT_PREPARE_REQUEST->value, [
+                throw new ConnectionException('Previous result is not a prepare request', ExceptionCode::CONNECTION_UNPREPARED_PREV_NOT_PREPARE_REQUEST->value, [
                     'operation' => 'unprepared_error_handling',
                     'request_class' => get_class($prevRequest),
                     'expected' => Request\Prepare::class,
@@ -1224,7 +1276,7 @@ final class Connection {
 
             $prepareResponse = $this->syncRequest($newPrepareRequest);
             if (!($prepareResponse instanceof Response\Result)) {
-                throw new Exception('Unexpected response type during repreparation', ExceptionCode::CON_REPREPARATION_UNEXPECTED_RESPONSE->value, [
+                throw new ConnectionException('Unexpected response type during repreparation', ExceptionCode::CONNECTION_REPREPARATION_UNEXPECTED_RESPONSE->value, [
                     'operation' => 'unprepared_error_handling',
                     'expected' => Response\Result::class,
                     'received' => get_class($prepareResponse),
@@ -1238,7 +1290,7 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): Response\Result {
 
@@ -1248,12 +1300,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement): ?Response\Result {
 
@@ -1280,12 +1334,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function handleResponseResult(Request\Request $request, Response\Result $result, ?Statement $statement): ?Response\Result {
 
@@ -1314,26 +1370,28 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function readResponse(): ?Response\Response {
         $node = $this->getConnectedNode();
 
         try {
             $version = ord($node->read(1));
-        } catch (Connection\NodeException $e) {
+        } catch (NodeException $e) {
             $this->handleNodeException($node);
 
             throw $e;
         }
 
         if ($version !== $this->versionIn) {
-            throw new Exception('Unsupported or mismatched CQL binary protocol version received from server.', ExceptionCode::CON_PROTOCOL_VERSION_MISMATCH->value, [
+            throw new ConnectionException('Unsupported or mismatched CQL binary protocol version received from server.', ExceptionCode::CONNECTION_PROTOCOL_VERSION_MISMATCH->value, [
                 'received_version' => $version,
                 'expected_version' => $this->versionIn,
                 'supported_versions' => ReleaseConstants::PHP_CASSANDRA_SUPPORTED_PROTOCOL_VERSIONS,
@@ -1350,7 +1408,7 @@ final class Connection {
              * } $headerData
              */
             $headerData = unpack('Cflags/nstream/Copcode/Nlength', $node->read(8));
-        } catch (Connection\NodeException $e) {
+        } catch (NodeException $e) {
             $this->handleNodeException($node);
 
             throw $e;
@@ -1359,7 +1417,7 @@ final class Connection {
         if ($headerData === false) {
             $nodeConfig = $node->getConfig();
 
-            throw new Exception('Cannot read response header', ExceptionCode::CON_CANNOT_READ_RESPONSE_HEADER->value, [
+            throw new ConnectionException('Cannot read response header', ExceptionCode::CONNECTION_CANNOT_READ_RESPONSE_HEADER->value, [
                 'host' => $nodeConfig->host,
                 'port' => $nodeConfig->port,
                 'protocol_version' => $this->version,
@@ -1377,14 +1435,14 @@ final class Connection {
                 length: $headerData['length'],
             );
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid opcode type: ' . $headerData['opcode'], ExceptionCode::CON_INVALID_OPCODE_TYPE->value, [
+            throw new ConnectionException('Invalid opcode type: ' . $headerData['opcode'], ExceptionCode::CONNECTION_INVALID_OPCODE_TYPE->value, [
                 'opcode' => $headerData['opcode'],
             ], $e);
         }
 
         try {
             $body = $header->length === 0 ? '' : $node->read($header->length);
-        } catch (Connection\NodeException $e) {
+        } catch (NodeException $e) {
             $this->handleNodeException($node);
 
             throw $e;
@@ -1418,7 +1476,7 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Connection\Exception
+     * @throws \Cassandra\Exception\ConnectionException
      */
     protected function selectNodeAndOpenConnection(): Connection\Node {
 
@@ -1434,7 +1492,7 @@ final class Connection {
 
             try {
                 $node = new $className($config);
-            } catch (Connection\NodeException $e) {
+            } catch (NodeException $e) {
                 $socketException = $e;
                 $this->nodeHealth->recordFailure($config);
 
@@ -1452,9 +1510,9 @@ final class Connection {
             'class' => $config->getNodeClass(),
         ], $this->nodes);
 
-        throw new Exception(
+        throw new ConnectionException(
             'Unable to connect to any Cassandra node',
-            ExceptionCode::CON_UNABLE_TO_CONNECT_ANY_NODE->value,
+            ExceptionCode::CONNECTION_UNABLE_TO_CONNECT_ANY_NODE->value,
             [
                 'attempted_nodes' => $nodeConfigs,
                 'node_count' => count($this->nodes),
@@ -1464,12 +1522,14 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Compression\Exception
-     * @throws \Cassandra\Connection\Exception
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
      */
     protected function sendAsyncRequest(Request\Request $request, ?int $streamId = null): Statement {
 
@@ -1506,7 +1566,7 @@ final class Connection {
         }
 
         if (isset($this->statements[$streamId])) {
-            throw new Exception('Stream ID already in use', ExceptionCode::CON_STREAM_ID_ALREADY_IN_USE->value, [
+            throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
                 'operation' => 'sendAsyncRequest',
                 'stream_id' => $streamId,
             ]);
@@ -1515,7 +1575,7 @@ final class Connection {
         try {
             $node->writeRequest($request);
             $this->nodeHealth->recordSuccess($node->getConfig());
-        } catch (Connection\NodeException $e) {
+        } catch (NodeException $e) {
             $this->handleNodeException($node);
 
             throw $e;

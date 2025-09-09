@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\TypeInfoException;
 use Cassandra\Type;
 use Cassandra\ValueFactory;
 
@@ -30,13 +31,14 @@ final class UDTInfo extends TypeInfo {
      *  name?: string,
      * } $typeDefinition
      * 
-     * @throws \Cassandra\TypeInfo\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeInfoException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
 
         if (!isset($typeDefinition['type'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "UDT type definition is missing required 'type' property",
                 ExceptionCode::TYPEINFO_UDT_MISSING_TYPE->value,
                 [
@@ -47,14 +49,14 @@ final class UDTInfo extends TypeInfo {
         }
 
         if ($typeDefinition['type'] !== Type::UDT) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Invalid type definition for UDT: 'type' must be Type::UDT",
                 ExceptionCode::TYPEINFO_UDT_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['valueTypes'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "UDT type definition is missing required 'valueTypes' property",
                 ExceptionCode::TYPEINFO_UDT_MISSING_VALUETYPES->value,
                 [
@@ -66,7 +68,7 @@ final class UDTInfo extends TypeInfo {
 
         /** @psalm-suppress DocblockTypeContradiction */
         if (!is_array($typeDefinition['valueTypes'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Invalid type definition for UDT: 'valueTypes' must be an array",
                 ExceptionCode::TYPEINFO_UDT_VALUETYPES_NOT_ARRAY->value,
                 [

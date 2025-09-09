@@ -4,9 +4,31 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ResponseException;
+use Cassandra\Exception\ServerException;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Header;
+use Cassandra\Response\Error\AlreadyExistsError;
+use Cassandra\Response\Error\AuthenticationError;
+use Cassandra\Response\Error\CasWriteUnknownError;
+use Cassandra\Response\Error\CdcWriteFailureError;
+use Cassandra\Response\Error\ConfigError;
 use Cassandra\Response\Error\Context\ErrorContext;
+use Cassandra\Response\Error\FunctionFailureError;
+use Cassandra\Response\Error\InvalidError;
+use Cassandra\Response\Error\IsBootstrappingError;
+use Cassandra\Response\Error\OverloadedError;
+use Cassandra\Response\Error\ProtocolError;
+use Cassandra\Response\Error\ReadFailureError;
+use Cassandra\Response\Error\ReadTimeoutError;
+use Cassandra\Response\Error\ServerError;
+use Cassandra\Response\Error\SyntaxError;
+use Cassandra\Response\Error\TruncateError;
+use Cassandra\Response\Error\UnauthorizedError;
+use Cassandra\Response\Error\UnavailableExceptionError;
+use Cassandra\Response\Error\UnpreparedError;
+use Cassandra\Response\Error\WriteFailureError;
+use Cassandra\Response\Error\WriteTimeoutError;
 use TypeError;
 use ValueError;
 
@@ -14,6 +36,32 @@ use ValueError;
  * Indicates an error processing a request.
  */
 class Error extends Response {
+    /**
+     * @var array<class-string<\Cassandra\Response\Error>, class-string<\Cassandra\Exception\ServerException>>
+     */
+    protected const exceptionClassMap = [
+        AlreadyExistsError::class => ServerException\AlreadyExistsException::class,
+        AuthenticationError::class => ServerException\AuthenticationErrorException::class,
+        CasWriteUnknownError::class => ServerException\CasWriteUnknownException::class,
+        CdcWriteFailureError::class => ServerException\CdcWriteFailureException::class,
+        ConfigError::class => ServerException\ConfigErrorException::class,
+        FunctionFailureError::class => ServerException\FunctionFailureException::class,
+        InvalidError::class => ServerException\InvalidException::class,
+        IsBootstrappingError::class => ServerException\IsBootstrappingException::class,
+        OverloadedError::class => ServerException\OverloadedException::class,
+        ProtocolError::class => ServerException\ProtocolErrorException::class,
+        ReadFailureError::class => ServerException\ReadFailureException::class,
+        ReadTimeoutError::class => ServerException\ReadTimeoutException::class,
+        ServerError::class => ServerException::class,
+        SyntaxError::class => ServerException\SyntaxErrorException::class,
+        TruncateError::class => ServerException\TruncateErrorException::class,
+        UnauthorizedError::class => ServerException\UnauthorizedException::class,
+        UnavailableExceptionError::class => ServerException\UnavailableException::class,
+        UnpreparedError::class => ServerException\UnpreparedException::class,
+        WriteFailureError::class => ServerException\WriteFailureException::class,
+        WriteTimeoutError::class => ServerException\WriteTimeoutException::class,
+    ];
+
     protected readonly int $code;
     protected readonly string $message;
     protected readonly ErrorType $type;
@@ -66,7 +114,7 @@ class Error extends Response {
         ];
     }
 
-    public function getException(): Exception {
+    public function getException(): ServerException {
         $baseContext = [
             'error_code' => $this->code,
             'error_type' => $this->type->name,
@@ -79,10 +127,13 @@ class Error extends Response {
 
         $message = sprintf('[%s %d] %s', $this->type->name, $this->code, $this->message);
 
-        return new Exception(
+        $exceptionClass = self::exceptionClassMap[static::class] ?? ServerException::class;
+
+        return new $exceptionClass(
             message: $message,
             code: $this->code,
-            context: array_merge($baseContext, $this->getContext()->toArray()),
+            context: $baseContext,
+            errorContext: $this->getContext(),
         );
     }
 
@@ -101,7 +152,7 @@ class Error extends Response {
      *   type: ErrorType,
      * }
      * 
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readData(): array {
         $this->stream->offset(0);
@@ -112,7 +163,7 @@ class Error extends Response {
         try {
             $type = ErrorType::from($code);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid error type: ' . $code, ExceptionCode::RESPONSE_ERROR_INVALID_TYPE->value, [
+            throw new ResponseException('Invalid error type: ' . $code, ExceptionCode::RESPONSE_ERROR_INVALID_TYPE->value, [
                 'error_type' => $code,
             ], $e);
         }

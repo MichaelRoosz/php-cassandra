@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -12,11 +13,11 @@ final class Decimal extends ValueReadableWithLength {
     protected readonly string $value;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(string|int|float $value) {
         if (!is_numeric($value)) {
-            throw new Exception('Value must be a numeric value', ExceptionCode::VALUE_DECIMAL_NON_NUMERIC->value, [
+            throw new ValueException('Value must be a numeric value', ExceptionCode::VALUE_DECIMAL_NON_NUMERIC->value, [
                 'value' => $value,
             ]);
         }
@@ -31,7 +32,7 @@ final class Decimal extends ValueReadableWithLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -42,7 +43,7 @@ final class Decimal extends ValueReadableWithLength {
 
         $length = strlen($binary);
         if ($length < 4) {
-            throw new Exception('Cannot unpack decimal binary data', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack decimal binary data', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
                 'binary_length' => $length,
                 'note' => 'expected >= 4 bytes (scale + varint)',
             ]);
@@ -52,7 +53,7 @@ final class Decimal extends ValueReadableWithLength {
          */
         $scaleUnpacked = unpack('N', substr($binary, 0, 4));
         if ($scaleUnpacked === false) {
-            throw new Exception('Cannot unpack decimal scale', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack decimal scale', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
                 'binary_length' => $length,
             ]);
         }
@@ -90,12 +91,12 @@ final class Decimal extends ValueReadableWithLength {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value)) {
-            throw new Exception('Invalid decimal value; expected numeric value', ExceptionCode::VALUE_DECIMAL_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid decimal value; expected numeric value', ExceptionCode::VALUE_DECIMAL_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -104,14 +105,14 @@ final class Decimal extends ValueReadableWithLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(string|int|float $value): static {
         return new static($value);
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function getBinary(): string {

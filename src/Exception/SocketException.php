@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Connection;
+namespace Cassandra\Exception;
 
 final class SocketException extends NodeException {
 }

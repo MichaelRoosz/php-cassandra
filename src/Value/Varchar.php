@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -27,12 +28,12 @@ class Varchar extends ValueReadableWithLength {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid varchar value; expected string', ExceptionCode::VALUE_VARCHAR_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid varchar value; expected string', ExceptionCode::VALUE_VARCHAR_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

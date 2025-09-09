@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\CustomInfo;
 use Cassandra\TypeInfo\TypeInfo;
@@ -24,7 +25,7 @@ class Custom extends ValueReadableWithLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -34,11 +35,11 @@ class Custom extends ValueReadableWithLength {
     ): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::VALUE_CUSTOM_TYPEINFO_REQUIRED->value);
+            throw new ValueException('typeInfo is required', ExceptionCode::VALUE_CUSTOM_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::VALUE_CUSTOM_INVALID_TYPEINFO->value, [
+            throw new ValueException('Invalid type info, CustomInfo expected', ExceptionCode::VALUE_CUSTOM_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -53,17 +54,17 @@ class Custom extends ValueReadableWithLength {
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::VALUE_CUSTOM_TYPEINFO_REQUIRED->value);
+            throw new ValueException('typeInfo is required', ExceptionCode::VALUE_CUSTOM_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof CustomInfo) {
-            throw new Exception('Invalid type info, CustomInfo expected', ExceptionCode::VALUE_CUSTOM_INVALID_TYPEINFO->value, [
+            throw new ValueException('Invalid type info, CustomInfo expected', ExceptionCode::VALUE_CUSTOM_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
 
         if (!is_string($value)) {
-            throw new Exception('Invalid custom value; expected string', ExceptionCode::VALUE_CUSTOM_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid custom value; expected string', ExceptionCode::VALUE_CUSTOM_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -72,7 +73,7 @@ class Custom extends ValueReadableWithLength {
     }
 
     /**
-     * @throws \Cassandra\TypeInfo\Exception
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     final public static function fromValue(string $value, string $javaClassName): static {
 

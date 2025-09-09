@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Event;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Event;
 use Cassandra\Response\Event\Data\EventData;
 use Cassandra\Response\Event\Data\StatusChangeData;
 use Cassandra\Response\Event\Data\StatusChangeType;
-use Cassandra\Response\Exception;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Response\StreamReader;
 use TypeError;
 use ValueError;
@@ -19,7 +19,7 @@ final class StatusChangeEvent extends Event {
     private StatusChangeData $data;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -41,7 +41,7 @@ final class StatusChangeEvent extends Event {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readData(): StatusChangeData {
 
@@ -50,7 +50,7 @@ final class StatusChangeEvent extends Event {
         try {
             $changeType = StatusChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid status change type: ' . $changeTypeAsString, ExceptionCode::RESPONSE_EVENT_STATUS_CHANGE_INVALID_TYPE->value, [
+            throw new ResponseException('Invalid status change type: ' . $changeTypeAsString, ExceptionCode::RESPONSE_EVENT_STATUS_CHANGE_INVALID_TYPE->value, [
                 'status_change_type' => $changeTypeAsString,
             ], $e);
         }

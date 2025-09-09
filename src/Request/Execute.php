@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Consistency;
+use Cassandra\Exception\RequestException;
 use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Response\Result\RowsResult;
 
@@ -24,8 +25,9 @@ final class Execute extends Request {
     /**
      * @param array<mixed> $values
      * 
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function __construct(
         protected Result $previousResult,
@@ -46,7 +48,7 @@ final class Execute extends Request {
         } elseif ($previousResult instanceof RowsResult) {
             $preparedData = $previousResult->getLastPreparedData();
             if ($preparedData === null) {
-                throw new Exception(
+                throw new RequestException(
                     message: 'Prepared statement not found for resumption of execution',
                     code: ExceptionCode::REQUEST_EXECUTE_PREPARED_STATEMENT_NOT_FOUND->value,
                     context: [
@@ -57,7 +59,7 @@ final class Execute extends Request {
             }
             $pagingStateOfPreviousResult = $previousResult->getRowsMetadata()->pagingState;
         } else {
-            throw new Exception(
+            throw new RequestException(
                 message: 'Execute request received an invalid previous result instance',
                 code: ExceptionCode::REQUEST_EXECUTE_INVALID_PREVIOUS_RESULT->value,
                 context: [
@@ -99,7 +101,7 @@ final class Execute extends Request {
     }
 
     /**
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
     public function getBody(): string {
@@ -107,7 +109,7 @@ final class Execute extends Request {
 
         if ($this->version >= 5) {
             if ($this->rowsMetadataId === null) {
-                throw new Exception(
+                throw new RequestException(
                     message: 'Missing result metadata id for protocol v5 execute request',
                     code: ExceptionCode::REQUEST_EXECUTE_MISSING_RESULT_METADATA_ID->value,
                     context: [

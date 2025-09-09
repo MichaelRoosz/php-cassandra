@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use ArrayIterator;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Header;
 use Cassandra\Request\Request;
 use Cassandra\Response\Result\ColumnInfo;
@@ -31,7 +32,7 @@ class Result extends Response implements IteratorAggregate {
     protected ?Request $request = null;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function __construct(Header $header, StreamReader $stream) {
 
@@ -46,11 +47,11 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function asPreparedResult(): PreparedResult {
         if (!($this instanceof PreparedResult)) {
-            throw new Exception('Result is not a PreparedResult', ExceptionCode::RESPONSE_RES_NOT_PREPARED_RESULT->value, [
+            throw new ResponseException('Result is not a PreparedResult', ExceptionCode::RESPONSE_RES_NOT_PREPARED_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -59,11 +60,11 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function asRowsResult(): RowsResult {
         if (!($this instanceof RowsResult)) {
-            throw new Exception('Result is not a RowsResult', ExceptionCode::RESPONSE_RES_NOT_ROWS_RESULT->value, [
+            throw new ResponseException('Result is not a RowsResult', ExceptionCode::RESPONSE_RES_NOT_ROWS_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -72,11 +73,11 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function asSchemaChangeResult(): SchemaChangeResult {
         if (!($this instanceof SchemaChangeResult)) {
-            throw new Exception('Result is not a SchemaChangeResult', ExceptionCode::RESPONSE_RES_NOT_SCHEMA_CHANGE_RESULT->value, [
+            throw new ResponseException('Result is not a SchemaChangeResult', ExceptionCode::RESPONSE_RES_NOT_SCHEMA_CHANGE_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -85,11 +86,11 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function asSetKeyspaceResult(): SetKeyspaceResult {
         if (!($this instanceof SetKeyspaceResult)) {
-            throw new Exception('Result is not a SetKeyspaceResult', ExceptionCode::RESPONSE_RES_NOT_SET_KEYSPACE_RESULT->value, [
+            throw new ResponseException('Result is not a SetKeyspaceResult', ExceptionCode::RESPONSE_RES_NOT_SET_KEYSPACE_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -98,11 +99,11 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function asVoidResult(): VoidResult {
         if (!($this instanceof VoidResult)) {
-            throw new Exception('Result is not a VoidResult', ExceptionCode::RESPONSE_RES_NOT_VOID_RESULT->value, [
+            throw new ResponseException('Result is not a VoidResult', ExceptionCode::RESPONSE_RES_NOT_VOID_RESULT->value, [
                 'result_kind' => $this->kind->name,
             ]);
         }
@@ -147,7 +148,7 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function setPreviousResult(Result $previousResult): static {
 
@@ -166,7 +167,7 @@ class Result extends Response implements IteratorAggregate {
 
             $lastPreparedData = $previousResult->getLastPreparedData();
             if ($lastPreparedData === null) {
-                throw new Exception('Prepared statement context not found in previous result', ExceptionCode::RESPONSE_RES_PREPARED_CONTEXT_NOT_FOUND->value, [
+                throw new ResponseException('Prepared statement context not found in previous result', ExceptionCode::RESPONSE_RES_PREPARED_CONTEXT_NOT_FOUND->value, [
                     'operation' => 'Result::setPreviousResult',
                     'previous_result_class' => get_class($previousResult),
                 ]);
@@ -195,8 +196,8 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     protected function readRowsMetadata(): RowsMetadata {
@@ -255,7 +256,7 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     private function readKind(): ResultKind {
         $this->stream->offset(0);
@@ -264,7 +265,7 @@ class Result extends Response implements IteratorAggregate {
         try {
             return ResultKind::from($kindInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid result kind value', ExceptionCode::RESPONSE_RES_INVALID_KIND_VALUE->value, [
+            throw new ResponseException('Invalid result kind value', ExceptionCode::RESPONSE_RES_INVALID_KIND_VALUE->value, [
                 'operation' => 'Result::readKind',
                 'result_kind' => $kindInt,
             ], $e);

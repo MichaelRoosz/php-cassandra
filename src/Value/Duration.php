@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
@@ -69,7 +70,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     /**
      * @param array{ months: int, days: int, nanoseconds: int }|string|DateInterval $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(array|string|DateInterval $value) {
         self::require64Bit();
@@ -88,7 +89,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
@@ -101,7 +102,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public function asDateInterval(): DateInterval {
         $value = $this->value;
@@ -180,7 +181,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
         $interval = DateInterval::createFromDateString($duration);
         if ($interval === false) {
-            throw new Exception(
+            throw new ValueException(
                 'Cannot convert Duration to DateInterval',
                 ExceptionCode::VALUE_DURATION_TO_DATEINTERVAL_FAILED->value, [
                     'duration_string' => $duration,
@@ -358,8 +359,8 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
@@ -375,14 +376,14 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         if (!is_array($value) && !is_string($value) && !$value instanceof DateInterval) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value; expected array, string or DateInterval',
                 ExceptionCode::VALUE_DURATION_INVALID_VALUE_TYPE->value,
                 [
@@ -398,8 +399,8 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
@@ -428,7 +429,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     /**
      * @param array{ months: int, days: int, nanoseconds: int }|string|DateInterval $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(array|string|DateInterval $value): static {
         return new static($value);
@@ -464,7 +465,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
     /**
      * @return array{ months: int, days: int, nanoseconds: int }
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     protected function nativeValueFromDateInterval(DateInterval $value): array {
         self::require64Bit();
@@ -489,7 +490,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
     /**
      * @return array{ months: int, days: int, nanoseconds: int }
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     protected function nativeValueFromString(string $value): array {
         self::require64Bit();
@@ -505,7 +506,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         }
 
         if (!$foundPattern) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value; expected string in ISO 8601 format',
                 ExceptionCode::VALUE_DURATION_INVALID_VALUE_TYPE->value, [
                     'givenValue' => $value,
@@ -570,11 +571,11 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     protected static function require64Bit(): void {
         if (PHP_INT_SIZE < 8) {
-            throw new Exception(
+            throw new ValueException(
                 'The Duration data type requires a 64-bit system',
                 ExceptionCode::VALUE_DURATION_64BIT_REQUIRED->value, [
                     'php_int_size_bytes' => PHP_INT_SIZE,
@@ -588,13 +589,13 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      * @param array<mixed> $value
      * @return array{ months: int, days: int, nanoseconds: int }
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     protected function validateValue(array $value): array {
 
         // validate months
         if (!isset($value['months']) || !is_int($value['months'])) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value - "months" must be provided as int',
                 ExceptionCode::VALUE_DURATION_MONTHS_INVALID->value, [
                     'provided' => $value['months'] ?? null,
@@ -605,7 +606,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         $months = $value['months'];
 
         if ($months < self::INT32_MIN || $months > self::INT32_MAX) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value - "months" is out of int32 range',
                 ExceptionCode::VALUE_DURATION_MONTHS_OUT_OF_RANGE->value, [
                     'value' => $months,
@@ -617,7 +618,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
         // validate days
         if (!isset($value['days']) || !is_int($value['days'])) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value - "days" must be provided as int',
                 ExceptionCode::VALUE_DURATION_DAYS_INVALID->value, [
                     'provided' => $value['days'] ?? null,
@@ -628,7 +629,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         $days = $value['days'];
 
         if ($days < self::INT32_MIN || $days > self::INT32_MAX) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value - "days" is out of int32 range',
                 ExceptionCode::VALUE_DURATION_DAYS_OUT_OF_RANGE->value, [
                     'value' => $days,
@@ -640,7 +641,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
         // validate nanoseconds
         if (!isset($value['nanoseconds']) || !is_int($value['nanoseconds'])) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value - "nanoseconds" must be provided as int',
                 ExceptionCode::VALUE_DURATION_NANOSECONDS_INVALID->value, [
                     'provided' => $value['nanoseconds'] ?? null,
@@ -654,7 +655,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         if (!($months <= 0 && $days <= 0 && $nanoseconds <= 0)
             && !($months >= 0 && $days >= 0 && $nanoseconds >= 0)
         ) {
-            throw new Exception(
+            throw new ValueException(
                 'Invalid duration value - sign mismatch across months, days and nanoseconds',
                 ExceptionCode::VALUE_DURATION_SIGN_MISMATCH->value, [
                     'months' => $months,

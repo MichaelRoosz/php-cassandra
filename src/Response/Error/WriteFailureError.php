@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Error;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
 use Cassandra\Response\Error\Context\WriteFailureContext;
 use Cassandra\Response\Error\Context\WriteType;
-use Cassandra\Response\Exception;
 use Cassandra\Response\StreamReader;
 use TypeError;
 use ValueError;
@@ -18,7 +18,7 @@ final class WriteFailureError extends Error {
     private WriteFailureContext $context;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -36,7 +36,7 @@ final class WriteFailureError extends Error {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readContext(): WriteFailureContext {
 
@@ -57,7 +57,7 @@ final class WriteFailureError extends Error {
         try {
             $writeType = WriteType::from($writeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid write type: ' . $writeTypeAsString, ExceptionCode::RESPONSE_WRITE_FAILURE_INVALID_WRITE_TYPE->value, [
+            throw new ResponseException('Invalid write type: ' . $writeTypeAsString, ExceptionCode::RESPONSE_WRITE_FAILURE_INVALID_WRITE_TYPE->value, [
                 'write_type' => $writeTypeAsString,
             ], $e);
         }

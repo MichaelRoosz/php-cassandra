@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
@@ -17,7 +18,7 @@ final class Inet extends ValueReadableWithLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -28,7 +29,7 @@ final class Inet extends ValueReadableWithLength {
         $inet = inet_ntop($binary);
 
         if ($inet === false) {
-            throw new Exception('Cannot convert inet binary to string', ExceptionCode::VALUE_INET_TO_STRING_FAILED->value, [
+            throw new ValueException('Cannot convert inet binary to string', ExceptionCode::VALUE_INET_TO_STRING_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -39,12 +40,12 @@ final class Inet extends ValueReadableWithLength {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid inet value; expected string', ExceptionCode::VALUE_INET_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid inet value; expected string', ExceptionCode::VALUE_INET_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -53,8 +54,8 @@ final class Inet extends ValueReadableWithLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ResponseException
      */
     #[\Override]
     final public static function fromStream(
@@ -65,7 +66,7 @@ final class Inet extends ValueReadableWithLength {
     ): static {
 
         if ($length !== 4 && $length !== 16) {
-            throw new Exception(
+            throw new ValueException(
                 message: 'Invalid inet length byte',
                 code: ExceptionCode::VALUE_INET_INVALID_LENGTH->value,
                 context: [
@@ -78,7 +79,7 @@ final class Inet extends ValueReadableWithLength {
 
         $inet = inet_ntop($stream->read($length));
         if ($inet === false) {
-            throw new Exception(
+            throw new ValueException(
                 message: 'Cannot parse inet address',
                 code: ExceptionCode::VALUE_INET_PARSE_FAIL->value,
                 context: [
@@ -97,14 +98,14 @@ final class Inet extends ValueReadableWithLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function getBinary(): string {
         $binary = inet_pton($this->value);
 
         if ($binary === false) {
-            throw new Exception('Cannot convert inet string to binary', ExceptionCode::VALUE_INET_TO_BINARY_FAILED->value, [
+            throw new ValueException('Cannot convert inet string to binary', ExceptionCode::VALUE_INET_TO_BINARY_FAILED->value, [
                 'value' => $this->value,
             ]);
         }

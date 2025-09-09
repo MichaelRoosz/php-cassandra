@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\ValueFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
@@ -27,8 +28,9 @@ final class Tuple extends ValueReadableWithoutLength {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     #[\Override]
     public static function fromBinary(
@@ -43,22 +45,22 @@ final class Tuple extends ValueReadableWithoutLength {
     /**
      * @param mixed $value
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new Exception('Invalid tuple value; expected array', ExceptionCode::VALUE_TUPLE_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid tuple value; expected array', ExceptionCode::VALUE_TUPLE_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
 
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::VALUE_TUPLE_TYPEINFO_REQUIRED->value);
+            throw new ValueException('typeInfo is required', ExceptionCode::VALUE_TUPLE_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof TupleInfo) {
-            throw new Exception('Invalid type info, TupleInfo expected', ExceptionCode::VALUE_TUPLE_INVALID_TYPEINFO->value, [
+            throw new ValueException('Invalid type info, TupleInfo expected', ExceptionCode::VALUE_TUPLE_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -67,8 +69,9 @@ final class Tuple extends ValueReadableWithoutLength {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     #[\Override]
     final public static function fromStream(
@@ -78,11 +81,11 @@ final class Tuple extends ValueReadableWithoutLength {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
         if ($typeInfo === null) {
-            throw new Exception('typeInfo is required', ExceptionCode::VALUE_TUPLE_TYPEINFO_REQUIRED->value);
+            throw new ValueException('typeInfo is required', ExceptionCode::VALUE_TUPLE_TYPEINFO_REQUIRED->value);
         }
 
         if (!$typeInfo instanceof TupleInfo) {
-            throw new Exception('Invalid type info, TupleInfo expected', ExceptionCode::VALUE_TUPLE_INVALID_TYPEINFO->value, [
+            throw new ValueException('Invalid type info, TupleInfo expected', ExceptionCode::VALUE_TUPLE_INVALID_TYPEINFO->value, [
                 'given_type' => get_class($typeInfo),
             ]);
         }
@@ -102,8 +105,9 @@ final class Tuple extends ValueReadableWithoutLength {
      * @param array<mixed> $value
      * @param list<\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)> $valueDefinition
      *
-     * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\TypeInfo\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     final public static function fromValue(
         array $value,
@@ -118,7 +122,8 @@ final class Tuple extends ValueReadableWithoutLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     #[\Override]
     public function getBinary(): string {

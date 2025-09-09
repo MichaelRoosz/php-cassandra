@@ -13,7 +13,7 @@ final class ReadTimeoutError extends Error {
     private ReadTimeoutContext $context;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -31,7 +31,7 @@ final class ReadTimeoutError extends Error {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readContext(): ReadTimeoutContext {
 

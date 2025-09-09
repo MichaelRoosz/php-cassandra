@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\StringMath\DecimalCalculator;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
-use Cassandra\StringMath\Exception;
 
 final class Native extends DecimalCalculator {
     #[\Override]
@@ -60,7 +60,7 @@ final class Native extends DecimalCalculator {
     }
 
     /** 
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function divideBy256(string $decimal): array {
@@ -72,7 +72,7 @@ final class Native extends DecimalCalculator {
         for ($i = 0; $i < $length; $i++) {
             $digit = ord($decimal[$i]) - 48;
             if ($digit < 0 || $digit > 9) {
-                throw new Exception(
+                throw new StringMathException(
                     'Invalid character in string',
                     ExceptionCode::STRINGMATH_CALCULATOR_NATIVE_INVALID_CHARACTER->value,
                     [
@@ -193,7 +193,7 @@ final class Native extends DecimalCalculator {
     }
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
     public function toBinary(string $decimal): string {

@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Consistency;
+use Cassandra\Exception\RequestException;
 use Cassandra\Response\Result\PreparedResult;
 
 final class Batch extends Request {
@@ -27,8 +28,9 @@ final class Batch extends Request {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Request\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function appendPreparedStatement(PreparedResult $prepareResult, array $values = []): self {
 
@@ -55,7 +57,7 @@ final class Batch extends Request {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     public function appendQuery(string $query, array $values = []): self {
 
@@ -70,7 +72,7 @@ final class Batch extends Request {
     }
 
     /**
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
     public function getBody(): string {
@@ -82,7 +84,7 @@ final class Batch extends Request {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     protected function encodeBatchParametersAsBinary(
         Consistency $consistency,
@@ -114,7 +116,7 @@ final class Batch extends Request {
                 $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
-                throw new Exception(
+                throw new RequestException(
                     message: 'Server protocol version does not support request option "keyspace"',
                     code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_KEYSPACE->value,
                     context: [
@@ -133,7 +135,7 @@ final class Batch extends Request {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
-                throw new Exception(
+                throw new RequestException(
                     message: 'Server protocol version does not support request option "now_in_seconds"',
                     code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_NOW_IN_SECONDS->value,
                     context: [

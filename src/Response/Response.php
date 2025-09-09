@@ -27,7 +27,7 @@ abstract class Response implements Frame, Stringable {
     protected ?array $warnings = null;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function __construct(
         protected Header $header,
@@ -121,7 +121,7 @@ abstract class Response implements Frame, Stringable {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readExtraData(): void {
         $flags = $this->header->flags;

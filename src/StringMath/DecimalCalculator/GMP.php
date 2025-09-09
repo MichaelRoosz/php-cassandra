@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Cassandra\StringMath\DecimalCalculator;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
-use Cassandra\StringMath\Exception;
 
 final class GMP extends DecimalCalculator {
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     public function __construct() {
         if (!extension_loaded('gmp')) {
-            throw new Exception(
+            throw new StringMathException(
                 'GMP extension is required',
                 ExceptionCode::STRINGMATH_GMP_EXTENSION_NOT_LOADED->value
             );

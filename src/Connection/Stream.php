@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\StreamException;
 use Cassandra\Request\Request;
 
 final class Stream implements NodeImplementation {
@@ -16,7 +17,7 @@ final class Stream implements NodeImplementation {
     protected $stream = null;
 
     /**
-     * @throws \Cassandra\Connection\StreamException
+     * @throws \Cassandra\Exception\StreamException
      */
     public function __construct(
         NodeConfig $config
@@ -51,7 +52,7 @@ final class Stream implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\StreamException
+     * @throws \Cassandra\Exception\StreamException
      */
     #[\Override]
     public function read(int $length): string {
@@ -130,7 +131,7 @@ final class Stream implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\StreamException
+     * @throws \Cassandra\Exception\StreamException
      */
     #[\Override]
     public function readOnce(int $length): string {
@@ -200,7 +201,7 @@ final class Stream implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\StreamException
+     * @throws \Cassandra\Exception\StreamException
      */
     #[\Override]
     public function write(string $binary): void {
@@ -272,7 +273,7 @@ final class Stream implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\StreamException
+     * @throws \Cassandra\Exception\StreamException
      */
     #[\Override]
     public function writeRequest(Request $request): void {
@@ -281,7 +282,7 @@ final class Stream implements NodeImplementation {
 
     /**
      * @return resource
-     * @throws \Cassandra\Connection\StreamException
+     * @throws \Cassandra\Exception\StreamException
      */
     protected function connect() {
         if ($this->stream) {

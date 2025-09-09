@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\TypeInfoException;
 use Cassandra\Type;
 
 final class CustomInfo extends TypeInfo {
@@ -20,11 +21,11 @@ final class CustomInfo extends TypeInfo {
      *  javaClassName: string,
      * } $typeDefinition
      * 
-     * @throws \Cassandra\TypeInfo\Exception
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
         if (!isset($typeDefinition['type'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Custom type definition is missing required 'type' property",
                 ExceptionCode::TYPEINFO_CUSTOM_MISSING_TYPE->value,
                 [
@@ -35,14 +36,14 @@ final class CustomInfo extends TypeInfo {
         }
 
         if ($typeDefinition['type'] !== Type::CUSTOM) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Invalid type definition for Custom: 'type' must be Type::CUSTOM",
                 ExceptionCode::TYPEINFO_CUSTOM_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['javaClassName'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Custom type definition is missing required 'javaClassName' property",
                 ExceptionCode::TYPEINFO_CUSTOM_MISSING_JAVA_CLASS->value,
                 [
@@ -54,7 +55,7 @@ final class CustomInfo extends TypeInfo {
 
         /** @psalm-suppress DocblockTypeContradiction */
         if (!is_string($typeDefinition['javaClassName'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 'Invalid type definition for Custom: javaClassName must be a string',
                 ExceptionCode::TYPEINFO_CUSTOM_JAVA_CLASS_NOT_STRING->value,
                 [

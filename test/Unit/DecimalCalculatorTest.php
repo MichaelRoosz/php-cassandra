@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\StringMath\DecimalCalculator;
 use Cassandra\StringMath\DecimalCalculator\BCMath as BcCalculator;
 use Cassandra\StringMath\DecimalCalculator\GMP as GmpCalculator;
 use Cassandra\StringMath\DecimalCalculator\Native as NativeCalculator;
-use Cassandra\StringMath\Exception as StringMathException;
+use Cassandra\Exception\StringMathException as StringMathException;
 use PHPUnit\Framework\TestCase;
 
 class DecimalCalculatorTest extends TestCase {

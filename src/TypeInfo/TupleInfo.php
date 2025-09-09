@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\TypeInfoException;
 use Cassandra\Type;
 use Cassandra\ValueFactory;
 
@@ -24,13 +25,14 @@ final class TupleInfo extends TypeInfo {
      *  valueTypes: list<\Cassandra\Type|(array{ type: \Cassandra\Type }&array<mixed>)>,
      * } $typeDefinition
      * 
-     * @throws \Cassandra\TypeInfo\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\TypeInfoException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public static function fromTypeDefinition(array $typeDefinition): self {
 
         if (!isset($typeDefinition['type'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Tuple type definition is missing required 'type' property",
                 ExceptionCode::TYPEINFO_TUPLE_MISSING_TYPE->value,
                 [
@@ -41,14 +43,14 @@ final class TupleInfo extends TypeInfo {
         }
 
         if ($typeDefinition['type'] !== Type::TUPLE) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Invalid type definition for Tuple: 'type' must be Type::TUPLE",
                 ExceptionCode::TYPEINFO_TUPLE_INVALID_TYPE->value,
             );
         }
 
         if (!isset($typeDefinition['valueTypes'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Tuple type definition is missing required 'valueTypes' property",
                 ExceptionCode::TYPEINFO_TUPLE_MISSING_VALUETYPES->value,
                 [
@@ -60,7 +62,7 @@ final class TupleInfo extends TypeInfo {
 
         /** @psalm-suppress DocblockTypeContradiction */
         if (!is_array($typeDefinition['valueTypes'])) {
-            throw new Exception(
+            throw new TypeInfoException(
                 "Invalid type definition for Tuple: 'valueTypes' must be an array",
                 ExceptionCode::TYPEINFO_TUPLE_VALUETYPES_NOT_ARRAY->value,
                 [

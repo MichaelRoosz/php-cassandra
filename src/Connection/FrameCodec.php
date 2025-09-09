@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 use Cassandra\Compression\Lz4Decompressor;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\NodeException;
 use Cassandra\Request\Request;
 
 final class FrameCodec implements Node {
@@ -26,7 +27,7 @@ final class FrameCodec implements Node {
     protected NodeImplementation $node;
 
     /**
-     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Exception\NodeException
      */
     public function __construct(NodeImplementation $node, string $compression = '') {
         if ($compression && $compression !== 'lz4') {
@@ -69,8 +70,8 @@ final class FrameCodec implements Node {
     }
 
     /**
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
      */
     #[\Override]
     public function read(int $length): string {
@@ -85,8 +86,8 @@ final class FrameCodec implements Node {
     }
 
     /**
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
      */
     #[\Override]
     public function readOnce(int $length): string {
@@ -102,7 +103,7 @@ final class FrameCodec implements Node {
     }
 
     /**
-     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
     public function writeRequest(Request $request): void {
@@ -142,8 +143,8 @@ final class FrameCodec implements Node {
     }
 
     /**
-     * @throws \Cassandra\Connection\NodeException
-     * @throws \Cassandra\Compression\Exception
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
      */
     protected function readFrame(): void {
         if ($this->compression) {
@@ -307,7 +308,7 @@ final class FrameCodec implements Node {
     }
 
     /**
-     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Exception\NodeException
      */
     protected function writeFrame(string $outputData, bool $isSelfContained, int $dataOffset = 0, int $payloadLength = 0): void {
         if ($payloadLength < 1) {

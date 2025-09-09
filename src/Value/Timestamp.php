@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\TimestampEncodeOption;
@@ -16,7 +17,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     protected readonly int $value;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(int|string|DateTimeInterface $value) {
         self::require64Bit();
@@ -30,7 +31,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
                 $timestamp = $date->getTimestamp();
                 $milliseconds = ($timestamp * 1000) + (int) $date->format('v');
             } catch (PhpException $e) {
-                throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
+                throw new ValueException('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
                     'value_type' => gettype($value),
                     'expected_types' => ['int', 'string', DateTimeInterface::class],
                 ], $e);
@@ -51,7 +52,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
@@ -63,7 +64,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public function asDateTime(): DateTimeImmutable {
         $seconds = intdiv($this->value, 1000);
@@ -73,13 +74,13 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
             $datetime = new DateTimeImmutable('@' . $seconds);
             $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
         } catch (PhpException $e) {
-            throw new Exception('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::VALUE_TIMESTAMP_TO_DATETIME_FAILED->value, [
+            throw new ValueException('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::VALUE_TIMESTAMP_TO_DATETIME_FAILED->value, [
                 'milliseconds' => $this->value,
             ], $e);
         }
 
         if ($datetime === false) {
-            throw new Exception('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::VALUE_TIMESTAMP_TO_DATETIME_FAILED->value, [
+            throw new ValueException('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::VALUE_TIMESTAMP_TO_DATETIME_FAILED->value, [
                 'milliseconds' => $this->value,
             ]);
         }
@@ -92,7 +93,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public function asString(): string {
         return $this->getValue();
@@ -104,7 +105,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -119,7 +120,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
          */
         $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -131,14 +132,14 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     /**
      * @param mixed $value
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
-            throw new Exception('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'expected_types' => ['int', 'string', DateTimeInterface::class],
             ]);
@@ -148,7 +149,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(int|string|DateTimeInterface $value): static {
         return new static($value);
@@ -165,7 +166,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function getValue(): string {
@@ -178,7 +179,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public static function now(): static {
         return new static(new DateTimeImmutable());
@@ -190,13 +191,13 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     protected static function require64Bit(): void {
         if (PHP_INT_SIZE < 8) {
             $className = self::class;
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::VALUE_TIMESTAMP_64BIT_REQUIRED->value, [
+            throw new ValueException('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::VALUE_TIMESTAMP_64BIT_REQUIRED->value, [
                 'class' => $className,
                 'php_int_size_bytes' => PHP_INT_SIZE,
                 'php_int_size_bits' => PHP_INT_SIZE * 8,

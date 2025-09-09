@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -24,7 +25,7 @@ final class Double extends ValueWithFixedLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -38,7 +39,7 @@ final class Double extends ValueWithFixedLength {
         $unpacked = unpack('E', $binary);
 
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack double binary data', ExceptionCode::VALUE_DOUBLE_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack double binary data', ExceptionCode::VALUE_DOUBLE_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -50,12 +51,12 @@ final class Double extends ValueWithFixedLength {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value)) {
-            throw new Exception('Invalid double value; expected numeric', ExceptionCode::VALUE_DOUBLE_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid double value; expected numeric', ExceptionCode::VALUE_DOUBLE_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

@@ -10,7 +10,7 @@ use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
-use Cassandra\Response\Exception as ServerException;
+use Cassandra\Exception\ResponseException as ServerException;
 use Cassandra\Type;
 use Cassandra\Value;
 

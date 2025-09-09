@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Test\Integration;
 
 use Cassandra\Consistency;
-use Cassandra\ExceptionCode;
-use Cassandra\Response\Exception as ResponseException;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException as ResponseException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\Value\ValueEncodeConfig;

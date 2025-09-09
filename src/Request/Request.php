@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Request;
 
 use Cassandra\Consistency;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\RequestException;
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
 use Cassandra\ValueFactory;
@@ -118,7 +119,7 @@ abstract class Request implements Frame, Stringable {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     protected function encodeQueryParametersAsBinary(Consistency $consistency, array $values = [], QueryOptions $options = new QueryOptions(), int $version = 3): string {
         $flags = 0;
@@ -162,7 +163,7 @@ abstract class Request implements Frame, Stringable {
                 $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
-                throw new Exception(
+                throw new RequestException(
                     message: 'Server protocol version does not support request option "keyspace"',
                     code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_KEYSPACE->value,
                     context: [
@@ -181,7 +182,7 @@ abstract class Request implements Frame, Stringable {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
-                throw new Exception(
+                throw new RequestException(
                     message: 'Server protocol version does not support request option "now_in_seconds"',
                     code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_NOW_IN_SECONDS->value,
                     context: [
@@ -205,7 +206,7 @@ abstract class Request implements Frame, Stringable {
     /**
      * @param array<mixed> $values
      *
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     protected function encodeQueryValuesAsBinary(array $values, bool $namesForValues = false): string {
         $valuesBinary = pack('n', count($values));
@@ -254,7 +255,7 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 default:
-                    throw new Exception(
+                    throw new RequestException(
                         message: 'Unsupported bound value type',
                         code: ExceptionCode::REQUEST_VALUES_UNSUPPORTED_VALUE_TYPE->value,
                         context: [
@@ -271,7 +272,7 @@ abstract class Request implements Frame, Stringable {
                     // as identifiers, which consist of: [A-Za-z0-9_]+.
                     $valuesBinary .= pack('n', strlen($name)) . strtolower($name);
                 } else {
-                    throw new Exception(
+                    throw new RequestException(
                         message: 'Invalid values format: sequential array provided while names_for_values=true expects associative array',
                         code: ExceptionCode::REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_ASSOCIATIVE->value,
                         context: [
@@ -285,7 +286,7 @@ abstract class Request implements Frame, Stringable {
                 /**
                 * @see https://github.com/duoshuo/php-cassandra/issues/29
                 */
-                throw new Exception(
+                throw new RequestException(
                     message: 'Invalid values format: associative array provided while names_for_values=false expects sequential array',
                     code: ExceptionCode::REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_SEQUENTIAL->value,
                     context: [
@@ -313,7 +314,8 @@ abstract class Request implements Frame, Stringable {
      * @param array<\Cassandra\Response\Result\ColumnInfo> $bindMarkers
      * @return array<mixed>
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     protected function encodeQueryValuesForBindMarkerTypes(array $values, array $bindMarkers, bool $namesForValues): array {
         $encodedValues = [];

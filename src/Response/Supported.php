@@ -8,7 +8,7 @@ final class Supported extends Response {
     /**
      * @return array<string,string[]>
      *
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function getData(): array {
         $this->stream->offset(0);

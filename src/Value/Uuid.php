@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use Exception as PhpException;
@@ -22,7 +23,7 @@ final class Uuid extends ValueWithFixedLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -36,7 +37,7 @@ final class Uuid extends ValueWithFixedLength {
         $unpacked = unpack('n8', $binary);
 
         if ($unpacked === false) {
-            throw new Exception(
+            throw new ValueException(
                 'Cannot unpack UUID binary data',
                 ExceptionCode::VALUE_UUID_UNPACK_FAILED->value,
                 [
@@ -62,12 +63,12 @@ final class Uuid extends ValueWithFixedLength {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new Exception('Invalid UUID value; expected string', ExceptionCode::VALUE_UUID_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid UUID value; expected string', ExceptionCode::VALUE_UUID_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'expected_format' => 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
             ]);
@@ -101,14 +102,14 @@ final class Uuid extends ValueWithFixedLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public static function random(): static {
 
         try {
             $bytes = random_bytes(16);
         } catch (PhpException $e) {
-            throw new Exception('Failed to generate random bytes', ExceptionCode::VALUE_UUID_RANDOM_FAILED->value);
+            throw new ValueException('Failed to generate random bytes', ExceptionCode::VALUE_UUID_RANDOM_FAILED->value);
         }
 
         // Set version to 0100

@@ -275,9 +275,9 @@ echo "Recent users: " . count($recentUsers) . "\n";
 
 ```php
 <?php
-use Cassandra\Response\Exception as ServerException;
-use Cassandra\Connection\Exception as ConnectionException;
-use Cassandra\Exception as CassandraException;
+use Cassandra\Exception\ServerException;
+use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\CassandraException;
 
 try {
     $result = $conn->query(
@@ -292,15 +292,13 @@ try {
     
 } catch (ServerException $e) {
     echo "Server error: " . $e->getMessage() . "\n";
-    // Handle specific server errors (timeouts, unavailable nodes, etc.)
+    // Inspect $e->getContext() and $e->getErrorContext() for server-provided details
     
 } catch (ConnectionException $e) {
     echo "Connection error: " . $e->getMessage() . "\n";
-    // Handle network/connection issues
     
 } catch (CassandraException $e) {
     echo "Client error: " . $e->getMessage() . "\n";
-    // Handle client-side errors
 }
 ```
 
@@ -692,9 +690,9 @@ Float32::fromValue(2.718);
 Inet::fromValue('192.168.0.1');
 Int32::fromValue(-123);
 Smallint::fromValue(2048);
-Timeuuid::fromValue('f47ac10b-58cc-11cf-a447-00100d4b9e00');
+Timeuuid::fromValue('8db96410-8dba-11f0-b0eb-325096b39f47');
 Tinyint::fromValue(12);
-Uuid::fromValue('00000000-0000-0000-0000-000000000000');
+Uuid::fromValue('78b58041-06dd-4181-a14f-ce0c1979f51c');
 Varchar::fromValue('hello ✅');
 Varint::fromValue(10000000000);
 
@@ -1008,33 +1006,42 @@ php-cassandra provides comprehensive error handling with a well-structured excep
 
 ```
 \Exception
-├── \Cassandra\Exception (base client exception)
-│   ├── \Cassandra\Connection\Exception (connection/transport errors)
-│   │   ├── \Cassandra\Connection\SocketException
-│   │   ├── \Cassandra\Connection\StreamException
-│   │   └── \Cassandra\Connection\NodeException
-│   ├── \Cassandra\Exception\StatementException (result type mismatches)
-│   ├── \Cassandra\Exception\TypeNameParserException (type parsing errors)
-│   └── \Cassandra\Exception\VIntCodecException (variable integer codec errors)
-└── \Cassandra\Response\Exception (server-side errors)
-    ├── \Cassandra\Response\Error\ServerError (5xxx errors)
-    ├── \Cassandra\Response\Error\ProtocolError (protocol violations)
-    ├── \Cassandra\Response\Error\AuthenticationError (authentication failures)
-    ├── \Cassandra\Response\Error\Unavailable (insufficient replicas)
-    ├── \Cassandra\Response\Error\Overloaded (server overloaded)
-    ├── \Cassandra\Response\Error\IsBootstrapping (node bootstrapping)
-    ├── \Cassandra\Response\Error\Truncate (truncation errors)
-    ├── \Cassandra\Response\Error\WriteTimeout (write timeout)
-    ├── \Cassandra\Response\Error\ReadTimeout (read timeout)
-    ├── \Cassandra\Response\Error\ReadFailure (read failure)
-    ├── \Cassandra\Response\Error\FunctionFailure (UDF/UDA failures)
-    ├── \Cassandra\Response\Error\WriteFailure (write failure)
-    ├── \Cassandra\Response\Error\Syntax (CQL syntax errors)
-    ├── \Cassandra\Response\Error\Unauthorized (permission denied)
-    ├── \Cassandra\Response\Error\Invalid (invalid query)
-    ├── \Cassandra\Response\Error\Config (configuration errors)
-    ├── \Cassandra\Response\Error\AlreadyExists (keyspace/table exists)
-    └── \Cassandra\Response\Error\Unprepared (prepared statement not found)
+└── \Cassandra\Exception\CassandraException (base exception)
+    ├── \Cassandra\Exception\CompressionException (conpression errors)
+    ├── \Cassandra\Exception\ConnectionException (connection/transport errors)
+    ├── \Cassandra\Exception\NodeException (node I/O errors)
+    │   ├── \Cassandra\Exception\SocketException
+    │   └── \Cassandra\Exception\StreamException
+    ├── \Cassandra\Exception\RequestException (request errors)
+    ├── \Cassandra\Exception\ResponseException (response errors)
+    ├── \Cassandra\Exception\ServerException (server-side errors)
+    │   ├── \Cassandra\Exception\ServerException\AlreadyExistsException
+    │   ├── \Cassandra\Exception\ServerException\AuthenticationErrorException
+    │   ├── \Cassandra\Exception\ServerException\CasWriteUnknownException
+    │   ├── \Cassandra\Exception\ServerException\CdcWriteFailureException
+    │   ├── \Cassandra\Exception\ServerException\ConfigErrorException
+    │   ├── \Cassandra\Exception\ServerException\FunctionFailureException
+    │   ├── \Cassandra\Exception\ServerException\InvalidException
+    │   ├── \Cassandra\Exception\ServerException\IsBootstrappingException
+    │   ├── \Cassandra\Exception\ServerException\OverloadedException
+    │   ├── \Cassandra\Exception\ServerException\ProtocolErrorException
+    │   ├── \Cassandra\Exception\ServerException\ReadFailureException
+    │   ├── \Cassandra\Exception\ServerException\ReadTimeoutException
+    │   ├── \Cassandra\Exception\ServerException\ServerErrorException
+    │   ├── \Cassandra\Exception\ServerException\SyntaxErrorException
+    │   ├── \Cassandra\Exception\ServerException\TruncateErrorException
+    │   ├── \Cassandra\Exception\ServerException\UnauthorizedException
+    │   ├── \Cassandra\Exception\ServerException\UnavailableException
+    │   ├── \Cassandra\Exception\ServerException\UnpreparedException
+    │   ├── \Cassandra\Exception\ServerException\WriteFailureException
+    │   ├── \Cassandra\Exception\ServerException\WriteTimeoutException
+    ├── \Cassandra\Exception\StatementException (result type mismatches)
+    ├── \Cassandra\Exception\StringMathException (string math backends)
+    ├── \Cassandra\Exception\TypeInfoException (type info building errors)
+    ├── \Cassandra\Exception\TypeNameParserException (type parsing errors)
+    ├── \Cassandra\Exception\ValueException (invalid value inputs)
+    ├── \Cassandra\Exception\ValueFactoryException (value factory/type def errors)
+    └── \Cassandra\Exception\VIntCodecException (variable integer codec errors)
 ```
 
 ### Error Handling Patterns
@@ -1042,8 +1049,9 @@ php-cassandra provides comprehensive error handling with a well-structured excep
 #### Basic Error Handling
 ```php
 use Cassandra\Exception\StatementException;
-use Cassandra\Response\ServerException;
-use Cassandra\Connection\Exception as ConnectionException;
+use Cassandra\Exception\ServerException;
+use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\CassandraException;
 
 try {
     $result = $conn->query('SELECT * FROM users WHERE id = ?', [$userId])
@@ -1065,7 +1073,7 @@ try {
     // Wrong result type access (e.g., calling asRowsResult() on non-rows result)
     error_log("Statement error: " . $e->getMessage());
     
-} catch (\Cassandra\Exception $e) {
+} catch (CassandraException $e) {
     // Other client-side errors
     error_log("Client error: " . $e->getMessage());
 }
@@ -1073,27 +1081,33 @@ try {
 
 #### Specific Server Error Handling
 ```php
-use Cassandra\Response\Error\{
-    Unavailable, ReadTimeout, WriteTimeout, Overloaded,
-    Syntax, Invalid, Unauthorized, AlreadyExists
+use Cassandra\Exception\ServerException\{
+    UnavailableException,
+    ReadTimeoutException,
+    WriteTimeoutException,
+    OverloadedException,
+    SyntaxErrorException,
+    InvalidException,
+    UnauthorizedException,
+    AlreadyExistsException
 };
 
 try {
     $conn->query('CREATE TABLE users (id UUID PRIMARY KEY, name TEXT)');
     
-} catch (AlreadyExists $e) {
+} catch (AlreadyExistsException $e) {
     // Table already exists - this might be OK
     echo "Table already exists, continuing...\n";
     
-} catch (Unauthorized $e) {
+} catch (UnauthorizedException $e) {
     // Permission denied
     throw new \RuntimeException("Insufficient permissions: " . $e->getMessage());
     
-} catch (Syntax $e) {
+} catch (SyntaxErrorException $e) {
     // CQL syntax error
     throw new \RuntimeException("Invalid CQL syntax: " . $e->getMessage());
     
-} catch (Invalid $e) {
+} catch (InvalidException $e) {
     // Invalid query (e.g., wrong types)
     throw new \RuntimeException("Invalid query: " . $e->getMessage());
 }
@@ -1110,7 +1124,7 @@ function executeWithRetry(callable $operation, int $maxRetries = 3): mixed
         try {
             return $operation();
             
-        } catch (Unavailable | ReadTimeout | WriteTimeout | Overloaded $e) {
+        } catch (UnavailableException | ReadTimeoutException | WriteTimeoutException | OverloadedException $e) {
             $attempt++;
             
             if ($attempt >= $maxRetries) {
@@ -1140,7 +1154,7 @@ $result = executeWithRetry(function() use ($conn, $userId) {
 
 #### Timeout Handling
 ```php
-use Cassandra\Response\Error\{ReadTimeout, WriteTimeout};
+use Cassandra\Exception\ServerException\{ReadTimeoutException, WriteTimeoutException};
 
 try {
     $result = $conn->query(
@@ -1149,33 +1163,31 @@ try {
         Consistency::QUORUM
     )->asRowsResult();
     
-} catch (ReadTimeout $e) {
-    // Handle read timeout
-    $consistency = $e->getConsistency();
-    $received = $e->getReceived();
-    $required = $e->getRequired();
-    $dataPresent = $e->isDataPresent();
+} catch (ReadTimeoutException $e) {
+    $ctx = $e->getErrorContext();
+    $consistency = $ctx->consistency;
+    $received = $ctx->nodesAnswered;
+    $required = $ctx->nodesRequired;
+    $dataPresent = $ctx->dataPresent;
     
-    error_log("Read timeout: got {$received}/{$required} responses at {$consistency}, data_present: " . 
+    error_log("Read timeout: got {$received}/{$required} responses at {$consistency->name}, data_present: " . 
               ($dataPresent ? 'yes' : 'no'));
     
-    // Maybe retry with lower consistency
     return $conn->query(
         'SELECT * FROM large_table WHERE complex_condition = ?',
         [$condition],
         Consistency::ONE
     )->asRowsResult();
     
-} catch (WriteTimeout $e) {
-    // Handle write timeout
-    $consistency = $e->getConsistency();
-    $received = $e->getReceived();
-    $required = $e->getRequired();
-    $writeType = $e->getWriteType();
+} catch (WriteTimeoutException $e) {
+    $ctx = $e->getErrorContext();
+    $consistency = $ctx->consistency;
+    $received = $ctx->nodesAcknowledged;
+    $required = $ctx->nodesRequired;
+    $writeType = $ctx->writeType->value;
     
-    error_log("Write timeout: got {$received}/{$required} responses at {$consistency}, write_type: {$writeType}");
+    error_log("Write timeout: got {$received}/{$required} responses at {$consistency->name}, write_type: {$writeType}");
     
-    // For BATCH_LOG writes, the operation might have succeeded
     if ($writeType === 'BATCH_LOG') {
         error_log("Batch log write timeout - operation may have succeeded");
     }
@@ -1187,25 +1199,30 @@ try {
 Most server exceptions provide additional context:
 
 ```php
+use Cassandra\Exception\ServerException\{UnavailableException, ReadTimeoutException, WriteTimeoutException};
+
 try {
     $conn->query('SELECT * FROM users');
     
-} catch (Unavailable $e) {
-    echo "Consistency: " . $e->getConsistency() . "\n";
-    echo "Required: " . $e->getRequired() . "\n";
-    echo "Alive: " . $e->getAlive() . "\n";
+} catch (UnavailableException $e) {
+    $ctx = $e->getErrorContext();
+    echo "Consistency: " . $ctx->consistency->name . "\n";
+    echo "Required: " . $ctx->nodesRequired . "\n";
+    echo "Alive: " . $ctx->nodesAlive . "\n";
     
-} catch (ReadTimeout $e) {
-    echo "Consistency: " . $e->getConsistency() . "\n";
-    echo "Received: " . $e->getReceived() . "\n";
-    echo "Required: " . $e->getRequired() . "\n";
-    echo "Data present: " . ($e->isDataPresent() ? 'yes' : 'no') . "\n";
+} catch (ReadTimeoutException $e) {
+    $ctx = $e->getErrorContext();
+    echo "Consistency: " . $ctx->consistency->name . "\n";
+    echo "Received: " . $ctx->nodesAnswered . "\n";
+    echo "Required: " . $ctx->nodesRequired . "\n";
+    echo "Data present: " . ($ctx->dataPresent ? 'yes' : 'no') . "\n";
     
-} catch (WriteTimeout $e) {
-    echo "Write type: " . $e->getWriteType() . "\n";
-    echo "Consistency: " . $e->getConsistency() . "\n";
-    echo "Received: " . $e->getReceived() . "\n";
-    echo "Required: " . $e->getRequired() . "\n";
+} catch (WriteTimeoutException $e) {
+    $ctx = $e->getErrorContext();
+    echo "Write type: " . $ctx->writeType->value . "\n";
+    echo "Consistency: " . $ctx->consistency->name . "\n";
+    echo "Received: " . $ctx->nodesAcknowledged . "\n";
+    echo "Required: " . $ctx->nodesRequired . "\n";
 }
 ```
 

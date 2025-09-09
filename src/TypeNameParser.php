@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\TypeNameParserException;
 use Cassandra\TypeInfo\ListCollectionInfo;
 use Cassandra\TypeInfo\MapCollectionInfo;
@@ -27,7 +28,7 @@ final class TypeNameParser {
             if (str_contains($typeString, ')')) {
                 throw new TypeNameParserException(
                     'Invalid type string: contains closing bracket without opening bracket',
-                    ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value,
+                    ExceptionCode::TYPENAMEPARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value,
                     [
                         'type_string' => $typeString,
                         'reason' => 'closing_bracket_without_opening',
@@ -45,7 +46,7 @@ final class TypeNameParser {
             if (!str_ends_with($paramString, ')')) {
                 throw new TypeNameParserException(
                     'Invalid type string: missing closing bracket',
-                    ExceptionCode::TYPENAME_PARSER_INVALID_BRACKETS_MISSING_CLOSING->value,
+                    ExceptionCode::TYPENAMEPARSER_INVALID_BRACKETS_MISSING_CLOSING->value,
                     [
                         'type_string' => $typeString,
                         'type_name' => $typeName,
@@ -66,7 +67,7 @@ final class TypeNameParser {
             if ($params) {
                 throw new TypeNameParserException(
                     'Invalid type string: simple types cannot have parameters',
-                    ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_WITH_PARAMETERS->value,
+                    ExceptionCode::TYPENAMEPARSER_SIMPLE_TYPE_WITH_PARAMETERS->value,
                     [
                         'type_string' => $typeString,
                         'type_name' => $typeName,
@@ -79,7 +80,7 @@ final class TypeNameParser {
             if ($isFrozen) {
                 throw new TypeNameParserException(
                     'Invalid type for frozen: simple types cannot be frozen',
-                    ExceptionCode::TYPENAME_PARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value,
+                    ExceptionCode::TYPENAMEPARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value,
                     [
                         'type_string' => $typeString,
                         'type_name' => $typeName,
@@ -134,7 +135,7 @@ final class TypeNameParser {
                 if ($bracketsOpened === 0) {
                     throw new TypeNameParserException(
                         'Invalid type string: unmatched closing bracket',
-                        ExceptionCode::TYPENAME_PARSER_INVALID_PARAM_BRACKETS_UNMATCHED_CLOSING->value,
+                        ExceptionCode::TYPENAMEPARSER_INVALID_PARAM_BRACKETS_UNMATCHED_CLOSING->value,
                         [
                             'param_string' => $paramString,
                             'position' => $i,
@@ -157,7 +158,7 @@ final class TypeNameParser {
                 if ($name !== null) {
                     throw new TypeNameParserException(
                         'Invalid UDT type params: multiple colons found in parameter',
-                        ExceptionCode::TYPENAME_PARSER_UDT_PARAMS_MULTIPLE_COLONS->value,
+                        ExceptionCode::TYPENAMEPARSER_UDT_PARAMS_MULTIPLE_COLONS->value,
                         [
                             'param_string' => $paramString,
                             'position' => $i,
@@ -188,7 +189,7 @@ final class TypeNameParser {
         if ($bracketsOpened > 0) {
             throw new TypeNameParserException(
                 'Invalid type string: unmatched opening bracket',
-                ExceptionCode::TYPENAME_PARSER_INVALID_PARAM_BRACKETS_UNMATCHED_OPENING->value,
+                ExceptionCode::TYPENAMEPARSER_INVALID_PARAM_BRACKETS_UNMATCHED_OPENING->value,
                 [
                     'param_string' => $paramString,
                     'unmatched_brackets' => $bracketsOpened,
@@ -268,7 +269,7 @@ final class TypeNameParser {
         if (count($params) !== 1) {
             throw new TypeNameParserException(
                 'Invalid frozen type params: exactly one parameter required',
-                ExceptionCode::TYPENAME_PARSER_FROZEN_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_FROZEN_INVALID_PARAM_COUNT->value,
                 [
                     'expected_count' => 1,
                     'actual_count' => count($params),
@@ -291,7 +292,7 @@ final class TypeNameParser {
         if (count($params) !== 1) {
             throw new TypeNameParserException(
                 'Invalid list type params: exactly one parameter required',
-                ExceptionCode::TYPENAME_PARSER_LIST_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_LIST_INVALID_PARAM_COUNT->value,
                 [
                     'expected_count' => 1,
                     'actual_count' => count($params),
@@ -316,7 +317,7 @@ final class TypeNameParser {
         if (count($params) !== 2) {
             throw new TypeNameParserException(
                 'Invalid map type params: exactly two parameters required',
-                ExceptionCode::TYPENAME_PARSER_MAP_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_MAP_INVALID_PARAM_COUNT->value,
                 [
                     'expected_count' => 2,
                     'actual_count' => count($params),
@@ -342,7 +343,7 @@ final class TypeNameParser {
         if (count($params) !== 1) {
             throw new TypeNameParserException(
                 'Invalid reversed type params: exactly one parameter required',
-                ExceptionCode::TYPENAME_PARSER_REVERSED_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_REVERSED_INVALID_PARAM_COUNT->value,
                 [
                     'expected_count' => 1,
                     'actual_count' => count($params),
@@ -365,7 +366,7 @@ final class TypeNameParser {
         if (count($params) !== 1) {
             throw new TypeNameParserException(
                 'Invalid set type params: exactly one parameter required',
-                ExceptionCode::TYPENAME_PARSER_SET_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_SET_INVALID_PARAM_COUNT->value,
                 [
                     'expected_count' => 1,
                     'actual_count' => count($params),
@@ -390,7 +391,7 @@ final class TypeNameParser {
         if (count($params) < 1) {
             throw new TypeNameParserException(
                 'Invalid tuple type params: at least one parameter required',
-                ExceptionCode::TYPENAME_PARSER_TUPLE_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_TUPLE_INVALID_PARAM_COUNT->value,
                 [
                     'minimum_count' => 1,
                     'actual_count' => count($params),
@@ -419,7 +420,7 @@ final class TypeNameParser {
         if (count($params) < 3) {
             throw new TypeNameParserException(
                 'Invalid UDT type params: at least three parameters required',
-                ExceptionCode::TYPENAME_PARSER_UDT_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_UDT_INVALID_PARAM_COUNT->value,
                 [
                     'minimum_count' => 3,
                     'actual_count' => count($params),
@@ -439,7 +440,7 @@ final class TypeNameParser {
             if (!is_string($key)) {
                 throw new TypeNameParserException(
                     'Invalid UDT type params: field keys must be strings',
-                    ExceptionCode::TYPENAME_PARSER_UDT_FIELD_KEY_NOT_STRING->value,
+                    ExceptionCode::TYPENAMEPARSER_UDT_FIELD_KEY_NOT_STRING->value,
                     [
                         'invalid_key' => $key,
                         'key_type' => gettype($key),
@@ -465,7 +466,7 @@ final class TypeNameParser {
         if (count($params) !== 2) {
             throw new TypeNameParserException(
                 'Invalid vector type params: exactly two parameters required',
-                ExceptionCode::TYPENAME_PARSER_VECTOR_INVALID_PARAM_COUNT->value,
+                ExceptionCode::TYPENAMEPARSER_VECTOR_INVALID_PARAM_COUNT->value,
                 [
                     'expected_count' => 2,
                     'actual_count' => count($params),
@@ -480,7 +481,7 @@ final class TypeNameParser {
         if (!is_numeric($params[1])) {
             throw new TypeNameParserException(
                 'Invalid vector type dimensions: must be numeric',
-                ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_NON_NUMERIC->value,
+                ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_NON_NUMERIC->value,
                 [
                     'provided_value' => $params[1],
                     'value_type' => gettype($params[1]),
@@ -494,7 +495,7 @@ final class TypeNameParser {
         if ($dimensions < 0) {
             throw new TypeNameParserException(
                 'Invalid vector type dimensions: must be non-negative',
-                ExceptionCode::TYPENAME_PARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value,
+                ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value,
                 [
                     'provided_value' => $dimensions,
                     'minimum_value' => 0,

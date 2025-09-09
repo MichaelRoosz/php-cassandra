@@ -13,7 +13,7 @@ final class CasWriteUnknownError extends Error {
     private CasWriteUnknownContext $context;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -31,7 +31,7 @@ final class CasWriteUnknownError extends Error {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception    
+     * @throws \Cassandra\Exception\ResponseException    
      */
     protected function readContext(): CasWriteUnknownContext {
 

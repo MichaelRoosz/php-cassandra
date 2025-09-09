@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use Cassandra\Consistency;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Type;
 use Cassandra\ValueFactory;
 use Cassandra\TypeInfo\ListCollectionInfo;
@@ -59,7 +60,7 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function read(int $length): string {
         if ($length < 1) {
@@ -67,7 +68,7 @@ class StreamReader {
         }
 
         if ($this->offset + $length > $this->dataLength) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Attempted to read beyond available data',
                 code: ExceptionCode::RESPONSE_SR_READ_BEYOND_AVAILABLE->value,
                 context: [
@@ -88,14 +89,14 @@ class StreamReader {
 
     /**
      * Reads a 1 byte unsigned integer
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readByte(): int {
         return ord($this->read(1));
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readBytes(): ?string {
 
@@ -115,7 +116,7 @@ class StreamReader {
     /**
      * @return array<string,?string>
      *
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readBytesMap(): array {
         $map = [];
@@ -130,7 +131,7 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readConsistency(): Consistency {
 
@@ -139,7 +140,7 @@ class StreamReader {
         try {
             $consistency = Consistency::from($consistencyAsInt);
         } catch (ValueError|TypeError $e) {
-            throw new Exception(
+            throw new ResponseException(
                 'Invalid consistency: ' . $consistencyAsInt,
                 ExceptionCode::RESPONSE_SR_INVALID_CONSISTENCY->value,
                 [
@@ -158,7 +159,7 @@ class StreamReader {
      *   port: int,
      * }
      * 
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readInet(): array {
         $address = $this->readInetAddr();
@@ -171,14 +172,14 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readInetAddr(): string {
 
         $length = $this->readByte();
 
         if ($length !== 4 && $length !== 16) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Invalid inet length byte',
                 code: ExceptionCode::RESPONSE_SR_INVALID_INET_LENGTH->value,
                 context: [
@@ -191,7 +192,7 @@ class StreamReader {
 
         $inet = inet_ntop($this->read($length));
         if ($inet === false) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Cannot parse inet address',
                 code: ExceptionCode::RESPONSE_SR_INET_PARSE_FAIL->value,
                 context: [
@@ -206,7 +207,7 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readInt(): int {
 
@@ -215,7 +216,7 @@ class StreamReader {
          */
         $unpacked = unpack('N', $this->read(4));
         if ($unpacked === false) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Cannot unpack 32-bit integer',
                 code: ExceptionCode::RESPONSE_SR_UNPACK_INT_FAIL->value,
                 context: [
@@ -231,7 +232,7 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readLong(): int {
 
@@ -240,7 +241,7 @@ class StreamReader {
          */
         $unpacked = unpack('J', $this->read(8));
         if ($unpacked === false) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Cannot unpack 64-bit integer',
                 code: ExceptionCode::RESPONSE_SR_UNPACK_LONG_FAIL->value,
                 context: [
@@ -254,7 +255,7 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readLongString(): string {
 
@@ -266,7 +267,7 @@ class StreamReader {
     /**
      * @return array<string,int>
      *
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readReasonMap(): array {
         $map = [];
@@ -281,7 +282,7 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readShort(): int {
 
@@ -290,7 +291,7 @@ class StreamReader {
          */
         $unpacked = unpack('n', $this->read(2));
         if ($unpacked === false) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Cannot unpack 16-bit integer',
                 code: ExceptionCode::RESPONSE_SR_UNPACK_SHORT_FAIL->value,
                 context: [
@@ -304,7 +305,7 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readShortBytes(): string {
 
@@ -316,7 +317,7 @@ class StreamReader {
     /**
      * Reads a signed VInt with a maximum size of 32 bits
      * 
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function readSignedVint32(): int {
@@ -327,14 +328,14 @@ class StreamReader {
      * Reads a signed VInt with a maximum size of 64 bits.
      * This is named "vint" in the native protocol specification.
      * 
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readSignedVint64(): int {
         return $this->vIntCodec->readSignedVint64($this);
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readString(): string {
 
@@ -346,7 +347,7 @@ class StreamReader {
     /**
      * @return string[]
      *
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readStringList(): array {
         $list = [];
@@ -361,7 +362,7 @@ class StreamReader {
     /**
      * @return array<string,string>
      *
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readStringMap(): array {
         $map = [];
@@ -378,7 +379,7 @@ class StreamReader {
     /**
      * @return array<string,string[]>
      *
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readStringMultimap(): array {
         $map = [];
@@ -397,8 +398,8 @@ class StreamReader {
      * Reads a type info object.
      * The native protocol specification calls this an "option".
      * 
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     final public function readTypeInfo(): TypeInfo {
@@ -407,7 +408,7 @@ class StreamReader {
         try {
             $type = Type::from($typeShort);
         } catch (ValueError|TypeError $e) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Invalid type discriminator',
                 code: ExceptionCode::RESPONSE_SR_INVALID_TYPE_DISCRIMINATOR->value,
                 context: [
@@ -478,7 +479,7 @@ class StreamReader {
             case Type::VECTOR:
 
                 // not supported as of protocol v5
-                throw new Exception(
+                throw new ResponseException(
                     message: 'Native vector type not supported as of protocol v5',
                     code: ExceptionCode::RESPONSE_SR_VECTOR_TYPE_NOT_SUPPORTED->value,
                     context: [
@@ -496,7 +497,7 @@ class StreamReader {
     /**
      * Reads an unsigned VInt with a maximum size of 32 bits
      * 
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\VIntCodecException
      */
     final public function readUnsignedVInt32(): int {
@@ -507,14 +508,14 @@ class StreamReader {
      * Reads an unsigned VInt with a maximum size of 64 bits.
      * This is named "unsigned vint" in the native protocol specification.
      * 
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readUnsignedVInt64(): int {
         return $this->vIntCodec->readUnsignedVint64($this);
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readUuid(): string {
 
@@ -525,7 +526,7 @@ class StreamReader {
          */
         $data = unpack('n8', $binary);
         if ($data === false) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Cannot unpack UUID',
                 code: ExceptionCode::RESPONSE_SR_UNPACK_UUID_FAIL->value,
                 context: [
@@ -551,8 +552,9 @@ class StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     final public function readValue(TypeInfo $typeInfo, ValueEncodeConfig $valueEncodeConfig): mixed {
 
@@ -569,7 +571,7 @@ class StreamReader {
                 return null;
             }
 
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Invalid value length',
                 code: ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value,
                 context: [

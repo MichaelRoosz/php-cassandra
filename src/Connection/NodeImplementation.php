@@ -6,12 +6,12 @@ namespace Cassandra\Connection;
 
 interface NodeImplementation extends Node {
     /**
-     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Exception\NodeException
      */
     public function __construct(NodeConfig $config);
 
     /**
-     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Exception\NodeException
      */
     public function write(string $binary): void;
 }

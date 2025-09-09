@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Cassandra\Response\Result;
 
 use ArrayIterator;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Header;
-use Cassandra\Response\Exception;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Response\Result;
 use Cassandra\Response\Result\Data\PreparedData;
 use Cassandra\Response\Result\Data\ResultData;
@@ -19,8 +19,8 @@ use Iterator;
 class PreparedResult extends Result {
     protected PreparedData $preparedData;
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     public function __construct(Header $header, StreamReader $stream) {
@@ -52,14 +52,14 @@ class PreparedResult extends Result {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     private function readPreparedData(): PreparedData {
 
         if ($this->kind !== ResultKind::PREPARED) {
-            throw new Exception('Unexpected result kind: ' . $this->kind->name, ExceptionCode::RESPONSE_PREPARED_UNEXPECTED_KIND->value, [
+            throw new ResponseException('Unexpected result kind: ' . $this->kind->name, ExceptionCode::RESPONSE_PREPARED_UNEXPECTED_KIND->value, [
                 'operation' => 'PreparedResult::getPreparedData',
                 'expected' => ResultKind::PREPARED->name,
                 'received' => $this->kind->name,
@@ -87,8 +87,8 @@ class PreparedResult extends Result {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     private function readPrepareMetadata(): PrepareMetadata {

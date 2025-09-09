@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use Cassandra\EventType;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Event\Data\EventData;
 use TypeError;
@@ -42,7 +43,7 @@ class Event extends Response {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readType(): EventType {
 
@@ -52,7 +53,7 @@ class Event extends Response {
         try {
             return EventType::from($typeString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid event type: ' . $typeString, ExceptionCode::RESPONSE_EVENT_INVALID_TYPE->value, [
+            throw new ResponseException('Invalid event type: ' . $typeString, ExceptionCode::RESPONSE_EVENT_INVALID_TYPE->value, [
                 'event_type' => $typeString,
             ], $e);
         }

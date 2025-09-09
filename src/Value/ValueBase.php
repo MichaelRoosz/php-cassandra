@@ -11,8 +11,7 @@ use Stringable;
 
 abstract class ValueBase implements Stringable {
     /**
-     * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function __toString(): string {
@@ -24,8 +23,7 @@ abstract class ValueBase implements Stringable {
         }
 
         /**
-         *  @throws \Cassandra\Value\Exception
-         *  @throws \Cassandra\Response\Exception
+         * @throws \Cassandra\Exception\ValueException
          * */
         $json = json_encode(
             $value,
@@ -43,7 +41,8 @@ abstract class ValueBase implements Stringable {
     abstract public static function fixedLength(): int;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     abstract public static function fromBinary(
         string $binary,
@@ -54,12 +53,14 @@ abstract class ValueBase implements Stringable {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     abstract public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     abstract public static function fromStream(
         StreamReader $stream,

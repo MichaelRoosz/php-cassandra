@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Event;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Event;
 use Cassandra\Response\Event\Data\EventData;
 use Cassandra\Response\Event\Data\SchemaChangeData;
 use Cassandra\Response\Event\Data\SchemaChangeTarget;
 use Cassandra\Response\Event\Data\SchemaChangeType;
-use Cassandra\Response\Exception;
 use Cassandra\Response\StreamReader;
 use TypeError;
 use ValueError;
@@ -20,7 +20,7 @@ final class SchemaChangeEvent extends Event {
     private SchemaChangeData $data;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -42,7 +42,7 @@ final class SchemaChangeEvent extends Event {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readData(): SchemaChangeData {
 
@@ -51,7 +51,7 @@ final class SchemaChangeEvent extends Event {
         try {
             $changeType = SchemaChangeType::from($changeTypeAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid schema change type: ' . $changeTypeAsString, ExceptionCode::RESPONSE_EVENT_SCHEMA_CHANGE_INVALID_TYPE->value, [
+            throw new ResponseException('Invalid schema change type: ' . $changeTypeAsString, ExceptionCode::RESPONSE_EVENT_SCHEMA_CHANGE_INVALID_TYPE->value, [
                 'schema_change_type' => $changeTypeAsString,
             ], $e);
         }
@@ -61,7 +61,7 @@ final class SchemaChangeEvent extends Event {
         try {
             $target = SchemaChangeTarget::from($targetAsString);
         } catch (ValueError|TypeError $e) {
-            throw new Exception('Invalid schema change target: ' . $targetAsString, ExceptionCode::RESPONSE_EVENT_SCHEMA_CHANGE_INVALID_TARGET->value, [
+            throw new ResponseException('Invalid schema change target: ' . $targetAsString, ExceptionCode::RESPONSE_EVENT_SCHEMA_CHANGE_INVALID_TARGET->value, [
                 'schema_change_target' => $targetAsString,
             ], $e);
         }
@@ -85,7 +85,7 @@ final class SchemaChangeEvent extends Event {
                 break;
 
             default:
-                throw new Exception(
+                throw new ResponseException(
                     message: 'Invalid schema change target: ' . $target->value,
                     code: ExceptionCode::RESPONSE_EVENT_SCHEMA_CHANGE_UNEXPECTED_TARGET_VALUE->value,
                     context: [

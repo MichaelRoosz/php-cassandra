@@ -9,7 +9,8 @@ use Cassandra\TypeInfo\TypeInfo;
 
 abstract class ValueWithFixedLength extends ValueBase {
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     #[\Override]
     abstract public static function fromBinary(
@@ -19,8 +20,9 @@ abstract class ValueWithFixedLength extends ValueBase {
     ): static;
 
     /**
-     * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ResponseException
      */
     #[\Override]
     public static function fromStream(

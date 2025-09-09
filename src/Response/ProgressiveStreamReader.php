@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Response;
 
 use Cassandra\Connection\Node;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\TypeNameParser;
 use Cassandra\VIntCodec;
 
@@ -20,11 +21,11 @@ final class ProgressiveStreamReader extends StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     #[\Override]
     public function getData(bool $includeExtraData = false): string {
-        throw new Exception(
+        throw new ResponseException(
             message: 'ProgressiveStreamReader does not support random access via getData()',
             code: ExceptionCode::RESPONSE_PSR_GET_DATA_NOT_SUPPORTED->value,
             context: [
@@ -34,8 +35,8 @@ final class ProgressiveStreamReader extends StreamReader {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Connection\NodeException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
     public function read(int $length): string {
@@ -44,7 +45,7 @@ final class ProgressiveStreamReader extends StreamReader {
         }
 
         if ($this->source === null) {
-            throw new Exception(
+            throw new ResponseException(
                 message: 'Source not set',
                 code: ExceptionCode::RESPONSE_PSR_SOURCE_NOT_SET->value,
                 context: [

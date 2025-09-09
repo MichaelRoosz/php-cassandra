@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Response\StreamReader;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -15,7 +16,8 @@ abstract class ValueReadableWithLength extends ValueBase {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     #[\Override]
     abstract public static function fromBinary(
@@ -25,8 +27,9 @@ abstract class ValueReadableWithLength extends ValueBase {
     ): static;
 
     /**
-     * @throws \Cassandra\Value\Exception
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ResponseException
      */
     #[\Override]
     public static function fromStream(
@@ -36,7 +39,7 @@ abstract class ValueReadableWithLength extends ValueBase {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
         if ($length === null || $length < 0) {
-            throw new Exception('Invalid data length', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
+            throw new ValueException('Invalid data length', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
                 'length' => $length,
             ]);
         }

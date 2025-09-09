@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\VIntCodecException;
 use Cassandra\Response\StreamReader;
 
@@ -180,7 +181,7 @@ final class VIntCodec {
 
     /**
      * @throws \Cassandra\Exception\VIntCodecException
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readSignedVint32(StreamReader $stream): int {
 
@@ -197,7 +198,7 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readSignedVint64(StreamReader $stream): int {
         return $this->zigZagDecode($this->readUnsignedVint64($stream));
@@ -205,7 +206,7 @@ final class VIntCodec {
 
     /**
      * @throws \Cassandra\Exception\VIntCodecException
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readUnsignedVint32(StreamReader $stream): int {
 
@@ -222,7 +223,7 @@ final class VIntCodec {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function readUnsignedVint64(StreamReader $stream): int {
 

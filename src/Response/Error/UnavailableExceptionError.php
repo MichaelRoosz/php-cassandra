@@ -13,7 +13,7 @@ final class UnavailableExceptionError extends Error {
     private UnavailableExceptionContext $context;
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     final public function __construct(Header $header, StreamReader $stream) {
 
@@ -31,7 +31,7 @@ final class UnavailableExceptionError extends Error {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     protected function readContext(): UnavailableExceptionContext {
 

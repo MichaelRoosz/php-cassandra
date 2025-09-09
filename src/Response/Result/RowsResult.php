@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Result;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Header;
-use Cassandra\Response\Exception;
 use Cassandra\Response\Result;
 use Cassandra\Response\Result\Data\ResultData;
 use Cassandra\Response\Result\Data\RowsData;
@@ -40,8 +40,8 @@ final class RowsResult extends Result {
     private ValueEncodeConfig $valueEncodeConfig;
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     final public function __construct(Header $header, StreamReader $stream) {
@@ -70,11 +70,11 @@ final class RowsResult extends Result {
      * @param array<mixed> $constructorArgs
      * @param FetchType $fetchType
      * 
-     * @throws \Cassandra\Response\Exception
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function configureFetchObject(string $rowClass, array $constructorArgs = [], FetchType $fetchType = FetchType::ASSOC): void {
         if (!is_subclass_of($rowClass, RowClassInterface::class)) {
-            throw new Exception('Invalid row class for fetchObject: must implement \\Cassandra\\Response\\Result\\RowClassInterface', ExceptionCode::RESPONSE_ROWS_INVALID_ROWCLASS->value, [
+            throw new ResponseException('Invalid row class for fetchObject: must implement \\Cassandra\\Response\\Result\\RowClassInterface', ExceptionCode::RESPONSE_ROWS_INVALID_ROWCLASS->value, [
                 'operation' => 'RowsResult::configureFetchObject',
                 'row_class' => $rowClass,
                 'expected_interface' => RowClassInterface::class,
@@ -96,8 +96,9 @@ final class RowsResult extends Result {
      * Fetches the next row from the result set.
      *
      * @return array<string|int, mixed>|false
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetch(FetchType $mode = FetchType::ASSOC): array|false {
         if ($this->fetchedRows >= $this->rowCount) {
@@ -118,8 +119,9 @@ final class RowsResult extends Result {
      * Fetches the remaining rows from the current cursor position.
      *
      * @return array<int, array<string|int, mixed>>
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchAll(FetchType $mode = FetchType::ASSOC): array {
         $rows = [];
@@ -140,8 +142,9 @@ final class RowsResult extends Result {
      * in that it consumes the stream from the current cursor forward.
      *
      * @return array<mixed>
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchAllColumns(int $index = 0): array {
         $values = [];
@@ -164,13 +167,14 @@ final class RowsResult extends Result {
      * Consumes the cursor from the current position forward.
      *
      * @return array<int|string, mixed>
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchAllKeyPairs(int $keyIndex = 0, int $valueIndex = 1, bool $mergeDuplicates = false): array {
 
         if ($this->rowsMetadata->columns === null) {
-            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
+            throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchAllKeyPairs',
                 'result_kind' => $this->kind->name,
             ]);
@@ -195,7 +199,7 @@ final class RowsResult extends Result {
                     /** @psalm-suppress MixedAssignment */
                     $key = $columnValue;
                     if (!is_int($key) && !is_string($key)) {
-                        throw new Exception('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
+                        throw new ResponseException('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
                             'key_type' => gettype($key),
                             'key_index' => $keyIndex,
                         ]);
@@ -210,7 +214,7 @@ final class RowsResult extends Result {
             $this->fetchedRows++;
 
             if ($key === null) {
-                throw new Exception('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
+                throw new ResponseException('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                     'operation' => 'RowsResult::fetchAllKeyPairs',
                     'key_index' => $keyIndex,
                     'column_count' => count($this->rowsMetadata->columns),
@@ -244,8 +248,9 @@ final class RowsResult extends Result {
      *
      * @return array<\Cassandra\Response\Result\RowClassInterface>
      *
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchAllObjects(): array {
 
@@ -266,8 +271,9 @@ final class RowsResult extends Result {
      * Returns false when there are no more rows.
      *
      * @return mixed|false
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchColumn(int $index = 0): mixed {
         if ($this->fetchedRows >= $this->rowCount) {
@@ -275,7 +281,7 @@ final class RowsResult extends Result {
         }
 
         if ($this->rowsMetadata->columns === null) {
-            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
+            throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchColumn',
                 'result_kind' => $this->kind->name,
             ]);
@@ -304,8 +310,9 @@ final class RowsResult extends Result {
      * Returns false when there are no more rows.
      *
      * @return array<int|string, mixed>|false
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchKeyPair(int $keyIndex = 0, int $valueIndex = 1): array|false {
         if ($this->fetchedRows >= $this->rowCount) {
@@ -313,7 +320,7 @@ final class RowsResult extends Result {
         }
 
         if ($this->rowsMetadata->columns === null) {
-            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
+            throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchKeyPair',
                 'result_kind' => $this->kind->name,
             ]);
@@ -331,7 +338,7 @@ final class RowsResult extends Result {
                 /** @psalm-suppress MixedAssignment */
                 $key = $columnValue;
                 if (!is_int($key) && !is_string($key)) {
-                    throw new Exception('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
+                    throw new ResponseException('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
                         'key_type' => gettype($key),
                         'key_index' => $keyIndex,
                     ]);
@@ -346,7 +353,7 @@ final class RowsResult extends Result {
         $this->fetchedRows++;
 
         if ($key === null) {
-            throw new Exception('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
+            throw new ResponseException('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                 'key_index' => $keyIndex,
                 'column_count' => count($this->rowsMetadata->columns),
             ]);
@@ -361,8 +368,9 @@ final class RowsResult extends Result {
      *
      * @return \Cassandra\Response\Result\RowClassInterface|false
      * 
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchObject(): RowClassInterface|false {
 
@@ -371,7 +379,7 @@ final class RowsResult extends Result {
         $mode = $this->fetchObjectConfiguration['fetchType'];
 
         if (!is_subclass_of($rowClass, RowClassInterface::class)) {
-            throw new Exception('row class "' . $rowClass . '" is not a subclass of \\Cassandra\\Response\\RowClassInterface', ExceptionCode::RESPONSE_ROWS_ROWCLASS_NOT_SUBCLASS->value, [
+            throw new ResponseException('row class "' . $rowClass . '" is not a subclass of \\Cassandra\\Response\\RowClassInterface', ExceptionCode::RESPONSE_ROWS_ROWCLASS_NOT_SUBCLASS->value, [
                 'row_class' => $rowClass,
                 'expected_interface' => RowClassInterface::class,
             ]);
@@ -389,8 +397,9 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function getData(): ResultData {
         return $this->getRowsData();
@@ -412,8 +421,9 @@ final class RowsResult extends Result {
     }
 
     /**
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function getRowsData(): RowsData {
 
@@ -484,12 +494,13 @@ final class RowsResult extends Result {
 
     /**
      * @return array<mixed>
-     * @throws \Cassandra\Response\Exception
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     private function readNextRow(FetchType $mode = FetchType::ASSOC): array {
         if ($this->rowsMetadata->columns === null) {
-            throw new Exception('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
+            throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::readNextRow',
                 'result_kind' => $this->kind->name,
             ]);

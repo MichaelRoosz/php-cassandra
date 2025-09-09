@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -32,12 +33,12 @@ final class Boolean extends ValueWithFixedLength {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_bool($value)) {
-            throw new Exception('Invalid boolean value; expected bool', ExceptionCode::VALUE_BOOLEAN_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid boolean value; expected bool', ExceptionCode::VALUE_BOOLEAN_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }

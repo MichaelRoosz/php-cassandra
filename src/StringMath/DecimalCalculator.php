@@ -31,7 +31,7 @@ abstract class DecimalCalculator {
     abstract public function fromBinary(string $binary): string;
 
     /**
-     * @throws \Cassandra\StringMath\Exception
+     * @throws \Cassandra\Exception\StringMathException
      */
     public static function get(): self {
         if (self::$calculator === null) {

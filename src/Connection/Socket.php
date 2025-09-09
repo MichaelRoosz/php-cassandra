@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\SocketException;
 use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
@@ -14,7 +15,7 @@ final class Socket implements NodeImplementation {
     protected ?PhpSocket $socket = null;
 
     /**
-     * @throws \Cassandra\Connection\SocketException
+     * @throws \Cassandra\Exception\SocketException
      */
     public function __construct(
         NodeConfig $config
@@ -61,7 +62,7 @@ final class Socket implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\SocketException
+     * @throws \Cassandra\Exception\SocketException
      */
     #[\Override]
     public function read(int $length): string {
@@ -158,7 +159,7 @@ final class Socket implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\SocketException
+     * @throws \Cassandra\Exception\SocketException
      */
     #[\Override]
     public function readOnce(int $length): string {
@@ -213,7 +214,7 @@ final class Socket implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\SocketException
+     * @throws \Cassandra\Exception\SocketException
      */
     #[\Override]
     public function write(string $binary): void {
@@ -254,7 +255,7 @@ final class Socket implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\SocketException
+     * @throws \Cassandra\Exception\SocketException
      */
     #[\Override]
     public function writeRequest(Request $request): void {
@@ -262,7 +263,7 @@ final class Socket implements NodeImplementation {
     }
 
     /**
-     * @throws \Cassandra\Connection\SocketException
+     * @throws \Cassandra\Exception\SocketException
      */
     protected function connect(): PhpSocket {
         if ($this->socket) {

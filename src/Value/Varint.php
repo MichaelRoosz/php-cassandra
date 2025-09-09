@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\StringMathException;
+use Cassandra\Exception\ValueException;
 use Cassandra\StringMath\DecimalCalculator;
-use Cassandra\StringMath\Exception as StringMathException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\VarintEncodeOption;
@@ -15,7 +16,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
     protected readonly string|int $value;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(string|int $value) {
 
@@ -27,7 +28,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
 
         $isInteger = str_starts_with($value, '-') ? ctype_digit(substr($value, 1)) : ctype_digit($value);
         if (!$isInteger) {
-            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::VALUE_VARINT_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid varint value; expected int or integer string', ExceptionCode::VALUE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -46,7 +47,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
@@ -57,11 +58,11 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public function asInt(): int {
         if (!is_int($this->value)) {
-            throw new Exception(
+            throw new ValueException(
                 'Value of Varint is outside of possible integer range for this system',
                 ExceptionCode::VALUE_VARINT_OUT_OF_PHP_INT_RANGE->value,
                 [
@@ -79,7 +80,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -93,7 +94,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
             try {
                 $decimal = DecimalCalculator::get()->fromBinary($binary);
             } catch (StringMathException $e) {
-                throw new Exception('Failed to get decimal from binary', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
+                throw new ValueException('Failed to get decimal from binary', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
                     'binary' => $binary,
                 ], $e);
             }
@@ -106,7 +107,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
          */
         $unpacked = unpack('C*', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack varint binary data', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack varint binary data', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
             ]);
         }
@@ -124,12 +125,12 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_numeric($value) || is_float($value)) {
-            throw new Exception('Invalid varint value; expected int or integer string', ExceptionCode::VALUE_VARINT_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid varint value; expected int or integer string', ExceptionCode::VALUE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -138,14 +139,14 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(string|int $value): static {
         return new static($value);
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function getBinary(): string {
@@ -157,7 +158,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
         try {
             return DecimalCalculator::get()->toBinary($this->value);
         } catch (StringMathException $e) {
-            throw new Exception('Failed to get binary from decimal', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
+            throw new ValueException('Failed to get binary from decimal', ExceptionCode::VALUE_VARINT_UNPACK_FAILED->value, [
                 'decimal' => $this->value,
             ], $e);
         }

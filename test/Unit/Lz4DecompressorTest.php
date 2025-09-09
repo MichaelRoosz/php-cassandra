@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
-use Cassandra\Compression\Exception as CompressionException;
+use Cassandra\Exception\CompressionException as CompressionException;
 use Cassandra\Compression\Lz4Decompressor;
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
 use PHPUnit\Framework\TestCase;
 
 class Lz4DecompressorTest extends TestCase {

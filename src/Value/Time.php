@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\TimeEncodeOption;
@@ -19,7 +20,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     protected readonly int $value;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(int|string|DateTimeInterface $value) {
 
@@ -27,7 +28,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
         if (is_int($value)) {
             if ($value > self::VALUE_MAX || $value < 0) {
-                throw new Exception('Time value is outside of supported range', ExceptionCode::VALUE_TIME_OUT_OF_RANGE->value, [
+                throw new ValueException('Time value is outside of supported range', ExceptionCode::VALUE_TIME_OUT_OF_RANGE->value, [
                     'value' => $value,
                     'min' => 0,
                     'max' => self::VALUE_MAX,
@@ -39,7 +40,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
         } elseif (is_string($value)) {
 
             if (!preg_match('/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/', $value, $matches)) {
-                throw new Exception('Invalid time string; expected HH:MM:SS(.fffffffff)', ExceptionCode::VALUE_TIME_INVALID_STRING->value, [
+                throw new ValueException('Invalid time string; expected HH:MM:SS(.fffffffff)', ExceptionCode::VALUE_TIME_INVALID_STRING->value, [
                     'value' => $value,
                 ]);
             }
@@ -54,7 +55,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
                 || $minutes < 0 || $minutes >= 60
                 || $seconds < 0 || $seconds >= 60
             ) {
-                throw new Exception('Invalid time format; expected HH:MM:SS(.fffffffff) within 24h range', ExceptionCode::VALUE_TIME_INVALID_FORMAT->value, [
+                throw new ValueException('Invalid time format; expected HH:MM:SS(.fffffffff) within 24h range', ExceptionCode::VALUE_TIME_INVALID_FORMAT->value, [
                     'value' => $value,
                     'hours' => $hours,
                     'minutes' => $minutes,
@@ -89,7 +90,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
@@ -101,14 +102,14 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public function asDateTime(): DateTimeImmutable {
 
         try {
             return new DateTimeImmutable('1970-01-01 ' . $this->asString());
         } catch (PhpException $e) {
-            throw new Exception('Invalid time value; cannot create DateTimeImmutable', ExceptionCode::VALUE_TIME_INVALID_DATETIME_STRING->value, [
+            throw new ValueException('Invalid time value; cannot create DateTimeImmutable', ExceptionCode::VALUE_TIME_INVALID_DATETIME_STRING->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the time is out of range for DateTimeImmutable',
                 'error' => $e->getMessage(),
@@ -141,7 +142,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -156,7 +157,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
          */
         $unpacked = unpack('J', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 8,
             ]);
@@ -168,14 +169,14 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     /**
      * @param mixed $value
      * 
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         self::require64Bit();
 
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
-            throw new Exception('Invalid time value; expected nanoseconds as int, time in format HH:MM:SS(.fffffffff) as string, or DateTimeInterface', ExceptionCode::VALUE_TIME_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid time value; expected nanoseconds as int, time in format HH:MM:SS(.fffffffff) as string, or DateTimeInterface', ExceptionCode::VALUE_TIME_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
                 'expected_types' => ['int', 'string', DateTimeInterface::class],
             ]);
@@ -185,7 +186,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(int|string|DateTimeInterface $value): static {
         return new static($value);
@@ -212,7 +213,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     public static function now(): static {
         return new static(new DateTimeImmutable());
@@ -224,13 +225,13 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     protected static function require64Bit(): void {
         if (PHP_INT_SIZE < 8) {
             $className = (new ReflectionClass(static::class))->getShortName();
 
-            throw new Exception('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::VALUE_TIME_64BIT_REQUIRED->value, [
+            throw new ValueException('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::VALUE_TIME_64BIT_REQUIRED->value, [
                 'class' => $className,
                 'php_int_size_bytes' => PHP_INT_SIZE,
                 'php_int_size_bits' => PHP_INT_SIZE * 8,

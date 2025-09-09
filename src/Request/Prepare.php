@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\PrepareOptions;
+use Cassandra\Exception\RequestException;
 
 final class Prepare extends Request {
     public function __construct(
@@ -17,7 +18,7 @@ final class Prepare extends Request {
     }
 
     /**
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
     public function getBody(): string {
@@ -31,7 +32,7 @@ final class Prepare extends Request {
                 $flags |= PrepareFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($this->options->keyspace)) . $this->options->keyspace;
             } else {
-                throw new Exception(
+                throw new RequestException(
                     message: 'Server protocol version does not support request option "keyspace"',
                     code: ExceptionCode::REQUEST_UNSUPPORTED_OPTION_KEYSPACE->value,
                     context: [

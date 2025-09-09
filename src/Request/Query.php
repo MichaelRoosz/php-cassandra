@@ -26,7 +26,7 @@ final class Query extends Request {
     }
 
     /**
-     * @throws \Cassandra\Request\Exception
+     * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
     public function getBody(): string {

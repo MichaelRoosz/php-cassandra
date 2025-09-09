@@ -7,7 +7,7 @@ namespace Cassandra\Test\Integration;
 use Cassandra\Consistency;
 use Cassandra\Value;
 use Cassandra\Request\Options\QueryOptions;
-use Cassandra\Response\Exception as ServerException;
+use Cassandra\Exception\ResponseException as ServerException;
 use Cassandra\Response\Result\CachedPreparedResult;
 use Cassandra\Response\Result\PreparedResult;
 

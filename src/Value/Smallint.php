@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
-use Cassandra\ExceptionCode;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -15,11 +16,11 @@ final class Smallint extends ValueWithFixedLength {
     protected readonly int $value;
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(int $value) {
         if ($value > self::VALUE_MAX || $value < self::VALUE_MIN) {
-            throw new Exception('Smallint value is outside of supported range', ExceptionCode::VALUE_SMALLINT_OUT_OF_RANGE->value, [
+            throw new ValueException('Smallint value is outside of supported range', ExceptionCode::VALUE_SMALLINT_OUT_OF_RANGE->value, [
                 'value' => $value,
                 'min' => self::VALUE_MIN,
                 'max' => self::VALUE_MAX,
@@ -35,7 +36,7 @@ final class Smallint extends ValueWithFixedLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromBinary(
@@ -50,7 +51,7 @@ final class Smallint extends ValueWithFixedLength {
          */
         $unpacked = unpack('n', $binary);
         if ($unpacked === false) {
-            throw new Exception('Cannot unpack smallint binary data', ExceptionCode::VALUE_SMALLINT_UNPACK_FAILED->value, [
+            throw new ValueException('Cannot unpack smallint binary data', ExceptionCode::VALUE_SMALLINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'expected_length' => 2,
             ]);
@@ -62,12 +63,12 @@ final class Smallint extends ValueWithFixedLength {
     /**
      * @param mixed $value
      *
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_int($value)) {
-            throw new Exception('Invalid smallint value; expected int', ExceptionCode::VALUE_SMALLINT_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid smallint value; expected int', ExceptionCode::VALUE_SMALLINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
@@ -76,7 +77,7 @@ final class Smallint extends ValueWithFixedLength {
     }
 
     /**
-     * @throws \Cassandra\Value\Exception
+     * @throws \Cassandra\Exception\ValueException
      */
     final public static function fromValue(int $value): static {
         return new static($value);
