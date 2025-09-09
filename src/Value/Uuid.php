@@ -7,8 +7,9 @@ namespace Cassandra\Value;
 use Cassandra\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Exception as PhpException;
 
-class Uuid extends ValueWithFixedLength {
+final class Uuid extends ValueWithFixedLength {
     protected readonly string $value;
 
     final public function __construct(string $value) {
@@ -97,6 +98,26 @@ class Uuid extends ValueWithFixedLength {
     #[\Override]
     final public static function isSerializedAsFixedLength(): bool {
         return true;
+    }
+
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
+    public static function random(): static {
+
+        try {
+            $bytes = random_bytes(16);
+        } catch (PhpException $e) {
+            throw new Exception('Failed to generate random bytes', ExceptionCode::VALUE_UUID_RANDOM_FAILED->value);
+        }
+
+        // Set version to 0100
+        $bytes[6] = chr(ord($bytes[6]) & 0x0f | 0x40);
+
+        // Set bits 6-7 to 10
+        $bytes[8] = chr(ord($bytes[8]) & 0x3f | 0x80);
+
+        return static::fromBinary($bytes);
     }
 
     #[\Override]
