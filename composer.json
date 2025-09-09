@@ -57,6 +57,7 @@
         "test:integration:init": "bash .docker/wait-for-cassandra.sh",
         "test:integration:run": "APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9142 vendor/bin/phpunit --testsuite integration",
         "test:integration:down": "docker compose down -v",
-        "test:integration": "docker compose up -d && bash .docker/wait-for-cassandra.sh && APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9142 vendor/bin/phpunit --testsuite integration && docker compose down -v"
+        "test:integration": "docker compose up -d && bash .docker/wait-for-cassandra.sh && APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9142 vendor/bin/phpunit --testsuite integration && docker compose down -v",
+        "find-unused-exceptions": "php scripts/find_unused_exception_codes.php"
     }
 }
