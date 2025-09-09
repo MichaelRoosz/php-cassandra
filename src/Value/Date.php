@@ -244,6 +244,13 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     /**
      * @throws \Cassandra\Value\Exception
      */
+    public static function today(): static {
+        return new static(new DateTimeImmutable());
+    }
+
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
     protected function getDayCountFromInterval(DateInterval $interval): int {
         $dayCount = $interval->format('%r%a');
 

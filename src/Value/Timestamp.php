@@ -177,6 +177,13 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
         return true;
     }
 
+    /**
+     * @throws \Cassandra\Value\Exception
+     */
+    public static function now(): static {
+        return new static(new DateTimeImmutable());
+    }
+
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
