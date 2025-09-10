@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 $srcDir = $root . '/src';
-$enumFile = $srcDir . '/ExceptionCode.php';
+$enumFile = $srcDir . '/Exception/ExceptionCode.php';
 
 if (!is_file($enumFile)) {
     fwrite(STDERR, "ExceptionCode.php not found at: {$enumFile}\n");
