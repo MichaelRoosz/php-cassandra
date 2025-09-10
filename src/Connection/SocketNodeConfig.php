@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 final class SocketNodeConfig extends NodeConfig {
-    public const DEFAULRT_SO_RCVTIMEO = ['sec' => 30, 'usec' => 0];
+    public const DEFAULT_SO_RCVTIMEO = ['sec' => 30, 'usec' => 0];
     public const DEFAULT_SO_SNDTIMEO = ['sec' => 5, 'usec' => 0];
 
     /** 
@@ -24,7 +24,7 @@ final class SocketNodeConfig extends NodeConfig {
         string $username = '',
         string $password = '',
         array $socketOptions = [
-            SO_RCVTIMEO => self::DEFAULRT_SO_RCVTIMEO,
+            SO_RCVTIMEO => self::DEFAULT_SO_RCVTIMEO,
             SO_SNDTIMEO => self::DEFAULT_SO_SNDTIMEO,
         ],
     ) {
@@ -36,7 +36,7 @@ final class SocketNodeConfig extends NodeConfig {
         );
 
         if (!isset($socketOptions[SO_RCVTIMEO])) {
-            $socketOptions[SO_RCVTIMEO] = self::DEFAULRT_SO_RCVTIMEO;
+            $socketOptions[SO_RCVTIMEO] = self::DEFAULT_SO_RCVTIMEO;
         }
 
         if (!isset($socketOptions[SO_SNDTIMEO])) {
