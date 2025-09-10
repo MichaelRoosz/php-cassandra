@@ -142,7 +142,7 @@ Requirements
 
 | Extension | Required | Purpose | Notes |
 |-----------|----------|---------|-------|
-| **sockets** | Optional | Socket transport | Required for sockets connection configured with `SocketNodeConfig` |
+| **sockets** | Optional | Socket transport | Required for sockets connections configured with `SocketNodeConfig` |
 | **bcmath** or **gmp** | Optional | Performance improvement for large integer operations | Used by `Varint` and `Decimal` types |
 | **openssl** | Optional | SSL/TLS connections | Required for encrypted connections |
 
@@ -338,16 +338,7 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection;
 
-$socketNode = new SocketNodeConfig(
-    host: '10.0.0.10',
-    port: 9042,
-    username: 'user',
-    password: 'secret',
-    // see https://www.php.net/manual/en/function.socket-get-option.php
-    socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]
-);
-
-// Streams transport with SSL/TLS and persistent connection
+// Stream transport
 $streamTlsNode = new StreamNodeConfig(
     host: 'tls://cassandra.example.com',
     port: 9042,
@@ -355,13 +346,32 @@ $streamTlsNode = new StreamNodeConfig(
     password: 'secret',
     connectTimeoutInSeconds: 10,
     timeoutInSeconds: 30,
-    persistent: true,
+);
+
+// Stream transport with SSL/TLS
+$streamTlsNode = new StreamNodeConfig(
+    host: 'tls://cassandra.example.com',
+    port: 9042,
+    username: 'user',
+    password: 'secret',
+    connectTimeoutInSeconds: 10,
+    timeoutInSeconds: 30,
     sslOptions: [
         // See https://www.php.net/manual/en/context.ssl.php
         'cafile' => '/etc/ssl/certs/ca.pem',
         'verify_peer' => true,
         'verify_peer_name' => true,
     ]
+);
+
+// Socket transport
+$socketNode = new SocketNodeConfig(
+    host: '10.0.0.10',
+    port: 9042,
+    username: 'user',
+    password: 'secret',
+    // see https://www.php.net/manual/en/function.socket-get-option.php
+    socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]
 );
 
 $conn = new Connection([$socketNode, $streamTlsNode], keyspace: 'app');
@@ -1243,23 +1253,6 @@ Configuration Reference
 
 #### Node Configuration
 
-**SocketNodeConfig** (requires `ext-sockets`)
-```php
-use Cassandra\Connection\SocketNodeConfig;
-
-$node = new SocketNodeConfig(
-    host: '127.0.0.1',                    // Cassandra host
-    port: 9042,                           // Cassandra port (default: 9042)
-    username: 'cassandra',                // Username (optional)
-    password: 'cassandra',                // Password (optional)
-    socketOptions: [                      // Socket-specific options
-        SO_RCVTIMEO => ['sec' => 10, 'usec' => 0],  // Receive timeout
-        SO_SNDTIMEO => ['sec' => 10, 'usec' => 0],  // Send timeout
-        SO_KEEPALIVE => 1,                // Keep-alive
-    ]
-);
-```
-
 **StreamNodeConfig** (supports SSL/TLS, persistent connections)
 ```php
 use Cassandra\Connection\StreamNodeConfig;
@@ -1281,6 +1274,23 @@ $node = new StreamNodeConfig(
         'passphrase' => 'cert_password',  // Private key passphrase
         'ciphers' => 'HIGH:!aNULL',       // Cipher list
         'crypto_method' => STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT,
+    ]
+);
+```
+
+**SocketNodeConfig** (requires `ext-sockets`)
+```php
+use Cassandra\Connection\SocketNodeConfig;
+
+$node = new SocketNodeConfig(
+    host: '127.0.0.1',                    // Cassandra host
+    port: 9042,                           // Cassandra port (default: 9042)
+    username: 'cassandra',                // Username (optional)
+    password: 'cassandra',                // Password (optional)
+    socketOptions: [                      // Socket-specific options
+        SO_RCVTIMEO => ['sec' => 10, 'usec' => 0],  // Receive timeout
+        SO_SNDTIMEO => ['sec' => 10, 'usec' => 0],  // Send timeout
+        SO_KEEPALIVE => 1,                // Keep-alive
     ]
 );
 ```
@@ -1492,10 +1502,10 @@ $session = $cluster->connect('keyspace_name');
 
 // php-cassandra (new)
 use Cassandra\Connection;
-use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Connection\StreamNodeConfig;
 
 $conn = new Connection([
-    new SocketNodeConfig('127.0.0.1', 9042, 'username', 'password')
+    new StreamNodeConfig('127.0.0.1', 9042, 'username', 'password')
 ], keyspace: 'keyspace_name');
 $conn->connect();
 ```
@@ -1566,18 +1576,6 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection\ConnectionOptions;
 
-// Socket with custom timeouts
-$socket = new SocketNodeConfig(
-    host: '127.0.0.1',
-    port: 9042,
-    username: 'user',
-    password: 'secret',
-    socketOptions: [
-        SO_RCVTIMEO => ['sec' => 5, 'usec' => 0],
-        SO_SNDTIMEO => ['sec' => 5, 'usec' => 0],
-    ]
-);
-
 // Stream with TLS and persistent
 $stream = new StreamNodeConfig(
     host: 'tls://cassandra.example.com',
@@ -1591,6 +1589,18 @@ $stream = new StreamNodeConfig(
         'cafile' => '/etc/ssl/certs/ca.pem',
         'verify_peer' => true,
         'verify_peer_name' => true,
+    ]
+);
+
+// Socket with custom timeouts
+$socket = new SocketNodeConfig(
+    host: '127.0.0.1',
+    port: 9042,
+    username: 'user',
+    password: 'secret',
+    socketOptions: [
+        SO_RCVTIMEO => ['sec' => 5, 'usec' => 0],
+        SO_SNDTIMEO => ['sec' => 5, 'usec' => 0],
     ]
 );
 
