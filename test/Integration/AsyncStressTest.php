@@ -34,7 +34,7 @@ final class AsyncStressTest extends AbstractIntegrationTestCase {
         $pending[$mid]->getRowsResult();
 
         // Drain remaining
-        $conn->flush();
+        $conn->waitForAllPendingAsyncStatements();
 
         $validated = 0;
         foreach ($pending as $stmt) {

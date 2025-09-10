@@ -9,7 +9,7 @@ use Cassandra\Type;
 use Cassandra\Value;
 
 final class AsyncTest extends AbstractIntegrationTestCase {
-    public function testAsyncBatchAndFlush(): void {
+    public function testAsyncBatchAndWaitForAllPendingAsyncStatements(): void {
 
         $conn = $this->connection;
 
@@ -31,7 +31,7 @@ final class AsyncTest extends AbstractIntegrationTestCase {
             $pending[] = $conn->batchAsync($batch);
         }
 
-        $conn->flush();
+        $conn->waitForAllPendingAsyncStatements();
 
         $countValue = $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',

@@ -1,8 +1,7 @@
 # Todo for the next release
 
 ## Features
-* add something like Connection::waitForNextEvent() and update readme and update tests
-* better name or method for Conenction::flush(), then update readme and update tests
+* remove error ex. double stored context
 
 * Test 32bit support
 

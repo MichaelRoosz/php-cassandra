@@ -897,7 +897,7 @@ $conn->syncRequest(new Register([
 
 // process events (simplest possible loop)
 while (true) {
-    $conn->flush();
+    $conn->waitForNextEvent();
     sleep(1);
 }
 ```
@@ -919,7 +919,7 @@ $result = $conn->syncRequest($req);
 Asynchronous API
 -----------------
 
-The async API lets you pipeline multiple requests without blocking. Each async method returns a `Cassandra\Statement` handle that you can resolve later. You can either block per statement (`getResult()` / `getRowsResult()`), or pump the connection (`flush()`) to advance all in-flight statements.
+The async API lets you pipeline multiple requests without blocking. Each async method returns a `Cassandra\Statement` handle that you can resolve later. You can either block per statement (`getResult()` / `getRowsResult()` / `waitForResponse()`), wait for a specific set of statements with `waitForAsyncStatements(array $statements)`, or drain all outstanding statements with `waitForAllPendingAsyncStatements()`.
 
 Basics:
 ```php
@@ -938,7 +938,7 @@ $r2 = $s2->getRowsResult();
 $r1 = $s1->getRowsResult();
 ```
 
-Pumping the connection:
+Waiting for all responses:
 ```php
 // Issue several statements
 $handles = [];
@@ -946,21 +946,22 @@ for ($i = 0; $i < 10; $i++) {
     $handles[] = $conn->queryAsync('SELECT now() FROM system.local');
 }
 
-// Pump until all complete
-while (true) {
-    $conn->flush();
-
-    $allDone = true;
-    foreach ($handles as $h) {
-        if (!$h->isResultReady()) { $allDone = false; break; }
-    }
-    if ($allDone) break;
-}
+$conn->waitForAsyncStatements($handles);
 
 foreach ($handles as $h) {
     $rows = $h->getRowsResult();
     // process
 }
+```
+
+Draining any pending statements:
+```php
+// Fire off work in various places...
+
+// Later: block until all outstanding statements complete
+$conn->waitForAllPendingAsyncStatements();
+
+// You can now safely consume results from any statements you issued earlier
 ```
 
 Prepared + async:
@@ -982,6 +983,13 @@ $s = $conn->executeAsync(
 
 // Block for rows when you need them
 $rows = $s->getRowsResult();
+```
+
+Advanced waiting:
+```php
+// Block until any response arrives (event or request response)
+$response = $conn->waitForResponse();
+// Inspect $response to determine what arrived
 ```
 
 Compression
@@ -1635,7 +1643,7 @@ $conn->addEventListener(new class () implements EventListener {
 
 // Non-busy loop with backoff
 while (true) {
-    $conn->flush();
+    $conn->waitForNextEvent();
     usleep(200_000); // 200ms
 }
 ```
@@ -1665,7 +1673,7 @@ Version support
 
 
 API reference (essentials)
--------------------------
+--------------------------
 
 - `Cassandra\Connection`
   - `connect()`, `disconnect()`, `isConnected()`, `getVersion()`
@@ -1675,8 +1683,9 @@ API reference (essentials)
   - `prepare(string, PrepareOptions)` / `prepareAsync(...)`
   - `execute(Result $previous, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)` / `executeAll(...)`
   - `batch(Batch)` / `batchAsync(Batch)`
-  - `syncRequest(Request)` / `asyncRequest(Request)` / `flush()`
-  - `addEventListener(EventListener)`
+  - `syncRequest(Request)` / `asyncRequest(Request)` / `waitForAsyncStatements(array $statements)` / `waitForAllPendingAsyncStatements()`
+  - `addEventListener(EventListener)` / `waitForNextEvent()`
+  - `waitForResponse()`
 
 - Results
   - `RowsResult` (iterable): `fetch()`, `fetchAll()`, `fetchColumn()`, `fetchAllColumns()`, `fetchKeyPair()`, `fetchAllKeyPairs()`, `configureFetchObject()`, `fetchObject()`, `fetchAllObjects()`, `getRowsMetadata()`, `hasMorePages()`

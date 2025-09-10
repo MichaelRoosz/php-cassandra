@@ -392,24 +392,6 @@ final class Connection {
         return $statement;
     }
 
-    /**
-     * Wait until all statements received response.
-     *
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
-    public function flush(): void {
-        while ($this->statements) {
-            $this->readResponse();
-        }
-    }
-
     public function getNode(): ?Connection\Node {
         return $this->node;
     }
@@ -730,6 +712,82 @@ final class Connection {
 
     public function unregisterWarningsListener(WarningsListener $warningsListener): void {
         $this->warningsListeners = array_filter($this->warningsListeners, fn (WarningsListener $listener) => $listener !== $warningsListener);
+    }
+
+    /**
+     * Wait until all async statements received response.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function waitForAllPendingAsyncStatements(): void {
+        while ($this->statements) {
+            $this->readResponse();
+        }
+    }
+
+    /**
+     * Wait until the given async statements received response.
+     *
+     * @param array<Statement> $statements
+     * 
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function waitForAsyncStatements(array $statements): void {
+        while (array_find($statements, fn (Statement $statement) => !$statement->isResultReady())) {
+            $this->readResponse();
+        }
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function waitForNextEvent(): Response\Event {
+        while (true) {
+            $event = $this->readResponse();
+            if ($event instanceof Response\Event) {
+                return $event;
+            }
+        }
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function waitForResponse(): Response\Response {
+        while (true) {
+            $response = $this->readResponse();
+            if ($response !== null) {
+                return $response;
+            }
+        }
     }
 
     public function withConsistency(Consistency $consistency): self {
