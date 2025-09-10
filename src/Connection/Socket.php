@@ -67,7 +67,7 @@ final class Socket implements NodeImplementation {
         if ($this->socket === null) {
             throw new SocketException(
                 message: 'Socket transport not connected',
-                code: ExceptionCode::SOCKET_NOT_CONNECTED_READ->value,
+                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_READ->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -90,7 +90,7 @@ final class Socket implements NodeImplementation {
 
                 throw new SocketException(
                     message: 'Socket read failed: ' . socket_strerror($errorCode),
-                    code: ExceptionCode::SOCKET_READ_FAILED_CONT->value,
+                    code: ExceptionCode::SOCKET_READ_FAILED->value,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
@@ -105,8 +105,8 @@ final class Socket implements NodeImplementation {
 
             if ($readData === '') {
                 throw new SocketException(
-                    message: 'Socket read returned no data',
-                    code: ExceptionCode::SOCKET_READ_NO_DATA_CONT->value,
+                    message: 'Socket connection reset by peer.',
+                    code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
@@ -133,7 +133,7 @@ final class Socket implements NodeImplementation {
         if ($this->socket === null) {
             throw new SocketException(
                 message: 'Socket transport not connected',
-                code: ExceptionCode::SOCKET_NOT_CONNECTED_READ_ONCE->value,
+                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_READ->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -153,7 +153,7 @@ final class Socket implements NodeImplementation {
 
             throw new SocketException(
                 message: 'Socket read failed: ' . socket_strerror($errorCode),
-                code: ExceptionCode::SOCKET_READ_ONCE_FAILED->value,
+                code: ExceptionCode::SOCKET_READ_FAILED->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -168,8 +168,8 @@ final class Socket implements NodeImplementation {
 
         if ($readData === '') {
             throw new SocketException(
-                message: 'Socket read returned no data',
-                code: ExceptionCode::SOCKET_READ_ONCE_NO_DATA->value,
+                message: 'Socket connection reset by peer.',
+                code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -192,7 +192,7 @@ final class Socket implements NodeImplementation {
         if ($this->socket === null) {
             throw new SocketException(
                 message: 'Socket transport not connected',
-                code: ExceptionCode::SOCKET_NOT_CONNECTED_WRITE->value,
+                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_WRITE->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -267,7 +267,15 @@ final class Socket implements NodeImplementation {
 
         $result = socket_connect($socket, $this->config->host, $this->config->port);
         if ($result === false) {
+
             $errorCode = socket_last_error($socket);
+
+            socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+                'l_onoff' => 1,
+                'l_linger' => 1,
+            ]);
+
+            socket_close($socket);
 
             throw new SocketException(
                 message: 'Socket connect failed: ' . socket_strerror($errorCode),

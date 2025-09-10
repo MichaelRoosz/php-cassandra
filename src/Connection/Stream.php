@@ -59,7 +59,7 @@ final class Stream implements NodeImplementation {
         if ($this->stream === null) {
             throw new StreamException(
                 message: 'Stream transport not connected',
-                code: ExceptionCode::STREAM_NOT_CONNECTED_READ->value,
+                code: ExceptionCode::STREAM_NOT_CONNECTED_DURING_READ->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -80,7 +80,7 @@ final class Stream implements NodeImplementation {
             if (feof($this->stream)) {
                 throw new StreamException(
                     message: 'Stream connection reset by peer',
-                    code: ExceptionCode::STREAM_RESET_BY_PEER_READ->value,
+                    code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_READ->value,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
@@ -95,7 +95,7 @@ final class Stream implements NodeImplementation {
             if (stream_get_meta_data($this->stream)['timed_out']) {
                 throw new StreamException(
                     message: 'Stream read timed out',
-                    code: ExceptionCode::STREAM_TIMEOUT_READ->value,
+                    code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
@@ -138,7 +138,7 @@ final class Stream implements NodeImplementation {
         if ($this->stream === null) {
             throw new StreamException(
                 message: 'Stream transport not connected',
-                code: ExceptionCode::STREAM_NOT_CONNECTED_READ_ONCE->value,
+                code: ExceptionCode::STREAM_NOT_CONNECTED_DURING_READ->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -157,7 +157,7 @@ final class Stream implements NodeImplementation {
         if (feof($this->stream)) {
             throw new StreamException(
                 message: 'Stream connection reset by peer',
-                code: ExceptionCode::STREAM_RESET_BY_PEER_READ_ONCE->value,
+                code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_READ->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -171,7 +171,7 @@ final class Stream implements NodeImplementation {
         if (stream_get_meta_data($this->stream)['timed_out']) {
             throw new StreamException(
                 message: 'Stream read timed out',
-                code: ExceptionCode::STREAM_TIMEOUT_READ_ONCE->value,
+                code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -186,7 +186,7 @@ final class Stream implements NodeImplementation {
         if ($readData === false || strlen($readData) == 0) {
             throw new StreamException(
                 message: 'Stream read failed',
-                code: ExceptionCode::STREAM_READ_ONCE_FAILED->value,
+                code: ExceptionCode::STREAM_READ_FAILED->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -208,7 +208,7 @@ final class Stream implements NodeImplementation {
         if ($this->stream === null) {
             throw new StreamException(
                 message: 'Stream transport not connected',
-                code: ExceptionCode::STREAM_NOT_CONNECTED_WRITE->value,
+                code: ExceptionCode::STREAM_NOT_CONNECTED_DURING_WRITE->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -228,7 +228,7 @@ final class Stream implements NodeImplementation {
             if (feof($this->stream)) {
                 throw new StreamException(
                     message: 'Stream connection reset by peer',
-                    code: ExceptionCode::STREAM_RESET_BY_PEER_WRITE->value,
+                    code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_WRITE->value,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
@@ -242,7 +242,7 @@ final class Stream implements NodeImplementation {
             if (stream_get_meta_data($this->stream)['timed_out']) {
                 throw new StreamException(
                     message: 'Stream write timed out',
-                    code: ExceptionCode::STREAM_TIMEOUT_WRITE->value,
+                    code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
