@@ -41,9 +41,32 @@ class ServerException extends CassandraException {
         array $context,
         ?Throwable $previous = null
     ) {
-        parent::__construct($message, $code, $context, $previous);
+        parent::__construct($message, $code, [], $previous);
         $this->baseContext = $context;
         $this->errorContext = $errorContext;
+
+        if (getenv('APP_CASSANDRA_DEBUG') === '1') {
+            $contextAsJson = json_encode($context);
+            if ($contextAsJson !== false) {
+                $this->message = $message . ' - context: ' . $contextAsJson;
+            }
+        }
+    }
+
+    /**
+     * @return array{
+     *   error_code: int,
+     *   error_type: string,
+     *   protocol_version: int,
+     *   stream_id: int,
+     *   tracing_uuid: string|null,
+     *   warnings: array<string>,
+     *   payload: array<string, ?string>|null,
+     * }
+     */
+    #[\Override]
+    public function context(): array {
+        return $this->baseContext;
     }
 
     /**

@@ -1,8 +1,6 @@
 # Todo for the next release
 
 ## Features
-* remove error ex. double stored context
-
 * Test 32bit support
 
 ## Tests
