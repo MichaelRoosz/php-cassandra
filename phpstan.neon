@@ -15,3 +15,7 @@ parameters:
             path: src/Value/Date.php
             message: '#Dead catch - Exception is never thrown in the try block\.#'
             reportUnmatched: false
+        -
+            path: src/Value/Uuid.php
+            message: '#Method Cassandra\\Value\\Uuid::random\(\) throws checked exception Random\\RandomException but it''s missing from the PHPDoc @throws tag\.#'
+            reportUnmatched: false

@@ -9,7 +9,6 @@ use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use Exception;
-use Random\RandomException;
 
 final class Uuid extends ValueWithFixedLength {
     protected readonly string $value;
@@ -109,7 +108,7 @@ final class Uuid extends ValueWithFixedLength {
 
         try {
             $bytes = random_bytes(16);
-        } catch (Exception|RandomException $e) {
+        } catch (Exception $e) {
             throw new ValueException('Failed to generate random bytes', ExceptionCode::VALUE_UUID_RANDOM_FAILED->value);
         }
 
