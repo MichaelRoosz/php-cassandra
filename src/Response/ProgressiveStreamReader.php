@@ -57,7 +57,7 @@ final class ProgressiveStreamReader extends StreamReader {
         }
 
         while ($this->dataLength < $this->offset + $length) {
-            $this->data .= $received = $this->source->readOnce($this->offset + $length - $this->dataLength);
+            $this->data .= $received = $this->source->readAvailableData($this->offset + $length - $this->dataLength);
             $this->dataLength += strlen($received);
         }
 

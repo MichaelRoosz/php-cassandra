@@ -19,7 +19,7 @@ interface Node {
     /**
      * @throws \Cassandra\Exception\NodeException
      */
-    public function readOnce(int $length): string;
+    public function readAvailableData(int $maxLength): string;
 
     /**
      * @throws \Cassandra\Exception\NodeException

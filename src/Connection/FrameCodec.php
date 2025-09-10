@@ -90,14 +90,14 @@ final class FrameCodec implements Node {
      * @throws \Cassandra\Exception\CompressionException
      */
     #[\Override]
-    public function readOnce(int $length): string {
+    public function readAvailableData(int $maxLength): string {
         if ($this->inputDataOffset >= $this->inputDataLength) {
             $this->readFrame();
         }
 
-        $length = min($length, $this->inputDataLength - $this->inputDataOffset);
-        $inputData = substr($this->inputData, $this->inputDataOffset, $length);
-        $this->inputDataOffset += $length;
+        $maxLength = min($maxLength, $this->inputDataLength - $this->inputDataOffset);
+        $inputData = substr($this->inputData, $this->inputDataOffset, $maxLength);
+        $this->inputDataOffset += $maxLength;
 
         return $inputData;
     }

@@ -134,7 +134,7 @@ final class Stream implements NodeImplementation {
      * @throws \Cassandra\Exception\StreamException
      */
     #[\Override]
-    public function readOnce(int $length): string {
+    public function readAvailableData(int $maxLength): string {
         if ($this->stream === null) {
             throw new StreamException(
                 message: 'Stream transport not connected',
@@ -142,17 +142,17 @@ final class Stream implements NodeImplementation {
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
-                    'operation' => 'readOnce',
-                    'requested_bytes' => $length,
+                    'operation' => 'readAvailableData',
+                    'requested_bytes' => $maxLength,
                 ]
             );
         }
 
-        if ($length < 1) {
+        if ($maxLength < 1) {
             return '';
         }
 
-        $readData = fread($this->stream, $length);
+        $readData = fread($this->stream, $maxLength);
 
         if (feof($this->stream)) {
             throw new StreamException(
@@ -161,8 +161,8 @@ final class Stream implements NodeImplementation {
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
-                    'operation' => 'readOnce',
-                    'requested_bytes' => $length,
+                    'operation' => 'readAvailableData',
+                    'requested_bytes' => $maxLength,
                     'meta' => stream_get_meta_data($this->stream),
                 ]
             );
@@ -175,9 +175,9 @@ final class Stream implements NodeImplementation {
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
-                    'operation' => 'readOnce',
+                    'operation' => 'readAvailableData',
                     'timeout_seconds' => $this->config->timeoutInSeconds,
-                    'requested_bytes' => $length,
+                    'requested_bytes' => $maxLength,
                     'meta' => stream_get_meta_data($this->stream),
                 ]
             );
@@ -190,8 +190,8 @@ final class Stream implements NodeImplementation {
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
-                    'operation' => 'readOnce',
-                    'requested_bytes' => $length,
+                    'operation' => 'readAvailableData',
+                    'requested_bytes' => $maxLength,
                     'meta' => stream_get_meta_data($this->stream),
                 ]
             );
