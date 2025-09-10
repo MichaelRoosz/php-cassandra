@@ -1,12 +1,10 @@
 # Todo for the next release
 
 ## Features
-* add something like Connection::waitForNextEvent() and update readme
-* better name or method for Conenction::flush(), then update readme
+* add something like Connection::waitForNextEvent() and update readme and update tests
+* better name or method for Conenction::flush(), then update readme and update tests
 
-* Implement examples
-
-* Maybe fix 32-bit support and test 32bit support
+* Test 32bit support
 
 ## Tests
 
@@ -16,3 +14,4 @@
 * Implement compression for outgoing data
 * Token-aware Routing
 * Datacenter-aware Load Balancing
+* Add some examples

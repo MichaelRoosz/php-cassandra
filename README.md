@@ -78,7 +78,6 @@ Table of contents
       - [Data Types](#data-types-1)
       - [Async Operations](#async-operations)
     - [Migration Checklist](#migration-checklist)
-  - [Examples](#examples)
   - [Connection tuning examples](#connection-tuning-examples)
   - [Configuring value encoding](#configuring-value-encoding)
   - [Warnings listener](#warnings-listener)
@@ -1549,22 +1548,6 @@ $result = $statement->getRowsResult();
 - [ ] **Update error handling** - Use new exception hierarchy
 - [ ] **Update batch operations** - Use new Batch class
 - [ ] **Test thoroughly** - Verify all functionality works as expected
-
-Examples
---------
-
-This library includes comprehensive examples in the [`examples/`](examples/) directory:
-
-- **[basic_usage.php](examples/basic_usage.php)** - Essential operations and getting started
-- **[async_operations.php](examples/async_operations.php)** - Asynchronous request handling
-- **[data_types.php](examples/data_types.php)** - Working with all Cassandra data types
-- **[batch_operations.php](examples/batch_operations.php)** - Batch processing patterns
-- **[ssl_connection.php](examples/ssl_connection.php)** - Secure SSL/TLS connections
-- **[event_handling.php](examples/event_handling.php)** - Event system usage
-- **[object_mapping.php](examples/object_mapping.php)** - Object-oriented result handling
-- **[configuration.php](examples/configuration.php)** - Advanced configuration options
-
-See the [examples README](examples/README.md) for detailed information about running and using the examples.
 
 Connection tuning examples
 --------------------------
