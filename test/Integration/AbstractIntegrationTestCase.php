@@ -6,6 +6,7 @@ namespace Cassandra\Test\Integration;
 
 use Cassandra\Connection;
 use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Request\Request;
 use Cassandra\Response\Response;
@@ -73,8 +74,38 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
     }
 
     protected static function newConnection(string $keyspace): Connection {
+
+        $mode = getenv('APP_CASSANDRA_CONNECTION_MODE') ?: 'socket';
+
+        return match ($mode) {
+            'socket' => self::newSocketConnection($keyspace),
+            'stream' => self::newStreamConnection($keyspace),
+            default => self::newSocketConnection($keyspace),
+        };
+    }
+
+    protected static function newSocketConnection(string $keyspace): Connection {
+
         $nodes = [
             new SocketNodeConfig(
+                host: self::getHost(),
+                port: self::getPort(),
+                username: '',
+                password: ''
+            ),
+        ];
+
+        $conn = new Connection($nodes, $keyspace);
+        $conn->setConsistency(Consistency::ONE);
+        $conn->connect();
+
+        return $conn;
+    }
+
+    protected static function newStreamConnection(string $keyspace): Connection {
+
+        $nodes = [
+            new StreamNodeConfig(
                 host: self::getHost(),
                 port: self::getPort(),
                 username: '',
