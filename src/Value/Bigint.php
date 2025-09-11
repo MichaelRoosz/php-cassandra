@@ -69,11 +69,11 @@ class Bigint extends ValueWithFixedLength {
         $value = $unpacked[1];
 
         if ($isPositiveRange) {
-            if (($value & 0x80000000) !== 0) {
+            if ((($value >> 16) & 0x8000) !== 0) {
                 throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
             }
         } else {
-            if (($value & 0x80000000) === 0) {
+            if (($value >> 16) & 0x8000 === 0) {
                 throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
             }
         }
