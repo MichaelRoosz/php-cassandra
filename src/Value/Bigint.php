@@ -43,21 +43,23 @@ class Bigint extends ValueWithFixedLength {
                 ]);
             }
 
-        } else {
-            /**
-             * @var false|array<int> $unpacked
-             */
-            $unpacked = unpack('N2', $binary);
-            if ($unpacked === false) {
-                throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
-                    'binary_length' => strlen($binary),
-                    'expected_length' => 8,
-                ]);
-            }
+            return new static($unpacked[1]);
 
-            if ($unpacked[1] !== 0) {
-                throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
-            }
+        }
+
+        /**
+         * @var false|array<int> $unpacked
+         */
+        $unpacked = unpack('N2', $binary);
+        if ($unpacked === false) {
+            throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
+                'binary_length' => strlen($binary),
+                'expected_length' => 8,
+            ]);
+        }
+
+        if ($unpacked[1] !== 0) {
+            throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
         }
 
         return new static($unpacked[2]);
