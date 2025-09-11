@@ -11,7 +11,7 @@ use Cassandra\TypeInfo\TypeInfo;
 
 final class Int32 extends ValueWithFixedLength {
     final public const VALUE_MAX = 2147483647;
-    final public const VALUE_MIN = -2147483648;
+    final public const VALUE_MIN = -2147483647 - 1;
     final protected const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
 
     protected readonly int $value;

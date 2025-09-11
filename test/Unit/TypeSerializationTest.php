@@ -73,8 +73,8 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testDuration(): void {
         $minDuration = [
-            'months' => -2147483648,
-            'days' => -2147483648,
+            'months' => -2147483647 - 1,
+            'days' => -2147483647 - 1,
             'nanoseconds' => PHP_INT_MIN,
         ];
 
@@ -182,8 +182,8 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
         $this->assertSame(
             [
-                'months' => -2147483648,
-                'days' => -2147483648,
+                'months' => -2147483647 - 1,
+                'days' => -2147483647 - 1,
                 'nanoseconds' => PHP_INT_MIN + 808,
             ],
             (Value\Duration::fromValue((Value\Duration::fromValue($minDuration))->asDateInterval()))->asNativeValue()
