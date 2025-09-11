@@ -45,7 +45,7 @@ use DateTimeImmutable;
  * - vector                 *Implemented
  */
 final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
-    use Data\Trait\CompareWithCqlsh;
+    use Trait\CompareAgainstCqlsh;
 
     public function testAsciiRoundtrip(): void {
         $this->connection->query(

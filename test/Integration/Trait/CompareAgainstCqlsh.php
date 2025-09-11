@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Test\Integration\Data\Trait;
+namespace Cassandra\Test\Integration\Trait;
 
-trait CompareWithCqlsh {
+trait CompareAgainstCqlsh {
     /**
      * @param array<mixed> $testValues
      */
@@ -199,6 +199,8 @@ trait CompareWithCqlsh {
 
         $csv = $this->runCqlSh($cqlshArguments);
         $handle = fopen('php://memory', 'r+');
+        $this->assertIsResource($handle);
+
         fwrite($handle, $csv);
         rewind($handle);
 
@@ -293,7 +295,7 @@ trait CompareWithCqlsh {
 
         $output = shell_exec($command);
         if ($output === null || $output === false) {
-            $this->fail("Failed to execute cqlsh command in container: {$command}");
+            $this->fail("Failed to execute cqlsh command: {$command}");
         }
 
         if (
