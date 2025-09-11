@@ -453,6 +453,11 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testDurationRoundtrip(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Duration requires 64-bit integer');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_duration (id int PRIMARY KEY, value duration)'
         );
