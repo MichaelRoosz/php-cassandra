@@ -16,6 +16,11 @@ use DateTimeImmutable;
 
 final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     public function testDateEncodeOptions(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Date requires 64-bit integer');
+        }
+
         $this->connection->query('TRUNCATE test_enc_date');
 
         $val = '2021-01-02';
@@ -53,6 +58,11 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     }
 
     public function testDurationEncodeOptions(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Duration requires 64-bit integer');
+        }
+
         $this->connection->query('TRUNCATE test_enc_duration');
 
         $val = '1y2mo3d4h5m6s7ms8us9ns';
@@ -105,6 +115,11 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     }
 
     public function testTimeEncodeOptions(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Time requires 64-bit integer');
+        }
+
         $this->connection->query('TRUNCATE test_enc_time');
 
         $val = '12:34:56.789012345';
@@ -142,6 +157,11 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     }
 
     public function testTimestampEncodeOptions(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         $this->connection->query('TRUNCATE test_enc_timestamp');
 
         $val = '2021-01-01 12:23:57.123+0000';

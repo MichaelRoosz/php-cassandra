@@ -90,25 +90,31 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
 
     public function testBigintRoundtrip(): void {
 
-        if (!$this->integerHasAtLeast64Bits()) {
-            $this->markTestSkipped('Bigint requires 64-bit integer');
-        }
-
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_bigint (id int PRIMARY KEY, value bigint)'
         );
 
-        $testValues = [
-            0,
-            1,
-            -1,
-            PHP_INT_MAX,
-            PHP_INT_MIN,
-            9223372036854775807, // max bigint
-            -9223372036854775807 - 1, // min bigint
-            1000000000000000,
-            -1000000000000000,
-        ];
+        if ($this->integerHasAtLeast64Bits()) {
+            $testValues = [
+                0,
+                1,
+                -1,
+                PHP_INT_MAX,
+                PHP_INT_MIN,
+                9223372036854775807, // max bigint
+                -9223372036854775807 - 1, // min bigint
+                1000000000000000,
+                -1000000000000000,
+            ];
+        } else {
+            $testValues = [
+                0,
+                1,
+                -1,
+                PHP_INT_MAX,
+                PHP_INT_MIN,
+            ];
+        }
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
@@ -196,10 +202,6 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testCounterRoundtrip(): void {
-
-        if (!$this->integerHasAtLeast64Bits()) {
-            $this->markTestSkipped('Counter requires 64-bit integer');
-        }
 
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_counter (id int PRIMARY KEY, value counter)'

@@ -106,12 +106,10 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
             $this->assertSame($v, $obj->getValue());
         }
 
-        if ($this->integerHasAtLeast64Bits()) {
-            // bigint
-            foreach ([0, 1, -1, 9223372036854775807, -9223372036854775807 - 1] as $v) {
-                $obj = $this->decodeViaFromStream(Type::BIGINT, $v);
-                $this->assertSame($v, $obj->getValue());
-            }
+        // bigint
+        foreach ([0, 1, -1, PHP_INT_MAX, PHP_INT_MIN] as $v) {
+            $obj = $this->decodeViaFromStream(Type::BIGINT, $v);
+            $this->assertSame($v, $obj->getValue());
         }
     }
 

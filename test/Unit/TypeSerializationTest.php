@@ -16,12 +16,9 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testBigint(): void {
 
-        if (!$this->integerHasAtLeast64Bits()) {
-            $this->markTestSkipped('Bigint requires 64-bit integer');
+        foreach ([0, 1, -1, 1000, -1000, PHP_INT_MAX, PHP_INT_MIN] as $v) {
+            $this->assertSame($v, Value\Bigint::fromBinary((Value\Bigint::fromValue($v))->getBinary())->getValue());
         }
-
-        $int64Max = 9223372036854775807;
-        $this->assertSame($int64Max, Value\Bigint::fromBinary((Value\Bigint::fromValue($int64Max))->getBinary())->getValue());
     }
 
     public function testBlob(): void {
@@ -36,12 +33,9 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testCounter(): void {
 
-        if (!$this->integerHasAtLeast64Bits()) {
-            $this->markTestSkipped('Counter requires 64-bit integer');
+        foreach ([0, 1, -1, 1000, -1000, PHP_INT_MAX, PHP_INT_MIN] as $v) {
+            $this->assertSame($v, Value\Counter::fromBinary((Value\Counter::fromValue($v))->getBinary())->getValue());
         }
-
-        $counter = 12345678901234;
-        $this->assertSame($counter, Value\Counter::fromBinary((Value\Counter::fromValue($counter))->getBinary())->getValue());
     }
 
     public function testCustom(): void {
