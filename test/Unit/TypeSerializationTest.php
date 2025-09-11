@@ -15,6 +15,11 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testBigint(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Bigint requires 64-bit integer');
+        }
+
         $int64Max = 9223372036854775807;
         $this->assertSame($int64Max, Value\Bigint::fromBinary((Value\Bigint::fromValue($int64Max))->getBinary())->getValue());
     }
@@ -30,6 +35,11 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testCounter(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Counter requires 64-bit integer');
+        }
+
         $counter = 12345678901234;
         $this->assertSame($counter, Value\Counter::fromBinary((Value\Counter::fromValue($counter))->getBinary())->getValue());
     }
@@ -72,6 +82,10 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testDuration(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Duration requires 64-bit integer');
+        }
+
         $minDuration = [
             'months' => -2147483647 - 1,
             'days' => -2147483647 - 1,
@@ -395,11 +409,19 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testTime(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Time requires 64-bit integer');
+        }
+
         $timeInNs = 86399999999999;
         $this->assertSame($timeInNs, Value\Time::fromBinary((Value\Time::fromValue($timeInNs))->getBinary())->asInteger());
     }
 
     public function testTimestamp(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         $timeInMs = 1674341495053;
         $this->assertSame($timeInMs, Value\Timestamp::fromBinary((Value\Timestamp::fromValue($timeInMs))->getBinary())->asInteger());
     }

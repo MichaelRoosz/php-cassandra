@@ -51,6 +51,11 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
     }
 
     public function testDurationFromStream(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Duration requires 64-bit integer');
+        }
+
         $vals = [
             '0s',
             '1y2mo3d4h5m6s7ms8us9ns',
@@ -101,10 +106,12 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
             $this->assertSame($v, $obj->getValue());
         }
 
-        // bigint
-        foreach ([0, 1, -1, 9223372036854775807, -9223372036854775807 - 1] as $v) {
-            $obj = $this->decodeViaFromStream(Type::BIGINT, $v);
-            $this->assertSame($v, $obj->getValue());
+        if ($this->integerHasAtLeast64Bits()) {
+            // bigint
+            foreach ([0, 1, -1, 9223372036854775807, -9223372036854775807 - 1] as $v) {
+                $obj = $this->decodeViaFromStream(Type::BIGINT, $v);
+                $this->assertSame($v, $obj->getValue());
+            }
         }
     }
 
