@@ -293,8 +293,9 @@ trait CompareWithCqlsh {
         if ($useDocker) {
             $this->runCqlShInDocker("cqlsh {$cqlshArguments} localhost 9042 2>&1", $dumpFile);
         } else {
+            $host = getenv('APP_CASSANDRA_HOST') ?: 'localhost';
             $port = getenv('APP_CASSANDRA_PORT') ?: '9142';
-            $this->runCqlShInCqlSh("cqlsh {$cqlshArguments} localhost {$port} 2>&1", $dumpFile);
+            $this->runCqlShInCqlSh("cqlsh {$cqlshArguments} {$host} {$port} 2>&1", $dumpFile);
         }
     }
 
