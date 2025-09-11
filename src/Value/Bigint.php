@@ -55,12 +55,12 @@ class Bigint extends ValueWithFixedLength {
                 ]);
             }
 
-            if ($unpacked[2] !== 0) {
+            if ($unpacked[1] !== 0) {
                 throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
             }
         }
 
-        return new static($unpacked[1]);
+        return new static($unpacked[2]);
     }
 
     /**
@@ -89,7 +89,7 @@ class Bigint extends ValueWithFixedLength {
         if (PHP_INT_SIZE >= 8) {
             return pack('J', $this->value);
         } else {
-            return pack('N2', $this->value, 0);
+            return pack('N2', 0, $this->value);
         }
     }
 
