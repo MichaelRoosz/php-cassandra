@@ -130,7 +130,7 @@ final class StreamReaderTest extends TestCase {
 
         // readBytesMap: 3 entries with null, empty and non-empty
         $bin = pack('n', 3);
-        $bin .= pack('n', 4) . 'key1' . pack('N', -1 & 0xFFFFFFFF); // null
+        $bin .= pack('n', 4) . 'key1' . pack('N', -1); // null
         $bin .= pack('n', 4) . 'key2' . pack('N', 0); // empty string
         $bin .= pack('n', 4) . 'key3' . pack('N', strlen('value')) . 'value'; // non-empty
         $reader = new StreamReader($bin);
@@ -172,7 +172,7 @@ final class StreamReaderTest extends TestCase {
 
         // readBytes: int length with null(-1), empty(0), non-empty
         $data = 'xyz';
-        $bin = pack('N', -1 & 0xFFFFFFFF) . pack('N', 0) . pack('N', strlen($data)) . $data;
+        $bin = pack('N', -1) . pack('N', 0) . pack('N', strlen($data)) . $data;
         $reader = new StreamReader($bin);
         $this->assertNull($reader->readBytes());
         $this->assertSame('', $reader->readBytes());
@@ -219,7 +219,7 @@ final class StreamReaderTest extends TestCase {
         $this->assertSame($val, $reader->readValue($typeInfo, $cfg));
 
         // null (-1)
-        $reader = new StreamReader(pack('N', -1 & 0xFFFFFFFF));
+        $reader = new StreamReader(pack('N', -1));
         $this->assertNull($reader->readValue($typeInfo, $cfg));
 
         // empty (0) for varchar
@@ -231,7 +231,7 @@ final class StreamReaderTest extends TestCase {
     public function testReadValueInvalidNegativeLength(): void {
         $typeInfo = \Cassandra\ValueFactory::getTypeInfoFromType(Type::INT);
         // -3 is invalid
-        $reader = new StreamReader(pack('N', (-3) & 0xFFFFFFFF));
+        $reader = new StreamReader(pack('N', (-3)));
         $this->expectException(ResponseException::class);
         $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value);
         $reader->readValue($typeInfo, new ValueEncodeConfig());
