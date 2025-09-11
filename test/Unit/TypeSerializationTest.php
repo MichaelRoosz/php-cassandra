@@ -504,13 +504,19 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         foreach ([
             PHP_INT_MAX,
             PHP_INT_MIN,
-            '999999999999999999999999999999999999999999999999999999999999999999',
-            '-999999999999999999999999999999999999999999999999999999999999999999',
         ] as $value) {
             $this->assertSame((string) $value, (Value\Varint::fromValue($value))->getValue());
             $this->assertSame($value, (Value\Varint::fromValue($value))->asInt());
             $this->assertSame((string) $value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())->getValue());
             $this->assertSame($value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())->asInt());
+        }
+
+        foreach ([
+            '999999999999999999999999999999999999999999999999999999999999999999',
+            '-999999999999999999999999999999999999999999999999999999999999999999',
+        ] as $value) {
+            $this->assertSame($value, (Value\Varint::fromValue($value))->getValue());
+            $this->assertSame($value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())->getValue());
         }
 
         $this->assertSame('0', Value\Varint::fromBinary("\x00")->getValue());
