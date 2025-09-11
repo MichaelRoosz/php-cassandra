@@ -152,8 +152,8 @@ Some Cassandra data types require 64-bit PHP and are unsupported on 32-bit:
 
 | Type | 32-bit PHP | 64-bit PHP | Notes |
 |------|------------|------------|-------|
-| `Bigint` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
-| `Counter` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
+| `Bigint` | ⚠️ Partial | ✅ Full | Supported if the value is within 32-bit range |
+| `Counter` | ⚠️ Partial | ✅ Full | Supported if the value is within 32-bit range |
 | `Date` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
 | `Duration` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
 | `Time` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |

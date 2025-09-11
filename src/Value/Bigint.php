@@ -12,12 +12,7 @@ use Cassandra\TypeInfo\TypeInfo;
 class Bigint extends ValueWithFixedLength {
     protected readonly int $value;
 
-    /**
-     * @throws \Cassandra\Exception\ValueException
-     */
     final public function __construct(int $value) {
-        self::require64Bit();
-
         $this->value = $value;
     }
 
@@ -36,17 +31,33 @@ class Bigint extends ValueWithFixedLength {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
 
-        self::require64Bit();
+        if (PHP_INT_SIZE >= 8) {
+            /**
+             * @var false|array<int> $unpacked
+             */
+            $unpacked = unpack('J', $binary);
+            if ($unpacked === false) {
+                throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
+                    'binary_length' => strlen($binary),
+                    'expected_length' => 8,
+                ]);
+            }
 
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('J', $binary);
-        if ($unpacked === false) {
-            throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
-                'binary_length' => strlen($binary),
-                'expected_length' => 8,
-            ]);
+        } else {
+            /**
+             * @var false|array<int> $unpacked
+             */
+            $unpacked = unpack('N2', $binary);
+            if ($unpacked === false) {
+                throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
+                    'binary_length' => strlen($binary),
+                    'expected_length' => 8,
+                ]);
+            }
+
+            if ($unpacked[2] !== 0) {
+                throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
+            }
         }
 
         return new static($unpacked[1]);
@@ -59,8 +70,6 @@ class Bigint extends ValueWithFixedLength {
      */
     #[\Override]
     final public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
-        self::require64Bit();
-
         if (!is_int($value)) {
             throw new ValueException('Invalid bigint value; expected int', ExceptionCode::VALUE_BIGINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
@@ -70,16 +79,18 @@ class Bigint extends ValueWithFixedLength {
         return new static($value);
     }
 
-    /**
-     * @throws \Cassandra\Exception\ValueException
-     */
     final public static function fromValue(int $value): static {
         return new static($value);
     }
 
     #[\Override]
     final public function getBinary(): string {
-        return pack('J', $this->value);
+
+        if (PHP_INT_SIZE >= 8) {
+            return pack('J', $this->value);
+        } else {
+            return pack('N2', $this->value, 0);
+        }
     }
 
     #[\Override]
