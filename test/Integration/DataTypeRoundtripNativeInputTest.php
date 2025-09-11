@@ -98,6 +98,11 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testBigintRoundtrip(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Bigint requires 64-bit integer');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_bigint (id int PRIMARY KEY, value bigint)'
         );
@@ -200,6 +205,11 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testCounterRoundtrip(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Counter requires 64-bit integer');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_counter (id int PRIMARY KEY, value counter)'
         );
@@ -271,6 +281,11 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testDateRoundtrip(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Date requires 64-bit integer');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_date (id int PRIMARY KEY, value date)'
         );
@@ -1152,6 +1167,11 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testTimeRoundtrip(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Time requires 64-bit integer');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_time (id int PRIMARY KEY, value time)'
         );
@@ -1222,6 +1242,10 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testTimestampRoundtrip(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_timestamp (id int PRIMARY KEY, value timestamp)'
         );
