@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1311
+ * Next free code: 1312
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -214,7 +214,6 @@ enum ExceptionCode: int {
     case TYPENAMEPARSER_VECTOR_INVALID_PARAM_COUNT = 1289;
 
     // ValueException (VALUE_)
-    case VALUE_BIGINT_64BIT_REQUIRED = 1142;
     case VALUE_BIGINT_INVALID_VALUE_TYPE = 1143;
     case VALUE_BIGINT_UNPACK_FAILED = 1144;
     case VALUE_BLOB_INVALID_VALUE_TYPE = 1145;
@@ -230,7 +229,6 @@ enum ExceptionCode: int {
     case VALUE_DECIMAL_UNPACK_FAILED = 1168;
     case VALUE_DOUBLE_INVALID_VALUE_TYPE = 1169;
     case VALUE_DOUBLE_UNPACK_FAILED = 1170;
-    case VALUE_DURATION_64BIT_REQUIRED = 1171;
     case VALUE_DURATION_DAYS_INVALID = 1172;
     case VALUE_DURATION_DAYS_OUT_OF_RANGE = 1173;
     case VALUE_DURATION_INVALID_VALUE_TYPE = 1174;
@@ -263,13 +261,11 @@ enum ExceptionCode: int {
     case VALUE_SMALLINT_INVALID_VALUE_TYPE = 1197;
     case VALUE_SMALLINT_OUT_OF_RANGE = 1198;
     case VALUE_SMALLINT_UNPACK_FAILED = 1199;
-    case VALUE_TIME_64BIT_REQUIRED = 1200;
     case VALUE_TIME_INVALID_DATETIME_STRING = 1201;
     case VALUE_TIME_INVALID_FORMAT = 1202;
     case VALUE_TIME_INVALID_STRING = 1203;
     case VALUE_TIME_INVALID_VALUE_TYPE = 1204;
     case VALUE_TIME_OUT_OF_RANGE = 1205;
-    case VALUE_TIMESTAMP_64BIT_REQUIRED = 1207;
     case VALUE_TIMESTAMP_INVALID_VALUE_TYPE = 1208;
     case VALUE_TIMESTAMP_TO_DATETIME_FAILED = 1209;
     case VALUE_TINYINT_INVALID_VALUE_TYPE = 1210;
@@ -278,6 +274,7 @@ enum ExceptionCode: int {
     case VALUE_TUPLE_INVALID_TYPEINFO = 1213;
     case VALUE_TUPLE_INVALID_VALUE_TYPE = 1214;
     case VALUE_TUPLE_TYPEINFO_REQUIRED = 1215;
+    case VALUE_TYPE_REQUIRES_64BIT_INTEGER = 1311;
     case VALUE_UDT_INVALID_TYPEINFO = 1217;
     case VALUE_UDT_INVALID_VALUE_TYPE = 1218;
     case VALUE_UDT_TYPEINFO_REQUIRED = 1219;

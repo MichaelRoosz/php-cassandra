@@ -29,6 +29,8 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
      */
     final public function __construct(int|string|DateTimeInterface $value) {
 
+        self::require64Bit();
+
         if (is_int($value)) {
             if ($value > self::VALUE_INT_MAX || $value < self::VALUE_INT_MIN) {
                 throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
@@ -167,6 +169,9 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
+
+        self::require64Bit();
+
         /**
          * @var false|array<int> $unpacked
          */
@@ -188,6 +193,8 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
+
+        self::require64Bit();
 
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
             throw new ValueException(

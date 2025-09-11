@@ -468,7 +468,6 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      * @throws \Cassandra\Exception\ValueException
      */
     protected function nativeValueFromDateInterval(DateInterval $value): array {
-        self::require64Bit();
 
         $months = ((int) $value->format('%r%y') * 12) + (int) $value->format('%r%m');
         $days = (int) $value->format('%r%d');
@@ -493,7 +492,6 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      * @throws \Cassandra\Exception\ValueException
      */
     protected function nativeValueFromString(string $value): array {
-        self::require64Bit();
 
         $foundPattern = false;
         foreach (self::PATTERNS as $pattern) {
@@ -568,21 +566,6 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             'days' => $days,
             'nanoseconds' => $nanoseconds,
         ];
-    }
-
-    /**
-     * @throws \Cassandra\Exception\ValueException
-     */
-    protected static function require64Bit(): void {
-        if (PHP_INT_SIZE < 8) {
-            throw new ValueException(
-                'The Duration data type requires a 64-bit system',
-                ExceptionCode::VALUE_DURATION_64BIT_REQUIRED->value, [
-                    'php_int_size_bytes' => PHP_INT_SIZE,
-                    'php_int_size_bits' => PHP_INT_SIZE * 8,
-                ]
-            );
-        }
     }
 
     /**

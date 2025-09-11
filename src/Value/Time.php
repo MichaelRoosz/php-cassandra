@@ -12,7 +12,6 @@ use Cassandra\Value\EncodeOption\TimeEncodeOption;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Exception as PhpException;
-use ReflectionClass;
 
 final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodings {
     final public const VALUE_MAX = 86399999999999;
@@ -222,20 +221,5 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\ValueException
-     */
-    protected static function require64Bit(): void {
-        if (PHP_INT_SIZE < 8) {
-            $className = (new ReflectionClass(static::class))->getShortName();
-
-            throw new ValueException('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::VALUE_TIME_64BIT_REQUIRED->value, [
-                'class' => $className,
-                'php_int_size_bytes' => PHP_INT_SIZE,
-                'php_int_size_bits' => PHP_INT_SIZE * 8,
-            ]);
-        }
     }
 }

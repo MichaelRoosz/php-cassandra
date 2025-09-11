@@ -136,7 +136,7 @@ Requirements
 | Component | Minimum | Recommended | Notes |
 |-----------|---------|-------------|-------|
 | **PHP Version** | 8.1.0 | 8.3+ | Latest stable version recommended |
-| **Architecture** | 32-bit/64-bit | 64-bit | 64-bit required for Bigint/Counter/Duration/Time/Timestamp types and defaultTimestamp request option (unsupported on 32-bit) |
+| **Architecture** | 32-bit/64-bit | 64-bit | 64-bit required for Bigint/Counter/Date/Duration/Time/Timestamp types and defaultTimestamp request option (unsupported on 32-bit) |
 
 ### PHP Extensions
 
@@ -154,6 +154,7 @@ Some Cassandra data types require 64-bit PHP and are unsupported on 32-bit:
 |------|------------|------------|-------|
 | `Bigint` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
 | `Counter` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
+| `Date` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
 | `Duration` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
 | `Time` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
 | `Timestamp` | ❌ Unsupported | ✅ Full | Requires 64-bit PHP |
@@ -1446,7 +1447,7 @@ A: The library works with standard PHP, but some extensions enhance functionalit
 
 **Q: Can I run this on 32-bit PHP?**
 
-A: Limited support. The following features are unsupported on 32-bit PHP: value types `Bigint`, `Counter`, `Duration`, `Time`, `Timestamp`, and the `defaultTimestamp` request option. Use 64-bit PHP for full compatibility.
+A: Limited support. The following features are unsupported on 32-bit PHP: value types `Bigint`, `Counter`, `Date`, `Duration`, `Time`, `Timestamp`, and the `defaultTimestamp` request option. Use 64-bit PHP for full compatibility.
 
 ### Data Types and Modeling
 

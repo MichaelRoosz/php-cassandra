@@ -8,7 +8,6 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
-use ReflectionClass;
 
 class Bigint extends ValueWithFixedLength {
     protected readonly int $value;
@@ -101,20 +100,5 @@ class Bigint extends ValueWithFixedLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\ValueException
-     */
-    final protected static function require64Bit(): void {
-        if (PHP_INT_SIZE < 8) {
-            $className = (new ReflectionClass(static::class))->getShortName();
-
-            throw new ValueException('The ' . $className . ' data type requires a 64-bit system', ExceptionCode::VALUE_BIGINT_64BIT_REQUIRED->value, [
-                'class' => $className,
-                'php_int_size_bytes' => PHP_INT_SIZE,
-                'php_int_size_bits' => PHP_INT_SIZE * 8,
-            ]);
-        }
     }
 }

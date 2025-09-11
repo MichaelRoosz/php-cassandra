@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
@@ -82,4 +84,19 @@ abstract class ValueBase implements Stringable {
     abstract public static function isSerializedAsFixedLength(): bool;
 
     abstract public static function requiresDefinition(): bool;
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    protected static function require64Bit(): void {
+        if (PHP_INT_SIZE < 8) {
+            $className = static::class;
+
+            throw new ValueException('The ' . $className . ' data type requires 64-bit integers, 64-bit php is required', ExceptionCode::VALUE_TYPE_REQUIRES_64BIT_INTEGER->value, [
+                'class' => $className,
+                'php_int_size_bytes' => PHP_INT_SIZE,
+                'php_int_size_bits' => PHP_INT_SIZE * 8,
+            ]);
+        }
+    }
 }
