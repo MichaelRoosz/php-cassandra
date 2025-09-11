@@ -298,11 +298,15 @@ trait CompareAgainstCqlsh {
             $this->fail("Failed to execute cqlsh command: {$command}");
         }
 
+        $lines = explode("\n", $output);
+        $lines = array_filter($lines, fn($line) => !str_starts_with($line, 'WARNING:'));
+        $output = implode("\n", $lines);
+
         if (
             str_contains($output, 'Connection error')
             || str_contains($output, 'SyntaxException')
             || str_contains($output, 'InvalidRequest')
-            || !str_contains($output, 'id|value')
+            || !str_starts_with($output, 'id|value')
         ) {
             $this->fail("cqlsh command failed: {$command}\nOutput: {$output}");
         }
@@ -320,6 +324,10 @@ trait CompareAgainstCqlsh {
         if ($output === null || $output === false) {
             $this->fail("Failed to execute cqlsh command in container: {$dockerCommand}");
         }
+
+        $lines = explode("\n", $output);
+        $lines = array_filter($lines, fn($line) => !str_starts_with($line, 'WARNING:'));
+        $output = implode("\n", $lines);
 
         if (
             str_contains($output, 'Connection error')
