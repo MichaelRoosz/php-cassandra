@@ -177,12 +177,6 @@ trait CompareWithCqlsh {
      */
     protected function dumpTableWithCqlsh(string $keyspace, string $tableName, string $idColumn, string $valueColumn): array {
 
-        $dumpFile = './table_dump.csv';
-
-        if (file_exists($dumpFile)) {
-            unlink($dumpFile);
-        }
-
         $options = [
             'HEADER' => 'TRUE',
             'DELIMITER' => '|',
@@ -199,17 +193,16 @@ trait CompareWithCqlsh {
         $optionsString = implode(' AND ', array_map(fn($k, $v) => "{$k} = '{$v}'", array_keys($options), $options));
 
         $columnList = [$idColumn, $valueColumn];
-        $query = "COPY {$keyspace}.\"{$tableName}\" (" . implode(',', $columnList) . ") TO '____DUMP_FILE____' WITH " . $optionsString . ' ;';
+        $query = "COPY {$keyspace}.\"{$tableName}\" (" . implode(',', $columnList) . ') TO STDOUT WITH ' . $optionsString . ' ;';
         $escapedQuery = escapeshellarg($query);
         $cqlshArguments = "-k {$keyspace} -e {$escapedQuery}";
 
-        $this->runCqlSh($cqlshArguments, $dumpFile);
+        $csv = $this->runCqlSh($cqlshArguments);
+        $handle = fopen('php://memory', 'r+');
+        fwrite($handle, $csv);
+        rewind($handle);
 
         $rowData = [];
-        $handle = fopen($dumpFile, 'r');
-        if ($handle === false) {
-            $this->fail('Failed to open CSV file for reading: ' . $dumpFile);
-        }
 
         $headerRaw = fgetcsv(
             stream: $handle,
@@ -269,10 +262,6 @@ trait CompareWithCqlsh {
 
         fclose($handle);
 
-        if (file_exists($dumpFile)) {
-            unlink($dumpFile);
-        }
-
         $rows = [];
         foreach ($rowData as $row) {
             $rows[$row[$idColumn]] = $row;
@@ -281,7 +270,7 @@ trait CompareWithCqlsh {
         return $rows;
     }
 
-    protected function runCqlSh(string $cqlshArguments, string $dumpFile): void {
+    protected function runCqlSh(string $cqlshArguments): string {
         static $useDocker = null;
         if ($useDocker === null) {
             if (shell_exec('which cqlsh') !== null) {
@@ -291,17 +280,16 @@ trait CompareWithCqlsh {
             }
         }
         if ($useDocker) {
-            $this->runCqlShInDocker("cqlsh {$cqlshArguments} localhost 9042 2>&1", $dumpFile);
+            return $this->runCqlShInDocker("cqlsh {$cqlshArguments} localhost 9042 2>&1");
         } else {
             $host = getenv('APP_CASSANDRA_HOST') ?: 'localhost';
             $port = getenv('APP_CASSANDRA_PORT') ?: '9142';
-            $this->runCqlShInCqlSh("cqlsh {$cqlshArguments} {$host} {$port} 2>&1", $dumpFile);
+
+            return $this->runCqlShInCqlSh("cqlsh {$cqlshArguments} {$host} {$port} 2>&1");
         }
     }
 
-    protected function runCqlShInCqlSh(string $command, string $dumpFile): void {
-
-        $command = str_replace('____DUMP_FILE____', $dumpFile, $command);
+    protected function runCqlShInCqlSh(string $command): string {
 
         $output = shell_exec($command);
         if ($output === null || $output === false) {
@@ -312,24 +300,17 @@ trait CompareWithCqlsh {
             str_contains($output, 'Connection error')
             || str_contains($output, 'SyntaxException')
             || str_contains($output, 'InvalidRequest')
-            || !str_contains($output, 'rows exported to 1 files')
+            || !str_contains($output, 'id|value')
         ) {
             $this->fail("cqlsh command failed: {$command}\nOutput: {$output}");
         }
+
+        return $output;
     }
 
-    protected function runCqlShInDocker(string $command, string $dumpFile): void {
+    protected function runCqlShInDocker(string $command): string {
 
         $containerName = 'php-cassandra-test-db';
-
-        $containerCheck = shell_exec("docker ps --filter name={$containerName} --format '{{.Names}}' 2>/dev/null");
-        $this->assertIsString($containerCheck);
-
-        if (trim($containerCheck) !== $containerName) {
-            $this->fail("Cassandra container '{$containerName}' is not running. Please start with 'docker-compose up -d'");
-        }
-
-        $command = str_replace('____DUMP_FILE____', '/tmp/table_dump.csv', $command);
 
         $dockerCommand = "docker exec {$containerName} {$command}";
 
@@ -342,12 +323,12 @@ trait CompareWithCqlsh {
             str_contains($output, 'Connection error')
             || str_contains($output, 'SyntaxException')
             || str_contains($output, 'InvalidRequest')
-            || !str_contains($output, 'rows exported to 1 files')
+            || !str_starts_with($output, 'id|value')
         ) {
             $this->fail("cqlsh command failed: {$dockerCommand}\nOutput: {$output}");
         }
 
-        shell_exec("docker cp {$containerName}:/tmp/table_dump.csv {$dumpFile}");
+        return $output;
     }
 
     /**
