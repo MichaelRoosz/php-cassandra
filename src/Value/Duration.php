@@ -465,7 +465,6 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
     /**
      * @return array{ months: int, days: int, nanoseconds: int }
-     * @throws \Cassandra\Exception\ValueException
      */
     protected function nativeValueFromDateInterval(DateInterval $value): array {
 
