@@ -44,13 +44,21 @@ class Bigint extends ValueWithFixedLength {
             }
 
             return new static($unpacked[1]);
+        }
 
+        $highBytes = substr($binary, 0, 4);
+        if ($highBytes === "\x00\x00\x00\x00") {
+            $isPositiveRange = true;
+        } elseif ($highBytes === "\xFF\xFF\xFF\xFF") {
+            $isPositiveRange = false;
+        } else {
+            throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
         }
 
         /**
          * @var false|array<int> $unpacked
          */
-        $unpacked = unpack('N2', $binary);
+        $unpacked = unpack('N', $binary, 4);
         if ($unpacked === false) {
             throw new ValueException('Cannot unpack bigint binary data', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
@@ -58,17 +66,19 @@ class Bigint extends ValueWithFixedLength {
             ]);
         }
 
-        $sign = $unpacked[1] & 0x80000000;
-        $value = $unpacked[2] & 0x7FFFFFFF;
+        $value = $unpacked[1];
 
-        $restOfSign = $unpacked[1] & 0x7FFFFFFF;
-        $restOfValue = $unpacked[2] & 0x80000000;
-
-        if ($restOfSign !== 0 || $restOfValue !== 0) {
-            throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
+        if ($isPositiveRange) {
+            if (($value & 0x80000000) !== 0) {
+                throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
+            }
+        } else {
+            if (($value & 0x80000000) === 0) {
+                throw new ValueException('Bigint value out of 32-bit integer range, 64-bit php is required.', ExceptionCode::VALUE_BIGINT_UNPACK_FAILED->value);
+            }
         }
 
-        return new static($sign | $value);
+        return new static($value);
     }
 
     /**
@@ -96,13 +106,12 @@ class Bigint extends ValueWithFixedLength {
 
         if (PHP_INT_SIZE >= 8) {
             return pack('J', $this->value);
-        } else {
-
-            $sign = $this->value & 0x80000000;
-            $value = $this->value & 0x7FFFFFFF;
-
-            return pack('N2', $sign, $value);
         }
+
+        $highBytes = $this->value < 0 ? "\xFF\xFF\xFF\xFF" : "\x00\x00\x00\x00";
+        $lowBytes = pack('N', $this->value);
+
+        return $highBytes . $lowBytes;
     }
 
     #[\Override]
