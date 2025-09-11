@@ -2,16 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Test\Integration;
+namespace Cassandra\Test\Unit;
 
 use Cassandra\Type;
 use Cassandra\ValueFactory;
 use Cassandra\Response\StreamReader;
 use Cassandra\Value;
 use Cassandra\Value\ValueBase;
-use PHPUnit\Framework\TestCase;
 
-final class ValueFromStreamTest extends TestCase {
+final class ValueFromStreamTest extends AbstractUnitTestCase {
     public function testCollectionsFromStream(): void {
         // list<varchar>
         $listVals = [[], ['a'], ['hello', 'world']];

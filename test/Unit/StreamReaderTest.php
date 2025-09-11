@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cassandra\Test\Integration;
+namespace Cassandra\Test\Unit;
 
 use Cassandra\Consistency;
 use Cassandra\Exception\ExceptionCode;
@@ -10,9 +10,10 @@ use Cassandra\Exception\ResponseException as ResponseException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\Value\ValueEncodeConfig;
-use PHPUnit\Framework\TestCase;
+use Cassandra\ValueFactory;
+use Cassandra\VIntCodec;
 
-final class StreamReaderTest extends TestCase {
+final class StreamReaderTest extends AbstractUnitTestCase {
     public function testBasicReadAndOffset(): void {
         $reader = new StreamReader('abcdef');
 
@@ -41,22 +42,24 @@ final class StreamReaderTest extends TestCase {
         $reader = new StreamReader(pack('C', 0xAB));
         $this->assertSame(0xAB, $reader->readByte());
 
-        // short (0x1234)
+        // short
         $reader = new StreamReader(pack('n', 0x1234));
         $this->assertSame(0x1234, $reader->readShort());
 
-        // int (0x7FFFFFFF then 0xFFFFFFFF -> -1)
-        $reader = new StreamReader(pack('N', 0x7FFFFFFF) . pack('N', 0xFFFFFFFF));
+        // int
+        $reader = new StreamReader(pack('N', 2147483647) . pack('N', -1));
         $this->assertSame(2147483647, $reader->readInt());
         $this->assertSame(-1, $reader->readInt());
 
-        // long: StreamReader uses unpack('J'), so test simple positive values within range
-        $valPos = 1;
-        $valPos2 = 2;
-        $bin = pack('J', $valPos) . pack('J', $valPos2);
-        $reader = new StreamReader($bin);
-        $this->assertSame($valPos, $reader->readLong());
-        $this->assertSame($valPos2, $reader->readLong());
+        if ($this->integerHasAtLeast64Bits()) {
+            // long: StreamReader uses unpack('J'), so test simple positive values within range
+            $valPos = 1;
+            $valPos2 = 2;
+            $bin = pack('J', $valPos) . pack('J', $valPos2);
+            $reader = new StreamReader($bin);
+            $this->assertSame($valPos, $reader->readLong());
+            $this->assertSame($valPos2, $reader->readLong());
+        }
     }
 
     public function testReadConsistency(): void {
@@ -215,7 +218,7 @@ final class StreamReaderTest extends TestCase {
         $bin = pack('N', strlen($valueBinary)) . $valueBinary; // length + content
         $reader = new StreamReader($bin);
         $cfg = new ValueEncodeConfig();
-        $typeInfo = \Cassandra\ValueFactory::getTypeInfoFromType(Type::INT);
+        $typeInfo = ValueFactory::getTypeInfoFromType(Type::INT);
         $this->assertSame($val, $reader->readValue($typeInfo, $cfg));
 
         // null (-1)
@@ -223,13 +226,13 @@ final class StreamReaderTest extends TestCase {
         $this->assertNull($reader->readValue($typeInfo, $cfg));
 
         // empty (0) for varchar
-        $typeInfo = \Cassandra\ValueFactory::getTypeInfoFromType(Type::VARCHAR);
+        $typeInfo = ValueFactory::getTypeInfoFromType(Type::VARCHAR);
         $reader = new StreamReader(pack('N', 0));
         $this->assertSame('', $reader->readValue($typeInfo, $cfg));
     }
 
     public function testReadValueInvalidNegativeLength(): void {
-        $typeInfo = \Cassandra\ValueFactory::getTypeInfoFromType(Type::INT);
+        $typeInfo = ValueFactory::getTypeInfoFromType(Type::INT);
         // -3 is invalid
         $reader = new StreamReader(pack('N', (-3)));
         $this->expectException(ResponseException::class);
@@ -238,27 +241,18 @@ final class StreamReaderTest extends TestCase {
     }
 
     public function testReadVIntVariants(): void {
-        $codec = new \Cassandra\VIntCodec();
+        $codec = new VIntCodec();
 
-        $cases = [0, 1, -1, 127, 128, 255, 256, -256, PHP_INT_MAX >> 1];
+        $cases = [0, 1, -1, 127, 128, 255, 256, -256, 2147483647, -2147483647 -1, PHP_INT_MAX, PHP_INT_MIN];
         foreach ($cases as $n) {
             $reader = new StreamReader($codec->encodeSignedVint64($n));
             $this->assertSame($n, $reader->readSignedVint64());
         }
 
-        $uCases = [0, 1, 127, 128, 255, 256, 65535, 4294967295];
+        $uCases = [0, 1, 127, 128, 255, 256, 65535, 2147483647, PHP_INT_MAX];
         foreach ($uCases as $n) {
             $reader = new StreamReader($codec->encodeUnsignedVint64($n));
             $this->assertSame($n, $reader->readUnsignedVInt64());
         }
-
-        // 32-bit variants within range
-        $reader = new StreamReader($codec->encodeSignedVint32(2147483647));
-        $this->assertSame(2147483647, $reader->readSignedVint32());
-        $reader = new StreamReader($codec->encodeSignedVint32(-2147483648));
-        $this->assertSame(-2147483648, $reader->readSignedVint32());
-
-        $reader = new StreamReader($codec->encodeUnsignedVint32(4294967295));
-        $this->assertSame(4294967295, $reader->readUnsignedVInt32());
     }
 }

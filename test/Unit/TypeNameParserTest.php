@@ -17,10 +17,9 @@ use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeInfo\VectorInfo;
-use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
-class TypeNameParserTest extends TestCase {
+class TypeNameParserTest extends AbstractUnitTestCase {
     private const SIMPLE_TYPES = [
         [TypeName::ASCII, Type::ASCII],
         [TypeName::BOOLEAN, Type::BOOLEAN],

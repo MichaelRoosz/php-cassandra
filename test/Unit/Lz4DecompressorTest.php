@@ -7,9 +7,8 @@ namespace Cassandra\Test\Unit;
 use Cassandra\Exception\CompressionException as CompressionException;
 use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Exception\ExceptionCode;
-use PHPUnit\Framework\TestCase;
 
-class Lz4DecompressorTest extends TestCase {
+class Lz4DecompressorTest extends AbstractUnitTestCase {
     public function testDecompressBlockThrowsOnIllegalOffset(): void {
         // Have some literals, then offset=0 -> illegal
         $token = chr((1 << 4) | 0x1); // literals=1, match nibble=1 (but we'll fail before using it)

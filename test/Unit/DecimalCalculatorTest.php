@@ -10,9 +10,8 @@ use Cassandra\StringMath\DecimalCalculator\BCMath as BcCalculator;
 use Cassandra\StringMath\DecimalCalculator\GMP as GmpCalculator;
 use Cassandra\StringMath\DecimalCalculator\Native as NativeCalculator;
 use Cassandra\Exception\StringMathException as StringMathException;
-use PHPUnit\Framework\TestCase;
 
-class DecimalCalculatorTest extends TestCase {
+class DecimalCalculatorTest extends AbstractUnitTestCase {
     /**
      * @return array<string, array{string, DecimalCalculator, string, string}>
      */

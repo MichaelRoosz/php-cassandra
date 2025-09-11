@@ -43,6 +43,10 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         $this->connection->disconnect();
     }
 
+    public function integerHasAtLeast64Bits(): bool {
+        return PHP_INT_SIZE >= 8;
+    }
+
     public function onWarnings(array $warnings, Request $request, Response $response): void {
 
         $this->fail('Received warnings: ' . implode(', ', $warnings));

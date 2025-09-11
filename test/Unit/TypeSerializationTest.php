@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
-use PHPUnit\Framework\TestCase;
 use Cassandra\Type;
 use Cassandra\Value;
 use Cassandra\ValueFactory;
 
-final class TypeSerializationTest extends TestCase {
+final class TypeSerializationTest extends AbstractUnitTestCase {
     public function testAscii(): void {
         $ascii = 'abcABC123!#_';
         $this->assertSame($ascii, Value\Ascii::fromBinary((Value\Ascii::fromValue($ascii))->getBinary())->getValue());
