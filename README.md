@@ -87,6 +87,8 @@ Table of contents
   - [Performance tips](#performance-tips)
   - [Version support](#version-support)
   - [API reference (essentials)](#api-reference-essentials)
+  - [Changelog](#changelog)
+  - [License](#license)
   - [Contributing](#contributing)
     - [Development Setup](#development-setup)
     - [Contribution Guidelines](#contribution-guidelines)
@@ -168,6 +170,13 @@ Installation
 
 ```bash
 composer require mroosz/php-cassandra
+```
+
+Then include Composer's autoloader in your application entrypoint (if not already):
+
+```php
+<?php
+require __DIR__ . '/vendor/autoload.php';
 ```
 
 ### Without Composer
@@ -430,7 +439,7 @@ Query options (`QueryOptions`):
 - `pageSize` (int, min 100 enforced by client)
 - `pagingState` (string)
 - `serialConsistency` (`SerialConsistency::SERIAL` or `SerialConsistency::LOCAL_SERIAL`)
-- `defaultTimestamp` (ms since epoch)
+- `defaultTimestamp` (microseconds since epoch)
   - Requires 64-bit PHP; unsupported on 32-bit
 - `namesForValues` (bool): true to use associative binds; if not explicitly set, it is auto-detected for queries and executes
 - `keyspace` (string; protocol v5 only)
@@ -1053,6 +1062,10 @@ $conn = new Connection(
 );
 ```
 
+Notes:
+- Compression is negotiated during STARTUP. When enabled, the client accepts server-compressed frames and transparently decompresses them.
+- The client may still send some frames uncompressed depending on size/heuristics; this is allowed by the protocol.
+
 Error handling
 --------------
 
@@ -1063,7 +1076,7 @@ php-cassandra provides comprehensive error handling with a well-structured excep
 ```
 \Exception
 └── \Cassandra\Exception\CassandraException (base exception)
-    ├── \Cassandra\Exception\CompressionException (conpression errors)
+    ├── \Cassandra\Exception\CompressionException (compression errors)
     ├── \Cassandra\Exception\ConnectionException (connection/transport errors)
     ├── \Cassandra\Exception\NodeException (node I/O errors)
     │   ├── \Cassandra\Exception\SocketException
@@ -1357,7 +1370,7 @@ $queryOptions = new QueryOptions(
     pageSize: 1000,                       // Page size (min 100, default: 5000)
     pagingState: $previousPagingState,    // For pagination (default: null)
     serialConsistency: SerialConsistency::SERIAL, // Serial consistency (default: null)
-    defaultTimestamp: 1640995200000,      // Default timestamp (microseconds, default: null)
+    defaultTimestamp: 1640995200000000,   // Default timestamp (microseconds, default: null)
     namesForValues: true,                 // Use named parameters (auto-detected if null)
     keyspace: 'my_keyspace',              // Per-request keyspace (v5 only, default: null)
     nowInSeconds: time(),                 // Current time override (v5 only, default: null)
@@ -1394,7 +1407,7 @@ use Cassandra\SerialConsistency;
 
 $batchOptions = new BatchOptions(
     serialConsistency: SerialConsistency::LOCAL_SERIAL,
-    defaultTimestamp: 1640995200000,      // Microseconds since epoch
+    defaultTimestamp: 1640995200000000,   // Microseconds since epoch
     keyspace: 'my_keyspace',              // v5 only
     nowInSeconds: time(),                 // v5 only
 );
@@ -1516,7 +1529,7 @@ $now = Timestamp::now();
 $timestamp = Timestamp::fromValue('2024-01-15T10:30:00Z');
 
 // From Unix timestamp
-$timestamp = Timestamp::fromValue(1705312200);
+$timestamp = Timestamp::fromValue(1705312200000); // milliseconds
 ```
 
 Migration Guide
@@ -1729,8 +1742,9 @@ API reference (essentials)
   - `prepare(string, PrepareOptions)` / `prepareAsync(...)`
   - `execute(Result $previous, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)` / `executeAll(...)`
   - `batch(Batch)` / `batchAsync(Batch)`
-  - `syncRequest(Request)` / `asyncRequest(Request)` / `waitForAsyncStatements(array $statements)` / `waitForAllPendingAsyncStatements()`
+  - `syncRequest(Request)` / `asyncRequest(Request)` / `waitForAsyncStatements(array $statements)` / `waitForAllPendingAsyncStatements()` / `waitForAnyStatement()`
   - `addEventListener(EventListener)` / `waitForNextEvent()`
+  - Non-blocking helpers: `drainAvailableResponses()`, `tryResolveStatement()`, `tryResolveStatements()`, `tryReadNextEvent()`
   - `waitForResponse()`
 
 - Results
@@ -1742,6 +1756,16 @@ API reference (essentials)
   - `Cassandra\Consistency` (enum)
   - `Cassandra\SerialConsistency` (enum)
   - `Cassandra\Type` (enum) and `Cassandra\Value\*` classes (Ascii, Bigint, Blob, Boolean, Counter, Date, Decimal, Double, Duration, Float32, Inet, Int32, ListCollection, MapCollection, NotSet, SetCollection, Smallint, Time, Timestamp, Timeuuid, Tinyint, Tuple, UDT, Uuid, Varchar, Varint, Vector, ...)
+
+Changelog
+---------
+
+See `CHANGELOG.md` for release notes and upgrade considerations.
+
+License
+-------
+
+This library is released under the MIT License. See `LICENSE` for details.
 
 
 Contributing
