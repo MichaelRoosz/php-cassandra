@@ -56,6 +56,123 @@ final class Socket extends NodeImplementation implements IoNode {
         $this->closeSocket($socket, true);
     }
 
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     */
+    #[\Override]
+    public function connect(): void {
+        if ($this->socket !== null) {
+            return;
+        }
+
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            $errorCode = socket_last_error();
+
+            throw new SocketException(
+                message: 'Socket create failed: ' . socket_strerror($errorCode),
+                code: ExceptionCode::SOCKET_CREATE_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'socket_create',
+                    'system_error_code' => $errorCode,
+                ]
+            );
+        }
+
+        socket_set_option($socket, SOL_TCP, TCP_NODELAY, 1);
+
+        foreach ($this->config->socketOptions as $optname => $optval) {
+            socket_set_option($socket, SOL_SOCKET, (int) $optname, $optval);
+        }
+
+        $this->isBlockingIo = socket_set_nonblock($socket) === false;
+
+        $start = microtime(true);
+        do {
+            $result = socket_connect($socket, $this->config->host, $this->config->port);
+            if ($result === false) {
+
+                $errorCode = socket_last_error($socket);
+
+                if ($errorCode === SOCKET_EISCONN) {
+                    break;
+                }
+
+                if ($errorCode === SOCKET_EINTR) {
+
+                    if (microtime(true) - $start > $this->sendTimeout) {
+                        $this->closeSocket($socket, false);
+
+                        throw new SocketException(
+                            message: 'Socket connect timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'connect',
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (
+                    $errorCode === SOCKET_EINPROGRESS
+                    || $errorCode === SOCKET_EALREADY
+                    || $errorCode === SOCKET_EAGAIN
+                ) {
+
+                    try {
+                        $this->waitForConnect($socket, $start);
+
+                    } catch (SocketException $e) {
+                        $this->closeSocket($socket, false);
+
+                        throw $e;
+                    }
+
+                    break;
+                }
+
+                if ($errorCode === SOCKET_ETIMEDOUT) {
+                    $this->closeSocket($socket, false);
+
+                    throw new SocketException(
+                        message: 'Socket connect timed out',
+                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'connect',
+                            'socket_options' => $this->config->socketOptions,
+                            'system_error_code' => $errorCode,
+                        ]
+                    );
+                }
+
+                $this->closeSocket($socket, false);
+
+                throw new SocketException(
+                    message: 'Socket connect failed: ' . socket_strerror($errorCode),
+                    code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'connect',
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
+                    ]
+                );
+            }
+        } while ($result === false);
+
+        $this->socket = $socket;
+    }
+
     #[\Override]
     public function getConfig(): SocketNodeConfig {
         return clone $this->config;
@@ -407,122 +524,6 @@ final class Socket extends NodeImplementation implements IoNode {
         }
 
         socket_close($socket);
-    }
-
-    /**
-     * @throws \Cassandra\Exception\SocketException
-     */
-    protected function connect(): void {
-        if ($this->socket !== null) {
-            return;
-        }
-
-        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        if ($socket === false) {
-            $errorCode = socket_last_error();
-
-            throw new SocketException(
-                message: 'Socket create failed: ' . socket_strerror($errorCode),
-                code: ExceptionCode::SOCKET_CREATE_FAILED->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'socket_create',
-                    'system_error_code' => $errorCode,
-                ]
-            );
-        }
-
-        socket_set_option($socket, SOL_TCP, TCP_NODELAY, 1);
-
-        foreach ($this->config->socketOptions as $optname => $optval) {
-            socket_set_option($socket, SOL_SOCKET, (int) $optname, $optval);
-        }
-
-        $this->isBlockingIo = socket_set_nonblock($socket) === false;
-
-        $start = microtime(true);
-        do {
-            $result = socket_connect($socket, $this->config->host, $this->config->port);
-            if ($result === false) {
-
-                $errorCode = socket_last_error($socket);
-
-                if ($errorCode === SOCKET_EISCONN) {
-                    break;
-                }
-
-                if ($errorCode === SOCKET_EINTR) {
-
-                    if (microtime(true) - $start > $this->sendTimeout) {
-                        $this->closeSocket($socket, false);
-
-                        throw new SocketException(
-                            message: 'Socket connect timed out',
-                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
-                            context: [
-                                'host' => $this->config->host,
-                                'port' => $this->config->port,
-                                'operation' => 'connect',
-                                'socket_options' => $this->config->socketOptions,
-                            ]
-                        );
-                    }
-
-                    continue;
-                }
-
-                if (
-                    $errorCode === SOCKET_EINPROGRESS
-                    || $errorCode === SOCKET_EALREADY
-                    || $errorCode === SOCKET_EAGAIN
-                ) {
-
-                    try {
-                        $this->waitForConnect($socket, $start);
-
-                    } catch (SocketException $e) {
-                        $this->closeSocket($socket, false);
-
-                        throw $e;
-                    }
-
-                    break;
-                }
-
-                if ($errorCode === SOCKET_ETIMEDOUT) {
-                    $this->closeSocket($socket, false);
-
-                    throw new SocketException(
-                        message: 'Socket connect timed out',
-                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'connect',
-                            'socket_options' => $this->config->socketOptions,
-                            'system_error_code' => $errorCode,
-                        ]
-                    );
-                }
-
-                $this->closeSocket($socket, false);
-
-                throw new SocketException(
-                    message: 'Socket connect failed: ' . socket_strerror($errorCode),
-                    code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
-                    context: [
-                        'host' => $this->config->host,
-                        'port' => $this->config->port,
-                        'operation' => 'connect',
-                        'socket_options' => $this->config->socketOptions,
-                        'system_error_code' => $errorCode,
-                    ]
-                );
-            }
-        } while ($result === false);
-
-        $this->socket = $socket;
     }
 
     /**

@@ -269,6 +269,32 @@ final class Connection {
     }
 
     /**
+     * Non-blocking: read up to $max available responses, returning how many were processed.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function drainAvailableResponses(int $max = PHP_INT_MAX): int {
+        $count = 0;
+        $drainedResponses = false;
+        while ($count < $max) {
+            $this->readResponse(waitForResponse: false,  drainedResponses: $drainedResponses);
+            if ($drainedResponses) {
+                break;
+            }
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
      * @param array<mixed> $values
      *
      * @throws \Cassandra\Exception\CompressionException
@@ -460,23 +486,6 @@ final class Connection {
         $request = new Request\Prepare($query, $options);
 
         return $this->asyncRequest($request);
-    }
-
-    /**
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
-    public function processAvailableResponses(): void {
-        do {
-            $response = $this->readResponse(waitForResponse: false);
-        } while ($response !== null);
-
     }
 
     /**
@@ -706,6 +715,109 @@ final class Connection {
         return $response;
     }
 
+    /**
+     * Non-blocking: attempt to read the next event; returns null if none available.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function tryReadNextEvent(): ?Response\Event {
+        $drainedResponses = false;
+        while (true) {
+            $event = $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            if ($drainedResponses) {
+                return null;
+            }
+            if ($event instanceof Response\Event) {
+                return $event;
+            }
+        }
+    }
+
+    /**
+     * Non-blocking: try to resolve a specific statement; returns true if it is ready.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function tryResolveStatement(Statement $statement): bool {
+        if ($statement->isResultReady()) {
+            return true;
+        }
+
+        $drainedResponses = false;
+        do {
+            $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            if ($drainedResponses) {
+                break;
+            }
+            /** @phpstan-ignore if.alwaysFalse */
+            if ($statement->isResultReady()) {
+                return true;
+            }
+        } while (true);
+
+        return false;
+    }
+
+    /**
+     * Non-blocking: try to resolve from a set of statements, up to $max responses processed.
+     * Returns the number of newly resolved statements from the provided set.
+     *
+     * @param array<Statement> $statements
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function tryResolveStatements(array $statements, int $max = PHP_INT_MAX): int {
+        $initialReady = 0;
+        foreach ($statements as $s) {
+            if ($s->isResultReady()) {
+                $initialReady++;
+            }
+        }
+
+        $processed = 0;
+        $drainedResponses = false;
+        while (
+            $processed < $max
+            && array_find($statements, fn (Statement $s) => !$s->isResultReady()) !== null
+        ) {
+            $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            if ($drainedResponses) {
+                break;
+            }
+            $processed++;
+        }
+
+        $ready = 0;
+        foreach ($statements as $s) {
+            if ($s->isResultReady()) {
+                $ready++;
+            }
+        }
+
+        return $ready - $initialReady;
+    }
+
     public function unregisterEventListener(EventListener $eventListener): void {
         $this->eventListeners = array_filter($this->eventListeners, fn (EventListener $listener) => $listener !== $eventListener);
     }
@@ -729,6 +841,29 @@ final class Connection {
     public function waitForAllPendingAsyncStatements(): void {
         while ($this->statements) {
             $this->readResponse(waitForResponse: true);
+        }
+    }
+
+    /**
+     * @param array<Statement> $statements
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function waitForAnyStatement(array $statements): Statement {
+        while (true) {
+            $this->readResponse(waitForResponse: true);
+            foreach ($statements as $s) {
+                if ($s->isResultReady()) {
+                    return $s;
+                }
+            }
         }
     }
 
@@ -1349,7 +1484,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function readResponse(bool $waitForResponse): ?Response\Response {
+    protected function readResponse(bool $waitForResponse, bool &$drainedResponses = false): ?Response\Response {
         $node = $this->getConnectedNode();
 
         try {
@@ -1361,8 +1496,12 @@ final class Connection {
         }
 
         if ($response === null) {
+            $drainedResponses = true;
+
             return null;
         }
+
+        $drainedResponses = false;
 
         if ($this->valueEncodeConfig !== null && ($response instanceof Result\RowsResult)) {
             $response->configureValueEncoding($this->valueEncodeConfig);
@@ -1405,6 +1544,7 @@ final class Connection {
 
             try {
                 $node = new $className($config);
+                $node->connect();
             } catch (NodeException $e) {
                 $socketException = $e;
                 $this->nodeHealth->recordFailure($config);

@@ -52,6 +52,67 @@ final class Stream extends NodeImplementation implements IoNode {
         }
     }
 
+    /**
+     * @throws \Cassandra\Exception\StreamException
+     */
+    #[\Override]
+    public function connect(): void {
+        if ($this->stream !== null) {
+            return;
+        }
+
+        $context = stream_context_create(
+            options: [
+                'ssl' => $this->config->sslOptions,
+            ]
+        );
+
+        $flags = $this->config->persistent ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
+
+        $stream = stream_socket_client(
+            address: $this->config->host . ':' . $this->config->port,
+            error_code: $errorCode,
+            error_message: $errorMessage,
+            timeout: $this->config->connectTimeoutInSeconds,
+            flags: $flags,
+            context: $context
+        );
+
+        if ($stream === false) {
+            /** @psalm-suppress TypeDoesNotContainType */
+            if (!is_string($errorMessage)) {
+                $errorMessage = 'Unknown error';
+            }
+
+            /** @psalm-suppress TypeDoesNotContainType */
+            if (!is_int($errorCode)) {
+                $errorCode = 0;
+            }
+
+            throw new StreamException(
+                message: $errorMessage,
+                code: ExceptionCode::STREAM_CONNECT_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'connect',
+                    'connect_timeout_seconds' => $this->config->connectTimeoutInSeconds,
+                    'persistent' => $this->config->persistent,
+                    'ssl_options' => $this->config->sslOptions,
+                    'system_error_code' => $errorCode,
+                ]
+            );
+        }
+
+        $this->isBlockingIo = stream_set_blocking($stream, enable: false) === false;
+
+        $timeoutSeconds = (int) floor($this->config->timeoutInSeconds);
+        $timeoutMicroseconds = (int) (($this->config->timeoutInSeconds - (float) $timeoutSeconds) * 1_000_000.0);
+        stream_set_timeout($stream, $timeoutSeconds, $timeoutMicroseconds);
+
+        $this->stream = $stream;
+    }
+
     #[\Override]
     public function getConfig(): StreamNodeConfig {
         return clone $this->config;
@@ -297,66 +358,6 @@ final class Stream extends NodeImplementation implements IoNode {
                 ]
             );
         }
-    }
-
-    /**
-     * @throws \Cassandra\Exception\StreamException
-     */
-    protected function connect(): void {
-        if ($this->stream !== null) {
-            return;
-        }
-
-        $context = stream_context_create(
-            options: [
-                'ssl' => $this->config->sslOptions,
-            ]
-        );
-
-        $flags = $this->config->persistent ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
-
-        $stream = stream_socket_client(
-            address: $this->config->host . ':' . $this->config->port,
-            error_code: $errorCode,
-            error_message: $errorMessage,
-            timeout: $this->config->connectTimeoutInSeconds,
-            flags: $flags,
-            context: $context
-        );
-
-        if ($stream === false) {
-            /** @psalm-suppress TypeDoesNotContainType */
-            if (!is_string($errorMessage)) {
-                $errorMessage = 'Unknown error';
-            }
-
-            /** @psalm-suppress TypeDoesNotContainType */
-            if (!is_int($errorCode)) {
-                $errorCode = 0;
-            }
-
-            throw new StreamException(
-                message: $errorMessage,
-                code: ExceptionCode::STREAM_CONNECT_FAILED->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'connect',
-                    'connect_timeout_seconds' => $this->config->connectTimeoutInSeconds,
-                    'persistent' => $this->config->persistent,
-                    'ssl_options' => $this->config->sslOptions,
-                    'system_error_code' => $errorCode,
-                ]
-            );
-        }
-
-        $this->isBlockingIo = stream_set_blocking($stream, enable: false) === false;
-
-        $timeoutSeconds = (int) floor($this->config->timeoutInSeconds);
-        $timeoutMicroseconds = (int) (($this->config->timeoutInSeconds - (float) $timeoutSeconds) * 1_000_000.0);
-        stream_set_timeout($stream, $timeoutSeconds, $timeoutMicroseconds);
-
-        $this->stream = $stream;
     }
 
     /**

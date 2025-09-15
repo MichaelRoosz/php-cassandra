@@ -9,4 +9,10 @@ interface IoNode extends Node {
      * @throws \Cassandra\Exception\NodeException
      */
     public function __construct(NodeConfig $config);
+
+    /**
+     * @throws \Cassandra\Exception\NodeException
+     */
+    public function connect(): void;
+
 }
