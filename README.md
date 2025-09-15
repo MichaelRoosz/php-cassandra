@@ -8,8 +8,8 @@ php-cassandra: A modern Cassandra client for PHP
 
 php-cassandra is a pure-PHP client for Apache Cassandra with support for CQL binary protocol v3, v4 and v5 (Cassandra 4.x/5.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.
 
-**Package:** https://packagist.org/packages/mroosz/php-cassandra  
-**Repository:** https://github.com/MichaelRoosz/php-cassandra
+**Packagist:** [mroosz/php-cassandra](https://packagist.org/packages/mroosz/php-cassandra)  
+**Repository:** [GitHub – MichaelRoosz/php-cassandra](https://github.com/MichaelRoosz/php-cassandra)
 
 Table of contents
 -----------------
@@ -127,7 +127,7 @@ php-cassandra is a modern PHP client for Apache Cassandra that prioritizes **cor
 - **Data Types**: Full coverage including collections, tuples, UDTs, custom types, vectors
 - **Results**: Iterators, multiple fetch styles, object mapping
 - **Events**: Schema/status/topology change notifications
-- **Advanced**: LZ4 compression, server overload signalling, tracing support
+- **Advanced**: LZ4 compression, server overload signaling, tracing support
 
 
 Requirements
@@ -349,7 +349,7 @@ use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection;
 
 // Stream transport
-$streamTlsNode = new StreamNodeConfig(
+$streamNode = new StreamNodeConfig(
     host: 'tls://cassandra.example.com',
     port: 9042,
     username: 'user',
@@ -367,7 +367,7 @@ $streamTlsNode = new StreamNodeConfig(
     connectTimeoutInSeconds: 10,
     timeoutInSeconds: 30,
     sslOptions: [
-        // See https://www.php.net/manual/en/context.ssl.php
+        // See [PHP SSL context options](https://www.php.net/manual/en/context.ssl.php)
         'cafile' => '/etc/ssl/certs/ca.pem',
         'verify_peer' => true,
         'verify_peer_name' => true,
@@ -380,17 +380,17 @@ $socketNode = new SocketNodeConfig(
     port: 9042,
     username: 'user',
     password: 'secret',
-    // see https://www.php.net/manual/en/function.socket-get-option.php
+    // See [PHP socket_get_option documentation](https://www.php.net/manual/en/function.socket-get-option.php)
     socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]
 );
 
-$conn = new Connection([$socketNode, $streamTlsNode], keyspace: 'app');
+$conn = new Connection([$streamNode, $streamTlsNode, $socketNode], keyspace: 'app');
 $conn->connect();
 ```
 
 Connection options are provided via `ConnectionOptions`:
 - `enableCompression` = use LZ4 if enabled on server
-- `throwOnOverload` = 'true' to ask server to throw on overload (v4+)
+- `throwOnOverload` = true to ask server to throw on overload (v4+)
 - `nodeSelectionStrategy` = `Random` (default) or `RoundRobin`
 - `preparedResultCacheSize` = cache size for prepared metadata (default 100)
 
@@ -903,7 +903,7 @@ use Cassandra\Response\Event;
 use Cassandra\Request\Register;
 use Cassandra\EventType;
 
-$conn->addEventListener(new class () implements EventListener {
+$conn->registerEventListener(new class () implements EventListener {
     public function onEvent(Event $event): void {
         // Inspect $event->getType() and $event->getData()
     }
@@ -957,7 +957,7 @@ The async API lets you pipeline multiple requests without blocking. Each async m
 You now have both blocking and non-blocking control:
 
 - Blocking per statement: `getResult()` / `getRowsResult()` / `waitForResponse()`
-- Blocking for sets: `waitForAsyncStatements(array $statements)` and `waitForAllPendingAsyncStatements()`
+- Blocking for sets: `waitForStatements(array $statements)` and `waitForAllPendingStatements()`
 - Non-blocking/polling:
   - `drainAvailableResponses(int $max = PHP_INT_MAX): int` — processes up to `max` responses if available
   - `tryResolveStatement(Statement $statement): bool` — resolves a specific statement if possible
@@ -989,7 +989,7 @@ for ($i = 0; $i < 10; $i++) {
     $handles[] = $conn->queryAsync('SELECT now() FROM system.local');
 }
 
-$conn->waitForAsyncStatements($handles);
+$conn->waitForStatements($handles);
 
 foreach ($handles as $h) {
     $rows = $h->getRowsResult();
@@ -1439,7 +1439,7 @@ use Cassandra\EventListener;
 use Cassandra\WarningsListener;
 
 // Event listener
-$conn->addEventListener(new class implements EventListener {
+$conn->registerEventListener(new class implements EventListener {
     public function onEvent(\Cassandra\Response\Event $event): void {
         error_log("Cassandra event: " . $event->getType());
     }
@@ -1694,7 +1694,7 @@ Event processing patterns
 use Cassandra\EventListener;
 use Cassandra\Response\Event;
 
-$conn->addEventListener(new class () implements EventListener {
+$conn->registerEventListener(new class () implements EventListener {
     public function onEvent(Event $event): void {
         // enqueue to worker, react to topology/status/schema changes
     }
@@ -1742,10 +1742,11 @@ API reference (essentials)
   - `prepare(string, PrepareOptions)` / `prepareAsync(...)`
   - `execute(Result $previous, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)` / `executeAll(...)`
   - `batch(Batch)` / `batchAsync(Batch)`
-  - `syncRequest(Request)` / `asyncRequest(Request)` / `waitForAsyncStatements(array $statements)` / `waitForAllPendingAsyncStatements()` / `waitForAnyStatement()`
-  - `addEventListener(EventListener)` / `waitForNextEvent()`
-  - Non-blocking helpers: `drainAvailableResponses()`, `tryResolveStatement()`, `tryResolveStatements()`, `tryReadNextEvent()`
-  - `waitForResponse()`
+  - `syncRequest(Request)` / `asyncRequest(Request)` / `waitForStatements(array $statements)` / `waitForAllPendingStatements()` / `waitForAnyStatement()`
+  - `registerEventListener(EventListener)` / `unregisterEventListener(EventListener)` / `waitForNextEvent()`
+  - `registerWarningsListener(WarningsListener)` / `unregisterWarningsListener(WarningsListener)`
+  - `waitForNextResponse()`
+  - Non-blocking helpers: `drainAvailableResponses()`, `tryResolveStatement()`, `tryResolveStatements()`, `tryReadNextResponse()`, `tryReadNextEvent()`
 
 - Results
   - `RowsResult` (iterable): `fetch()`, `fetchAll()`, `fetchColumn()`, `fetchAllColumns()`, `fetchKeyPair()`, `fetchAllKeyPairs()`, `configureFetchObject()`, `fetchObject()`, `fetchAllObjects()`, `getRowsMetadata()`, `hasMorePages()`
@@ -1777,7 +1778,7 @@ Contributions are welcome! Here's how to get started:
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/your-username/php-cassandra.git
+   git clone https://github.com/MichaelRoosz/php-cassandra.git
    cd php-cassandra
    ```
 
@@ -1797,6 +1798,14 @@ Contributions are welcome! Here's how to get started:
    composer test:unit
    composer test:integration:run
    ```
+
+Docker quickstart for integration tests:
+```bash
+composer test:integration:up           # start Cassandra test container (ports 9142->9042)
+composer test:integration:init         # wait until Cassandra is ready
+composer test:integration:run          # run integration suite (socket + stream)
+composer test:integration:down         # stop and clean up
+```
 
 ### Contribution Guidelines
 

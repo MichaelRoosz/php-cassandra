@@ -93,7 +93,7 @@ final class PagingStressTest extends AbstractIntegrationTestCase {
             $pending[] = $conn->batchAsync($batch);
         }
 
-        $conn->waitForAllPendingAsyncStatements();
+        $conn->waitForAllPendingStatements();
 
         foreach ($pending as $stmt) {
             $stmt->waitForResponse();

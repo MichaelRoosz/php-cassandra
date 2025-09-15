@@ -719,18 +719,6 @@ final class Connection {
     }
 
     /**
-     * Non-blocking: attempt to read the next event; returns null if none available.
-     *
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
-    /**
      * Non-blocking: attempt to read and return the next event, or null if none is available.
      *
      * @throws \Cassandra\Exception\CompressionException
@@ -751,6 +739,31 @@ final class Connection {
             }
             if ($event instanceof Response\Event) {
                 return $event;
+            }
+        }
+    }
+
+    /**
+     * Non-blocking: attempt to read and return the next response, or null if none is available.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function tryReadNextResponse(): ?Response\Response {
+        $drainedResponses = false;
+        while (true) {
+            $response = $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            if ($drainedResponses) {
+                return null;
+            }
+            if ($response !== null) {
+                return $response;
             }
         }
     }
@@ -853,7 +866,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function waitForAllPendingAsyncStatements(): void {
+    public function waitForAllPendingStatements(): void {
         while ($this->statements) {
             $this->readResponse(waitForResponse: true);
         }
@@ -881,26 +894,6 @@ final class Connection {
                     return $s;
                 }
             }
-        }
-    }
-
-    /**
-     * Wait until the given async statements received response.
-     *
-     * @param array<Statement> $statements
-     * 
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
-    public function waitForAsyncStatements(array $statements): void {
-        while (array_find($statements, fn (Statement $statement) => !$statement->isResultReady())) {
-            $this->readResponse(waitForResponse: true);
         }
     }
 
@@ -939,6 +932,26 @@ final class Connection {
             if ($response !== null) {
                 return $response;
             }
+        }
+    }
+
+    /**
+     * Wait until the given async statements received response.
+     *
+     * @param array<Statement> $statements
+     * 
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function waitForStatements(array $statements): void {
+        while (array_find($statements, fn (Statement $statement) => !$statement->isResultReady())) {
+            $this->readResponse(waitForResponse: true);
         }
     }
 
