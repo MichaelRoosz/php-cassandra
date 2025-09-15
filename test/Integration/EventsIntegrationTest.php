@@ -99,7 +99,7 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
     private function pumpFor(int $timeoutMs): void {
         $deadline = microtime(true) + ($timeoutMs / 1000);
         do {
-            $this->connection->query('SELECT key FROM system.local');
+            $this->connection->tryReadNextEvent();
             usleep(100_000);
         } while (microtime(true) < $deadline);
     }
@@ -109,24 +109,27 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
         $deadline = microtime(true) + ($timeoutMs / 1000);
         do {
             // Issue a lightweight query to drive the socket and dispatch any pending events
-            $this->connection->query('SELECT key FROM system.local');
+            $event = $this->connection->tryReadNextEvent();
 
-            foreach ($listener->getEvents() as $event) {
-                if (!($event instanceof SchemaChangeEvent)) {
-                    continue;
-                }
+            if ($event === null) {
+                continue;
+            }
 
-                $data = $event->getSchemaChangeData();
-                if ($data->target === SchemaChangeTarget::TABLE
-                    && $data->keyspace === $this->keyspace
-                    && $data->name === $table
-                    && $data->changeType === $expectedType
-                ) {
-                    return $event;
-                }
+            if (!($event instanceof SchemaChangeEvent)) {
+                continue;
+            }
+
+            $data = $event->getSchemaChangeData();
+            if ($data->target === SchemaChangeTarget::TABLE
+                && $data->keyspace === $this->keyspace
+                && $data->name === $table
+                && $data->changeType === $expectedType
+            ) {
+                return $event;
             }
 
             usleep(100_000); // 100ms
+
         } while (microtime(true) < $deadline);
 
         return null;

@@ -998,9 +998,8 @@ $rows = $s->getRowsResult();
 
 Advanced waiting:
 ```php
-// Block until any response arrives (event or request response)
-$response = $conn->waitForResponse();
-// Inspect $response to determine what arrived
+// Block until any response arrives
+// todo
 ```
 
 Compression
