@@ -85,12 +85,13 @@ final class FrameCodec extends NodeImplementation {
                 break;
             }
 
-            if ($frameData === '') {
-                continue;
+            if ($frameData !== '') {
+                $length += strlen($frameData);
+                $data .= $frameData;
             }
 
-            $length += strlen($frameData);
-            $data .= $frameData;
+            $waitForData = false;
+
         } while ($length < $upperBoundaryLength);
 
         return $data;
