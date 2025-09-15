@@ -9,9 +9,11 @@ use Cassandra\Exception\SocketException;
 use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
-final class Socket implements NodeImplementation {
+final class Socket extends Node implements IoNode {
     protected SocketNodeConfig $config;
-
+    protected bool $isBlockingIo = false;
+    protected int $receiveTimeout = 10;
+    protected int $sendTimeout = 10;
     protected ?PhpSocket $socket = null;
 
     /**
@@ -32,7 +34,14 @@ final class Socket implements NodeImplementation {
         }
         $this->config = $config;
 
+        $this->sendTimeout = max(1, $this->config->socketOptions[SO_SNDTIMEO]['sec'] ?? 10);
+        $this->receiveTimeout = max(1, $this->config->socketOptions[SO_RCVTIMEO]['sec'] ?? 10);
+
         $this->connect();
+    }
+
+    public function __destruct() {
+        $this->close();
     }
 
     #[\Override]
@@ -44,14 +53,7 @@ final class Socket implements NodeImplementation {
         $socket = $this->socket;
         $this->socket = null;
 
-        socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
-            'l_onoff' => 1,
-            'l_linger' => 1,
-        ]);
-
-        socket_shutdown($socket);
-
-        socket_close($socket);
+        $this->closeSocket($socket, true);
     }
 
     #[\Override]
@@ -63,7 +65,8 @@ final class Socket implements NodeImplementation {
      * @throws \Cassandra\Exception\SocketException
      */
     #[\Override]
-    public function read(int $length): string {
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
+
         if ($this->socket === null) {
             throw new SocketException(
                 message: 'Socket transport not connected',
@@ -71,22 +74,101 @@ final class Socket implements NodeImplementation {
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
-                    'operation' => 'read',
-                    'requested_bytes' => $length,
+                    'operation' => 'readAvailableDataFromSource',
+                    'expectedLength' => $expectedLength,
+                    'upperBoundaryLength' => $upperBoundaryLength,
+                    'waitForData' => $waitForData,
                 ]
             );
         }
 
-        if ($length < 1) {
+        if ($expectedLength < 1) {
             return '';
         }
 
-        $data = '';
-        do {
-            $readData = socket_read($this->socket, $length);
+        $start = microtime(true);
 
+        if (!$this->isBlockingIo) {
+            $hasData = $this->selectSocketForRead($start, $expectedLength, $upperBoundaryLength, $waitForData);
+            if (!$hasData) {
+                return '';
+            }
+        }
+
+        $readLength = $this->isBlockingIo ? $expectedLength : $upperBoundaryLength;
+        do {
+            $readData = socket_read($this->socket, $readLength, PHP_BINARY_READ);
             if ($readData === false) {
                 $errorCode = socket_last_error($this->socket);
+
+                if ($errorCode === SOCKET_EINTR) {
+                    if ($waitForData) {
+                        $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
+
+                        continue;
+                    }
+
+                    return '';
+                }
+
+                if (
+                    $errorCode === SOCKET_EWOULDBLOCK
+                    || $errorCode === SOCKET_EAGAIN
+                ) {
+                    if ($this->isBlockingIo && $waitForData) {
+                        throw new SocketException(
+                            message: 'Socket read timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'readAvailableDataFromSource',
+                                'expectedLength' => $expectedLength,
+                                'upperBoundaryLength' => $upperBoundaryLength,
+                                'bytes_read' => 0,
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    return '';
+                }
+
+                if (
+                    $errorCode === SOCKET_ECONNRESET
+                    || $errorCode === SOCKET_ENOTCONN
+                    || $errorCode === SOCKET_ECONNABORTED
+                ) {
+                    throw new SocketException(
+                        message: 'Socket connection reset by peer during read.',
+                        code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'readAvailableDataFromSource',
+                            'expectedLength' => $expectedLength,
+                            'upperBoundaryLength' => $upperBoundaryLength,
+                            'bytes_read' => 0,
+                            'socket_options' => $this->config->socketOptions,
+                        ]
+                    );
+                }
+
+                if ($errorCode === SOCKET_ETIMEDOUT) {
+                    throw new SocketException(
+                        message: 'Socket read timed out',
+                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'readAvailableDataFromSource',
+                            'expectedLength' => $expectedLength,
+                            'upperBoundaryLength' => $upperBoundaryLength,
+                            'bytes_read' => 0,
+                            'socket_options' => $this->config->socketOptions,
+                        ]
+                    );
+                }
 
                 throw new SocketException(
                     message: 'Socket read failed: ' . socket_strerror($errorCode),
@@ -94,9 +176,11 @@ final class Socket implements NodeImplementation {
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
-                        'operation' => 'read',
-                        'requested_bytes' => $length,
-                        'bytes_read' => strlen($data),
+                        'operation' => 'readAvailableDataFromSource',
+                        'expectedLength' => $expectedLength,
+                        'upperBoundaryLength' => $upperBoundaryLength,
+                        'waitForData' => $waitForData,
+                        'bytes_read' => 0,
                         'socket_options' => $this->config->socketOptions,
                         'system_error_code' => $errorCode,
                     ]
@@ -105,81 +189,23 @@ final class Socket implements NodeImplementation {
 
             if ($readData === '') {
                 throw new SocketException(
-                    message: 'Socket connection reset by peer.',
+                    message: 'Socket connection reset by peer during read.',
                     code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
                     context: [
                         'host' => $this->config->host,
                         'port' => $this->config->port,
-                        'operation' => 'read',
-                        'requested_bytes' => $length,
-                        'bytes_read' => strlen($data),
+                        'operation' => 'readAvailableDataFromSource',
+                        'expectedLength' => $expectedLength,
+                        'upperBoundaryLength' => $upperBoundaryLength,
+                        'bytes_read' => 0,
                         'socket_options' => $this->config->socketOptions,
                     ]
                 );
             }
 
-            $data .= $readData;
-            $length -= strlen($readData);
-        } while ($length > 0);
+            break;
 
-        return $data;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\SocketException
-     */
-    #[\Override]
-    public function readAvailableData(int $maxLength): string {
-        if ($this->socket === null) {
-            throw new SocketException(
-                message: 'Socket transport not connected',
-                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_READ->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'readAvailableData',
-                    'requested_bytes' => $maxLength,
-                ]
-            );
-        }
-
-        if ($maxLength < 1) {
-            return '';
-        }
-
-        $readData = socket_read($this->socket, $maxLength);
-        if ($readData === false) {
-            $errorCode = socket_last_error($this->socket);
-
-            throw new SocketException(
-                message: 'Socket read failed: ' . socket_strerror($errorCode),
-                code: ExceptionCode::SOCKET_READ_FAILED->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'readAvailableData',
-                    'requested_bytes' => $maxLength,
-                    'bytes_read' => 0,
-                    'socket_options' => $this->config->socketOptions,
-                    'system_error_code' => $errorCode,
-                ]
-            );
-        }
-
-        if ($readData === '') {
-            throw new SocketException(
-                message: 'Socket connection reset by peer.',
-                code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'readAvailableData',
-                    'requested_bytes' => $maxLength,
-                    'bytes_read' => 0,
-                    'socket_options' => $this->config->socketOptions,
-                ]
-            );
-        }
+        } while (true);
 
         return $readData;
     }
@@ -197,32 +223,124 @@ final class Socket implements NodeImplementation {
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'write',
-                    'bytes_remaining' => strlen($binary),
                 ]
             );
         }
 
+        if (strlen($binary) < 1) {
+            return;
+        }
+
+        $start = microtime(true);
         do {
-            $sentBytes = socket_write($this->socket, $binary);
-
-            if ($sentBytes === false) {
-                $errorCode = socket_last_error($this->socket);
-
-                throw new SocketException(
-                    message: 'Socket write failed: ' . socket_strerror($errorCode),
-                    code: ExceptionCode::SOCKET_WRITE_FAILED->value,
-                    context: [
-                        'host' => $this->config->host,
-                        'port' => $this->config->port,
-                        'operation' => 'write',
-                        'bytes_remaining' => strlen($binary),
-                        'socket_options' => $this->config->socketOptions,
-                        'system_error_code' => $errorCode,
-                    ]
-                );
+            if (!$this->isBlockingIo) {
+                $canWrite = $this->selectSocketForWrite($start);
+                if (!$canWrite) {
+                    continue;
+                }
             }
-            $binary = substr($binary, $sentBytes);
-        } while ($binary);
+
+            $bufferErrors = 0;
+            do {
+                $sentBytes = socket_write($this->socket, $binary);
+
+                if ($sentBytes === 0) {
+                    $this->checkForWriteTimeout($start);
+
+                    continue;
+                }
+
+                if ($sentBytes === false) {
+                    $errorCode = socket_last_error($this->socket);
+
+                    if (
+                        $errorCode === SOCKET_EWOULDBLOCK
+                        || $errorCode === SOCKET_EAGAIN
+                        || $errorCode === SOCKET_EINTR
+                    ) {
+
+                        $this->checkForWriteTimeout($start);
+
+                        continue;
+                    }
+
+                    if (
+                        $errorCode === SOCKET_ECONNRESET
+                        || $errorCode === SOCKET_EPIPE
+                        || $errorCode === SOCKET_ENOTCONN
+                        || $errorCode === SOCKET_ECONNABORTED
+                    ) {
+                        throw new SocketException(
+                            message: 'Socket connection reset by peer during write.',
+                            code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_WRITE->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'write',
+                                'socket_options' => $this->config->socketOptions,
+                                'system_error_code' => $errorCode,
+                            ]
+                        );
+                    }
+
+                    if ($errorCode === SOCKET_ETIMEDOUT) {
+                        throw new SocketException(
+                            message: 'Socket write timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_WRITE->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'write',
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    if ($errorCode === SOCKET_ENOBUFS) {
+                        $bufferErrors++;
+
+                        if ($bufferErrors >= 3) {
+                            throw new SocketException(
+                                message: 'Socket write failed: ' . socket_strerror($errorCode),
+                                code: ExceptionCode::SOCKET_WRITE_FAILED->value,
+                                context: [
+                                    'host' => $this->config->host,
+                                    'port' => $this->config->port,
+                                    'operation' => 'write',
+
+                                    'socket_options' => $this->config->socketOptions,
+                                    'system_error_code' => $errorCode,
+                                ]
+                            );
+                        }
+
+                        usleep(1000);
+
+                        continue;
+                    }
+
+                    throw new SocketException(
+                        message: 'Socket write failed: ' . socket_strerror($errorCode),
+                        code: ExceptionCode::SOCKET_WRITE_FAILED->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'write',
+
+                            'socket_options' => $this->config->socketOptions,
+                            'system_error_code' => $errorCode,
+                        ]
+                    );
+                }
+
+                $bufferErrors = 0;
+                $binary = substr($binary, $sentBytes);
+
+            } while ($binary);
+
+            break;
+
+        } while (true);
     }
 
     /**
@@ -231,6 +349,54 @@ final class Socket implements NodeImplementation {
     #[\Override]
     public function writeRequest(Request $request): void {
         $this->write($request->__toString());
+    }
+
+    protected function checkForReceiveTimeout(float $start, int $expectedLength, int $upperBoundaryLength): void {
+
+        if (microtime(true) - $start > $this->receiveTimeout) {
+            throw new SocketException(
+                message: 'Socket read timed out',
+                code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readAvailableDataFromSource',
+                    'expectedLength' => $expectedLength,
+                    'upperBoundaryLength' => $upperBoundaryLength,
+                    'bytes_read' => 0,
+                    'socket_options' => $this->config->socketOptions,
+                ]
+            );
+        }
+    }
+
+    protected function checkForWriteTimeout(float $start): void {
+
+        if (microtime(true) - $start > $this->sendTimeout) {
+            throw new SocketException(
+                message: 'Socket write timed out',
+                code: ExceptionCode::SOCKET_TIMEOUT_DURING_WRITE->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                    'socket_options' => $this->config->socketOptions,
+                ]
+            );
+        }
+    }
+
+    protected function closeSocket(PhpSocket $socket, bool $shutdown): void {
+        socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+            'l_onoff' => 1,
+            'l_linger' => 1,
+        ]);
+
+        if ($shutdown) {
+            socket_shutdown($socket);
+        }
+
+        socket_close($socket);
     }
 
     /**
@@ -257,25 +423,274 @@ final class Socket implements NodeImplementation {
             );
         }
 
-        socket_set_block($socket);
-
         socket_set_option($socket, SOL_TCP, TCP_NODELAY, 1);
 
         foreach ($this->config->socketOptions as $optname => $optval) {
             socket_set_option($socket, SOL_SOCKET, (int) $optname, $optval);
         }
 
-        $result = socket_connect($socket, $this->config->host, $this->config->port);
-        if ($result === false) {
+        $this->isBlockingIo = socket_set_nonblock($socket) === false;
 
-            $errorCode = socket_last_error($socket);
+        $start = microtime(true);
+        do {
+            $result = socket_connect($socket, $this->config->host, $this->config->port);
+            if ($result === false) {
 
-            socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
-                'l_onoff' => 1,
-                'l_linger' => 1,
-            ]);
+                $errorCode = socket_last_error($socket);
 
-            socket_close($socket);
+                if ($errorCode === SOCKET_EISCONN) {
+                    break;
+                }
+
+                if ($errorCode === SOCKET_EINTR) {
+
+                    if (microtime(true) - $start > $this->sendTimeout) {
+                        $this->closeSocket($socket, false);
+
+                        throw new SocketException(
+                            message: 'Socket connect timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'connect',
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (
+                    $errorCode === SOCKET_EINPROGRESS
+                    || $errorCode === SOCKET_EALREADY
+                    || $errorCode === SOCKET_EAGAIN
+                ) {
+
+                    try {
+                        $this->waitForConnect($socket, $start);
+
+                    } catch (SocketException $e) {
+                        $this->closeSocket($socket, false);
+
+                        throw $e;
+                    }
+
+                    break;
+                }
+
+                if ($errorCode === SOCKET_ETIMEDOUT) {
+                    $this->closeSocket($socket, false);
+
+                    throw new SocketException(
+                        message: 'Socket connect timed out',
+                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'connect',
+                            'socket_options' => $this->config->socketOptions,
+                            'system_error_code' => $errorCode,
+                        ]
+                    );
+                }
+
+                $this->closeSocket($socket, false);
+
+                throw new SocketException(
+                    message: 'Socket connect failed: ' . socket_strerror($errorCode),
+                    code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'connect',
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
+                    ]
+                );
+            }
+        } while ($result === false);
+
+        $this->socket = $socket;
+    }
+
+    protected function selectSocketForRead(float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
+
+        do {
+            $read = [ $this->socket ];
+            $write = null;
+            $except = null;
+
+            if ($waitForData) {
+                $selectResult = socket_select(
+                    read: $read,
+                    write: $write,
+                    except: $except,
+                    seconds: null
+                );
+            } else {
+                $selectResult = socket_select(
+                    read: $read,
+                    write: $write,
+                    except: $except,
+                    seconds: 0
+                );
+            }
+
+            if ($selectResult === false) {
+                $errorCode = socket_last_error();
+
+                if ($errorCode === SOCKET_EINTR) {
+                    if ($waitForData) {
+                        $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
+
+                        continue;
+                    }
+
+                    return false;
+                }
+
+                throw new SocketException(
+                    message: 'Socket select failed: ' . socket_strerror($errorCode),
+                    code: ExceptionCode::SOCKET_SELECT_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'readAvailableDataFromSource',
+                        'expectedLength' => $expectedLength,
+                        'upperBoundaryLength' => $upperBoundaryLength,
+                        'waitForData' => $waitForData,
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
+                    ]
+                );
+            }
+
+            if ($selectResult === 0) {
+                return false;
+            }
+
+            break;
+
+        } while (true);
+
+        return true;
+    }
+
+    protected function selectSocketForWrite(float $start): bool {
+
+        $read = null;
+        $write = [ $this->socket ];
+        $except = null;
+
+        $selectResult = socket_select(
+            read: $read,
+            write: $write,
+            except: $except,
+            seconds: $this->sendTimeout
+        );
+
+        if ($selectResult === false) {
+            $errorCode = socket_last_error();
+
+            if ($errorCode === SOCKET_EINTR) {
+                $this->checkForWriteTimeout($start);
+
+                return false;
+            }
+
+            throw new SocketException(
+                message: 'Socket select failed: ' . socket_strerror($errorCode),
+                code: ExceptionCode::SOCKET_SELECT_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                    'socket_options' => $this->config->socketOptions,
+                    'system_error_code' => $errorCode,
+                ]
+            );
+        }
+
+        if ($selectResult === 0) {
+            $this->checkForWriteTimeout($start);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function waitForConnect(PhpSocket $socket, float $start): void {
+
+        do {
+            $read = null;
+            $write = [ $socket ];
+            $except = null;
+
+            $selectResult = socket_select(
+                read: $read,
+                write: $write,
+                except: $except,
+                seconds: $this->sendTimeout
+            );
+
+            if ($selectResult === false) {
+                $errorCode = socket_last_error();
+                if ($errorCode === SOCKET_EINTR) {
+
+                    if (microtime(true) - $start > $this->sendTimeout) {
+                        throw new SocketException(
+                            message: 'Socket connect timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'connect',
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    continue;
+                }
+
+                throw new SocketException(
+                    message: 'Socket select failed: ' . socket_strerror($errorCode),
+                    code: ExceptionCode::SOCKET_SELECT_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'connect',
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
+                    ]
+                );
+            }
+
+            if ($selectResult === 0) {
+                if (microtime(true) - $start > $this->sendTimeout) {
+                    throw new SocketException(
+                        message: 'Socket connect timed out',
+                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'connect',
+                            'socket_options' => $this->config->socketOptions,
+                        ]
+                    );
+                }
+
+                continue;
+            }
+
+            $errorCode = socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+            if ($errorCode === 0) {
+
+                return;
+            }
 
             throw new SocketException(
                 message: 'Socket connect failed: ' . socket_strerror($errorCode),
@@ -288,8 +703,7 @@ final class Socket implements NodeImplementation {
                     'system_error_code' => $errorCode,
                 ]
             );
-        }
 
-        $this->socket = $socket;
+        } while (true);
     }
 }

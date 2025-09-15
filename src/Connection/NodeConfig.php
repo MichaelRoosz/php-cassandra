@@ -15,7 +15,7 @@ abstract class NodeConfig {
     }
 
     /**
-     * @return class-string<NodeImplementation>
+     * @return class-string<IoNode>
      */
     abstract public function getNodeClass(): string;
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 final class SocketNodeConfig extends NodeConfig {
-    public const DEFAULT_SO_RCVTIMEO = ['sec' => 30, 'usec' => 0];
+    public const DEFAULT_SO_RCVTIMEO = ['sec' => 10, 'usec' => 0];
     public const DEFAULT_SO_SNDTIMEO = ['sec' => 5, 'usec' => 0];
 
     /** 

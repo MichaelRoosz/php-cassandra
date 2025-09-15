@@ -6,9 +6,8 @@ namespace Cassandra;
 
 use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Opcode;
-use Cassandra\Protocol\Flag;
-use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Connection\ConnectionOptions;
+use Cassandra\Connection\ResponseReader;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
@@ -24,8 +23,6 @@ use Cassandra\Value\NotSet;
 use Cassandra\Value\ValueBase;
 use Cassandra\Value\ValueEncodeConfig;
 use SplQueue;
-use TypeError;
-use ValueError;
 
 final class Connection {
     protected Consistency $consistency = Consistency::ONE;
@@ -38,8 +35,6 @@ final class Connection {
     protected string $keyspace;
 
     protected int $lastStreamId = 0;
-
-    protected Lz4Decompressor $lz4Decompressor;
 
     protected ?Connection\Node $node = null;
 
@@ -70,6 +65,8 @@ final class Connection {
      */
     protected SplQueue $recycledStreams;
 
+    protected ResponseReader $responseReader;
+
     /**
      * @var array<Statement> $statements
      */
@@ -95,7 +92,7 @@ final class Connection {
         $this->options = $options->toArray();
         $this->nodeSelector = $options->nodeSelectionStrategy->createSelector();
         $this->nodeHealth = new Connection\NodeHealth();
-        $this->lz4Decompressor = new Lz4Decompressor();
+        $this->responseReader = new ResponseReader();
 
         /** @var SplQueue<int> $recycledStreams */
         $recycledStreams = new SplQueue();
@@ -210,11 +207,11 @@ final class Connection {
             }
 
             if ($this->version >= 5) {
-                if (!($node instanceof Connection\NodeImplementation)) {
-                    throw new ConnectionException('Invalid node implementation: expected NodeImplementation', ExceptionCode::CONNECTION_AUTH_INVALID_NODE_IMPLEMENTATION->value, [
+                if (!($node instanceof Connection\IoNode)) {
+                    throw new ConnectionException('Invalid node implementation: expected IoNode', ExceptionCode::CONNECTION_AUTH_INVALID_NODE_IMPLEMENTATION->value, [
                         'operation' => 'connect/authenticate',
                         'node_class' => get_class($node),
-                        'expected_interface' => Connection\NodeImplementation::class,
+                        'expected_interface' => Connection\IoNode::class,
                     ]);
                 }
                 $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
@@ -231,11 +228,11 @@ final class Connection {
             }
         } elseif ($response instanceof Response\Ready) {
             if ($this->version >= 5) {
-                if (!($node instanceof Connection\NodeImplementation)) {
-                    throw new ConnectionException('Invalid node implementation: expected NodeImplementation', ExceptionCode::CONNECTION_READY_INVALID_NODE_IMPLEMENTATION->value, [
+                if (!($node instanceof Connection\IoNode)) {
+                    throw new ConnectionException('Invalid node implementation: expected IoNode', ExceptionCode::CONNECTION_READY_INVALID_NODE_IMPLEMENTATION->value, [
                         'operation' => 'connect/ready',
                         'node_class' => get_class($node),
-                        'expected_interface' => Connection\NodeImplementation::class,
+                        'expected_interface' => Connection\IoNode::class,
                     ]);
                 }
                 $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
@@ -477,6 +474,23 @@ final class Connection {
         $request = new Request\Prepare($query, $options);
 
         return $this->asyncRequest($request);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function processAvailableResponses(): void {
+        do {
+            $response = $this->readResponse(waitForResponse: false);
+        } while ($response !== null);
+
     }
 
     /**
@@ -728,7 +742,7 @@ final class Connection {
      */
     public function waitForAllPendingAsyncStatements(): void {
         while ($this->statements) {
-            $this->readResponse();
+            $this->readResponse(waitForResponse: true);
         }
     }
 
@@ -748,7 +762,7 @@ final class Connection {
      */
     public function waitForAsyncStatements(array $statements): void {
         while (array_find($statements, fn (Statement $statement) => !$statement->isResultReady())) {
-            $this->readResponse();
+            $this->readResponse(waitForResponse: true);
         }
     }
 
@@ -764,7 +778,7 @@ final class Connection {
      */
     public function waitForNextEvent(): Response\Event {
         while (true) {
-            $event = $this->readResponse();
+            $event = $this->readResponse(waitForResponse: true);
             if ($event instanceof Response\Event) {
                 return $event;
             }
@@ -781,9 +795,9 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function waitForResponse(): Response\Response {
+    public function waitForNextResponse(): Response\Response {
         while (true) {
-            $response = $this->readResponse();
+            $response = $this->readResponse(waitForResponse: true);
             if ($response !== null) {
                 return $response;
             }
@@ -939,94 +953,6 @@ final class Connection {
         $this->versionIn = $this->version + 0x80;
     }
 
-    /**
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\ResponseException
-     */
-    protected function createResponse(Header $header, string $body): Response\Response {
-
-        $responseClassMap = Response\Response::getResponseClassMap();
-        if (!isset($responseClassMap[$header->opcode->value])) {
-            throw new ConnectionException('Unknown response type: ' . $header->opcode->value, ExceptionCode::CONNECTION_UNKNOWN_RESPONSE_TYPE->value, [
-                'expected' => array_keys($responseClassMap),
-                'received' => $header->opcode->value,
-            ]);
-        }
-
-        $streamReader = new Response\StreamReader($body);
-        $resetStream = true;
-
-        $responseClass = $responseClassMap[$header->opcode->value];
-
-        switch ($responseClass) {
-            case Response\Result::class:
-                $result = new Response\Result($header, $streamReader);
-                $resultKind = $result->getKind();
-
-                $resultClassMap = Response\Result::getResultClassMap();
-                if (isset($resultClassMap[$resultKind->value])) {
-                    $responseClass = $resultClassMap[$resultKind->value];
-                } else {
-                    throw new ConnectionException('Unknown result kind: ' . $resultKind->value, ExceptionCode::CONNECTION_UNKNOWN_RESULT_KIND->value, [
-                        'expected' => array_keys($resultClassMap),
-                        'received' => $resultKind->value,
-                    ]);
-                }
-
-                break;
-
-            case Response\Event::class:
-                $result = new Response\Event($header, $streamReader);
-                $eventType = $result->getType();
-
-                $eventClassMap = Response\Event::getEventClassMap();
-                if (isset($eventClassMap[$eventType->value])) {
-                    $responseClass = $eventClassMap[$eventType->value];
-                } else {
-                    throw new ConnectionException('Unknown event type: ' . $eventType->value, ExceptionCode::CONNECTION_UNKNOWN_EVENT_TYPE->value, [
-                        'expected' => array_keys($eventClassMap),
-                        'received' => $eventType->value,
-                    ]);
-                }
-
-                break;
-
-            case Response\Error::class:
-                $result = new Response\Error($header, $streamReader);
-                $errorCode = $result->getCode();
-
-                $errorClassMap = Response\Error::getErrorClassMap();
-                if (isset($errorClassMap[$errorCode])) {
-                    $responseClass = $errorClassMap[$errorCode];
-                } else {
-                    throw new ConnectionException('Unknown error code: ' . $errorCode, ExceptionCode::CONNECTION_UNKNOWN_ERROR_CODE->value, [
-                        'expected' => array_keys($errorClassMap),
-                        'received' => $errorCode,
-                    ]);
-                }
-
-                break;
-
-            default:
-                $resetStream = false;
-
-                break;
-        }
-
-        if ($resetStream) {
-            $streamReader->extraDataOffset(0);
-            $streamReader->offset(0);
-        }
-
-        $response = new $responseClass($header, $streamReader);
-
-        if ($this->valueEncodeConfig !== null && ($response instanceof Response\Result\RowsResult)) {
-            $response->configureValueEncoding($this->valueEncodeConfig);
-        }
-
-        return $response;
-    }
-
     protected function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {
 
         // auto-prepare query if bind markers are used not all values defined with type
@@ -1105,7 +1031,7 @@ final class Connection {
         }
 
         while ($this->recycledStreams->isEmpty()) {
-            $this->readResponse();
+            $this->readResponse(waitForResponse: true);
         }
 
         return $this->recycledStreams->dequeue();
@@ -1123,7 +1049,7 @@ final class Connection {
      */
     protected function getNextResponseForStream(int $streamId = 0): Response\Response {
         do {
-            $response = $this->readResponse();
+            $response = $this->readResponse(waitForResponse: true);
         } while ($response === null || $response->getStream() !== $streamId);
 
         return $response;
@@ -1437,83 +1363,26 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function readResponse(): ?Response\Response {
+    protected function readResponse(bool $waitForResponse): ?Response\Response {
         $node = $this->getConnectedNode();
 
         try {
-            $version = ord($node->read(1));
+            $response = $this->responseReader->readResponse($node, $this->version, $waitForResponse);
         } catch (NodeException $e) {
             $this->handleNodeException($node);
 
             throw $e;
         }
 
-        if ($version !== $this->versionIn) {
-            throw new ConnectionException('Unsupported or mismatched CQL binary protocol version received from server.', ExceptionCode::CONNECTION_PROTOCOL_VERSION_MISMATCH->value, [
-                'received_version' => $version,
-                'expected_version' => $this->versionIn,
-                'supported_versions' => ReleaseConstants::PHP_CASSANDRA_SUPPORTED_PROTOCOL_VERSIONS,
-            ]);
+        if ($response === null) {
+            return null;
         }
 
-        try {
-            /**
-             * @var false|array{
-             *  flags: int,
-             *  stream: int,
-             *  opcode: int,
-             *  length: int
-             * } $headerData
-             */
-            $headerData = unpack('Cflags/nstream/Copcode/Nlength', $node->read(8));
-        } catch (NodeException $e) {
-            $this->handleNodeException($node);
-
-            throw $e;
+        if ($this->valueEncodeConfig !== null && ($response instanceof Result\RowsResult)) {
+            $response->configureValueEncoding($this->valueEncodeConfig);
         }
 
-        if ($headerData === false) {
-            $nodeConfig = $node->getConfig();
-
-            throw new ConnectionException('Cannot read response header', ExceptionCode::CONNECTION_CANNOT_READ_RESPONSE_HEADER->value, [
-                'host' => $nodeConfig->host,
-                'port' => $nodeConfig->port,
-                'protocol_version' => $this->version,
-            ]);
-        }
-
-        $headerVersion = $version - 0x80;
-
-        try {
-            $header = new Header(
-                version: $headerVersion,
-                flags: $headerData['flags'],
-                stream: $headerData['stream'],
-                opcode: Opcode::from($headerData['opcode']),
-                length: $headerData['length'],
-            );
-        } catch (ValueError|TypeError $e) {
-            throw new ConnectionException('Invalid opcode type: ' . $headerData['opcode'], ExceptionCode::CONNECTION_INVALID_OPCODE_TYPE->value, [
-                'opcode' => $headerData['opcode'],
-            ], $e);
-        }
-
-        try {
-            $body = $header->length === 0 ? '' : $node->read($header->length);
-        } catch (NodeException $e) {
-            $this->handleNodeException($node);
-
-            throw $e;
-        }
-
-        if ($this->version < 5 && $header->length > 0 && $header->flags & Flag::COMPRESSION) {
-            $this->lz4Decompressor->setInput($body);
-            $body = $this->lz4Decompressor->decompressBlock();
-        }
-
-        $response = $this->createResponse($header, $body);
-
-        $streamId = $header->stream;
+        $streamId = $response->getStream();
         if ($streamId !== 0 && isset($this->statements[$streamId])) {
             $statement = $this->statements[$streamId];
             unset($this->statements[$streamId]);

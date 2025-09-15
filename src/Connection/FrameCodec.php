@@ -9,7 +9,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Request\Request;
 
-final class FrameCodec implements Node {
+final class FrameCodec extends Node {
     final public const CRC24_INIT = 0x875060;
     final public const CRC24_POLYNOMIAL = 0x1974F0B;
     final public const PAYLOAD_MAX_SIZE = 131071;
@@ -18,18 +18,22 @@ final class FrameCodec implements Node {
 
     protected string $crc32Prefix;
 
-    protected string $inputData;
-    protected int $inputDataLength;
-    protected int $inputDataOffset;
+    /**
+     * @var ?array{
+     *  payloadLength: int,
+     *  uncompressedLength: int,
+     * } $currentFrameHeader
+     */
+    protected ?array $currentFrameHeader;
 
     protected ?Lz4Decompressor $lz4Decompressor;
 
-    protected NodeImplementation $node;
+    protected IoNode $node;
 
     /**
      * @throws \Cassandra\Exception\NodeException
      */
-    public function __construct(NodeImplementation $node, string $compression = '') {
+    public function __construct(IoNode $node, string $compression = '') {
         if ($compression && $compression !== 'lz4') {
             throw new NodeException(
                 message: 'Unsupported frame compression algorithm',
@@ -53,10 +57,7 @@ final class FrameCodec implements Node {
 
         $this->node = $node;
         $this->compression = $compression;
-
-        $this->inputData = '';
-        $this->inputDataOffset = 0;
-        $this->inputDataLength = 0;
+        $this->currentFrameHeader = null;
     }
 
     #[\Override]
@@ -74,32 +75,33 @@ final class FrameCodec implements Node {
      * @throws \Cassandra\Exception\CompressionException
      */
     #[\Override]
-    public function read(int $length): string {
-        if ($this->inputDataOffset + $length > $this->inputDataLength) {
-            $this->readFrame();
-        }
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
 
-        $inputData = substr($this->inputData, $this->inputDataOffset, $length);
-        $this->inputDataOffset += $length;
+        $data = '';
+        $length = 0;
+        do {
+            $frameData = $this->readFrameData($waitForData);
+            if ($frameData === null) {
+                break;
+            }
 
-        return $inputData;
+            if ($frameData === '') {
+                continue;
+            }
+
+            $length += strlen($frameData);
+            $data .= $frameData;
+        } while ($length < $upperBoundaryLength);
+
+        return $data;
     }
 
     /**
      * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\CompressionException
      */
     #[\Override]
-    public function readAvailableData(int $maxLength): string {
-        if ($this->inputDataOffset >= $this->inputDataLength) {
-            $this->readFrame();
-        }
-
-        $maxLength = min($maxLength, $this->inputDataLength - $this->inputDataOffset);
-        $inputData = substr($this->inputData, $this->inputDataOffset, $maxLength);
-        $this->inputDataOffset += $maxLength;
-
-        return $inputData;
+    public function write(string $binary): void {
+        $this->node->write($binary);
     }
 
     /**
@@ -146,69 +148,38 @@ final class FrameCodec implements Node {
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function readFrame(): void {
-        if ($this->compression) {
-            $header = $this->node->read(8);
-            $headerLength = 5;
+    protected function readFrameData(bool $waitForData): ?string {
 
-            /** @var false|array<int> $unpacked */
-            $unpacked = unpack('V2', $header);
-        } else {
-            $header = $this->node->read(6);
-            $headerLength = 3;
-
-            /** @var false|array<int> $unpacked */
-            $unpacked = unpack('v3', $header);
+        if ($this->currentFrameHeader === null) {
+            $this->currentFrameHeader = $this->readFrameHeader($waitForData);
+            if ($this->currentFrameHeader === null) {
+                return null;
+            }
         }
 
-        if ($unpacked === false) {
-            throw new NodeException(
-                message: 'Failed to decode frame header',
-                code: ExceptionCode::NODE_DECODE_FRAME_HEADER_FAILED->value,
-                context: [
-                    'host' => $this->getConfig()->host,
-                    'port' => $this->getConfig()->port,
-                    'stage' => 'read_frame_header',
-                    'compression' => $this->compression,
-                    'header_length' => $headerLength,
-                    'header_hex' => bin2hex($header),
-                ]
-            );
+        $frameHeader = $this->currentFrameHeader;
+
+        $payloadLength = $frameHeader['payloadLength'];
+        $uncompressedLength = $frameHeader['uncompressedLength'];
+
+        if ($payloadLength === 0) {
+            $this->currentFrameHeader = null;
+
+            return '';
         }
 
-        if ($this->compression) {
-            $payloadLength = $unpacked[1] & 0x1FFFF;
-            $uncompressedLength = (($unpacked[1] >> 17) & 0x7FFF) + (($unpacked[2] & 0x3) << 15);
-            //$isSelfContained = $unpacked[2] & 0x4;
-            $headerCrc24 = ($unpacked[2] >> 8) & 0xFFFFFF;
-        } else {
-            $payloadLength = $unpacked[1] + (($unpacked[2] & 0x1) << 16);
-            $uncompressedLength = 0;
-            //$isSelfContained = $unpacked[2] & 0x2;
-            $headerCrc24 = (($unpacked[2] >> 8) & 0xFF) + ($unpacked[3] << 8);
+        $payload = $this->node->read($payloadLength + 4, $waitForData);
+        if ($payload === '') {
+            return null;
         }
 
-        if ($this->crc24($header, $headerLength) !== $headerCrc24) {
-            throw new NodeException(
-                message: 'Invalid frame header checksum',
-                code: ExceptionCode::NODE_INVALID_HEADER_CRC24->value,
-                context: [
-                    'host' => $this->getConfig()->host,
-                    'port' => $this->getConfig()->port,
-                    'stage' => 'verify_header_crc24',
-                    'expected_crc24' => $this->crc24($header, $headerLength),
-                    'actual_crc24' => $headerCrc24,
-                    'compression' => $this->compression,
-                    'header_length' => $headerLength,
-                    'header_hex' => bin2hex($header),
-                ]
-            );
-        }
+        $this->currentFrameHeader = null;
 
-        $payload = $this->node->read($payloadLength);
+        $checksum = substr($payload, $payloadLength, 4);
+        $payload = substr($payload, 0, $payloadLength);
 
         /** @var false|array<int> $unpacked */
-        $unpacked = unpack('V', $this->node->read(4));
+        $unpacked = unpack('V', $checksum);
         if ($unpacked === false) {
             throw new NodeException(
                 message: 'Failed to decode frame payload checksum',
@@ -295,16 +266,86 @@ final class FrameCodec implements Node {
             }
         }
 
-        if ($this->inputDataOffset < $this->inputDataLength) {
-            $length = $this->inputDataLength - $this->inputDataOffset;
-            $this->inputData = substr($this->inputData, $this->inputDataOffset, $length) . $payload;
-            $this->inputDataOffset = 0;
-            $this->inputDataLength = $length + $payloadLength;
+        return $payload;
+    }
+
+    /**
+     * @return ?array{
+     *  payloadLength: int,
+     *  uncompressedLength: int,
+     * }
+     */
+    protected function readFrameHeader(bool $waitForData): ?array {
+        if ($this->compression) {
+            $header = $this->node->read(8, $waitForData);
+            if ($header === '') {
+                return null;
+            }
+
+            $headerLength = 5;
+
+            /** @var false|array<int> $unpacked */
+            $unpacked = unpack('V2', $header);
         } else {
-            $this->inputData = $payload;
-            $this->inputDataOffset = 0;
-            $this->inputDataLength = $payloadLength;
+            $header = $this->node->read(6, $waitForData);
+            if ($header === '') {
+                return null;
+            }
+
+            $headerLength = 3;
+
+            /** @var false|array<int> $unpacked */
+            $unpacked = unpack('v3', $header);
         }
+
+        if ($unpacked === false) {
+            throw new NodeException(
+                message: 'Failed to decode frame header',
+                code: ExceptionCode::NODE_DECODE_FRAME_HEADER_FAILED->value,
+                context: [
+                    'host' => $this->getConfig()->host,
+                    'port' => $this->getConfig()->port,
+                    'stage' => 'read_frame_header',
+                    'compression' => $this->compression,
+                    'header_length' => $headerLength,
+                    'header_hex' => bin2hex($header),
+                ]
+            );
+        }
+
+        if ($this->compression) {
+            $payloadLength = $unpacked[1] & 0x1FFFF;
+            $uncompressedLength = (($unpacked[1] >> 17) & 0x7FFF) + (($unpacked[2] & 0x3) << 15);
+            //$isSelfContained = $unpacked[2] & 0x4;
+            $headerCrc24 = ($unpacked[2] >> 8) & 0xFFFFFF;
+        } else {
+            $payloadLength = $unpacked[1] + (($unpacked[2] & 0x1) << 16);
+            $uncompressedLength = 0;
+            //$isSelfContained = $unpacked[2] & 0x2;
+            $headerCrc24 = (($unpacked[2] >> 8) & 0xFF) + ($unpacked[3] << 8);
+        }
+
+        if ($this->crc24($header, $headerLength) !== $headerCrc24) {
+            throw new NodeException(
+                message: 'Invalid frame header checksum',
+                code: ExceptionCode::NODE_INVALID_HEADER_CRC24->value,
+                context: [
+                    'host' => $this->getConfig()->host,
+                    'port' => $this->getConfig()->port,
+                    'stage' => 'verify_header_crc24',
+                    'expected_crc24' => $this->crc24($header, $headerLength),
+                    'actual_crc24' => $headerCrc24,
+                    'compression' => $this->compression,
+                    'header_length' => $headerLength,
+                    'header_hex' => bin2hex($header),
+                ]
+            );
+        }
+
+        return [
+            'payloadLength' => $payloadLength,
+            'uncompressedLength' => $uncompressedLength,
+        ];
     }
 
     /**

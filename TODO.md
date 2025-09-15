@@ -1,7 +1,6 @@
 # Todo for the next release
 
 ## Features
-* Test 32bit support
 * Finalize README.md
 * Update CHANGELOG.md
 
