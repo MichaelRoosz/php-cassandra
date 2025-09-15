@@ -106,16 +106,34 @@ final class EventsIntegrationTest extends AbstractIntegrationTestCase {
 
     private function waitForSchemaChange(EventListener $listener, string $table, SchemaChangeType $expectedType, int $timeoutMs = 5000): ?SchemaChangeEvent {
 
+        foreach ($listener->getEvents() as $event) {
+            if (!($event instanceof SchemaChangeEvent)) {
+                continue;
+            }
+
+            $data = $event->getSchemaChangeData();
+            if ($data->target === SchemaChangeTarget::TABLE
+                && $data->keyspace === $this->keyspace
+                && $data->name === $table
+                && $data->changeType === $expectedType
+            ) {
+                return $event;
+            }
+        }
+
         $deadline = microtime(true) + ($timeoutMs / 1000);
         do {
-            // Issue a lightweight query to drive the socket and dispatch any pending events
             $event = $this->connection->tryReadNextEvent();
 
             if ($event === null) {
+                usleep(100_000); // 100ms
+
                 continue;
             }
 
             if (!($event instanceof SchemaChangeEvent)) {
+                usleep(100_000); // 100ms
+
                 continue;
             }
 

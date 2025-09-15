@@ -271,6 +271,9 @@ final class Connection {
     /**
      * Non-blocking: read up to $max available responses, returning how many were processed.
      *
+     * NOTE: This method will not block; it processes any currently available responses
+     * and returns when the receive buffer is drained or the provided limit is reached.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -727,6 +730,18 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
+    /**
+     * Non-blocking: attempt to read and return the next event, or null if none is available.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
     public function tryReadNextEvent(): ?Response\Event {
         $drainedResponses = false;
         while (true) {
@@ -845,6 +860,8 @@ final class Connection {
     }
 
     /**
+     * Wit until any of the given statements becomes ready and return that statement.
+     *
      * @param array<Statement> $statements
      *
      * @throws \Cassandra\Exception\CompressionException

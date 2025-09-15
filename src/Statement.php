@@ -56,7 +56,6 @@ final class Statement {
 
         return $response;
     }
-
     public function getRequest(): Request\Request {
         return $this->request;
     }
@@ -217,6 +216,175 @@ final class Statement {
 
     public function setStatus(StatementStatus $status): void {
         $this->status = $status;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\StatementException
+     */
+    public function tryGetPreparedResult(): ?Response\Result\PreparedResult {
+        $response = $this->tryGetResponse();
+        if ($response === null) {
+            return null;
+        }
+
+        if (!($response instanceof Response\Result\PreparedResult)) {
+            throw new StatementException('Unexpected response type for tryGetPreparedResult', ExceptionCode::STATEMENT_UNEXPECTED_PREPARED_RESULT->value, [
+                'operation' => 'Statement::tryGetPreparedResult',
+                'expected' => Response\Result\PreparedResult::class,
+                'received' => get_class($response),
+                'stream_id' => $this->streamId,
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Non-blocking: try to fetch the response if available; returns null if not ready.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function tryGetResponse(): ?Response\Response {
+        if ($this->response === null) {
+            $this->connection->tryResolveStatement($this);
+        }
+
+        if ($this->response instanceof Response\Error) {
+            throw $this->response->getException();
+        }
+
+        return $this->response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\StatementException
+     */
+    public function tryGetResult(): ?Response\Result {
+        $response = $this->tryGetResponse();
+        if ($response === null) {
+            return null;
+        }
+
+        if (!($response instanceof Response\Result)) {
+            throw new StatementException('Unexpected response type for tryGetResult', ExceptionCode::STATEMENT_UNEXPECTED_RESULT->value, [
+                'operation' => 'Statement::tryGetResult',
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+                'stream_id' => $this->streamId,
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\StatementException
+     */
+    public function tryGetRowsResult(): ?Response\Result\RowsResult {
+        $response = $this->tryGetResponse();
+        if ($response === null) {
+            return null;
+        }
+
+        if (!($response instanceof Response\Result\RowsResult)) {
+            throw new StatementException('Unexpected response type for tryGetRowsResult', ExceptionCode::STATEMENT_UNEXPECTED_ROWS_RESULT->value, [
+                'operation' => 'Statement::tryGetRowsResult',
+                'expected' => Response\Result\RowsResult::class,
+                'received' => get_class($response),
+                'stream_id' => $this->streamId,
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\StatementException
+     */
+    public function tryGetSchemaChangeResult(): ?Response\Result\SchemaChangeResult {
+        $response = $this->tryGetResponse();
+        if ($response === null) {
+            return null;
+        }
+
+        if (!($response instanceof Response\Result\SchemaChangeResult)) {
+            throw new StatementException('Unexpected response type for tryGetSchemaChangeResult', ExceptionCode::STATEMENT_UNEXPECTED_SCHEMA_CHANGE_RESULT->value, [
+                'operation' => 'Statement::tryGetSchemaChangeResult',
+                'expected' => Response\Result\SchemaChangeResult::class,
+                'received' => get_class($response),
+                'stream_id' => $this->streamId,
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\StatementException
+     */
+    public function tryGetSetKeyspaceResult(): ?Response\Result\SetKeyspaceResult {
+        $response = $this->tryGetResponse();
+        if ($response === null) {
+            return null;
+        }
+
+        if (!($response instanceof Response\Result\SetKeyspaceResult)) {
+            throw new StatementException('Unexpected response type for tryGetSetKeyspaceResult', ExceptionCode::STATEMENT_UNEXPECTED_SET_KEYSPACE_RESULT->value, [
+                'operation' => 'Statement::tryGetSetKeyspaceResult',
+                'expected' => Response\Result\SetKeyspaceResult::class,
+                'received' => get_class($response),
+                'stream_id' => $this->streamId,
+            ]);
+        }
+
+        return $response;
     }
 
     /**

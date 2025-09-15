@@ -913,6 +913,19 @@ while (true) {
 }
 ```
 
+Non-blocking event polling:
+```php
+// In your app loop, poll without blocking
+if ($event = $conn->tryReadNextEvent()) {
+    // handle $event
+}
+
+// Or drain all currently available events
+while ($event = $conn->tryReadNextEvent()) {
+    // handle $event
+}
+```
+
 Tracing and custom payloads (advanced)
 -------------------------------------
 
@@ -930,7 +943,17 @@ $result = $conn->syncRequest($req);
 Asynchronous API
 -----------------
 
-The async API lets you pipeline multiple requests without blocking. Each async method returns a `Cassandra\Statement` handle that you can resolve later. You can either block per statement (`getResult()` / `getRowsResult()` / `waitForResponse()`), wait for a specific set of statements with `waitForAsyncStatements(array $statements)`, or drain all outstanding statements with `waitForAllPendingAsyncStatements()`.
+The async API lets you pipeline multiple requests without blocking. Each async method returns a `Cassandra\Statement` handle that you can resolve later.
+
+You now have both blocking and non-blocking control:
+
+- Blocking per statement: `getResult()` / `getRowsResult()` / `waitForResponse()`
+- Blocking for sets: `waitForAsyncStatements(array $statements)` and `waitForAllPendingAsyncStatements()`
+- Non-blocking/polling:
+  - `drainAvailableResponses(int $max = PHP_INT_MAX): int` — processes up to `max` responses if available
+  - `tryResolveStatement(Statement $statement): bool` — resolves a specific statement if possible
+  - `tryResolveStatements(array $statements, int $max = PHP_INT_MAX): int` — resolves from a set without blocking
+  - `waitForAnyStatement(array $statements): Statement` — blocks until any of the given statements completes
 
 Basics:
 ```php
@@ -965,14 +988,24 @@ foreach ($handles as $h) {
 }
 ```
 
-Draining any pending statements:
+Non-blocking draining and polling:
 ```php
 // Fire off work in various places...
 
-// Later: block until all outstanding statements complete
-$conn->waitForAllPendingAsyncStatements();
+// Later in your loop: non-blocking drain up to 32 available responses
+$processed = $conn->drainAvailableResponses(32);
+if ($processed > 0) {
+    // some statements just became ready; you can consume their results now
+}
 
-// You can now safely consume results from any statements you issued earlier
+// Or: non-blocking check for a specific statement
+if ($conn->tryResolveStatement($s1)) {
+    $rows = $s1->getRowsResult();
+}
+
+// Or: wait until any of several statements completes
+$ready = $conn->waitForAnyStatement([$s1, $s2]);
+// $ready is whichever completed first
 ```
 
 Prepared + async:
@@ -998,8 +1031,11 @@ $rows = $s->getRowsResult();
 
 Advanced waiting:
 ```php
-// Block until any response arrives
-// todo
+// Block until any statement completes:
+$stmt = $conn->waitForAnyStatement([$s1, $s2, $s3]);
+
+// Block until the next event arrives:
+$event = $conn->waitForNextEvent();
 ```
 
 Compression
