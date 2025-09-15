@@ -1,7 +1,6 @@
 # Todo for the next release
 
 ## Features
-* Finalize README.md
 * Update CHANGELOG.md
 
 ## Tests
