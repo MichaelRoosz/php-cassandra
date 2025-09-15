@@ -8,7 +8,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StreamException;
 use Cassandra\Request\Request;
 
-final class Stream extends Node implements IoNode {
+final class Stream extends NodeImplementation implements IoNode {
     protected StreamNodeConfig $config;
     protected bool $isBlockingIo = false;
     protected int $sendTimeout = 10;
@@ -37,8 +37,6 @@ final class Stream extends Node implements IoNode {
         $this->config = $config;
 
         $this->sendTimeout = max(1, (int) $config->timeoutInSeconds);
-
-        $this->connect();
     }
 
     public function __destruct() {
@@ -80,23 +78,25 @@ final class Stream extends Node implements IoNode {
             );
         }
 
+        $stream = $this->stream;
+
         if ($expectedLength < 1) {
             return '';
         }
 
         if (!$this->isBlockingIo) {
-            $hasData = $this->selectStreamForRead($expectedLength, $upperBoundaryLength, $waitForData);
+            $hasData = $this->selectStreamForRead($stream, $expectedLength, $upperBoundaryLength, $waitForData);
             if (!$hasData) {
                 return '';
             }
         }
 
-        $readLength = $this->isBlockingIo ? $expectedLength : $upperBoundaryLength;
+        $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
 
-        $readData = fread($this->stream, $readLength);
+        $readData = fread($stream, $readLength);
         if ($readData === false) {
 
-            if (feof($this->stream)) {
+            if (feof($stream)) {
                 throw new StreamException(
                     message: 'Stream connection reset by peer',
                     code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_READ->value,
@@ -107,12 +107,12 @@ final class Stream extends Node implements IoNode {
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
                         'waitForData' => $waitForData,
-                        'meta' => stream_get_meta_data($this->stream),
+                        'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
 
-            if (stream_get_meta_data($this->stream)['timed_out']) {
+            if (stream_get_meta_data($stream)['timed_out']) {
                 throw new StreamException(
                     message: 'Stream read timed out',
                     code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
@@ -123,7 +123,7 @@ final class Stream extends Node implements IoNode {
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
                         'waitForData' => $waitForData,
-                        'meta' => stream_get_meta_data($this->stream),
+                        'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
@@ -139,13 +139,13 @@ final class Stream extends Node implements IoNode {
                     'upperBoundaryLength' => $upperBoundaryLength,
                     'waitForData' => $waitForData,
                     'bytes_read' => 0,
-                    'meta' => stream_get_meta_data($this->stream),
+                    'meta' => stream_get_meta_data($stream),
                 ]
             );
         }
 
         if ($readData === '') {
-            if (feof($this->stream)) {
+            if (feof($stream)) {
                 throw new StreamException(
                     message: 'Stream connection reset by peer',
                     code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_READ->value,
@@ -156,12 +156,12 @@ final class Stream extends Node implements IoNode {
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
                         'waitForData' => $waitForData,
-                        'meta' => stream_get_meta_data($this->stream),
+                        'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
 
-            if (stream_get_meta_data($this->stream)['timed_out']) {
+            if (stream_get_meta_data($stream)['timed_out']) {
                 throw new StreamException(
                     message: 'Stream read timed out',
                     code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
@@ -172,7 +172,7 @@ final class Stream extends Node implements IoNode {
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
                         'waitForData' => $waitForData,
-                        'meta' => stream_get_meta_data($this->stream),
+                        'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
@@ -185,7 +185,7 @@ final class Stream extends Node implements IoNode {
      * @throws \Cassandra\Exception\StreamException
      */
     #[\Override]
-    public function write(string $binary): void {
+    public function write(string $data): void {
         if ($this->stream === null) {
             throw new StreamException(
                 message: 'Stream transport not connected',
@@ -194,12 +194,14 @@ final class Stream extends Node implements IoNode {
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'write',
-                    'bytes_remaining' => strlen($binary),
+                    'bytes_remaining' => strlen($data),
                 ]
             );
         }
 
-        if (strlen($binary) < 1) {
+        $stream = $this->stream;
+
+        if (strlen($data) < 1) {
             return;
         }
 
@@ -207,16 +209,16 @@ final class Stream extends Node implements IoNode {
 
         do {
             if (!$this->isBlockingIo) {
-                $canWrite = $this->selectStreamForWrite($start);
+                $canWrite = $this->selectStreamForWrite($stream, $start);
                 if (!$canWrite) {
                     continue;
                 }
             }
 
-            $sentBytes = fwrite($this->stream, $binary);
+            $sentBytes = fwrite($stream, $data);
             if ($sentBytes === false) {
 
-                if (feof($this->stream)) {
+                if (feof($stream)) {
                     throw new StreamException(
                         message: 'Stream connection reset by peer',
                         code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_WRITE->value,
@@ -224,12 +226,12 @@ final class Stream extends Node implements IoNode {
                             'host' => $this->config->host,
                             'port' => $this->config->port,
                             'operation' => 'write',
-                            'meta' => stream_get_meta_data($this->stream),
+                            'meta' => stream_get_meta_data($stream),
                         ]
                     );
                 }
 
-                if (stream_get_meta_data($this->stream)['timed_out']) {
+                if (stream_get_meta_data($stream)['timed_out']) {
                     throw new StreamException(
                         message: 'Stream write timed out',
                         code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
@@ -238,7 +240,7 @@ final class Stream extends Node implements IoNode {
                             'port' => $this->config->port,
                             'operation' => 'write',
                             'send_timeout_seconds' => $this->sendTimeout,
-                            'meta' => stream_get_meta_data($this->stream),
+                            'meta' => stream_get_meta_data($stream),
                         ]
                     );
                 }
@@ -250,21 +252,21 @@ final class Stream extends Node implements IoNode {
                         'host' => $this->config->host,
                         'port' => $this->config->port,
                         'operation' => 'write',
-                        'meta' => stream_get_meta_data($this->stream),
+                        'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
 
             if ($sentBytes === 0) {
 
-                $this->checkForWriteTimeout($start);
+                $this->checkForWriteTimeout($stream, $start);
 
                 continue;
             }
 
-            $binary = substr($binary, $sentBytes);
+            $data = substr($data, $sentBytes);
 
-        } while ($binary);
+        } while ($data);
     }
 
     /**
@@ -275,7 +277,12 @@ final class Stream extends Node implements IoNode {
         $this->write($request->__toString());
     }
 
-    protected function checkForWriteTimeout(float $start): void {
+    /**
+     * @param resource $stream
+     * 
+     * @throws \Cassandra\Exception\StreamException
+     */
+    protected function checkForWriteTimeout($stream, float $start): void {
 
         if (microtime(true) - $start > $this->sendTimeout) {
             throw new StreamException(
@@ -286,7 +293,7 @@ final class Stream extends Node implements IoNode {
                     'port' => $this->config->port,
                     'operation' => 'write',
                     'send_timeout_seconds' => $this->sendTimeout,
-                    'meta' => stream_get_meta_data($this->stream),
+                    'meta' => stream_get_meta_data($stream),
                 ]
             );
         }
@@ -352,9 +359,14 @@ final class Stream extends Node implements IoNode {
         $this->stream = $stream;
     }
 
-    protected function selectStreamForRead(int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
+    /**
+     * @param resource $stream
+     * 
+     * @throws \Cassandra\Exception\StreamException
+     */
+    protected function selectStreamForRead($stream, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
 
-        $read = [ $this->stream ];
+        $read = [ $stream ];
         $write = null;
         $except = null;
 
@@ -376,7 +388,7 @@ final class Stream extends Node implements IoNode {
 
         if ($selectResult === false) {
 
-            if (feof($this->stream)) {
+            if (feof($stream)) {
                 throw new StreamException(
                     message: 'Stream connection reset by peer',
                     code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_READ->value,
@@ -387,7 +399,7 @@ final class Stream extends Node implements IoNode {
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
                         'waitForData' => $waitForData,
-                        'meta' => stream_get_meta_data($this->stream),
+                        'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
@@ -403,7 +415,7 @@ final class Stream extends Node implements IoNode {
                     'upperBoundaryLength' => $upperBoundaryLength,
                     'waitForData' => $waitForData,
                     'bytes_read' => 0,
-                    'meta' => stream_get_meta_data($this->stream),
+                    'meta' => stream_get_meta_data($stream),
                 ]
             );
         }
@@ -415,9 +427,14 @@ final class Stream extends Node implements IoNode {
         return true;
     }
 
-    protected function selectStreamForWrite(float $start): bool {
+    /**
+     * @param resource $stream
+     * 
+     * @throws \Cassandra\Exception\StreamException
+     */
+    protected function selectStreamForWrite($stream, float $start): bool {
         $read = null;
-        $write = [ $this->stream ];
+        $write = [ $stream ];
         $except = null;
 
         $selectResult = stream_select(
@@ -429,7 +446,7 @@ final class Stream extends Node implements IoNode {
 
         if ($selectResult === false) {
 
-            if (feof($this->stream)) {
+            if (feof($stream)) {
                 throw new StreamException(
                     message: 'Stream connection reset by peer',
                     code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_WRITE->value,
@@ -437,7 +454,7 @@ final class Stream extends Node implements IoNode {
                         'host' => $this->config->host,
                         'port' => $this->config->port,
                         'operation' => 'write',
-                        'meta' => stream_get_meta_data($this->stream),
+                        'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
@@ -449,13 +466,13 @@ final class Stream extends Node implements IoNode {
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'write',
-                    'meta' => stream_get_meta_data($this->stream),
+                    'meta' => stream_get_meta_data($stream),
                 ]
             );
         }
 
         if ($selectResult === 0) {
-            $this->checkForWriteTimeout($start);
+            $this->checkForWriteTimeout($stream, $start);
 
             return false;
         }

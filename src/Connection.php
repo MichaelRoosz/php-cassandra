@@ -207,13 +207,6 @@ final class Connection {
             }
 
             if ($this->version >= 5) {
-                if (!($node instanceof Connection\IoNode)) {
-                    throw new ConnectionException('Invalid node implementation: expected IoNode', ExceptionCode::CONNECTION_AUTH_INVALID_NODE_IMPLEMENTATION->value, [
-                        'operation' => 'connect/authenticate',
-                        'node_class' => get_class($node),
-                        'expected_interface' => Connection\IoNode::class,
-                    ]);
-                }
                 $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
 
@@ -228,13 +221,6 @@ final class Connection {
             }
         } elseif ($response instanceof Response\Ready) {
             if ($this->version >= 5) {
-                if (!($node instanceof Connection\IoNode)) {
-                    throw new ConnectionException('Invalid node implementation: expected IoNode', ExceptionCode::CONNECTION_READY_INVALID_NODE_IMPLEMENTATION->value, [
-                        'operation' => 'connect/ready',
-                        'node_class' => get_class($node),
-                        'expected_interface' => Connection\IoNode::class,
-                    ]);
-                }
                 $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
         } else {
@@ -1405,7 +1391,7 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception\ConnectionException
      */
-    protected function selectNodeAndOpenConnection(): Connection\Node {
+    protected function selectNodeAndOpenConnection(): Connection\IoNode {
 
         $ordered = $this->nodeSelector->order($this->nodes);
         $parts = $this->nodeHealth->partitionByAvailability($ordered);

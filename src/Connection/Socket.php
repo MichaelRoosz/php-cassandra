@@ -9,7 +9,7 @@ use Cassandra\Exception\SocketException;
 use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
-final class Socket extends Node implements IoNode {
+final class Socket extends NodeImplementation implements IoNode {
     protected SocketNodeConfig $config;
     protected bool $isBlockingIo = false;
     protected int $receiveTimeout = 10;
@@ -34,10 +34,10 @@ final class Socket extends Node implements IoNode {
         }
         $this->config = $config;
 
-        $this->sendTimeout = max(1, $this->config->socketOptions[SO_SNDTIMEO]['sec'] ?? 10);
-        $this->receiveTimeout = max(1, $this->config->socketOptions[SO_RCVTIMEO]['sec'] ?? 10);
-
-        $this->connect();
+        [
+            'sendTimeout' => $this->sendTimeout,
+            'receiveTimeout' => $this->receiveTimeout,
+        ] = $this->getTimeoutsFromConfig();
     }
 
     public function __destruct() {
@@ -82,6 +82,8 @@ final class Socket extends Node implements IoNode {
             );
         }
 
+        $socket = $this->socket;
+
         if ($expectedLength < 1) {
             return '';
         }
@@ -89,17 +91,17 @@ final class Socket extends Node implements IoNode {
         $start = microtime(true);
 
         if (!$this->isBlockingIo) {
-            $hasData = $this->selectSocketForRead($start, $expectedLength, $upperBoundaryLength, $waitForData);
+            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, $waitForData);
             if (!$hasData) {
                 return '';
             }
         }
 
-        $readLength = $this->isBlockingIo ? $expectedLength : $upperBoundaryLength;
+        $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
         do {
-            $readData = socket_read($this->socket, $readLength, PHP_BINARY_READ);
+            $readData = socket_read($socket, $readLength, PHP_BINARY_READ);
             if ($readData === false) {
-                $errorCode = socket_last_error($this->socket);
+                $errorCode = socket_last_error($socket);
 
                 if ($errorCode === SOCKET_EINTR) {
                     if ($waitForData) {
@@ -113,7 +115,7 @@ final class Socket extends Node implements IoNode {
 
                 if (
                     $errorCode === SOCKET_EWOULDBLOCK
-                    || $errorCode === SOCKET_EAGAIN
+                    || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
                 ) {
                     if ($this->isBlockingIo && $waitForData) {
                         throw new SocketException(
@@ -207,14 +209,14 @@ final class Socket extends Node implements IoNode {
 
         } while (true);
 
-        return $readData;
+        return $readData; /** @phpstan-ignore return.type */
     }
 
     /**
      * @throws \Cassandra\Exception\SocketException
      */
     #[\Override]
-    public function write(string $binary): void {
+    public function write(string $data): void {
         if ($this->socket === null) {
             throw new SocketException(
                 message: 'Socket transport not connected',
@@ -227,14 +229,16 @@ final class Socket extends Node implements IoNode {
             );
         }
 
-        if (strlen($binary) < 1) {
+        $socket = $this->socket;
+
+        if (strlen($data) < 1) {
             return;
         }
 
         $start = microtime(true);
         do {
             if (!$this->isBlockingIo) {
-                $canWrite = $this->selectSocketForWrite($start);
+                $canWrite = $this->selectSocketForWrite($socket, $start);
                 if (!$canWrite) {
                     continue;
                 }
@@ -242,7 +246,7 @@ final class Socket extends Node implements IoNode {
 
             $bufferErrors = 0;
             do {
-                $sentBytes = socket_write($this->socket, $binary);
+                $sentBytes = socket_write($socket, $data);
 
                 if ($sentBytes === 0) {
                     $this->checkForWriteTimeout($start);
@@ -251,11 +255,11 @@ final class Socket extends Node implements IoNode {
                 }
 
                 if ($sentBytes === false) {
-                    $errorCode = socket_last_error($this->socket);
+                    $errorCode = socket_last_error($socket);
 
                     if (
                         $errorCode === SOCKET_EWOULDBLOCK
-                        || $errorCode === SOCKET_EAGAIN
+                        || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
                         || $errorCode === SOCKET_EINTR
                     ) {
 
@@ -334,9 +338,9 @@ final class Socket extends Node implements IoNode {
                 }
 
                 $bufferErrors = 0;
-                $binary = substr($binary, $sentBytes);
+                $data = substr($data, $sentBytes);
 
-            } while ($binary);
+            } while ($data);
 
             break;
 
@@ -351,6 +355,9 @@ final class Socket extends Node implements IoNode {
         $this->write($request->__toString());
     }
 
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     */
     protected function checkForReceiveTimeout(float $start, int $expectedLength, int $upperBoundaryLength): void {
 
         if (microtime(true) - $start > $this->receiveTimeout) {
@@ -370,6 +377,9 @@ final class Socket extends Node implements IoNode {
         }
     }
 
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     */
     protected function checkForWriteTimeout(float $start): void {
 
         if (microtime(true) - $start > $this->sendTimeout) {
@@ -515,10 +525,50 @@ final class Socket extends Node implements IoNode {
         $this->socket = $socket;
     }
 
-    protected function selectSocketForRead(float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
+    /**
+     * @return array{
+     *   sendTimeout: int,
+     *   receiveTimeout: int,
+     * }
+     * 
+     * @throws \Cassandra\Exception\SocketException
+     */
+    protected function getTimeoutsFromConfig(): array {
+        $sendTimeout = $this->config->socketOptions[SO_SNDTIMEO]['sec'] ?? 10;
+        if (!is_int($sendTimeout)) {
+            throw new SocketException(
+                message: 'Invalid send timeout',
+                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                context: [
+                    'send_timeout' => $sendTimeout,
+                ]
+            );
+        }
+
+        $receiveTimeout = $this->config->socketOptions[SO_RCVTIMEO]['sec'] ?? 10;
+        if (!is_int($receiveTimeout)) {
+            throw new SocketException(
+                message: 'Invalid receive timeout',
+                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                context: [
+                    'receive_timeout' => $receiveTimeout,
+                ]
+            );
+        }
+
+        return [
+            'sendTimeout' => max(1, $sendTimeout),
+            'receiveTimeout' => max(1, $receiveTimeout),
+        ];
+    }
+
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     */
+    protected function selectSocketForRead(PhpSocket $socket, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
 
         do {
-            $read = [ $this->socket ];
+            $read = [ $socket ];
             $write = null;
             $except = null;
 
@@ -578,10 +628,13 @@ final class Socket extends Node implements IoNode {
         return true;
     }
 
-    protected function selectSocketForWrite(float $start): bool {
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     */
+    protected function selectSocketForWrite(PhpSocket $socket, float $start): bool {
 
         $read = null;
-        $write = [ $this->socket ];
+        $write = [ $socket ];
         $except = null;
 
         $selectResult = socket_select(
@@ -622,6 +675,9 @@ final class Socket extends Node implements IoNode {
         return true;
     }
 
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     */
     protected function waitForConnect(PhpSocket $socket, float $start): void {
 
         do {
@@ -690,6 +746,20 @@ final class Socket extends Node implements IoNode {
             if ($errorCode === 0) {
 
                 return;
+            }
+
+            if ($errorCode === false || !is_int($errorCode)) {
+                throw new SocketException(
+                    message: 'Socket connect failed: Unknown error',
+                    code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'connect',
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => 'unknown',
+                    ]
+                );
             }
 
             throw new SocketException(

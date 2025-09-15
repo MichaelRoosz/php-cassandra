@@ -9,7 +9,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Request\Request;
 
-final class FrameCodec extends Node {
+final class FrameCodec extends NodeImplementation {
     final public const CRC24_INIT = 0x875060;
     final public const CRC24_POLYNOMIAL = 0x1974F0B;
     final public const PAYLOAD_MAX_SIZE = 131071;
@@ -28,12 +28,12 @@ final class FrameCodec extends Node {
 
     protected ?Lz4Decompressor $lz4Decompressor;
 
-    protected IoNode $node;
+    protected Node $node;
 
     /**
      * @throws \Cassandra\Exception\NodeException
      */
-    public function __construct(IoNode $node, string $compression = '') {
+    public function __construct(Node $node, string $compression = '') {
         if ($compression && $compression !== 'lz4') {
             throw new NodeException(
                 message: 'Unsupported frame compression algorithm',
@@ -100,8 +100,8 @@ final class FrameCodec extends Node {
      * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
-    public function write(string $binary): void {
-        $this->node->write($binary);
+    public function write(string $data): void {
+        $this->node->write($data);
     }
 
     /**
@@ -274,6 +274,8 @@ final class FrameCodec extends Node {
      *  payloadLength: int,
      *  uncompressedLength: int,
      * }
+     * 
+     * @throws \Cassandra\Exception\NodeException
      */
     protected function readFrameHeader(bool $waitForData): ?array {
         if ($this->compression) {

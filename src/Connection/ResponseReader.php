@@ -28,6 +28,12 @@ final class ResponseReader {
         $this->currentHeader = null;
     }
 
+    /**
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\CompressionException
+     */
     public function readResponse(Node $node, int $version, bool $waitForResponse): ?Response {
 
         if ($this->currentHeader === null) {
@@ -142,6 +148,10 @@ final class ResponseReader {
         return new $responseClass($header, $streamReader);
     }
 
+    /**
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\ConnectionException
+     */
     protected function readHeader(Node $node, int $version, bool $waitForResponse): ?Header {
 
         $headerBytes = $node->read(9, $waitForResponse);
