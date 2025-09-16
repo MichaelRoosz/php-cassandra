@@ -43,7 +43,8 @@
         "friendsofphp/php-cs-fixer": "^3.87.1",
         "phpstan/phpstan": "^2.1.22",
         "phpunit/phpunit": "^10.5.53",
-        "vimeo/psalm": "^6.13.1"
+        "vimeo/psalm": "^6.13.1",
+        "phpbench/phpbench": "^1.4.1"
     },
     "scripts": {
         "lint": "vendor/bin/php-cs-fixer check",
@@ -60,6 +61,8 @@
         "test:integration:run:stream": "APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9142 APP_CASSANDRA_CONNECTION_MODE=stream vendor/bin/phpunit --testsuite integration",
         "test:integration:down": "docker compose down -v",
         "test:integration": "docker compose up -d && bash .docker/wait-for-cassandra.sh && APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9142 vendor/bin/phpunit --testsuite integration && docker compose down -v",
+        "bench": "vendor/bin/phpbench run",
+        "bench:profile": "vendor/bin/phpbench xdebug:profile",
         "find-unused-exceptions": "php scripts/find_unused_exception_codes.php"
     },
     "config": {

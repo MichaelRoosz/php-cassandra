@@ -7,3 +7,5 @@ phpDocumentor.phar
 .phpdoc
 .php-cs-fixer.cache
 table_dump.csv
+.phpbench
+.DS_Store
