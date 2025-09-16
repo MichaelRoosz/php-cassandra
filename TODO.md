@@ -1,7 +1,6 @@
 # Todo for the next release
 
 ## Features
-* Update CHANGELOG.md
 
 ## Tests
 
