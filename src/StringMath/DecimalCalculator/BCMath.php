@@ -9,6 +9,8 @@ use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
 use DivisionByZeroError;
 
+use function bcadd, bcdiv, bcmod, bcmul, bcsub;
+
 final class BCMath extends DecimalCalculator {
     /**
      * @throws \Cassandra\Exception\StringMathException
@@ -28,18 +30,15 @@ final class BCMath extends DecimalCalculator {
     #[\Override]
     public function add1(string $decimal): string {
 
-        if (!is_numeric($decimal)) {
+        if (!ctype_digit($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
-                ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
+                ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
             );
         }
 
-        $result = bcadd($decimal, '1', 0);
-        $result = ltrim($result, '0');
-
-        return $result === '' ? '0' : $result;
+        return bcadd($decimal, '1', 0);
     }
 
     /**
@@ -47,22 +46,28 @@ final class BCMath extends DecimalCalculator {
      */
     #[\Override]
     public function addUnsignedInt8(string $decimal, int $addend): string {
-        if ($addend === 0) {
-            return $decimal;
-        }
 
-        if (!is_numeric($decimal)) {
+        if (!ctype_digit($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
-                ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
+                ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
             );
         }
 
-        $result = bcadd($decimal, (string) $addend, 0);
-        $result = ltrim($result, '0');
+        if ($addend === 0) {
+            return ltrim($decimal, '0') ?: '0';
+        }
 
-        return $result === '' ? '0' : $result;
+        if ($addend < 0 || $addend > 255) {
+            throw new StringMathException(
+                'Invalid addend',
+                ExceptionCode::STRINGMATH_BCMATH_INVALID_ADDEND->value,
+                ['addend' => $addend]
+            );
+        }
+
+        return bcadd($decimal, (string) $addend, 0);
     }
 
     /**
@@ -77,10 +82,10 @@ final class BCMath extends DecimalCalculator {
             ];
         }
 
-        if (!is_numeric($decimal)) {
+        if (!ctype_digit($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
-                ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
+                ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
             );
         }
@@ -91,75 +96,33 @@ final class BCMath extends DecimalCalculator {
         } catch (DivisionByZeroError $e) {
             throw new StringMathException(
                 'Division by zero',
-                ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_DIVISION_BY_ZERO->value,
+                ExceptionCode::STRINGMATH_BCMATH_DIVISION_BY_ZERO->value,
                 ['decimal' => $decimal],
                 $e
             );
         }
 
-        $quotient = ltrim($quotient, '0');
-
         return [
-            'quotient' => $quotient === '' ? '0' : $quotient,
+            'quotient' => $quotient,
             'remainder' => $remainder,
         ];
     }
 
     #[\Override]
-    public function fromBinary(string $binary): string {
-        if ($binary === '') {
+    public function multiplyBy256(string $decimal): string {
+        if ($decimal === '0') {
             return '0';
         }
 
-        $isNegative = (ord($binary[0]) & 0x80) !== 0;
-
-        if ($isNegative) {
-            $length = strlen($binary);
-            for ($i = 0; $i < $length; $i++) {
-                $binary[$i] = ~$binary[$i];
-            }
-        }
-
-        $decimal = '0';
-        $length = strlen($binary);
-        for ($i = 0; $i < $length; $i++) {
-            $decimal = bcmul($decimal, '256', 0);
-            $decimal = bcadd($decimal, (string) ord($binary[$i]), 0);
-        }
-
-        if ($isNegative) {
-            $decimal = bcadd($decimal, '1', 0);
-
-            return '-' . $decimal;
-        }
-
-        return $decimal;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\StringMathException
-     */
-    #[\Override]
-    public function multiplyByUnsignedInt8(string $decimal, int $multiplier): string {
-        if ($decimal === '0' || $multiplier === 0) {
-            return '0';
-        }
-        if ($multiplier === 1) {
-            return $decimal;
-        }
-
-        if (!is_numeric($decimal)) {
+        if (!ctype_digit($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
-                ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
+                ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
             );
         }
 
-        $product = bcmul($decimal, (string) $multiplier, 0);
-        $product = ltrim($product, '0');
-
-        return $product === '' ? '0' : $product;
+        return bcmul($decimal, '256', 0);
     }
 
     /**
@@ -167,64 +130,20 @@ final class BCMath extends DecimalCalculator {
      */
     #[\Override]
     public function sub1(string $decimal): string {
+
+        $decimal = ltrim($decimal, '0') ?: '0';
         if ($decimal === '0') {
             return '0';
         }
 
-        if (!is_numeric($decimal)) {
+        if (!ctype_digit($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
-                ExceptionCode::STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL->value,
+                ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
                 ['decimal' => $decimal]
             );
         }
 
-        $result = bcsub($decimal, '1', 0);
-        $result = ltrim($result, '0');
-
-        return $result === '' ? '0' : $result;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\StringMathException
-     */
-    #[\Override]
-    public function toBinary(string $decimal): string {
-        $isNegative = str_starts_with($decimal, '-');
-        if ($isNegative) {
-            $decimal = substr($decimal, 1);
-        }
-
-        $decimal = ltrim($decimal, '0') ?: '0';
-        if ($isNegative) {
-            if ($decimal === '0') {
-                $isNegative = false;
-            } else {
-                $decimal = $this->sub1($decimal);
-            }
-        }
-
-        $bytes = [];
-        while ($decimal !== '0') {
-            ['quotient' => $decimal, 'remainder' => $remainder] = $this->divideBy256($decimal);
-            $bytes[] = chr($remainder);
-        }
-
-        $binary = count($bytes) > 0 ? implode('', array_reverse($bytes)) : '';
-        $length = strlen($binary);
-
-        if ($isNegative) {
-            for ($i = 0; $i < $length; $i++) {
-                $binary[$i] = ~$binary[$i];
-            }
-        }
-
-        if (!$isNegative && ($length === 0 || (ord($binary[0]) & 0x80) !== 0)) {
-            $binary = chr(0) . $binary;
-        } elseif ($isNegative && ($length === 0 || (ord($binary[0]) & 0x80) === 0)) {
-            $binary = chr(0xFF) . $binary;
-        }
-
-        return $binary;
+        return bcsub($decimal, '1', 0);
     }
 }

@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1318
+ * Next free code: 1323
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -162,11 +162,15 @@ enum ExceptionCode: int {
     case STREAM_WRITE_FAILED = 1063;
 
     // StringMathException (STRINGMATH_)
+    case STRINGMATH_BCMATH_DIVISION_BY_ZERO = 1293;
     case STRINGMATH_BCMATH_EXTENSION_NOT_LOADED = 1291;
-    case STRINGMATH_CALCULATOR_BCMATH_DIVISION_BY_ZERO = 1293;
-    case STRINGMATH_CALCULATOR_BCMATH_INVALID_DECIMAL = 1292;
-    case STRINGMATH_CALCULATOR_NATIVE_INVALID_CHARACTER = 1261;
+    case STRINGMATH_BCMATH_INVALID_ADDEND = 1322;
+    case STRINGMATH_BCMATH_INVALID_DECIMAL = 1292;
     case STRINGMATH_GMP_EXTENSION_NOT_LOADED = 1290;
+    case STRINGMATH_GMP_INVALID_ADDEND = 1320;
+    case STRINGMATH_GMP_INVALID_DECIMAL = 1318;
+    case STRINGMATH_NATIVE_INVALID_ADDEND = 1321;
+    case STRINGMATH_NATIVE_INVALID_DECIMAL = 1319;
 
     // TypeInfoException (TYPEINFO_)
     case TYPEINFO_CUSTOM_INVALID_TYPE = 1237;

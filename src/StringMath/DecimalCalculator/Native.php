@@ -9,14 +9,26 @@ use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
 
 final class Native extends DecimalCalculator {
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
     public function add1(string $decimal): string {
+
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
+        }
+
         $length = strlen($decimal);
         $carry = true;
 
         for ($i = $length - 1; $i >= 0; $i--) {
             if ($decimal[$i] !== '9') {
-                $decimal[$i] = (string) ((int) $decimal[$i] + 1);
+                $decimal[$i] = chr(ord($decimal[$i]) + 1);
                 $carry = false;
 
                 break;
@@ -29,13 +41,35 @@ final class Native extends DecimalCalculator {
             $decimal = '1' . $decimal;
         }
 
+        $decimal = ltrim($decimal, '0') ?: '0';
+
         return $decimal;
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
     public function addUnsignedInt8(string $decimal, int $addend): string {
+
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
+        }
+
         if ($addend === 0) {
-            return $decimal;
+            return ltrim($decimal, '0') ?: '0';
+        }
+
+        if ($addend < 0 || $addend > 255) {
+            throw new StringMathException(
+                'Invalid addend',
+                ExceptionCode::STRINGMATH_NATIVE_INVALID_ADDEND->value,
+                ['addend' => $addend]
+            );
         }
 
         $carry = $addend;
@@ -64,6 +98,22 @@ final class Native extends DecimalCalculator {
      */
     #[\Override]
     public function divideBy256(string $decimal): array {
+
+        if ($decimal === '0') {
+            return [
+                'quotient' => '0',
+                'remainder' => 0,
+            ];
+        }
+
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
+        }
+
         $carry = 0;
         $out = [];
         $started = false;
@@ -71,16 +121,6 @@ final class Native extends DecimalCalculator {
 
         for ($i = 0; $i < $length; $i++) {
             $digit = ord($decimal[$i]) - 48;
-            if ($digit < 0 || $digit > 9) {
-                throw new StringMathException(
-                    'Invalid character in string',
-                    ExceptionCode::STRINGMATH_CALCULATOR_NATIVE_INVALID_CHARACTER->value,
-                    [
-                        'character' => $decimal[$i],
-                    ]
-                );
-            }
-
             $acc = ($carry * 10) + $digit;
             $q = intdiv($acc, 256);
             $carry = $acc % 256;
@@ -103,54 +143,29 @@ final class Native extends DecimalCalculator {
         ];
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
-    public function fromBinary(string $binary): string {
-        if ($binary === '') {
-            return '0';
-        }
-
-        $isNegative = (ord($binary[0]) & 0x80) !== 0;
-
-        // If negative, invert the bytes; we'll add 1 at the end (two's complement)
-        if ($isNegative) {
-            $length = strlen($binary);
-            for ($i = 0; $i < $length; $i++) {
-                $binary[$i] = ~$binary[$i];
-            }
-        }
-
-        // Convert big-endian bytes to decimal string via repeated *256 and +byte
-        $decimal = '0';
-        $length = strlen($binary);
-        for ($i = 0; $i < $length; $i++) {
-            $decimal = $this->multiplyByUnsignedInt8($decimal, 256);
-            $decimal = $this->addUnsignedInt8($decimal, ord($binary[$i]));
-        }
-
-        if ($isNegative) {
-            $decimal = $this->add1($decimal);
-
-            return '-' . $decimal;
-        }
-
-        return $decimal;
-    }
-
-    #[\Override]
-    public function multiplyByUnsignedInt8(string $decimal, int $multiplier): string {
+    public function multiplyBy256(string $decimal): string {
         if ($decimal === '0') {
             return '0';
         }
-        if ($multiplier === 1) {
-            return $decimal;
+
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
         }
-        if ($multiplier === 0) {
-            return '0';
-        }
+
+        $multiplier = 256;
 
         $carry = 0;
         $out = [];
-        for ($i = strlen($decimal) - 1; $i >= 0; $i--) {
+        $length = strlen($decimal);
+        for ($i = $length - 1; $i >= 0; $i--) {
             $digit = ord($decimal[$i]) - 48;
             $product = ($digit * $multiplier) + $carry;
             $out[] = chr(48 + ($product % 10));
@@ -168,18 +183,29 @@ final class Native extends DecimalCalculator {
         return $result === '' ? '0' : $result;
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
     public function sub1(string $decimal): string {
 
-        // avoid underflow
+        $decimal = ltrim($decimal, '0') ?: '0';
         if ($decimal === '0') {
             return '0';
+        }
+
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
         }
 
         $length = strlen($decimal);
         for ($i = $length - 1; $i >= 0; $i--) {
             if ($decimal[$i] !== '0') {
-                $decimal[$i] = (string) ((int) $decimal[$i] - 1);
+                $decimal[$i] = chr(ord($decimal[$i]) - 1);
 
                 break;
             }
@@ -190,52 +216,5 @@ final class Native extends DecimalCalculator {
         $decimal = ltrim($decimal, '0') ?: '0';
 
         return $decimal;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\StringMathException
-     */
-    #[\Override]
-    public function toBinary(string $decimal): string {
-        $isNegative = str_starts_with($decimal, '-');
-        if ($isNegative) {
-            $decimal = substr($decimal, 1);
-        }
-
-        // Normalize and handle -0
-        $decimal = ltrim($decimal, '0') ?: '0';
-        if ($isNegative) {
-            if ($decimal === '0') {
-                $isNegative = false;
-            } else {
-                $decimal = $this->sub1($decimal);
-            }
-        }
-
-        // Repeated division by 256 to collect bytes
-        $bytes = [];
-        while ($decimal !== '0') {
-            ['quotient' => $decimal, 'remainder' => $remainder] = $this->divideBy256($decimal);
-            $bytes[] = chr($remainder);
-        }
-
-        // Assemble big-endian
-        $binary = count($bytes) > 0 ? implode('', array_reverse($bytes)) : '';
-        $length = strlen($binary);
-
-        if ($isNegative) {
-            for ($i = 0; $i < $length; $i++) {
-                $binary[$i] = ~$binary[$i];
-            }
-        }
-
-        // Sign-extend to preserve sign
-        if (!$isNegative && ($length === 0 || (ord($binary[0]) & 0x80) !== 0)) {
-            $binary = chr(0) . $binary;
-        } elseif ($isNegative && ($length === 0 || (ord($binary[0]) & 0x80) === 0)) {
-            $binary = chr(0xFF) . $binary;
-        }
-
-        return $binary;
     }
 }

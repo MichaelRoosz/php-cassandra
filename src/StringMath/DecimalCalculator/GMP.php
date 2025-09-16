@@ -7,6 +7,9 @@ namespace Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
+use GMP as GMPValue;
+
+use function gmp_add, gmp_init, gmp_mul, gmp_strval, gmp_sub, gmp_intval, gmp_div_qr;
 
 final class GMP extends DecimalCalculator {
     /**
@@ -21,28 +24,59 @@ final class GMP extends DecimalCalculator {
         }
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
     public function add1(string $decimal): string {
-        $res = gmp_add($decimal, '1');
-        $str = gmp_strval($res, 10);
-        $str = ltrim($str, '0');
 
-        return $str === '' ? '0' : $str;
-    }
-
-    #[\Override]
-    public function addUnsignedInt8(string $decimal, int $addend): string {
-        if ($addend === 0) {
-            return $decimal;
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
         }
 
-        $res = gmp_add($decimal, (string) $addend);
-        $str = gmp_strval($res, 10);
-        $str = ltrim($str, '0');
+        $result = gmp_add(gmp_init($decimal, 10), 1);
 
-        return $str === '' ? '0' : $str;
+        return gmp_strval($result, 10);
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
+    #[\Override]
+    public function addUnsignedInt8(string $decimal, int $addend): string {
+
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
+        }
+
+        if ($addend === 0) {
+            return ltrim($decimal, '0') ?: '0';
+        }
+
+        if ($addend < 0 || $addend > 255) {
+            throw new StringMathException(
+                'Invalid addend',
+                ExceptionCode::STRINGMATH_GMP_INVALID_ADDEND->value,
+                ['addend' => $addend]
+            );
+        }
+
+        $result = gmp_add(gmp_init($decimal, 10), $addend);
+
+        return gmp_strval($result, 10);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
     public function divideBy256(string $decimal): array {
         if ($decimal === '0') {
@@ -52,115 +86,67 @@ final class GMP extends DecimalCalculator {
             ];
         }
 
-        $n = gmp_init($decimal, 10);
-        $q = gmp_div_q($n, '256');
-        $r = gmp_div_r($n, '256');
-        $remainder = (int) gmp_strval($r, 10);
-        $qs = gmp_strval($q, 10);
-        $qs = ltrim($qs, '0');
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
+        }
+
+        /** @var GMPValue $q */
+        /** @var GMPValue $r */
+        [$q, $r] = gmp_div_qr(gmp_init($decimal, 10), 256, GMP_ROUND_ZERO);
 
         return [
-            'quotient' => $qs === '' ? '0' : $qs,
-            'remainder' => $remainder,
+            'quotient' => gmp_strval($q, 10),
+            'remainder' => gmp_intval($r),
         ];
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
-    public function fromBinary(string $binary): string {
-        if ($binary === '') {
-            return '0';
-        }
-
-        $isNegative = (ord($binary[0]) & 0x80) !== 0;
-        if ($isNegative) {
-            $length = strlen($binary);
-            for ($i = 0; $i < $length; $i++) {
-                $binary[$i] = ~$binary[$i];
-            }
-        }
-
-        $value = gmp_init(0, 10);
-        $length = strlen($binary);
-        for ($i = 0; $i < $length; $i++) {
-            $value = gmp_mul($value, 256);
-            $value = gmp_add($value, ord($binary[$i]));
-        }
-
-        if ($isNegative) {
-            $value = gmp_add($value, 1);
-
-            return '-' . gmp_strval($value, 10);
-        }
-
-        return gmp_strval($value, 10);
-    }
-
-    #[\Override]
-    public function multiplyByUnsignedInt8(string $decimal, int $multiplier): string {
-        if ($decimal === '0' || $multiplier === 0) {
-            return '0';
-        }
-        if ($multiplier === 1) {
-            return $decimal;
-        }
-
-        $res = gmp_mul($decimal, (string) $multiplier);
-        $str = gmp_strval($res, 10);
-        $str = ltrim($str, '0');
-
-        return $str === '' ? '0' : $str;
-    }
-
-    #[\Override]
-    public function sub1(string $decimal): string {
+    public function multiplyBy256(string $decimal): string {
         if ($decimal === '0') {
             return '0';
         }
 
-        $res = gmp_sub($decimal, '1');
-        $str = gmp_strval($res, 10);
-        $str = ltrim($str, '0');
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
+        }
 
-        return $str === '' ? '0' : $str;
+        $result = gmp_mul(gmp_init($decimal, 10), 256);
+
+        return gmp_strval($result, 10);
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
-    public function toBinary(string $decimal): string {
-        $isNegative = str_starts_with($decimal, '-');
-        if ($isNegative) {
-            $decimal = substr($decimal, 1);
-        }
+    public function sub1(string $decimal): string {
 
         $decimal = ltrim($decimal, '0') ?: '0';
-        if ($isNegative) {
-            if ($decimal === '0') {
-                $isNegative = false;
-            } else {
-                $decimal = $this->sub1($decimal);
-            }
+        if ($decimal === '0') {
+            return '0';
         }
 
-        $bytes = [];
-        while ($decimal !== '0') {
-            ['quotient' => $decimal, 'remainder' => $remainder] = $this->divideBy256($decimal);
-            $bytes[] = chr($remainder);
+        if (!ctype_digit($decimal)) {
+            throw new StringMathException(
+                'Invalid decimal string',
+                ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
+                ['decimal' => $decimal]
+            );
         }
 
-        $binary = count($bytes) > 0 ? implode('', array_reverse($bytes)) : '';
-        $length = strlen($binary);
+        $result = gmp_sub(gmp_init($decimal, 10), 1);
 
-        if ($isNegative) {
-            for ($i = 0; $i < $length; $i++) {
-                $binary[$i] = ~$binary[$i];
-            }
-        }
-
-        if (!$isNegative && ($length === 0 || (ord($binary[0]) & 0x80) !== 0)) {
-            $binary = chr(0) . $binary;
-        } elseif ($isNegative && ($length === 0 || (ord($binary[0]) & 0x80) === 0)) {
-            $binary = chr(0xFF) . $binary;
-        }
-
-        return $binary;
+        return gmp_strval($result, 10);
     }
 }
