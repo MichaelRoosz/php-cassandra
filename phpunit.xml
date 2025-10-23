@@ -13,6 +13,7 @@
          displayDetailsOnTestsThatTriggerNotices="true"
          displayDetailsOnTestsThatTriggerWarnings="true"
          displayDetailsOnPhpunitDeprecations="true"
+         displayDetailsOnSkippedTests="true"
 >
     <coverage>
         <report>
