@@ -827,8 +827,19 @@ final class Connection {
         $drainedResponses = false;
         while (
             $processed < $max
-            && array_find($statements, fn (Statement $s) => !$s->isResultReady()) !== null
         ) {
+            $hasUnresolvedStatements = false;
+            foreach ($statements as $s) {
+                if (!$s->isResultReady()) {
+                    $hasUnresolvedStatements = true;
+
+                    break;
+                }
+            }
+            if (!$hasUnresolvedStatements) {
+                break;
+            }
+
             $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
             if ($drainedResponses) {
                 break;
@@ -950,7 +961,21 @@ final class Connection {
      * @throws \Cassandra\Exception\ServerException
      */
     public function waitForStatements(array $statements): void {
-        while (array_find($statements, fn (Statement $statement) => !$statement->isResultReady())) {
+
+        while (true) {
+            $hasUnresolvedStatements = false;
+            foreach ($statements as $s) {
+                if (!$s->isResultReady()) {
+                    $hasUnresolvedStatements = true;
+
+                    break;
+                }
+            }
+
+            if (!$hasUnresolvedStatements) {
+                break;
+            }
+
             $this->readResponse(waitForResponse: true);
         }
     }
@@ -1106,7 +1131,7 @@ final class Connection {
 
     protected function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {
 
-        // auto-prepare query if bind markers are used not all values defined with type
+        // auto-prepare query if bind markers are used and not all values are defined with type
         if (
             ($request instanceof Request\Query)
         ) {
@@ -1117,17 +1142,28 @@ final class Connection {
             if (
                 $queryOptions->autoPrepare
                 && $values
-                && array_find($values, fn($v) => (
-                    $v !== null
-                    && !($v instanceof ValueBase)
-                    && !($v instanceof NotSet)
-                )) !== null
             ) {
+                $hasUnresolvedValues = false;
 
-                $prepareOptions = new PrepareOptions(keyspace: $queryOptions->keyspace);
-                $prepareRequest = new Request\Prepare($request->getQuery(), $prepareOptions);
+                foreach ($values as $v) {
+                    if (
+                        $v !== null
+                        && !($v instanceof ValueBase)
+                        && !($v instanceof NotSet)
+                    ) {
+                        $hasUnresolvedValues = true;
 
-                return $prepareRequest;
+                        break;
+                    }
+                }
+
+                if ($hasUnresolvedValues) {
+
+                    $prepareOptions = new PrepareOptions(keyspace: $queryOptions->keyspace);
+                    $prepareRequest = new Request\Prepare($request->getQuery(), $prepareOptions);
+
+                    return $prepareRequest;
+                }
             }
         }
 
