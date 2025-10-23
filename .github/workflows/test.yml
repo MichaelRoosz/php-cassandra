@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        php: [8.1, 8.2, 8.3, 8.4]
+        php: ["8.1", "8.2", "8.3", "8.4"]
 
     name: Unit test - PHP ${{ matrix.php }}
 
@@ -83,11 +83,16 @@ jobs:
     - name: Install dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader
 
+    - name: Check PHP version
+      run: php -v
+
     - name: PHPUnit integration tests
       run: CASSANDRA_VERSION=${{ matrix.cassandra }} composer run test:integration
 
   php-version-compatibility:
     runs-on: ubuntu-latest
+
+    name: PHP version compatibility test - PHP 8.1
 
     steps:
     - uses: actions/checkout@v4
@@ -95,7 +100,7 @@ jobs:
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: 8.1
+        php-version: "8.1"
         extensions: mbstring, bcmath, gmp
         tools: composer:v2
 
@@ -115,6 +120,9 @@ jobs:
 
     - name: Initialize PHP Compatibility database
       run: vendor/bin/phpcompatinfo db:init
+
+    - name: Check PHP version
+      run: php -v
 
     - name: Ensure PHP version compatibility with PHP 8.1
       run: scripts/check-php-version.sh
