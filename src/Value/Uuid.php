@@ -107,7 +107,11 @@ final class Uuid extends ValueWithFixedLength {
     public static function random(): static {
 
         try {
-            $bytes = random_bytes(16);
+            if (function_exists('random_bytes')) {
+                $bytes = random_bytes(16);
+            } else {
+                $bytes = openssl_random_pseudo_bytes(16);
+            }
         } catch (Exception $e) {
             throw new ValueException('Failed to generate random bytes', ExceptionCode::VALUE_UUID_RANDOM_FAILED->value);
         }
