@@ -44,7 +44,8 @@
         "phpstan/phpstan": "^2.1.22",
         "phpunit/phpunit": "^10.5.53",
         "vimeo/psalm": "^6.13.1",
-        "phpbench/phpbench": "^1.4.1"
+        "phpbench/phpbench": "^1.4.1",
+        "bartlett/php-compatinfo": "^7.2.4"
     },
     "scripts": {
         "lint": "vendor/bin/php-cs-fixer check",
