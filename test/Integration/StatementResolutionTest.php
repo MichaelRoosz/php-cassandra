@@ -244,9 +244,6 @@ final class StatementResolutionTest extends AbstractIntegrationTestCase {
 
         // Waiting for empty array should return immediately without error
         $conn->waitForStatements([]);
-
-        // Test passes if no exception is thrown
-        $this->assertTrue(true);
     }
 
     public function testWaitForStatementsWithInserts(): void {
