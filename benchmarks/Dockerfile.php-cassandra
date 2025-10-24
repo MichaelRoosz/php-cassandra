@@ -1,0 +1,27 @@
+# Dockerfile for php-cassandra library benchmarks (PHP 8.2)
+FROM php:8.2-cli
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    libzip-dev \
+    time \
+    && docker-php-ext-install zip sockets \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+# Copy project files
+COPY composer.json composer.lock ./
+COPY src/ ./src/
+COPY benchmarks/bootstrap.php benchmarks/QueryBench.php benchmarks/run-bench-php-cassandra.php benchmarks/bench-config.php ./benchmarks/
+
+# Install dependencies
+RUN composer install --no-dev --optimize-autoloader
+
+CMD ["php", "-v"]
+

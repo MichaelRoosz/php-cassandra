@@ -1,0 +1,61 @@
+# Dockerfile for ScyllaDB PHP Driver benchmarks (PHP 8.2)
+FROM php:8.2-cli
+
+# Install dependencies for ScyllaDB driver
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    build-essential \
+    cmake \
+    ninja-build \
+    libssl-dev \
+    libgmp-dev \
+    libpcre2-dev \
+    libuv1-dev \
+    zlib1g-dev \
+    libssh2-1-dev \
+    autoconf \
+    automake \
+    libtool \
+    time \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ScyllaDB C++ driver from source (following he4rt/scylladb-php-driver instructions)
+WORKDIR /tmp
+RUN git clone --depth 1 https://github.com/scylladb/cpp-driver.git scylladb-driver \
+    && cd scylladb-driver \
+    && mkdir build && cd build \
+    && cmake -DCASS_CPP_STANDARD=17 \
+        -DCASS_BUILD_STATIC=ON \
+        -DCASS_BUILD_SHARED=ON \
+        -DCASS_USE_STD_ATOMIC=ON \
+        -DCASS_USE_TIMERFD=ON \
+        -DCASS_USE_LIBSSH2=ON \
+        -DCASS_USE_ZLIB=ON \
+        -DCMAKE_C_FLAGS="-fPIC" \
+        -DCMAKE_CXX_FLAGS="-fPIC -Wno-error=redundant-move" \
+        -DCMAKE_BUILD_TYPE=RelWithInfo \
+        -G Ninja .. \
+    && ninja install \
+    && ldconfig \
+    && cd /tmp && rm -rf /tmp/*
+
+# Clone and build ScyllaDB PHP driver
+WORKDIR /tmp
+RUN git clone --depth 1 --branch v1.3.x https://github.com/he4rt/scylladb-php-driver.git \
+    && cd scylladb-php-driver \
+    && mkdir build && cd build \
+    && cmake -DCMAKE_BUILD_TYPE=Release -G Ninja .. \
+    && ninja \
+    && PHP_EXT_DIR=$(php-config --extension-dir) \
+    && cp cassandra.so "$PHP_EXT_DIR/" \
+    && docker-php-ext-enable cassandra \
+    && cd /tmp && rm -rf /tmp/*
+
+WORKDIR /app
+
+# Copy benchmark configuration and files
+COPY benchmarks/bench-config.php ./benchmarks/bench-config.php
+COPY benchmarks/scylladb/ ./benchmarks/scylladb/
+
+CMD ["php", "-v"]

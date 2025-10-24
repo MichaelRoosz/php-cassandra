@@ -1,0 +1,60 @@
+=== php-cassandra Library Benchmarks ===
+PHP Version: 8.2.29
+
+Running benchInsertAndSelectWithoutTypeInfo...
+  Total: 15.7069s | Avg: 0.7853s | Ops/s: 50.93
+Running benchInsertAndSelectWithTypeInfo...
+  Total: 14.6365s | Avg: 0.7318s | Ops/s: 54.66
+Running benchPagedQuery...
+  Total: 2.8436s | Avg: 0.1422s | Ops/s: 281.33
+Running benchPreparedInsert...
+  Total: 14.7220s | Avg: 0.7361s | Ops/s: 54.34
+Running benchSimpleSelect...
+  Total: 0.1884s | Avg: 0.0094s | Ops/s: 4245.97
+
+=== JSON Results ===
+{
+    "driver": "php-cassandra",
+    "results": [
+        {
+            "name": "benchInsertAndSelectWithoutTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 15.706855773925781,
+            "avg_time": 0.785342788696289,
+            "ops_per_second": 50.93317284596467
+        },
+        {
+            "name": "benchInsertAndSelectWithTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 14.636539936065674,
+            "avg_time": 0.7318269968032837,
+            "ops_per_second": 54.65772672329013
+        },
+        {
+            "name": "benchPagedQuery",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 2.8436460494995117,
+            "avg_time": 0.1421823024749756,
+            "ops_per_second": 281.32896502390014
+        },
+        {
+            "name": "benchPreparedInsert",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 14.722045660018921,
+            "avg_time": 0.736102283000946,
+            "ops_per_second": 54.340274339223306
+        },
+        {
+            "name": "benchSimpleSelect",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 0.1884138584136963,
+            "avg_time": 0.009420692920684814,
+            "ops_per_second": 4245.972173891037
+        }
+    ]
+}

@@ -1,0 +1,48 @@
+# Dockerfile for DataStax PHP Driver benchmarks (PHP 7.1)
+FROM php:7.1-cli
+
+# Fix Debian Buster repositories (moved to archive)
+RUN sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
+    sed -i '/stretch-updates/d' /etc/apt/sources.list
+
+# Install dependencies for DataStax driver
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    build-essential \
+    cmake \
+    libssl-dev \
+    libgmp-dev \
+    libpcre3-dev \
+    libuv1-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install DataStax C++ driver from source (for multi-arch support)
+WORKDIR /tmp
+RUN wget https://github.com/datastax/cpp-driver/archive/refs/tags/2.16.2.tar.gz \
+    && tar xzf 2.16.2.tar.gz \
+    && cd cpp-driver-2.16.2 \
+    && mkdir build && cd build \
+    && cmake .. \
+    && make -j$(nproc) \
+    && make install \
+    && ldconfig \
+    && cd /tmp && rm -rf /tmp/*
+
+# Install DataStax PHP driver from PECL
+RUN pecl install cassandra-1.3.2 \
+    && docker-php-ext-enable cassandra
+
+# Install time command for benchmarking
+RUN apt-get update && apt-get install -y time && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy benchmark configuration and files
+COPY benchmarks/bench-config.php ./benchmarks/bench-config.php
+COPY benchmarks/datastax/ ./benchmarks/datastax/
+
+CMD ["php", "-v"]
+

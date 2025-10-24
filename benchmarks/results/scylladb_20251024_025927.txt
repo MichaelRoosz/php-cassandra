@@ -1,0 +1,64 @@
+=== ScyllaDB PHP Driver Benchmarks ===
+PHP Version: 8.2.29
+ScyllaDB Extension Version: 1.4.0-dev
+
+Connected to Cassandra successfully
+===== Using optimized driver!!! =====
+===== Using optimized driver!!! =====
+Running benchInsertAndSelectWithoutTypeInfo...
+  Total: 25.9924s | Avg: 1.2996s | Ops/s: 30.78
+Running benchInsertAndSelectWithTypeInfo...
+  Total: 24.9733s | Avg: 1.2487s | Ops/s: 32.03
+Running benchPagedQuery...
+  Total: 4.4354s | Avg: 0.2218s | Ops/s: 180.37
+Running benchPreparedInsert...
+  Total: 27.0776s | Avg: 1.3539s | Ops/s: 29.54
+Running benchSimpleSelect...
+  Total: 0.3641s | Avg: 0.0182s | Ops/s: 2197.12
+
+=== JSON Results ===
+{
+    "driver": "scylladb",
+    "results": [
+        {
+            "name": "benchInsertAndSelectWithoutTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 25.9924418926239,
+            "avg_time": 1.2996220946311952,
+            "ops_per_second": 30.778177875893334
+        },
+        {
+            "name": "benchInsertAndSelectWithTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 24.973310708999634,
+            "avg_time": 1.2486655354499816,
+            "ops_per_second": 32.03419880215177
+        },
+        {
+            "name": "benchPagedQuery",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 4.435356140136719,
+            "avg_time": 0.22176780700683593,
+            "ops_per_second": 180.36883053439317
+        },
+        {
+            "name": "benchPreparedInsert",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 27.077582597732544,
+            "avg_time": 1.3538791298866273,
+            "ops_per_second": 29.544734915405314
+        },
+        {
+            "name": "benchSimpleSelect",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 0.36411285400390625,
+            "avg_time": 0.018205642700195312,
+            "ops_per_second": 2197.1210057621793
+        }
+    ]
+}

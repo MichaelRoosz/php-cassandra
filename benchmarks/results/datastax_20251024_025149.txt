@@ -1,0 +1,62 @@
+=== DataStax PHP Driver Benchmarks ===
+PHP Version: 7.1.33
+DataStax Extension Version: 1.3.2
+
+Connected to Cassandra successfully
+Running benchInsertAndSelectWithoutTypeInfo...
+  Total: 27.7873s | Avg: 1.3894s | Ops/s: 28.79
+Running benchInsertAndSelectWithTypeInfo...
+  Total: 26.6296s | Avg: 1.3315s | Ops/s: 30.04
+Running benchPagedQuery...
+  Total: 4.3981s | Avg: 0.2199s | Ops/s: 181.90
+Running benchPreparedInsert...
+  Total: 24.4498s | Avg: 1.2225s | Ops/s: 32.72
+Running benchSimpleSelect...
+  Total: 0.3102s | Avg: 0.0155s | Ops/s: 2578.63
+
+=== JSON Results ===
+{
+    "driver": "datastax",
+    "results": [
+        {
+            "name": "benchInsertAndSelectWithoutTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 27.787266731262207,
+            "avg_time": 1.3893633365631104,
+            "ops_per_second": 28.790165212613584
+        },
+        {
+            "name": "benchInsertAndSelectWithTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 26.62961220741272,
+            "avg_time": 1.331480610370636,
+            "ops_per_second": 30.041744272089286
+        },
+        {
+            "name": "benchPagedQuery",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 4.3980793952941895,
+            "avg_time": 0.21990396976470947,
+            "ops_per_second": 181.89758030652553
+        },
+        {
+            "name": "benchPreparedInsert",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 24.449840545654297,
+            "avg_time": 1.2224920272827149,
+            "ops_per_second": 32.72004978953499
+        },
+        {
+            "name": "benchSimpleSelect",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 0.3102421760559082,
+            "avg_time": 0.01551210880279541,
+            "ops_per_second": 2578.630701248799
+        }
+    ]
+}

@@ -1,0 +1,63 @@
+=== DataStax PHP Driver Benchmarks ===
+PHP Version: 7.1.33
+DataStax Extension Version: 1.3.2
+
+Connection attempt 1/5 failed, retrying in 2s...
+Connected to Cassandra successfully
+Running benchInsertAndSelectWithoutTypeInfo...
+  Total: 26.9174s | Avg: 1.3459s | Ops/s: 29.72
+Running benchInsertAndSelectWithTypeInfo...
+  Total: 26.5617s | Avg: 1.3281s | Ops/s: 30.12
+Running benchPagedQuery...
+  Total: 4.3207s | Avg: 0.2160s | Ops/s: 185.16
+Running benchPreparedInsert...
+  Total: 25.1164s | Avg: 1.2558s | Ops/s: 31.85
+Running benchSimpleSelect...
+  Total: 0.2836s | Avg: 0.0142s | Ops/s: 2821.23
+
+=== JSON Results ===
+{
+    "driver": "datastax",
+    "results": [
+        {
+            "name": "benchInsertAndSelectWithoutTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 26.9173686504364,
+            "avg_time": 1.34586843252182,
+            "ops_per_second": 29.7205871193888
+        },
+        {
+            "name": "benchInsertAndSelectWithTypeInfo",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 26.56171727180481,
+            "avg_time": 1.3280858635902404,
+            "ops_per_second": 30.118534574163164
+        },
+        {
+            "name": "benchPagedQuery",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 4.320692539215088,
+            "avg_time": 0.2160346269607544,
+            "ops_per_second": 185.15550290586768
+        },
+        {
+            "name": "benchPreparedInsert",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 25.116437911987305,
+            "avg_time": 1.2558218955993652,
+            "ops_per_second": 31.851650413301027
+        },
+        {
+            "name": "benchSimpleSelect",
+            "revs": 40,
+            "iterations": 20,
+            "total_time": 0.28356385231018066,
+            "avg_time": 0.014178192615509034,
+            "ops_per_second": 2821.234065916511
+        }
+    ]
+}

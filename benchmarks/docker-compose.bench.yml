@@ -1,0 +1,75 @@
+services:
+  # Cassandra database for benchmarks
+  cassandra:
+    image: cassandra:${CASSANDRA_VERSION:-5.0}
+    container_name: php-cassandra-bench-db
+    ports:
+      - "9142:9042"
+    environment:
+      - CASSANDRA_START_RPC=false
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "cqlsh -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - php_cassandra_bench_net
+
+  # Benchmark container for php-cassandra library (PHP 8.2)
+  bench-php-cassandra:
+    build:
+      context: ..
+      dockerfile: benchmarks/Dockerfile.php-cassandra
+    container_name: php-cassandra-bench-php-cassandra
+    environment:
+      - APP_CASSANDRA_HOST=cassandra
+      - APP_CASSANDRA_PORT=9042
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      - php_cassandra_bench_net
+    command: php benchmarks/run-bench-php-cassandra.php
+
+  # Benchmark container for DataStax PHP driver (PHP 7.1)
+  bench-datastax:
+    build:
+      context: ..
+      dockerfile: benchmarks/Dockerfile.datastax
+    container_name: php-cassandra-bench-datastax
+    environment:
+      - CASSANDRA_HOST=cassandra
+      - CASSANDRA_PORT=9042
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      - php_cassandra_bench_net
+    command: php benchmarks/datastax/run-bench.php
+
+  # Benchmark container for ScyllaDB PHP driver (PHP 8.2)
+  bench-scylladb:
+    build:
+      context: ..
+      dockerfile: benchmarks/Dockerfile.scylladb
+    container_name: php-cassandra-bench-scylladb
+    environment:
+      - CASSANDRA_HOST=cassandra
+      - CASSANDRA_PORT=9042
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      - php_cassandra_bench_net
+    command: php benchmarks/scylladb/run-bench.php
+
+networks:
+  php_cassandra_bench_net:
+    driver: bridge
+

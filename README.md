@@ -89,6 +89,7 @@ Table of contents
   - [v5 keyspace per request](#v5-keyspace-per-request)
   - [Tracing notes](#tracing-notes)
   - [Performance tips](#performance-tips)
+  - [Benchmarks](#benchmarks)
   - [Version support](#version-support)
   - [API reference (essentials)](#api-reference-essentials)
   - [Changelog](#changelog)
@@ -1728,6 +1729,28 @@ Performance tips
 
 - Prefer prepared statements for hot paths; the driver caches prepared metadata.
 - Iterate results instead of materializing large arrays.
+
+Benchmarks
+----------
+
+The following results were produced by the benchmarking suite in `benchmarks/` (Dockerized), comparing this library against the legacy DataStax PHP driver and the ScyllaDB PHP driver. Full setup and reproduction steps are documented in `benchmarks/README.md`; raw outputs are stored under `benchmarks/results/`.
+
+```text
+Benchmark Comparison Table
+=====================================================================================================================================================================
+Benchmark                                php-cassandra (PHP 8.2)   DataStax (PHP 7.1)   ScyllaDB (PHP 8.2)   vs DataStax               vs ScyllaDB              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+benchInsertAndSelectWithoutTypeInfo      748.44ms                  1.3894s              1.3191s              1.86x faster              1.76x faster             
+benchInsertAndSelectWithTypeInfo         703.34ms                  1.3315s              1.2973s              1.89x faster              1.84x faster             
+benchPagedQuery                          138.55ms                  219.90ms             216.76ms             1.59x faster              1.56x faster             
+benchPreparedInsert                      723.57ms                  1.2225s              1.2495s              1.69x faster              1.73x faster             
+benchSimpleSelect                        9.80ms                    15.51ms              19.40ms              1.58x faster              1.98x faster             
+=====================================================================================================================================================================
+```
+
+Notes:
+- The DataStax driver runs on PHP 7.1; ScyllaDB and php-cassandra ran on PHP 8.2.
+- Environment details and exact commands are in `benchmarks/README.md`.
 
 Version support
 ---------------
