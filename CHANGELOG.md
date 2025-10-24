@@ -1,3 +1,10 @@
+## v1.0.1
+
+This is a small bugfix, restoring compatibilty with older PHP version (8.1, 8.2, 8.3).
+
+### Fixed 🔷
+* Fixed compatibilty with PHP v8.1, 8.2 and 8.3
+
 ## v1.0.0 "Prism" 🔷🌈
 
 This release brings major improvements across the library.
