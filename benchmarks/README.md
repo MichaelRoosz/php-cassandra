@@ -9,19 +9,17 @@ The benchmarks compare:
 - **DataStax PHP Driver**: Legacy PECL extension (PHP 7.1)
 - **ScyllaDB PHP Driver**: Modern PECL extension fork (PHP 8.2) - [he4rt/scylladb-php-driver](https://github.com/he4rt/scylladb-php-driver)
 
-> **Note**: The DataStax and ScyllaDB containers compile the C++ driver from source for multi-architecture support (ARM64/AMD64). The first build takes 10-15 minutes but subsequent runs use cached images.
-
 All drivers are tested against the same Cassandra instance running in Docker, performing identical operations to ensure fair comparison.
 
 ## Benchmarks
 
 The following operations are benchmarked:
 
-1. **benchInsertAndSelectWithoutTypeInfo**: Insert 100 rows and select one without explicit type information
+1. **benchInsertAndSelectWithoutTypeInfo**: Insert 100 rows and select 100 without explicit type information
 2. **benchInsertAndSelectWithTypeInfo**: Insert 100 rows and select one with explicit type information
-3. **benchPagedQuery**: Query 500+ rows with pagination (page size 50)
+3. **benchPagedQuery**: Query 500 rows with pagination (page size 50)
 4. **benchPreparedInsert**: Use prepared statements to insert 100 rows
-5. **benchSimpleSelect**: Simple select from system.local table
+5. **benchSimpleSelect**: One simple select from a table
 
 ## Prerequisites
 
@@ -116,15 +114,6 @@ Edit `docker-compose.yml` or set environment variable:
 ```bash
 CASSANDRA_VERSION=4.1 ./benchmarks/run-comparison.sh
 ```
-
-### Adjust Benchmark Parameters
-
-Edit the benchmark configuration in:
-- `benchmarks/run-bench-php-cassandra.php` - php-cassandra benchmarks
-- `benchmarks/datastax/run-bench.php` - DataStax benchmarks
-- `benchmarks/scylladb/run-bench.php` - ScyllaDB benchmarks
-
-Change revs (repetitions) and iterations for each benchmark method.
 
 ### Add New Benchmarks
 

@@ -88,18 +88,36 @@ function main(array $argv): int {
             $scylladbResults[$result['name']] = $result;
         }
 
-        // Print comparison table
-        echo "\nBenchmark Comparison Table\n";
-        echo str_repeat('=', 165) . "\n";
-        printf("%-40s %-25s %-20s %-20s %-25s %-25s\n",
+        // First table: Benchmark descriptions
+        echo "\n=== Benchmark Descriptions ===\n\n";
+
+        foreach ($phpCassandraResults as $benchName => $phpCassandra) {
+            if (isset($datastaxResults[$benchName]) && isset($scylladbResults[$benchName])) {
+                $description = $phpCassandra['description'] ?? 'N/A';
+                $rounds = $phpCassandra['rounds'] ?? 0;
+                $iterations = $phpCassandra['iterations'] ?? 0;
+
+                printf("%s\n  %s\n  -> 1 iteration = %d rounds, testing with %d iterations\n\n",
+                    $benchName,
+                    $description,
+                    $rounds,
+                    $iterations
+                );
+            }
+        }
+
+        // Second table: Performance comparison
+        echo "\n=== Performance Comparison (avg time per iteration, lower is better) ===\n";
+        echo str_repeat('=', 130) . "\n";
+        printf("%-45s %-15s %-15s %-15s %-20s %-20s\n",
             'Benchmark',
-            'php-cassandra (PHP 8.2)',
-            'DataStax (PHP 7.1)',
-            'ScyllaDB (PHP 8.2)',
+            'php-cassandra',
+            'DataStax',
+            'ScyllaDB',
             'vs DataStax',
             'vs ScyllaDB'
         );
-        echo str_repeat('-', 165) . "\n";
+        echo str_repeat('-', 130) . "\n";
 
         foreach ($phpCassandraResults as $benchName => $phpCassandra) {
             if (isset($datastaxResults[$benchName]) && isset($scylladbResults[$benchName])) {
@@ -113,7 +131,8 @@ function main(array $argv): int {
                 $comparisonDataStax = calculateSpeedup($phpCassandraAvg, $datastaxAvg);
                 $comparisonScyllaDB = calculateSpeedup($phpCassandraAvg, $scylladbAvg);
 
-                printf("%-40s %-25s %-20s %-20s %-25s %-25s\n",
+                // Print benchmark name and times
+                printf("%-45s %-15s %-15s %-15s %-20s %-20s\n",
                     $benchName,
                     formatTime($phpCassandraAvg),
                     formatTime($datastaxAvg),
@@ -124,13 +143,11 @@ function main(array $argv): int {
             }
         }
 
-        echo str_repeat('=', 165) . "\n";
+        echo str_repeat('=', 130) . "\n";
         echo "\nNotes:\n";
-        echo "  - Lower time is better\n";
-        echo "  - 'vs DataStax' shows php-cassandra (PHP 8.2) relative to DataStax (PHP 7.1)\n";
-        echo "  - 'vs ScyllaDB' shows php-cassandra (PHP 8.2) relative to ScyllaDB driver (PHP 8.2)\n";
-        echo "  - 'Xx faster' means php-cassandra is faster\n";
-        echo "  - 'Xx slower' means php-cassandra is slower\n";
+        echo "  Times are average per iteration. Each iteration runs multiple rounds of operations.\n";
+        echo "  'Xx faster/slower' compares php-cassandra to the other driver (lower time is better)\n";
+        echo "  php-cassandra: PHP 8.2 | DataStax: PHP 7.1 | ScyllaDB: PHP 8.2\n";
 
         return 0;
     } catch (Exception $e) {

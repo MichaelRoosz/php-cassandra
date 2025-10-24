@@ -23,14 +23,14 @@ class ScyllaDBQueryBench {
     /**
      * Insert 100 rows and select one without prepared statements
      */
-    public function benchInsertAndSelectWithoutTypeInfo($revs, $iterations) {
+    public function benchInsertAndSelectWithoutTypeInfo($rounds, $iterations) {
         $totalTime = 0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
             $this->beforeEach();
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 for ($i = 0; $i < 100; $i++) {
                     $this->session->execute(
                         'INSERT INTO kv (id, v) VALUES (?, ?)',
@@ -38,10 +38,12 @@ class ScyllaDBQueryBench {
                     );
                 }
 
-                $this->session->execute(
-                    'SELECT * FROM kv WHERE id = ?',
-                    ['arguments' => [42], 'consistency' => \Cassandra::CONSISTENCY_ONE]
-                );
+                for ($i = 0; $i < 100; $i++) {
+                    $this->session->execute(
+                        'SELECT * FROM kv WHERE id = ?',
+                        ['arguments' => [42], 'consistency' => \Cassandra::CONSISTENCY_ONE]
+                    );
+                }
             }
 
             $elapsed = microtime(true) - $start;
@@ -50,25 +52,25 @@ class ScyllaDBQueryBench {
 
         return [
             'name' => 'benchInsertAndSelectWithoutTypeInfo',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Insert 100 rows and select one with type info
      */
-    public function benchInsertAndSelectWithTypeInfo($revs, $iterations) {
+    public function benchInsertAndSelectWithTypeInfo($rounds, $iterations) {
         $totalTime = 0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
             $this->beforeEach();
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 for ($i = 0; $i < 100; $i++) {
                     $this->session->execute(
                         'INSERT INTO kv (id, v) VALUES (?, ?)',
@@ -79,12 +81,14 @@ class ScyllaDBQueryBench {
                     );
                 }
 
-                $this->session->execute(
-                    'SELECT * FROM kv WHERE id = ?',
-                    ['arguments' => [
-                        42,
-                    ], 'consistency' => \Cassandra::CONSISTENCY_ONE]
-                );
+                for ($i = 0; $i < 100; $i++) {
+                    $this->session->execute(
+                        'SELECT * FROM kv WHERE id = ?',
+                        ['arguments' => [
+                            42,
+                        ], 'consistency' => \Cassandra::CONSISTENCY_ONE]
+                    );
+                }
             }
 
             $elapsed = microtime(true) - $start;
@@ -93,18 +97,18 @@ class ScyllaDBQueryBench {
 
         return [
             'name' => 'benchInsertAndSelectWithTypeInfo',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Paged query benchmark
      */
-    public function benchPagedQuery($revs, $iterations) {
+    public function benchPagedQuery($rounds, $iterations) {
         $totalTime = 0;
 
         // Setup data once
@@ -122,7 +126,7 @@ class ScyllaDBQueryBench {
         for ($iter = 0; $iter < $iterations; $iter++) {
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 $statement = new \Cassandra\SimpleStatement('SELECT * FROM kv');
                 $options = ['page_size' => 50, 'consistency' => \Cassandra::CONSISTENCY_ONE];
                 $result = $this->session->execute($statement, $options);
@@ -146,18 +150,18 @@ class ScyllaDBQueryBench {
 
         return [
             'name' => 'benchPagedQuery',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Prepared statement insert benchmark
      */
-    public function benchPreparedInsert($revs, $iterations) {
+    public function benchPreparedInsert($rounds, $iterations) {
         $totalTime = 0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
@@ -166,7 +170,7 @@ class ScyllaDBQueryBench {
 
             $prepared = $this->session->prepare('INSERT INTO kv (id, v) VALUES (?, ?)');
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 for ($i = 0; $i < 100; $i++) {
                     $this->session->execute($prepared, ['arguments' => [$i, (string) $i], 'consistency' => \Cassandra::CONSISTENCY_ONE]);
                 }
@@ -178,24 +182,24 @@ class ScyllaDBQueryBench {
 
         return [
             'name' => 'benchPreparedInsert',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Simple select benchmark
      */
-    public function benchSimpleSelect($revs, $iterations) {
+    public function benchSimpleSelect($rounds, $iterations) {
         $totalTime = 0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 $this->session->execute('SELECT key FROM system.local', ['consistency' => \Cassandra::CONSISTENCY_ONE]);
             }
 
@@ -205,11 +209,11 @@ class ScyllaDBQueryBench {
 
         return [
             'name' => 'benchSimpleSelect',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 }
@@ -232,14 +236,27 @@ foreach ($benchConfig as $method => $params) {
 $results = [];
 foreach ($benchmarks as $config) {
     echo "Running {$config['method']}...\n";
-    $result = $bench->{$config['method']}($config['revs'], $config['iterations']);
+    if (isset($config['description'])) {
+        printf("  Description: %s (rounds=%d, iterations=%d)\n",
+            $config['description'],
+            $config['rounds'],
+            $config['iterations']
+        );
+    }
+    $result = $bench->{$config['method']}($config['rounds'], $config['iterations']);
+
+    // Add config info to result
+    $result['description'] = $config['description'] ?? '';
+    $result['rounds'] = $config['rounds'];
+
     $results[] = $result;
 
-    printf("  Total: %.4fs | Avg: %.4fs | Ops/s: %.2f\n",
+    printf("  Total Time: %.4fs | Avg/Iteration: %.4fs | Ops/s: %.2f\n",
         $result['total_time'],
         $result['avg_time'],
         $result['ops_per_second']
     );
+    echo "\n";
 }
 
 // Output JSON results for comparison

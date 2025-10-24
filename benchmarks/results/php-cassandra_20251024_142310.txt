@@ -1,0 +1,75 @@
+=== php-cassandra Library Benchmarks ===
+PHP Version: 8.2.29
+
+Running benchInsertAndSelectWithoutTypeInfo...
+  Description: 100 inserts + 100 selects per round (without type hints) (rounds=100, iterations=30)
+  Total Time: 113.8474s | Avg/Iteration: 3.7949s | Ops/s: 26.35
+
+Running benchInsertAndSelectWithTypeInfo...
+  Description: 100 inserts + 100 selects per round (with type hints) (rounds=100, iterations=30)
+  Total Time: 113.2236s | Avg/Iteration: 3.7741s | Ops/s: 26.50
+
+Running benchPagedQuery...
+  Description: 1 paged query per round (500 rows, page size 50) (rounds=100, iterations=30)
+  Total Time: 10.8480s | Avg/Iteration: 0.3616s | Ops/s: 276.55
+
+Running benchPreparedInsert...
+  Description: 100 inserts per round (prepared statement) (rounds=100, iterations=30)
+  Total Time: 55.5249s | Avg/Iteration: 1.8508s | Ops/s: 54.03
+
+Running benchSimpleSelect...
+  Description: 1 simple select per round (rounds=700, iterations=30)
+  Total Time: 4.5399s | Avg/Iteration: 0.1513s | Ops/s: 4625.67
+
+
+=== JSON Results ===
+{
+    "driver": "php-cassandra",
+    "results": [
+        {
+            "name": "benchInsertAndSelectWithoutTypeInfo",
+            "rounds": 100,
+            "iterations": 30,
+            "total_time": 113.84741067886353,
+            "avg_time": 3.7949136892954507,
+            "ops_per_second": 26.351060442316836,
+            "description": "100 inserts + 100 selects per round (without type hints)"
+        },
+        {
+            "name": "benchInsertAndSelectWithTypeInfo",
+            "rounds": 100,
+            "iterations": 30,
+            "total_time": 113.22358989715576,
+            "avg_time": 3.774119663238525,
+            "ops_per_second": 26.496245197003436,
+            "description": "100 inserts + 100 selects per round (with type hints)"
+        },
+        {
+            "name": "benchPagedQuery",
+            "rounds": 100,
+            "iterations": 30,
+            "total_time": 10.84799575805664,
+            "avg_time": 0.36159985860188804,
+            "ops_per_second": 276.548780706514,
+            "description": "1 paged query per round (500 rows, page size 50)"
+        },
+        {
+            "name": "benchPreparedInsert",
+            "rounds": 100,
+            "iterations": 30,
+            "total_time": 55.524906396865845,
+            "avg_time": 1.8508302132288614,
+            "ops_per_second": 54.02980742655224,
+            "description": "100 inserts per round (prepared statement)"
+        },
+        {
+            "name": "benchSimpleSelect",
+            "rounds": 700,
+            "iterations": 30,
+            "total_time": 4.539884567260742,
+            "avg_time": 0.15132948557535808,
+            "ops_per_second": 4625.668271709142,
+            "description": "1 simple select per round"
+        }
+    ]
+}

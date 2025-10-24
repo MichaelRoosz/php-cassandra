@@ -29,14 +29,14 @@ class PhpCassandraQueryBench {
     /**
      * Insert 100 rows and select one without prepared statements
      */
-    public function benchInsertAndSelectWithoutTypeInfo(int $revs, int $iterations): array {
+    public function benchInsertAndSelectWithoutTypeInfo(int $rounds, int $iterations): array {
         $totalTime = 0.0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
             $this->beforeEach();
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 for ($i = 0; $i < 100; $i++) {
                     $this->conn->query(
                         'INSERT INTO kv (id, v) VALUES (?, ?)',
@@ -45,11 +45,13 @@ class PhpCassandraQueryBench {
                     );
                 }
 
-                $this->conn->query(
-                    'SELECT * FROM kv WHERE id = ?',
-                    [42],
-                    Consistency::ONE
-                )->asRowsResult();
+                for ($i = 0; $i < 100; $i++) {
+                    $this->conn->query(
+                        'SELECT * FROM kv WHERE id = ?',
+                        [42],
+                        Consistency::ONE
+                    )->asRowsResult();
+                }
             }
 
             $elapsed = microtime(true) - $start;
@@ -58,25 +60,25 @@ class PhpCassandraQueryBench {
 
         return [
             'name' => 'benchInsertAndSelectWithoutTypeInfo',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Insert 100 rows and select one with type info
      */
-    public function benchInsertAndSelectWithTypeInfo(int $revs, int $iterations): array {
+    public function benchInsertAndSelectWithTypeInfo(int $rounds, int $iterations): array {
         $totalTime = 0.0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
             $this->beforeEach();
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 for ($i = 0; $i < 100; $i++) {
                     $this->conn->query(
                         'INSERT INTO kv (id, v) VALUES (?, ?)',
@@ -85,11 +87,13 @@ class PhpCassandraQueryBench {
                     );
                 }
 
-                $this->conn->query(
-                    'SELECT * FROM kv WHERE id = ?',
-                    [Int32::fromValue(42)],
-                    Consistency::ONE
-                )->asRowsResult();
+                for ($i = 0; $i < 100; $i++) {
+                    $this->conn->query(
+                        'SELECT * FROM kv WHERE id = ?',
+                        [Int32::fromValue(42)],
+                        Consistency::ONE
+                    )->asRowsResult();
+                }
             }
 
             $elapsed = microtime(true) - $start;
@@ -98,18 +102,18 @@ class PhpCassandraQueryBench {
 
         return [
             'name' => 'benchInsertAndSelectWithTypeInfo',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Paged query benchmark
      */
-    public function benchPagedQuery(int $revs, int $iterations): array {
+    public function benchPagedQuery(int $rounds, int $iterations): array {
         $totalTime = 0.0;
 
         // Setup data once
@@ -125,27 +129,22 @@ class PhpCassandraQueryBench {
         for ($iter = 0; $iter < $iterations; $iter++) {
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
 
                 $count = 0;
 
                 $query = 'SELECT * FROM kv';
                 $opts = (new QueryOptions(pageSize: 50));
-                $response = $this->conn->query($query, [], Consistency::ONE, $opts)->asRowsResult();
+                $pagingState = null;
 
-                foreach ($response as $_row) {
-                    $count++;
-                }
-
-                $pagingState = $response->getRowsMetadata()->pagingState;
-                while ($pagingState !== null) {
+                do {
                     $response = $this->conn->query(
                         query: $query,
                         values: [],
                         consistency: Consistency::ONE,
-                        options: $opts->withPagingState(
+                        options: $pagingState ? $opts->withPagingState(
                             $pagingState
-                        )
+                        ) : $opts
                     )->asRowsResult();
 
                     foreach ($response as $_row) {
@@ -153,7 +152,8 @@ class PhpCassandraQueryBench {
                     }
 
                     $pagingState = $response->getRowsMetadata()->pagingState;
-                }
+
+                } while ($pagingState !== null);
 
                 if ($count < 100) {
                     throw new RuntimeException('Unexpected low row count: ' . $count);
@@ -166,18 +166,18 @@ class PhpCassandraQueryBench {
 
         return [
             'name' => 'benchPagedQuery',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Prepared statement insert benchmark
      */
-    public function benchPreparedInsert(int $revs, int $iterations): array {
+    public function benchPreparedInsert(int $rounds, int $iterations): array {
         $totalTime = 0.0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
@@ -186,7 +186,7 @@ class PhpCassandraQueryBench {
 
             $prepared = $this->conn->prepare('INSERT INTO kv (id, v) VALUES (?, ?)');
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 for ($i = 0; $i < 100; $i++) {
                     $this->conn->execute($prepared, [$i, (string) $i]);
                 }
@@ -198,24 +198,24 @@ class PhpCassandraQueryBench {
 
         return [
             'name' => 'benchPreparedInsert',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 
     /**
      * Simple select benchmark
      */
-    public function benchSimpleSelect(int $revs, int $iterations): array {
+    public function benchSimpleSelect(int $rounds, int $iterations): array {
         $totalTime = 0.0;
 
         for ($iter = 0; $iter < $iterations; $iter++) {
             $start = microtime(true);
 
-            for ($rev = 0; $rev < $revs; $rev++) {
+            for ($round = 0; $round < $rounds; $round++) {
                 $this->conn->query('SELECT key FROM system.local')->asRowsResult();
             }
 
@@ -225,11 +225,11 @@ class PhpCassandraQueryBench {
 
         return [
             'name' => 'benchSimpleSelect',
-            'revs' => $revs,
+            'rounds' => $rounds,
             'iterations' => $iterations,
             'total_time' => $totalTime,
             'avg_time' => $totalTime / $iterations,
-            'ops_per_second' => ($revs * $iterations) / $totalTime,
+            'ops_per_second' => ($rounds * $iterations) / $totalTime,
         ];
     }
 }
@@ -251,14 +251,27 @@ foreach ($benchConfig as $method => $params) {
 $results = [];
 foreach ($benchmarks as $config) {
     echo "Running {$config['method']}...\n";
-    $result = $bench->{$config['method']}($config['revs'], $config['iterations']);
+    if (isset($config['description'])) {
+        printf("  Description: %s (rounds=%d, iterations=%d)\n",
+            $config['description'],
+            $config['rounds'],
+            $config['iterations']
+        );
+    }
+    $result = $bench->{$config['method']}($config['rounds'], $config['iterations']);
+
+    // Add config info to result
+    $result['description'] = $config['description'] ?? '';
+    $result['rounds'] = $config['rounds'];
+
     $results[] = $result;
 
-    printf("  Total: %.4fs | Avg: %.4fs | Ops/s: %.2f\n",
+    printf("  Total Time: %.4fs | Avg/Iteration: %.4fs | Ops/s: %.2f\n",
         $result['total_time'],
         $result['avg_time'],
         $result['ops_per_second']
     );
+    echo "\n";
 }
 
 // Output JSON results for comparison

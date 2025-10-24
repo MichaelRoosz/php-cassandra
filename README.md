@@ -1735,17 +1735,49 @@ Benchmarks
 
 The following results were produced by the benchmarking suite in `benchmarks/` (Dockerized), comparing this library against the legacy DataStax PHP driver and the ScyllaDB PHP driver. Full setup and reproduction steps are documented in `benchmarks/README.md`; raw outputs are stored under `benchmarks/results/`.
 
-```text
-Benchmark Comparison Table
-=====================================================================================================================================================================
-Benchmark                                php-cassandra (PHP 8.2)   DataStax (PHP 7.1)   ScyllaDB (PHP 8.2)   vs DataStax               vs ScyllaDB              
----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-benchInsertAndSelectWithoutTypeInfo      748.44ms                  1.3894s              1.3191s              1.86x faster              1.76x faster             
-benchInsertAndSelectWithTypeInfo         703.34ms                  1.3315s              1.2973s              1.89x faster              1.84x faster             
-benchPagedQuery                          138.55ms                  219.90ms             216.76ms             1.59x faster              1.56x faster             
-benchPreparedInsert                      723.57ms                  1.2225s              1.2495s              1.69x faster              1.73x faster             
-benchSimpleSelect                        9.80ms                    15.51ms              19.40ms              1.58x faster              1.98x faster             
-=====================================================================================================================================================================
+```
+================================================
+Detailed Comparison
+================================================
+
+=== Benchmark Descriptions ===
+
+benchInsertAndSelectWithoutTypeInfo
+  100 inserts + 100 selects per round (without type hints)
+  -> 1 iteration = 100 rounds, testing with 30 iterations
+
+benchInsertAndSelectWithTypeInfo
+  100 inserts + 100 selects per round (with type hints)
+  -> 1 iteration = 100 rounds, testing with 30 iterations
+
+benchPagedQuery
+  1 paged query per round (500 rows, page size 50)
+  -> 1 iteration = 100 rounds, testing with 30 iterations
+
+benchPreparedInsert
+  100 inserts per round (prepared statement)
+  -> 1 iteration = 100 rounds, testing with 30 iterations
+
+benchSimpleSelect
+  1 simple select per round
+  -> 1 iteration = 700 rounds, testing with 30 iterations
+
+
+=== Performance Comparison (avg time per iteration, lower is better) ===
+==================================================================================================================================
+Benchmark                                     php-cassandra   DataStax        ScyllaDB        vs DataStax          vs ScyllaDB    
+----------------------------------------------------------------------------------------------------------------------------------
+benchInsertAndSelectWithoutTypeInfo           3.7949s         6.6016s         6.6054s         1.74x faster         1.74x faster   
+benchInsertAndSelectWithTypeInfo              3.7741s         6.5143s         6.5288s         1.73x faster         1.73x faster   
+benchPagedQuery                               361.60ms        551.67ms        552.76ms        1.53x faster         1.53x faster   
+benchPreparedInsert                           1.8508s         3.0090s         2.9760s         1.63x faster         1.61x faster   
+benchSimpleSelect                             151.33ms        316.87ms        331.51ms        2.09x faster         2.19x faster   
+==================================================================================================================================
+
+Notes:
+  Times are average per iteration. Each iteration runs multiple rounds of operations.
+  'Xx faster/slower' compares php-cassandra to the other driver (lower time is better)
+  php-cassandra: PHP 8.2 | DataStax: PHP 7.1 | ScyllaDB: PHP 8.2
 ```
 
 Notes:
