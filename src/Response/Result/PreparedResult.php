@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Response\Result;
 
 use ArrayIterator;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Exception\ResponseException;
@@ -68,7 +69,7 @@ class PreparedResult extends Result {
 
         $this->stream->offset(4);
 
-        if ($this->getVersion() >= 5) {
+        if ($this->getProtocolVersion()->value >= ProtocolVersion::V5->value) {
             $data = new PreparedData(
                 id: $this->stream->readShortBytes(),
                 rowsMetadataId: $this->stream->readShortBytes(),
@@ -95,7 +96,7 @@ class PreparedResult extends Result {
         $flags = $this->stream->readInt();
         $bindMarkersCount = $this->stream->readInt();
 
-        if ($this->getVersion() >= 4) {
+        if ($this->getProtocolVersion()->value >= ProtocolVersion::V4->value) {
             $pkCount = $this->stream->readInt();
             $pkIndex = [];
 

@@ -7,6 +7,7 @@ namespace Cassandra;
 use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Connection\ConnectionOptions;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Connection\ResponseReader;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
@@ -74,8 +75,14 @@ final class Connection {
 
     protected ?ValueEncodeConfig $valueEncodeConfig = null;
 
-    protected int $version = 0x03;
-    protected int $versionIn = 0x83;
+    protected ProtocolVersion $version = ProtocolVersion::V3;
+
+    /** @var  array<\Cassandra\Protocol\ProtocolVersion> $allowedProtocolVersions */
+    protected array $allowedProtocolVersions = [
+        ProtocolVersion::V5,
+        ProtocolVersion::V4,
+        ProtocolVersion::V3,
+    ];
 
     /**
      * @var array<WarningsListener> $warningsListeners
@@ -85,7 +92,11 @@ final class Connection {
     /**
      * @param array<\Cassandra\Connection\NodeConfig> $nodes
      */
-    public function __construct(array $nodes, string $keyspace = '', ConnectionOptions $options = new ConnectionOptions()) {
+    public function __construct(
+        array $nodes,
+        string $keyspace = '',
+        ConnectionOptions $options = new ConnectionOptions(),
+    ) {
 
         $this->nodes = $nodes;
         $this->keyspace = $keyspace;
@@ -100,6 +111,30 @@ final class Connection {
 
         $this->preparedResultCacheSize = max(0, $options->preparedResultCacheSize);
         $this->preparedResultCacheSizeToTrim = (int) ceil((float) $this->preparedResultCacheSize * 0.25);
+    }
+
+    /**
+     * @param array<\Cassandra\Protocol\ProtocolVersion> $versions
+     * 
+     * @throws \Cassandra\Exception\ConnectionException
+     */
+    public function setAllowedProtocolVersions(array $versions): void {
+
+        if ($this->isConnected()) {
+            throw new ConnectionException(
+                'Cannot change allowed protocol versions when already connected.',
+                ExceptionCode::CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED->value
+            );
+        }
+
+        $this->allowedProtocolVersions = $versions;
+    }
+
+    /**
+     * @return array<\Cassandra\Protocol\ProtocolVersion>
+     */
+    public function getAllowedProtocolVersions(): array {
+        return $this->allowedProtocolVersions;
     }
 
     /**
@@ -206,7 +241,7 @@ final class Connection {
                 ]);
             }
 
-            if ($this->version >= 5) {
+            if ($this->version->value >= ProtocolVersion::V5->value) {
                 $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
 
@@ -220,7 +255,7 @@ final class Connection {
                 ]);
             }
         } elseif ($response instanceof Response\Ready) {
-            if ($this->version >= 5) {
+            if ($this->version->value >= ProtocolVersion::V5->value) {
                 $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
             }
         } else {
@@ -235,7 +270,7 @@ final class Connection {
             ]);
         }
 
-        if ($this->keyspace && $this->version < 5) {
+        if ($this->keyspace && $this->version->value < ProtocolVersion::V5->value) {
             $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
         }
     }
@@ -247,7 +282,7 @@ final class Connection {
         if (
             $options->keyspace === null
             && $this->keyspace
-            && $this->version >= 5
+            && $this->version->value >= ProtocolVersion::V5->value
         ) {
             $options = $options->withKeyspace($this->keyspace);
         }
@@ -316,7 +351,7 @@ final class Connection {
         if (
             $options->keyspace === null
             && $this->keyspace
-            && $this->version >= 5
+            && $this->version->value >= ProtocolVersion::V5->value
         ) {
             $options = $options->withKeyspace($this->keyspace);
         }
@@ -392,7 +427,7 @@ final class Connection {
         if (
             $options->keyspace === null
             && $this->keyspace
-            && $this->version >= 5
+            && $this->version->value >= ProtocolVersion::V5->value
         ) {
             $options = $options->withKeyspace($this->keyspace);
         }
@@ -427,7 +462,14 @@ final class Connection {
         return $this->getNextResponseForStream($statement->getStreamId());
     }
 
+    /**
+     * @deprecated Use getProtocolVersion() instead.
+     */
     public function getVersion(): int {
+        return $this->version->value;
+    }
+
+    public function getProtocolVersion(): ProtocolVersion {
         return $this->version;
     }
 
@@ -450,7 +492,7 @@ final class Connection {
         if (
             $options->keyspace === null
             && $this->keyspace
-            && $this->version >= 5
+            && $this->version->value >= ProtocolVersion::V5->value
         ) {
             $options = $options->withKeyspace($this->keyspace);
         }
@@ -481,7 +523,7 @@ final class Connection {
         if (
             $options->keyspace === null
             && $this->keyspace
-            && $this->version >= 5
+            && $this->version->value >= ProtocolVersion::V5->value
         ) {
             $options = $options->withKeyspace($this->keyspace);
         }
@@ -510,7 +552,7 @@ final class Connection {
         if (
             $options->keyspace === null
             && $this->keyspace
-            && $this->version >= 5
+            && $this->version->value >= ProtocolVersion::V5->value
         ) {
             $options = $options->withKeyspace($this->keyspace);
         }
@@ -587,7 +629,7 @@ final class Connection {
         if (
             $options->keyspace === null
             && $this->keyspace
-            && $this->version >= 5
+            && $this->version->value >= ProtocolVersion::V5->value
         ) {
             $options = $options->withKeyspace($this->keyspace);
         }
@@ -627,7 +669,7 @@ final class Connection {
             return;
         }
 
-        if ($this->version < 5) {
+        if ($this->version->value < ProtocolVersion::V5->value) {
             $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
             if (!($response instanceof Response\Result)) {
                 throw new ConnectionException('Unexpected response type during setKeyspace', ExceptionCode::CONNECTION_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
@@ -641,11 +683,11 @@ final class Connection {
     }
 
     public function supportsKeyspaceRequestOption(): bool {
-        return $this->version >= 5;
+        return $this->version->value >= ProtocolVersion::V5->value;
     }
 
     public function supportsNowInSecondsRequestOption(): bool {
-        return $this->version >= 5;
+        return $this->version->value >= ProtocolVersion::V5->value;
     }
 
     /**
@@ -1012,7 +1054,7 @@ final class Connection {
         }
 
         $cachedResult = new Response\Result\CachedPreparedResult(
-            new Header(version: 5, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
+            new Header(version: ProtocolVersion::V5, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
             new StreamReader(''),
             $result->getPreparedData(),
         );
@@ -1076,19 +1118,27 @@ final class Connection {
         $serverOptions = $supportedReponse->getData();
 
         if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->version = 3;
-        } elseif (in_array('5/v5', $serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->version = 5;
-        } elseif (in_array('4/v4', $serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->version = 4;
-        } elseif (in_array('3/v3', $serverOptions['PROTOCOL_VERSIONS'])) {
-            $this->version = 3;
+            $versionsSupportedByServer = [ProtocolVersion::V3];
         } else {
+            $versionsSupportedByServer = [];
+
+            foreach ($serverOptions['PROTOCOL_VERSIONS'] as $versionString) {
+                $version = ProtocolVersion::fromOptionFormat($versionString);
+                if ($version !== null) {
+                    $versionsSupportedByServer[] = $version;
+                }
+            }
+        }
+
+        $protocolVersion = ProtocolVersion::getHighestSupportedVersion($versionsSupportedByServer, $this->allowedProtocolVersions);
+        if ($protocolVersion === null) {
             throw new ConnectionException('Server does not support a compatible protocol version.', ExceptionCode::CONNECTION_SERVER_PROTOCOL_UNSUPPORTED->value, [
-                'server_versions' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
-                'client_supported' => ReleaseConstants::PHP_CASSANDRA_SUPPORTED_PROTOCOL_VERSIONS,
+                'proocol_versions_supported_by_server' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
+                'proocol_versions_supported_by_client' => ProtocolVersion::CASES_IN_OPTION_FORMAT,
             ]);
         }
+
+        $this->version = $protocolVersion;
 
         if (isset($this->options['COMPRESSION']) && $this->options['COMPRESSION']
             && isset($serverOptions['COMPRESSION']) && $serverOptions['COMPRESSION']
@@ -1111,7 +1161,7 @@ final class Connection {
             unset($this->options['COMPRESSION']);
         }
 
-        if ($this->version >= 4) {
+        if ($this->version->value >= ProtocolVersion::V4->value) {
             if (isset($this->options['THROW_ON_OVERLOAD']) && $this->options['THROW_ON_OVERLOAD']) {
                 $this->options['THROW_ON_OVERLOAD'] = '1';
             } else {
@@ -1121,12 +1171,10 @@ final class Connection {
             unset($this->options['THROW_ON_OVERLOAD']);
         }
 
-        if ($this->version < 5) {
+        if ($this->version->value < ProtocolVersion::V5->value) {
             unset($this->options['DRIVER_NAME']);
             unset($this->options['DRIVER_VERSION']);
         }
-
-        $this->versionIn = $this->version + 0x80;
     }
 
     protected function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {

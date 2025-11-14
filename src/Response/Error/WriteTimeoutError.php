@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Error;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
@@ -53,7 +54,7 @@ final class WriteTimeoutError extends Error {
             ], $e);
         }
 
-        if ($this->getVersion() >= 5) {
+        if ($this->getProtocolVersion()->supports(ProtocolVersion::V5)) {
             $contentions = $this->stream->readShort();
         } else {
             $contentions = null;

@@ -13,5 +13,10 @@ interface Frame {
 
     public function getStream(): int;
 
+    /**
+     * @deprecated Use getProtocolVersion() instead.
+     */
     public function getVersion(): int;
+
+    public function getProtocolVersion(): ProtocolVersion;
 }

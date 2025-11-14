@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result;
@@ -107,13 +108,13 @@ final class Execute extends Request {
     public function getBody(): string {
         $body = pack('n', strlen($this->queryId)) . $this->queryId;
 
-        if ($this->version >= 5) {
+        if ($this->version->value >= ProtocolVersion::V5->value) {
             if ($this->rowsMetadataId === null) {
                 throw new RequestException(
                     message: 'Missing result metadata id for protocol v5 execute request',
                     code: ExceptionCode::REQUEST_EXECUTE_MISSING_RESULT_METADATA_ID->value,
                     context: [
-                        'protocol_version' => $this->version,
+                        'protocol_version' => $this->version->toOptionFormat(),
                         'query_id' => $this->queryId,
                     ]
                 );

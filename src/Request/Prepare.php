@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\PrepareOptions;
@@ -28,7 +29,7 @@ final class Prepare extends Request {
         $body = pack('N', strlen($this->query)) . $this->query;
 
         if ($this->options->keyspace !== null) {
-            if ($this->version >= 5) {
+            if ($this->version->value >= ProtocolVersion::V5->value) {
                 $flags |= PrepareFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($this->options->keyspace)) . $this->options->keyspace;
             } else {
@@ -38,15 +39,15 @@ final class Prepare extends Request {
                     context: [
                         'request' => 'PREPARE',
                         'option' => 'keyspace',
-                        'required_protocol' => 'v5',
-                        'actual_protocol' => $this->version,
+                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
+                        'actual_protocol_version' => $this->version->toOptionFormat(),
                         'keyspace' => $this->options->keyspace,
                     ]
                 );
             }
         }
 
-        if ($this->version < 5) {
+        if ($this->version->value < ProtocolVersion::V5->value) {
             return $body;
         } else {
             return $body . pack('N', $flags) . $optional;

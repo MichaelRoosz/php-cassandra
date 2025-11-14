@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Consistency;
 
 final class ConnectionTest extends AbstractIntegrationTestCase {
@@ -13,10 +14,11 @@ final class ConnectionTest extends AbstractIntegrationTestCase {
         $conn->connect();
         $this->assertTrue($conn->isConnected());
 
-        $version = $conn->getVersion();
-        $this->assertGreaterThanOrEqual(3, $version);
+        $version = $conn->getProtocolVersion();
+        $this->assertTrue($version->supports(ProtocolVersion::V3));
+        $this->assertGreaterThanOrEqual(ProtocolVersion::V3->value, $version->value);
 
-        if ($version >= 5) {
+        if ($version->value >= ProtocolVersion::V5->value) {
             $this->assertTrue($conn->supportsKeyspaceRequestOption());
             $this->assertTrue($conn->supportsNowInSecondsRequestOption());
         }

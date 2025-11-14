@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\BatchOptions;
@@ -90,7 +91,7 @@ final class Batch extends Request {
         Consistency $consistency,
         array $values = [],
         BatchOptions $options = new BatchOptions(),
-        int $version = 3
+        ProtocolVersion $version = ProtocolVersion::V3
     ): string {
 
         $flags = 0;
@@ -112,7 +113,7 @@ final class Batch extends Request {
         }
 
         if ($options->keyspace !== null) {
-            if ($version >= 5) {
+            if ($version->value >= ProtocolVersion::V5->value) {
                 $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
@@ -122,8 +123,8 @@ final class Batch extends Request {
                     context: [
                         'request' => 'BATCH',
                         'option' => 'keyspace',
-                        'required_protocol' => 'v5',
-                        'actual_protocol' => $version,
+                        'required_protocol_verison' => ProtocolVersion::V5->toOptionFormat(),
+                        'actual_protocol_version' => $version->toOptionFormat(),
                         'keyspace' => $options->keyspace,
                     ]
                 );
@@ -131,7 +132,7 @@ final class Batch extends Request {
         }
 
         if ($options->nowInSeconds !== null) {
-            if ($version >= 5) {
+            if ($version->value >= ProtocolVersion::V5->value) {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
@@ -141,15 +142,15 @@ final class Batch extends Request {
                     context: [
                         'request' => 'BATCH',
                         'option' => 'now_in_seconds',
-                        'required_protocol' => 'v5',
-                        'actual_protocol' => $version,
+                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
+                        'actual_protocol_version' => $version->toOptionFormat(),
                         'now_in_seconds' => $options->nowInSeconds,
                     ]
                 );
             }
         }
 
-        if ($version < 5) {
+        if ($version->value < ProtocolVersion::V5->value) {
             return pack('n', $consistency->value) . chr($flags) . $optional;
         } else {
             return pack('n', $consistency->value) . pack('N', $flags) . $optional;

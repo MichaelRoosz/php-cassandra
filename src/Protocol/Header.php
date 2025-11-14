@@ -6,7 +6,7 @@ namespace Cassandra\Protocol;
 
 final class Header {
     public function __construct(
-        public readonly int $version,
+        public readonly ProtocolVersion $version,
         public readonly int $flags,
         public readonly int $stream,
         public readonly Opcode $opcode,

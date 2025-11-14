@@ -12,7 +12,7 @@ class ServerException extends CassandraException {
      * @var array{
      *   error_code: int,
      *   error_type: string,
-     *   protocol_version: int,
+     *   protocol_version: string,
      *   stream_id: int,
      *   tracing_uuid: string|null,
      *   warnings: array<string>,
@@ -27,7 +27,7 @@ class ServerException extends CassandraException {
      * @param array{
      *   error_code: int,
      *   error_type: string,
-     *   protocol_version: int,
+     *   protocol_version: string,
      *   stream_id: int,
      *   tracing_uuid: string|null,
      *   warnings: array<string>,
@@ -57,7 +57,7 @@ class ServerException extends CassandraException {
      * @return array{
      *   error_code: int,
      *   error_type: string,
-     *   protocol_version: int,
+     *   protocol_version: string,
      *   stream_id: int,
      *   tracing_uuid: string|null,
      *   warnings: array<string>,
@@ -73,7 +73,7 @@ class ServerException extends CassandraException {
      * @return array{
      *   error_code: int,
      *   error_type: string,
-     *   protocol_version: int,
+     *   protocol_version: string,
      *   stream_id: int,
      *   tracing_uuid: string|null,
      *   warnings: array<string>,

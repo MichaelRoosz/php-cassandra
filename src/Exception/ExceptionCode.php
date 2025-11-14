@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1323
+ * Next free code: 1324
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -58,6 +58,7 @@ enum ExceptionCode: int {
     case CONNECTION_UNPREPARED_PREV_NO_REQUEST = 1033;
     case CONNECTION_UNPREPARED_PREV_NOT_PREPARE_REQUEST = 1034;
     case CONNECTION_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE = 1035;
+    case CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED = 1323;
 
     // NodeException (NODE_)
     case NODE_DECODE_COMPUTED_CRC32_FAILED = 1254;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Error;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Header;
@@ -44,7 +45,7 @@ final class WriteFailureError extends Error {
         $nodesAnswered = $this->stream->readInt();
         $nodesRequired = $this->stream->readInt();
 
-        if ($this->getVersion() >= 5) {
+        if ($this->getProtocolVersion()->supports(ProtocolVersion::V5)) {
             $reasonMap = $this->stream->readReasonMap();
             $numFailures = null;
         } else {

@@ -1794,7 +1794,7 @@ API reference (essentials)
 --------------------------
 
 - `Cassandra\Connection`
-  - `connect()`, `disconnect()`, `isConnected()`, `getVersion()`
+  - `connect()`, `disconnect()`, `isConnected()`, `getProtocolVersion()`
   - `setConsistency(Consistency)`, `withConsistency(Consistency)`
   - `setKeyspace(string)`, `withKeyspace(string)`, `supportsKeyspaceRequestOption()`, `supportsNowInSecondsRequestOption()`
   - `query(string, array = [], ?Consistency, QueryOptions)` / `queryAsync(...)` / `queryAll(...)`

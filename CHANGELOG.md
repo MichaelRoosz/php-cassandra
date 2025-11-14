@@ -1,3 +1,26 @@
+## v1.1.0
+
+### Breaking Changes
+* Cassandra\Protocol\Header: type of `$version` changed from `int` to `Cassandra\Protocol\ProtocolVersion`
+* These methods now expect for `$version` a value of type `Cassandra\Protocol\ProtocolVersion` instead of `int`:
+    * `Cassandra\Connection\ResponseReader::readResponse()`
+    * `Cassandra\Request\Request::__construct()`
+    * `Cassandra\Request\Request::setVersion()`
+* Exception context: type of `protocol_version` changed from `int` to `string`
+
+### Changed
+* Cassandra\Connection: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Cassandra\Protocol\Frame: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Cassandra\Request\Request: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Cassandra\Response\Response: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+
+### Added
+* Cassandra\Connection: added function `getProtocolVersion(): ProtocolVersion`
+* Cassandra\Connection: added function `setAllowedProtocolVersions(array $versions)`
+* Cassandra\Connection: added function `getAllowedProtocolVersions(): array`
+* Cassandra\Connection: added exception `CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED`
+* Added enum `Cassandra\Protocol\ProtocolVersion`
+
 ## v1.0.1
 
 This is a small bugfix, restoring compatibility with older PHP versions (8.1, 8.2, 8.3).

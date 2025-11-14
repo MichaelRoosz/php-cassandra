@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Protocol\Frame;
 use Cassandra\Protocol\Flag;
 use Cassandra\Protocol\Header;
@@ -104,8 +105,16 @@ abstract class Response implements Frame, Stringable {
         return $this->tracingUuid;
     }
 
+    /**
+     * @deprecated Use getProtocolVersion() instead.
+     */
     #[\Override]
     public function getVersion(): int {
+        return $this->header->version->value;
+    }
+
+    #[\Override]
+    public function getProtocolVersion(): ProtocolVersion {
         return $this->header->version;
     }
 

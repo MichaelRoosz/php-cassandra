@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Consistency;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\RequestException;
@@ -27,7 +28,7 @@ abstract class Request implements Frame, Stringable {
         protected int $stream = 0,
         protected int $flags = 0,
         protected ?array $payload = null,
-        protected int $version = 3
+        protected ProtocolVersion $version = ProtocolVersion::V3
     ) {
     }
 
@@ -52,7 +53,7 @@ abstract class Request implements Frame, Stringable {
 
         return pack(
             'CCnCN',
-            $this->version,
+            $this->version->value,
             $this->flags,
             $this->stream,
             $this->opcode->value,
@@ -91,8 +92,16 @@ abstract class Request implements Frame, Stringable {
         return $this->stream;
     }
 
+    /**
+     * @deprecated Use getProtocolVersion() instead.
+     */
     #[\Override]
     public function getVersion(): int {
+        return $this->version->value;
+    }
+
+    #[\Override]
+    public function getProtocolVersion(): ProtocolVersion {
         return $this->version;
     }
 
@@ -112,7 +121,7 @@ abstract class Request implements Frame, Stringable {
         $this->stream = $stream;
     }
 
-    public function setVersion(int $version): void {
+    public function setVersion(ProtocolVersion $version): void {
         $this->version = $version;
     }
 
@@ -121,7 +130,13 @@ abstract class Request implements Frame, Stringable {
      *
      * @throws \Cassandra\Exception\RequestException
      */
-    protected function encodeQueryParametersAsBinary(Consistency $consistency, array $values = [], QueryOptions $options = new QueryOptions(), int $version = 3): string {
+    protected function encodeQueryParametersAsBinary(
+        Consistency $consistency,
+        array $values = [],
+        QueryOptions $options = new QueryOptions(),
+        ProtocolVersion $version = ProtocolVersion::V3
+    ): string {
+
         $flags = 0;
         $optional = '';
 
@@ -159,7 +174,7 @@ abstract class Request implements Frame, Stringable {
         }
 
         if ($options->keyspace !== null) {
-            if ($version >= 5) {
+            if ($version->value >= ProtocolVersion::V5->value) {
                 $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
@@ -169,8 +184,8 @@ abstract class Request implements Frame, Stringable {
                     context: [
                         'request' => 'QUERY',
                         'option' => 'keyspace',
-                        'required_protocol' => 'v5',
-                        'actual_protocol' => $version,
+                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
+                        'actual_protocol_version' => $version->toOptionFormat(),
                         'keyspace' => $options->keyspace,
                     ]
                 );
@@ -178,7 +193,7 @@ abstract class Request implements Frame, Stringable {
         }
 
         if ($options->nowInSeconds !== null) {
-            if ($version >= 5) {
+            if ($version->value >= ProtocolVersion::V5->value) {
                 $flags |= QueryFlag::WITH_NOW_IN_SECONDS;
                 $optional .= pack('N', $options->nowInSeconds);
             } else {
@@ -188,15 +203,15 @@ abstract class Request implements Frame, Stringable {
                     context: [
                         'request' => 'QUERY',
                         'option' => 'now_in_seconds',
-                        'required_protocol' => 'v5',
-                        'actual_protocol' => $version,
+                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
+                        'actual_protocol_version' => $version->toOptionFormat(),
                         'now_in_seconds' => $options->nowInSeconds,
                     ]
                 );
             }
         }
 
-        if ($version < 5) {
+        if ($version->value < ProtocolVersion::V5->value) {
             return pack('n', $consistency->value) . chr($flags) . $optional;
         } else {
             return pack('n', $consistency->value) . pack('N', $flags) . $optional;

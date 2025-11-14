@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Response\Error;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Protocol\Header;
 use Cassandra\Response\Error;
 use Cassandra\Response\Error\Context\ReadFailureContext;
@@ -39,7 +40,7 @@ final class ReadFailureError extends Error {
         $nodesAnswered = $this->stream->readInt();
         $nodesRequired = $this->stream->readInt();
 
-        if ($this->getVersion() >= 5) {
+        if ($this->getProtocolVersion()->supports(ProtocolVersion::V5)) {
             $reasonMap = $this->stream->readReasonMap();
             $numFailures = null;
         } else {

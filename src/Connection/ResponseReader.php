@@ -10,7 +10,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Flag;
 use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
-use Cassandra\ReleaseConstants;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Response\Error;
 use Cassandra\Response\Event;
 use Cassandra\Response\Response;
@@ -34,7 +34,7 @@ final class ResponseReader {
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\CompressionException
      */
-    public function readResponse(Node $node, int $version, bool $waitForResponse): ?Response {
+    public function readResponse(Node $node, ProtocolVersion $version, bool $waitForResponse): ?Response {
 
         if ($this->currentHeader === null) {
             $this->currentHeader = $this->readHeader($node, $version, $waitForResponse);
@@ -58,7 +58,11 @@ final class ResponseReader {
 
         $this->currentHeader = null;
 
-        if ($version < 5 && $header->length > 0 && $header->flags & Flag::COMPRESSION) {
+        if (
+            $version->value < ProtocolVersion::V5->value
+            && $header->length > 0
+            && $header->flags & Flag::COMPRESSION
+        ) {
             $this->lz4Decompressor->setInput($body);
             $body = $this->lz4Decompressor->decompressBlock();
         }
@@ -152,25 +156,24 @@ final class ResponseReader {
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\ConnectionException
      */
-    protected function readHeader(Node $node, int $version, bool $waitForResponse): ?Header {
+    protected function readHeader(Node $node, ProtocolVersion $version, bool $waitForResponse): ?Header {
 
         $headerBytes = $node->read(9, $waitForResponse);
         if ($headerBytes === '') {
             return null;
         }
 
-        $headerVersion = ord($headerBytes[0]);
-        $versionIn = $version + 0x80;
+        $headerVersion = ord($headerBytes[0]) - 0x80;
 
-        if ($headerVersion !== $versionIn) {
+        if ($headerVersion !== $version->value) {
             $nodeConfig = $node->getConfig();
 
             throw new ConnectionException('Unsupported or mismatched CQL binary protocol version received from server.', ExceptionCode::CONNECTION_PROTOCOL_VERSION_MISMATCH->value, [
                 'host' => $nodeConfig->host,
                 'port' => $nodeConfig->port,
-                'received_version' => $headerVersion,
-                'expected_version' => $versionIn,
-                'supported_versions' => ReleaseConstants::PHP_CASSANDRA_SUPPORTED_PROTOCOL_VERSIONS,
+                'received_protocol_version_as_int' => $headerVersion,
+                'expected_protocol_version_as_int' => $version->value,
+                'supported_protocol_versions' => ProtocolVersion::CASES_IN_OPTION_FORMAT,
             ]);
         }
 

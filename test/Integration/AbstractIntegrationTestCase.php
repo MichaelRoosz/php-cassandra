@@ -77,18 +77,18 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return (int) $port;
     }
 
-    protected static function newConnection(string $keyspace): Connection {
+    protected static function newConnection(string $keyspace, bool $connect = true): Connection {
 
         $mode = getenv('APP_CASSANDRA_CONNECTION_MODE') ?: 'socket';
 
         return match ($mode) {
-            'socket' => self::newSocketConnection($keyspace),
-            'stream' => self::newStreamConnection($keyspace),
-            default => self::newSocketConnection($keyspace),
+            'socket' => self::newSocketConnection($keyspace, $connect),
+            'stream' => self::newStreamConnection($keyspace, $connect),
+            default => self::newSocketConnection($keyspace, $connect),
         };
     }
 
-    protected static function newSocketConnection(string $keyspace): Connection {
+    protected static function newSocketConnection(string $keyspace, bool $connect = true): Connection {
 
         $nodes = [
             new SocketNodeConfig(
@@ -101,12 +101,15 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
 
         $conn = new Connection($nodes, $keyspace);
         $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
+
+        if ($connect) {
+            $conn->connect();
+        }
 
         return $conn;
     }
 
-    protected static function newStreamConnection(string $keyspace): Connection {
+    protected static function newStreamConnection(string $keyspace, bool $connect = true): Connection {
 
         $nodes = [
             new StreamNodeConfig(
@@ -119,7 +122,10 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
 
         $conn = new Connection($nodes, $keyspace);
         $conn->setConsistency(Consistency::ONE);
-        $conn->connect();
+
+        if ($connect) {
+            $conn->connect();
+        }
 
         return $conn;
     }
