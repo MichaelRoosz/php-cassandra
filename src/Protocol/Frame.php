@@ -11,12 +11,12 @@ interface Frame {
 
     public function getOpcode(): Opcode;
 
+    public function getProtocolVersion(): ProtocolVersion;
+
     public function getStream(): int;
 
     /**
      * @deprecated Use getProtocolVersion() instead.
      */
     public function getVersion(): int;
-
-    public function getProtocolVersion(): ProtocolVersion;
 }

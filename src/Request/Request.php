@@ -88,6 +88,11 @@ abstract class Request implements Frame, Stringable {
     }
 
     #[\Override]
+    public function getProtocolVersion(): ProtocolVersion {
+        return $this->version;
+    }
+
+    #[\Override]
     public function getStream(): int {
         return $this->stream;
     }
@@ -98,11 +103,6 @@ abstract class Request implements Frame, Stringable {
     #[\Override]
     public function getVersion(): int {
         return $this->version->value;
-    }
-
-    #[\Override]
-    public function getProtocolVersion(): ProtocolVersion {
-        return $this->version;
     }
 
     public function setFlags(int $flags): void {

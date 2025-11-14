@@ -9,25 +9,11 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\ProtocolVersion;
 
 final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegrationTestCase {
-
     protected function setUp(): void {
 
         $this->connection = $this->newConnection(self::$defaultKeyspace, connect: false);
         $this->connection->registerWarningsListener($this);
         $this->keyspace = self::$defaultKeyspace;
-    }
-
-    public function testSetAllowedProtocolVersionsWhenNotConnected(): void {
-
-        $allowedVersions = [
-            ProtocolVersion::V3,
-        ];
-        $this->connection->setAllowedProtocolVersions($allowedVersions);
-
-        $this->assertSame($allowedVersions, $this->connection->getAllowedProtocolVersions());
-        
-        $this->connection->connect();
-        $this->assertContains($this->connection->getProtocolVersion(), $allowedVersions);
     }
 
     public function testSetAllowedProtocolVersionsWhenConnectedThrows(): void {
@@ -40,5 +26,18 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
         $this->connection->setAllowedProtocolVersions([
             ProtocolVersion::V3,
         ]);
+    }
+
+    public function testSetAllowedProtocolVersionsWhenNotConnected(): void {
+
+        $allowedVersions = [
+            ProtocolVersion::V3,
+        ];
+        $this->connection->setAllowedProtocolVersions($allowedVersions);
+
+        $this->assertSame($allowedVersions, $this->connection->getAllowedProtocolVersions());
+
+        $this->connection->connect();
+        $this->assertContains($this->connection->getProtocolVersion(), $allowedVersions);
     }
 }

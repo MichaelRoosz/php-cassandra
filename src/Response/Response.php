@@ -78,6 +78,11 @@ abstract class Response implements Frame, Stringable {
         return $this->payload;
     }
 
+    #[\Override]
+    public function getProtocolVersion(): ProtocolVersion {
+        return $this->header->version;
+    }
+
     /**
      * @todo this should be moved to a const class value once support for php 8.1 is dropped
      * 
@@ -111,11 +116,6 @@ abstract class Response implements Frame, Stringable {
     #[\Override]
     public function getVersion(): int {
         return $this->header->version->value;
-    }
-
-    #[\Override]
-    public function getProtocolVersion(): ProtocolVersion {
-        return $this->header->version;
     }
 
     /**

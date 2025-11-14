@@ -26,6 +26,12 @@ use Cassandra\Value\ValueEncodeConfig;
 use SplQueue;
 
 final class Connection {
+    /** @var  array<\Cassandra\Protocol\ProtocolVersion> $allowedProtocolVersions */
+    protected array $allowedProtocolVersions = [
+        ProtocolVersion::V5,
+        ProtocolVersion::V4,
+        ProtocolVersion::V3,
+    ];
     protected Consistency $consistency = Consistency::ONE;
 
     /**
@@ -77,13 +83,6 @@ final class Connection {
 
     protected ProtocolVersion $version = ProtocolVersion::V3;
 
-    /** @var  array<\Cassandra\Protocol\ProtocolVersion> $allowedProtocolVersions */
-    protected array $allowedProtocolVersions = [
-        ProtocolVersion::V5,
-        ProtocolVersion::V4,
-        ProtocolVersion::V3,
-    ];
-
     /**
      * @var array<WarningsListener> $warningsListeners
      */
@@ -111,30 +110,6 @@ final class Connection {
 
         $this->preparedResultCacheSize = max(0, $options->preparedResultCacheSize);
         $this->preparedResultCacheSizeToTrim = (int) ceil((float) $this->preparedResultCacheSize * 0.25);
-    }
-
-    /**
-     * @param array<\Cassandra\Protocol\ProtocolVersion> $versions
-     * 
-     * @throws \Cassandra\Exception\ConnectionException
-     */
-    public function setAllowedProtocolVersions(array $versions): void {
-
-        if ($this->isConnected()) {
-            throw new ConnectionException(
-                'Cannot change allowed protocol versions when already connected.',
-                ExceptionCode::CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED->value
-            );
-        }
-
-        $this->allowedProtocolVersions = $versions;
-    }
-
-    /**
-     * @return array<\Cassandra\Protocol\ProtocolVersion>
-     */
-    public function getAllowedProtocolVersions(): array {
-        return $this->allowedProtocolVersions;
     }
 
     /**
@@ -439,8 +414,19 @@ final class Connection {
         return $statement;
     }
 
+    /**
+     * @return array<\Cassandra\Protocol\ProtocolVersion>
+     */
+    public function getAllowedProtocolVersions(): array {
+        return $this->allowedProtocolVersions;
+    }
+
     public function getNode(): ?Connection\Node {
         return $this->node;
+    }
+
+    public function getProtocolVersion(): ProtocolVersion {
+        return $this->version;
     }
 
     /**
@@ -467,10 +453,6 @@ final class Connection {
      */
     public function getVersion(): int {
         return $this->version->value;
-    }
-
-    public function getProtocolVersion(): ProtocolVersion {
-        return $this->version;
     }
 
     public function isConnected(): bool {
@@ -645,6 +627,23 @@ final class Connection {
 
     public function registerWarningsListener(WarningsListener $warningsListener): void {
         $this->warningsListeners[] = $warningsListener;
+    }
+
+    /**
+     * @param array<\Cassandra\Protocol\ProtocolVersion> $versions
+     * 
+     * @throws \Cassandra\Exception\ConnectionException
+     */
+    public function setAllowedProtocolVersions(array $versions): void {
+
+        if ($this->isConnected()) {
+            throw new ConnectionException(
+                'Cannot change allowed protocol versions when already connected.',
+                ExceptionCode::CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED->value
+            );
+        }
+
+        $this->allowedProtocolVersions = $versions;
     }
 
     public function setConsistency(Consistency $consistency): void {
