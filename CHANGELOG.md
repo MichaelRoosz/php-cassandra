@@ -19,6 +19,9 @@
 * Cassandra\Connection: added function `setAllowedProtocolVersions(array $versions)`
 * Cassandra\Connection: added function `getAllowedProtocolVersions(): array`
 * Cassandra\Connection: added exception `CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED`
+* Cassandra\Protocol\Frame: added function `getProtocolVersion(): ProtocolVersion`
+* Cassandra\Request\Request: added function `getProtocolVersion(): ProtocolVersion`
+* Cassandra\Response\Response: added function `getProtocolVersion(): ProtocolVersion`
 * Added enum `Cassandra\Protocol\ProtocolVersion`
 
 ## v1.0.1
