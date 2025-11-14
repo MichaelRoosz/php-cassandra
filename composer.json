@@ -40,11 +40,11 @@
     "require-dev": {
         "ext-bcmath": "*",
         "ext-gmp": "*",
-        "friendsofphp/php-cs-fixer": "^3.87.1",
-        "phpstan/phpstan": "^2.1.22",
-        "phpunit/phpunit": "^10.5.53",
-        "vimeo/psalm": "^6.13.1",
-        "phpbench/phpbench": "^1.4.1",
+        "friendsofphp/php-cs-fixer": "^3.89.2",
+        "phpstan/phpstan": "^2.1.32",
+        "phpunit/phpunit": "^10.5.58",
+        "vimeo/psalm": "^7.0.0-beta11",
+        "phpbench/phpbench": "^1.4.3",
         "bartlett/php-compatinfo": "^7.2.4"
     },
     "scripts": {
