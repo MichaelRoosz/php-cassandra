@@ -27,11 +27,8 @@ use SplQueue;
 
 final class Connection {
     /** @var  array<\Cassandra\Protocol\ProtocolVersion> $allowedProtocolVersions */
-    private array $allowedProtocolVersions = [
-        ProtocolVersion::V5,
-        ProtocolVersion::V4,
-        ProtocolVersion::V3,
-    ];
+    private array $allowedProtocolVersions;
+
     private Consistency $consistency = Consistency::ONE;
 
     /**
@@ -100,6 +97,7 @@ final class Connection {
         $this->nodes = $nodes;
         $this->keyspace = $keyspace;
         $this->options = $options->toArray();
+        $this->allowedProtocolVersions = ProtocolVersion::PREFRED_ORDER;
         $this->nodeSelector = $options->nodeSelectionStrategy->createSelector();
         $this->nodeHealth = new Connection\NodeHealth();
         $this->responseReader = new ResponseReader();
