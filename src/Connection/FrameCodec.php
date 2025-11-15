@@ -14,9 +14,9 @@ final class FrameCodec extends NodeImplementation {
     final public const CRC24_POLYNOMIAL = 0x1974F0B;
     final public const PAYLOAD_MAX_SIZE = 131071;
 
-    protected string $compression;
+    private string $compression;
 
-    protected string $crc32Prefix;
+    private string $crc32Prefix;
 
     /**
      * @var ?array{
@@ -24,11 +24,11 @@ final class FrameCodec extends NodeImplementation {
      *  uncompressedLength: int,
      * } $currentFrameHeader
      */
-    protected ?array $currentFrameHeader;
+    private ?array $currentFrameHeader;
 
-    protected ?Lz4Decompressor $lz4Decompressor;
+    private ?Lz4Decompressor $lz4Decompressor;
 
-    protected Node $node;
+    private Node $node;
 
     /**
      * @throws \Cassandra\Exception\NodeException
@@ -129,7 +129,7 @@ final class FrameCodec extends NodeImplementation {
         }
     }
 
-    protected function crc24(string $data, int $length = 0): int {
+    private function crc24(string $data, int $length = 0): int {
         $crc = self::CRC24_INIT;
         $len = $length > 0 ? $length : strlen($data);
         for ($i = 0; $i < $len; $i++) {
@@ -149,7 +149,7 @@ final class FrameCodec extends NodeImplementation {
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function readFrameData(bool $waitForData): ?string {
+    private function readFrameData(bool $waitForData): ?string {
 
         if ($this->currentFrameHeader === null) {
             $this->currentFrameHeader = $this->readFrameHeader($waitForData);
@@ -278,7 +278,7 @@ final class FrameCodec extends NodeImplementation {
      * 
      * @throws \Cassandra\Exception\NodeException
      */
-    protected function readFrameHeader(bool $waitForData): ?array {
+    private function readFrameHeader(bool $waitForData): ?array {
         if ($this->compression) {
             $header = $this->node->read(8, $waitForData);
             if ($header === '') {
@@ -354,7 +354,7 @@ final class FrameCodec extends NodeImplementation {
     /**
      * @throws \Cassandra\Exception\NodeException
      */
-    protected function writeFrame(string $outputData, bool $isSelfContained, int $dataOffset = 0, int $payloadLength = 0): void {
+    private function writeFrame(string $outputData, bool $isSelfContained, int $dataOffset = 0, int $payloadLength = 0): void {
         if ($payloadLength < 1) {
             $payloadLength = strlen($outputData);
         }

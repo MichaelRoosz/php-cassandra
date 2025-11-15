@@ -13,10 +13,10 @@ final class Query extends Request {
      * @param array<mixed> $values
      */
     public function __construct(
-        protected string $query,
-        protected array $values = [],
-        protected Consistency $consistency = Consistency::ONE,
-        protected QueryOptions $options = new QueryOptions()
+        private string $query,
+        private array $values = [],
+        private Consistency $consistency = Consistency::ONE,
+        private QueryOptions $options = new QueryOptions()
     ) {
         parent::__construct(Opcode::REQUEST_QUERY);
 

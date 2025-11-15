@@ -14,10 +14,10 @@ use Cassandra\VIntCodec;
 use DateInterval;
 
 final class Duration extends ValueReadableWithoutLength implements ValueWithMultipleEncodings {
-    final protected const INT32_MAX = 2147483647;
-    final protected const INT32_MIN = -2147483647 - 1;
+    private const INT32_MAX = 2147483647;
+    private const INT32_MIN = -2147483647 - 1;
 
-    final protected const PATTERNS = [
+    private const PATTERNS = [
         '/P'
             . '(?<years>\d+)?'
             . '-'
@@ -65,7 +65,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     /**
      * @var array{ months: int, days: int, nanoseconds: int } $value
      */
-    protected readonly array $value;
+    private readonly array $value;
 
     /**
      * @param array{ months: int, days: int, nanoseconds: int }|string|DateInterval $value
@@ -466,7 +466,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     /**
      * @return array{ months: int, days: int, nanoseconds: int }
      */
-    protected function nativeValueFromDateInterval(DateInterval $value): array {
+    private function nativeValueFromDateInterval(DateInterval $value): array {
 
         $months = ((int) $value->format('%r%y') * 12) + (int) $value->format('%r%m');
         $days = (int) $value->format('%r%d');
@@ -490,7 +490,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      * @return array{ months: int, days: int, nanoseconds: int }
      * @throws \Cassandra\Exception\ValueException
      */
-    protected function nativeValueFromString(string $value): array {
+    private function nativeValueFromString(string $value): array {
 
         $foundPattern = false;
         foreach (self::PATTERNS as $pattern) {
@@ -573,7 +573,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      * 
      * @throws \Cassandra\Exception\ValueException
      */
-    protected function validateValue(array $value): array {
+    private function validateValue(array $value): array {
 
         // validate months
         if (!isset($value['months']) || !is_int($value['months'])) {

@@ -33,7 +33,7 @@ final class CasWriteUnknownError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException    
      */
-    protected function readContext(): CasWriteUnknownContext {
+    private function readContext(): CasWriteUnknownContext {
 
         $consistency = $this->stream->readConsistency();
         $nodesAcknowledged = $this->stream->readInt();

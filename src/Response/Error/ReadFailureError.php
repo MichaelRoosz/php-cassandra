@@ -34,7 +34,7 @@ final class ReadFailureError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): ReadFailureContext {
+    private function readContext(): ReadFailureContext {
 
         $consistency = $this->stream->readConsistency();
         $nodesAnswered = $this->stream->readInt();

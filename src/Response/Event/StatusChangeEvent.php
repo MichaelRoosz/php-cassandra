@@ -43,7 +43,7 @@ final class StatusChangeEvent extends Event {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readData(): StatusChangeData {
+    private function readData(): StatusChangeData {
 
         $changeTypeAsString = $this->stream->readString();
 

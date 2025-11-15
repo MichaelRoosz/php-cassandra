@@ -33,7 +33,7 @@ final class UnpreparedError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): UnpreparedContext {
+    private function readContext(): UnpreparedContext {
 
         $unknownStatementId = $this->stream->readString();
 

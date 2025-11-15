@@ -13,7 +13,7 @@ use TypeError;
 use ValueError;
 
 class Event extends Response {
-    protected EventType $type;
+    private EventType $type;
 
     public function __construct(Header $header, StreamReader $stream) {
         parent::__construct($header, $stream);
@@ -45,7 +45,7 @@ class Event extends Response {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readType(): EventType {
+    private function readType(): EventType {
 
         $this->stream->offset(0);
         $typeString = $this->stream->readString();

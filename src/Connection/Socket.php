@@ -10,11 +10,11 @@ use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
 final class Socket extends NodeImplementation implements IoNode {
-    protected SocketNodeConfig $config;
-    protected bool $isBlockingIo = false;
-    protected int $receiveTimeout = 10;
-    protected int $sendTimeout = 10;
-    protected ?PhpSocket $socket = null;
+    private SocketNodeConfig $config;
+    private bool $isBlockingIo = false;
+    private int $receiveTimeout = 10;
+    private int $sendTimeout = 10;
+    private ?PhpSocket $socket = null;
 
     /**
      * @throws \Cassandra\Exception\SocketException
@@ -475,7 +475,7 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    protected function checkForReceiveTimeout(float $start, int $expectedLength, int $upperBoundaryLength): void {
+    private function checkForReceiveTimeout(float $start, int $expectedLength, int $upperBoundaryLength): void {
 
         if (microtime(true) - $start > $this->receiveTimeout) {
             throw new SocketException(
@@ -497,7 +497,7 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    protected function checkForWriteTimeout(float $start): void {
+    private function checkForWriteTimeout(float $start): void {
 
         if (microtime(true) - $start > $this->sendTimeout) {
             throw new SocketException(
@@ -513,7 +513,7 @@ final class Socket extends NodeImplementation implements IoNode {
         }
     }
 
-    protected function closeSocket(PhpSocket $socket, bool $shutdown): void {
+    private function closeSocket(PhpSocket $socket, bool $shutdown): void {
         socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
             'l_onoff' => 1,
             'l_linger' => 1,
@@ -534,7 +534,7 @@ final class Socket extends NodeImplementation implements IoNode {
      * 
      * @throws \Cassandra\Exception\SocketException
      */
-    protected function getTimeoutsFromConfig(): array {
+    private function getTimeoutsFromConfig(): array {
         $sendTimeout = $this->config->socketOptions[SO_SNDTIMEO]['sec'] ?? 10;
         if (!is_int($sendTimeout)) {
             throw new SocketException(
@@ -566,7 +566,7 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    protected function selectSocketForRead(PhpSocket $socket, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
+    private function selectSocketForRead(PhpSocket $socket, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
 
         do {
             $read = [ $socket ];
@@ -632,7 +632,7 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    protected function selectSocketForWrite(PhpSocket $socket, float $start): bool {
+    private function selectSocketForWrite(PhpSocket $socket, float $start): bool {
 
         $read = null;
         $write = [ $socket ];
@@ -679,7 +679,7 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    protected function waitForConnect(PhpSocket $socket, float $start): void {
+    private function waitForConnect(PhpSocket $socket, float $start): void {
 
         do {
             $read = null;

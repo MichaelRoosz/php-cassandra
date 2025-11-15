@@ -11,7 +11,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Inet extends ValueReadableWithLength {
-    protected readonly string $value;
+    private readonly string $value;
 
     final public function __construct(string $value) {
         $this->value = $value;

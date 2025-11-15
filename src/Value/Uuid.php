@@ -11,7 +11,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use Exception;
 
 final class Uuid extends ValueWithFixedLength {
-    protected readonly string $value;
+    private readonly string $value;
 
     final public function __construct(string $value) {
         $this->value = $value;

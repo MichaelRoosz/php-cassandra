@@ -12,8 +12,8 @@ use Cassandra\Exception\RequestException;
 
 final class Prepare extends Request {
     public function __construct(
-        protected string $query,
-        protected PrepareOptions $options = new PrepareOptions()
+        private string $query,
+        private PrepareOptions $options = new PrepareOptions()
     ) {
         parent::__construct(Opcode::REQUEST_PREPARE);
     }

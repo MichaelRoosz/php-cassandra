@@ -9,14 +9,14 @@ use Cassandra\Exception\StreamException;
 use Cassandra\Request\Request;
 
 final class Stream extends NodeImplementation implements IoNode {
-    protected StreamNodeConfig $config;
-    protected bool $isBlockingIo = false;
-    protected int $sendTimeout = 10;
+    private StreamNodeConfig $config;
+    private bool $isBlockingIo = false;
+    private int $sendTimeout = 10;
 
     /**
      * @var ?resource $stream
      */
-    protected $stream = null;
+    private $stream = null;
 
     /**
      * @throws \Cassandra\Exception\StreamException
@@ -343,7 +343,7 @@ final class Stream extends NodeImplementation implements IoNode {
      * 
      * @throws \Cassandra\Exception\StreamException
      */
-    protected function checkForWriteTimeout($stream, float $start): void {
+    private function checkForWriteTimeout($stream, float $start): void {
 
         if (microtime(true) - $start > $this->sendTimeout) {
             throw new StreamException(
@@ -365,7 +365,7 @@ final class Stream extends NodeImplementation implements IoNode {
      * 
      * @throws \Cassandra\Exception\StreamException
      */
-    protected function selectStreamForRead($stream, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
+    private function selectStreamForRead($stream, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
 
         $read = [ $stream ];
         $write = null;
@@ -433,7 +433,7 @@ final class Stream extends NodeImplementation implements IoNode {
      * 
      * @throws \Cassandra\Exception\StreamException
      */
-    protected function selectStreamForWrite($stream, float $start): bool {
+    private function selectStreamForWrite($stream, float $start): bool {
         $read = null;
         $write = [ $stream ];
         $except = null;

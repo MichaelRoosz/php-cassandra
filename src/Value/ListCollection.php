@@ -13,12 +13,12 @@ use Cassandra\TypeInfo\ListCollectionInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class ListCollection extends ValueReadableWithoutLength {
-    protected ListCollectionInfo $typeInfo;
+    private ListCollectionInfo $typeInfo;
 
     /**
      * @var array<mixed> $value
      */
-    protected readonly array $value;
+    private readonly array $value;
 
     /**
      * @param array<mixed> $value

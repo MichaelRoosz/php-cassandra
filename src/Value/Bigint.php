@@ -10,7 +10,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 class Bigint extends ValueWithFixedLength {
-    protected readonly int $value;
+    private readonly int $value;
 
     final public function __construct(int $value) {
         $this->value = $value;

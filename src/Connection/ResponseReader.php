@@ -20,8 +20,8 @@ use TypeError;
 use ValueError;
 
 final class ResponseReader {
-    protected ?Header $currentHeader;
-    protected Lz4Decompressor $lz4Decompressor;
+    private ?Header $currentHeader;
+    private Lz4Decompressor $lz4Decompressor;
 
     public function __construct() {
         $this->lz4Decompressor = new Lz4Decompressor();
@@ -74,7 +74,7 @@ final class ResponseReader {
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function createResponse(Header $header, string $body): Response {
+    private function createResponse(Header $header, string $body): Response {
 
         $responseClassMap = Response::getResponseClassMap();
         if (!isset($responseClassMap[$header->opcode->value])) {
@@ -156,7 +156,7 @@ final class ResponseReader {
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\ConnectionException
      */
-    protected function readHeader(Node $node, ProtocolVersion $version, bool $waitForResponse): ?Header {
+    private function readHeader(Node $node, ProtocolVersion $version, bool $waitForResponse): ?Header {
 
         $headerBytes = $node->read(9, $waitForResponse);
         if ($headerBytes === '') {

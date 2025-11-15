@@ -13,7 +13,7 @@ final class Smallint extends ValueWithFixedLength {
     final public const VALUE_MAX = 32767;
     final public const VALUE_MIN = -32768;
 
-    protected readonly int $value;
+    private readonly int $value;
 
     /**
      * @throws \Cassandra\Exception\ValueException

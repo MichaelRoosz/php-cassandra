@@ -13,12 +13,12 @@ use Cassandra\TypeInfo\MapCollectionInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class MapCollection extends ValueReadableWithoutLength {
-    protected MapCollectionInfo $typeInfo;
+    private MapCollectionInfo $typeInfo;
 
     /**
      * @var array<mixed> $value
      */
-    protected readonly array $value;
+    private readonly array $value;
 
     /**
      * @param array<mixed> $value

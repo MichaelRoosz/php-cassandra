@@ -39,7 +39,7 @@ final class WriteFailureError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): WriteFailureContext {
+    private function readContext(): WriteFailureContext {
 
         $consistency = $this->stream->readConsistency();
         $nodesAnswered = $this->stream->readInt();

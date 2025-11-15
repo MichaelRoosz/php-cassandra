@@ -18,10 +18,10 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     final public const VALUE_INT_MAX = 4_294_967_295;
     final public const VALUE_INT_MIN = 0;
 
-    final protected const VALUE_2_31 = 2_147_483_648;
-    final protected const VALUE_INT_9999_12_31 = 2_150_416_544;
+    private const VALUE_2_31 = 2_147_483_648;
+    private const VALUE_INT_9999_12_31 = 2_150_416_544;
 
-    protected readonly int $value;
+    private readonly int $value;
 
     /**
      * @param int|string|DateTimeInterface $value 
@@ -259,7 +259,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     /**
      * @throws \Cassandra\Exception\ValueException
      */
-    protected function getDayCountFromInterval(DateInterval $interval): int {
+    private function getDayCountFromInterval(DateInterval $interval): int {
         $dayCount = $interval->format('%r%a');
 
         if (str_starts_with($dayCount, '--')) {

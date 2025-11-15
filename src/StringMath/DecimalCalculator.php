@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\StringMath;
 
 abstract class DecimalCalculator {
-    protected static ?self $calculator = null;
+    private static ?self $calculator = null;
 
     /**
      * Add 1 to an unsigned base-10 decimal string.

@@ -44,7 +44,7 @@ final class SchemaChangeEvent extends Event {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readData(): SchemaChangeData {
+    private function readData(): SchemaChangeData {
 
         $changeTypeAsString = $this->stream->readString();
 

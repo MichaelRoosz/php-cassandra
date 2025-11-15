@@ -24,10 +24,10 @@ abstract class Request implements Frame, Stringable {
      * @param ?array<string,string> $payload
      */
     public function __construct(
-        protected Opcode $opcode,
-        protected int $stream = 0,
-        protected int $flags = 0,
-        protected ?array $payload = null,
+        private Opcode $opcode,
+        private int $stream = 0,
+        private int $flags = 0,
+        private ?array $payload = null,
         protected ProtocolVersion $version = ProtocolVersion::V3
     ) {
     }

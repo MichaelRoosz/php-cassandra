@@ -39,7 +39,7 @@ class Error extends Response {
     /**
      * @var array<class-string<\Cassandra\Response\Error>, class-string<\Cassandra\Exception\ServerException>>
      */
-    protected const exceptionClassMap = [
+    private const exceptionClassMap = [
         AlreadyExistsError::class => ServerException\AlreadyExistsException::class,
         AuthenticationError::class => ServerException\AuthenticationErrorException::class,
         CasWriteUnknownError::class => ServerException\CasWriteUnknownException::class,
@@ -62,9 +62,9 @@ class Error extends Response {
         WriteTimeoutError::class => ServerException\WriteTimeoutException::class,
     ];
 
-    protected readonly int $code;
-    protected readonly string $message;
-    protected readonly ErrorType $type;
+    private readonly int $code;
+    private readonly string $message;
+    private readonly ErrorType $type;
 
     public function __construct(Header $header, StreamReader $stream) {
         parent::__construct($header, $stream);
@@ -154,7 +154,7 @@ class Error extends Response {
      * 
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readData(): array {
+    private function readData(): array {
         $this->stream->offset(0);
 
         $code = $this->stream->readInt();

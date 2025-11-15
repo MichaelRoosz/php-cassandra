@@ -33,7 +33,7 @@ final class UnavailableExceptionError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): UnavailableExceptionContext {
+    private function readContext(): UnavailableExceptionContext {
 
         $consistency = $this->stream->readConsistency();
         $nodesRequired = $this->stream->readInt();

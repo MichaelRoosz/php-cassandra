@@ -16,12 +16,12 @@ final class Batch extends Request {
     /**
      * @var array<string> $queryArray
      */
-    protected array $queryArray = [];
+    private array $queryArray = [];
 
     public function __construct(
-        protected BatchType $type = BatchType::LOGGED,
-        protected Consistency $consistency = Consistency::ONE,
-        protected BatchOptions $options = new BatchOptions()
+        private BatchType $type = BatchType::LOGGED,
+        private Consistency $consistency = Consistency::ONE,
+        private BatchOptions $options = new BatchOptions()
     ) {
         parent::__construct(Opcode::REQUEST_BATCH);
     }
@@ -87,7 +87,7 @@ final class Batch extends Request {
      *
      * @throws \Cassandra\Exception\RequestException
      */
-    protected function encodeBatchParametersAsBinary(
+    private function encodeBatchParametersAsBinary(
         Consistency $consistency,
         array $values = [],
         BatchOptions $options = new BatchOptions(),

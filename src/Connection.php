@@ -27,66 +27,66 @@ use SplQueue;
 
 final class Connection {
     /** @var  array<\Cassandra\Protocol\ProtocolVersion> $allowedProtocolVersions */
-    protected array $allowedProtocolVersions = [
+    private array $allowedProtocolVersions = [
         ProtocolVersion::V5,
         ProtocolVersion::V4,
         ProtocolVersion::V3,
     ];
-    protected Consistency $consistency = Consistency::ONE;
+    private Consistency $consistency = Consistency::ONE;
 
     /**
      * @var array<EventListener> $eventListeners
      */
-    protected array $eventListeners = [];
+    private array $eventListeners = [];
 
-    protected string $keyspace;
+    private string $keyspace;
 
-    protected int $lastStreamId = 0;
+    private int $lastStreamId = 0;
 
-    protected ?Connection\Node $node = null;
+    private ?Connection\Node $node = null;
 
-    protected Connection\NodeHealth $nodeHealth;
+    private Connection\NodeHealth $nodeHealth;
 
     /**
      * @var array<\Cassandra\Connection\NodeConfig> $nodes
      */
-    protected array $nodes;
+    private array $nodes;
 
-    protected Connection\NodeSelector $nodeSelector;
+    private Connection\NodeSelector $nodeSelector;
 
     /**
      * @var array<string,string> $options
      */
-    protected array $options;
+    private array $options;
 
     /**
      * @var array<string, \Cassandra\Response\Result\CachedPreparedResult> $preparedResultCache
      */
-    protected array $preparedResultCache = [];
+    private array $preparedResultCache = [];
 
-    protected int $preparedResultCacheSize;
-    protected int $preparedResultCacheSizeToTrim;
+    private int $preparedResultCacheSize;
+    private int $preparedResultCacheSizeToTrim;
 
     /**
      * @var SplQueue<int> $recycledStreams
      */
-    protected SplQueue $recycledStreams;
+    private SplQueue $recycledStreams;
 
-    protected ResponseReader $responseReader;
+    private ResponseReader $responseReader;
 
     /**
      * @var array<Statement> $statements
      */
-    protected array $statements = [];
+    private array $statements = [];
 
-    protected ?ValueEncodeConfig $valueEncodeConfig = null;
+    private ?ValueEncodeConfig $valueEncodeConfig = null;
 
-    protected ProtocolVersion $version = ProtocolVersion::V3;
+    private ProtocolVersion $version = ProtocolVersion::V3;
 
     /**
      * @var array<WarningsListener> $warningsListeners
      */
-    protected array $warningsListeners = [];
+    private array $warningsListeners = [];
 
     /**
      * @param array<\Cassandra\Connection\NodeConfig> $nodes
@@ -1046,7 +1046,7 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function cachePrepareResult(Request\Prepare $request, Response\Result\PreparedResult $result): void {
+    private function cachePrepareResult(Request\Prepare $request, Response\Result\PreparedResult $result): void {
 
         if ($this->preparedResultCacheSize < 1) {
             return;
@@ -1078,7 +1078,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function chainAsyncRequest(Request\Request $request, Statement $statement): void {
+    private function chainAsyncRequest(Request\Request $request, Statement $statement): void {
 
         $node = $this->getConnectedNode();
 
@@ -1113,7 +1113,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function configureOptions(Response\Supported $supportedReponse): void {
+    private function configureOptions(Response\Supported $supportedReponse): void {
         $serverOptions = $supportedReponse->getData();
 
         if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
@@ -1176,7 +1176,7 @@ final class Connection {
         }
     }
 
-    protected function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {
+    private function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {
 
         // auto-prepare query if bind markers are used and not all values are defined with type
         if (
@@ -1217,7 +1217,7 @@ final class Connection {
         return null;
     }
 
-    protected function getCachedPrepareResult(Request\Prepare $request): ?Response\Result\CachedPreparedResult {
+    private function getCachedPrepareResult(Request\Prepare $request): ?Response\Result\CachedPreparedResult {
 
         return $this->preparedResultCache[$request->getHash()] ?? null;
     }
@@ -1232,7 +1232,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function getConnectedNode(): Connection\Node {
+    private function getConnectedNode(): Connection\Node {
 
         $node = $this->node;
         if ($node === null) {
@@ -1259,7 +1259,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function getNewStreamId(): int {
+    private function getNewStreamId(): int {
         if ($this->lastStreamId < 32767) {
             return ++$this->lastStreamId;
         }
@@ -1281,7 +1281,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function getNextResponseForStream(int $streamId = 0): Response\Response {
+    private function getNextResponseForStream(int $streamId = 0): Response\Response {
         do {
             $response = $this->readResponse(waitForResponse: true);
         } while ($response === null || $response->getStream() !== $streamId);
@@ -1299,7 +1299,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function handleAutoPrepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
+    private function handleAutoPrepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected result type while handling auto-prepared statement', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESULT_TYPE->value, [
@@ -1346,7 +1346,7 @@ final class Connection {
         return $response;
     }
 
-    protected function handleNodeException(Connection\Node $node): void {
+    private function handleNodeException(Connection\Node $node): void {
         $this->nodeHealth->recordFailure($node->getConfig());
         $this->disconnect();
     }
@@ -1361,7 +1361,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
+    private function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected result type while handling reprepared statement', ExceptionCode::CONNECTION_REPREPARE_UNEXPECTED_RESULT_TYPE->value, [
@@ -1418,7 +1418,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null): ?Response\Response {
+    private function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null): ?Response\Response {
 
         if ($response->hasWarnings()) {
             foreach ($this->warningsListeners as $listener) {
@@ -1443,7 +1443,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement): ?Response\Response {
+    private function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement): ?Response\Response {
 
         // re-prepare query if it is unprepared
         if (
@@ -1510,7 +1510,7 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): Response\Result {
+    private function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): Response\Result {
 
         $result->setPreviousResult($request->getPreviousResult());
 
@@ -1527,7 +1527,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement): ?Response\Result {
+    private function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement): ?Response\Result {
 
         $result->setRequest($request);
 
@@ -1561,7 +1561,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function handleResponseResult(Request\Request $request, Response\Result $result, ?Statement $statement): ?Response\Result {
+    private function handleResponseResult(Request\Request $request, Response\Result $result, ?Statement $statement): ?Response\Result {
 
         return match (true) {
             $request instanceof Request\Prepare => $this->handleResponsePrepareResult($request, $result, $statement),
@@ -1570,20 +1570,10 @@ final class Connection {
         };
     }
 
-    protected function onEvent(Response\Event $event): void {
+    private function onEvent(Response\Event $event): void {
 
         foreach ($this->eventListeners as $listener) {
             $listener->onEvent($event);
-        }
-    }
-
-    /**
-     * @param array<string> $warnings
-     */
-    protected function onWarnings(array $warnings, Request\Request $request, Response\Response $response, ): void {
-
-        foreach ($this->warningsListeners as $listener) {
-            $listener->onWarnings($warnings, $request, $response);
         }
     }
 
@@ -1597,7 +1587,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function readResponse(bool $waitForResponse, bool &$drainedResponses = false): ?Response\Response {
+    private function readResponse(bool $waitForResponse, bool &$drainedResponses = false): ?Response\Response {
         $node = $this->getConnectedNode();
 
         try {
@@ -1643,7 +1633,7 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception\ConnectionException
      */
-    protected function selectNodeAndOpenConnection(): Connection\IoNode {
+    private function selectNodeAndOpenConnection(): Connection\IoNode {
 
         $ordered = $this->nodeSelector->order($this->nodes);
         $parts = $this->nodeHealth->partitionByAvailability($ordered);
@@ -1697,7 +1687,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    protected function sendAsyncRequest(Request\Request $request, ?int $streamId = null): Statement {
+    private function sendAsyncRequest(Request\Request $request, ?int $streamId = null): Statement {
 
         $node = $this->getConnectedNode();
 

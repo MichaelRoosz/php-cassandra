@@ -8,17 +8,17 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StatementException;
 
 final class Statement {
-    protected Connection $connection;
+    private Connection $connection;
 
-    protected Request\Request $originalRequest;
+    private Request\Request $originalRequest;
 
-    protected Request\Request $request;
+    private Request\Request $request;
 
-    protected ?Response\Response $response = null;
+    private ?Response\Response $response = null;
 
-    protected StatementStatus $status;
+    private StatementStatus $status;
 
-    protected int $streamId;
+    private int $streamId;
 
     public function __construct(Connection $connection, int $streamId, Request\Request $request, ?Request\Request $originalRequest = null) {
         $this->connection = $connection;

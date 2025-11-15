@@ -13,11 +13,11 @@ use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Tuple extends ValueReadableWithoutLength {
-    protected TupleInfo $typeInfo;
+    private TupleInfo $typeInfo;
     /**
      * @var array<mixed> $value
      */
-    protected readonly array $value;
+    private readonly array $value;
 
     /**
      * @param array<mixed> $value

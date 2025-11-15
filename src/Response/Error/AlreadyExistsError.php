@@ -33,7 +33,7 @@ final class AlreadyExistsError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): AlreadyExistsContext {
+    private function readContext(): AlreadyExistsContext {
 
         $keyspace = $this->stream->readString();
         $table = $this->stream->readString();

@@ -33,14 +33,13 @@ use Cassandra\Exception\CompressionException;
 use Cassandra\Exception\ExceptionCode;
 
 final class Lz4Decompressor {
-    protected string $input;
+    private string $input;
 
-    protected int $inputLength;
+    private int $inputLength;
 
-    protected int $inputOffset;
-    protected string $output;
-    protected int $outputLength;
-    protected int $outputOffset;
+    private int $inputOffset;
+    private string $output;
+    private int $outputLength;
 
     public function __construct(?string $compressedData = null, int $inputOffset = 0, int $inputLength = 0) {
         if ($compressedData !== null) {
@@ -53,7 +52,6 @@ final class Lz4Decompressor {
             $this->outputLength = 0;
 
             $this->output = '';
-            $this->outputOffset = 0;
         }
     }
 
@@ -109,13 +107,12 @@ final class Lz4Decompressor {
         $this->outputLength = 0;
 
         $this->output = '';
-        $this->outputOffset = 0;
     }
 
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function decompressBlockAtOffset(int $inputOffset, int $inputLength): void {
+    private function decompressBlockAtOffset(int $inputOffset, int $inputLength): void {
         while ($inputOffset < $inputLength) {
             $token = ord($this->input[$inputOffset++]);
             $nLiterals = $token >> 4;
@@ -250,7 +247,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function readLegacyFrame(int $magicBytes): bool {
+    private function readLegacyFrame(int $magicBytes): bool {
         if ($magicBytes !== 0x184C2102) {
             return false;
         }
@@ -308,7 +305,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function readMagicBytes(): int {
+    private function readMagicBytes(): int {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new CompressionException(
                 'invalid lz4 frame data - input overflow while reading magic number',
@@ -344,7 +341,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function readSkipableFrame(int $magicBytes): bool {
+    private function readSkipableFrame(int $magicBytes): bool {
         if ($magicBytes < 0x184D2A50 || $magicBytes > 0x184D2A5F) {
             return false;
         }
@@ -402,7 +399,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function readVersionOneBlock(int $flgBlockChecksum, bool $validateChecksums): bool {
+    private function readVersionOneBlock(int $flgBlockChecksum, bool $validateChecksums): bool {
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new CompressionException(
                 'invalid lz4 frame data - input overflow while reading block size',
@@ -507,7 +504,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function readVersionOneFrame(int $magicBytes, bool $validateChecksums): bool {
+    private function readVersionOneFrame(int $magicBytes, bool $validateChecksums): bool {
         if ($magicBytes !== 0x184D2204) {
             return false;
         }
@@ -647,7 +644,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function validateChecksum(string $type, string $in, int $dataStart, int $dataLength, int $checksum): void {
+    private function validateChecksum(string $type, string $in, int $dataStart, int $dataLength, int $checksum): void {
         $data = substr($in, $dataStart, $dataLength);
 
         $currentChecksum = hash('xxh32', $data, true, ['seed' => 0]);
@@ -685,7 +682,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    protected function validateHeaderChecksum(string $in, int $headerStart, int $headerLength, int $checksum): void {
+    private function validateHeaderChecksum(string $in, int $headerStart, int $headerLength, int $checksum): void {
         $headerData = substr($in, $headerStart, $headerLength);
 
         $currentChecksum = hash('xxh32', $headerData, true, ['seed' => 0]);

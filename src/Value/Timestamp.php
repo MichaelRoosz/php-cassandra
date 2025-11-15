@@ -14,7 +14,7 @@ use DateTimeInterface;
 use Exception as PhpException;
 
 final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleEncodings {
-    protected readonly int $value;
+    private readonly int $value;
 
     /**
      * @throws \Cassandra\Exception\ValueException

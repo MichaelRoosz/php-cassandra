@@ -13,7 +13,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\VarintEncodeOption;
 
 final class Varint extends ValueReadableWithLength implements ValueWithMultipleEncodings {
-    protected readonly string|int $value;
+    private readonly string|int $value;
 
     /**
      * @throws \Cassandra\Exception\ValueException
@@ -179,7 +179,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
         return false;
     }
 
-    protected function getBinaryFromIntValue(int $value): string {
+    private function getBinaryFromIntValue(int $value): string {
         $isNegative = $value < 0;
         $breakValue = $isNegative ? -1 : 0;
 

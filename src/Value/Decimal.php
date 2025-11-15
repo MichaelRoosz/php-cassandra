@@ -10,7 +10,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Decimal extends ValueReadableWithLength {
-    protected readonly string $value;
+    private readonly string $value;
 
     /**
      * @throws \Cassandra\Exception\ValueException

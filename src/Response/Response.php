@@ -18,14 +18,14 @@ abstract class Response implements Frame, Stringable {
     /**
      * @var ?array<string,?string> $payload
      */
-    protected ?array $payload = null;
+    private ?array $payload = null;
 
-    protected ?string $tracingUuid = null;
+    private ?string $tracingUuid = null;
 
     /**
      * @var ?array<string> $warnings
      */
-    protected ?array $warnings = null;
+    private ?array $warnings = null;
 
     /**
      * @throws \Cassandra\Exception\ResponseException
@@ -132,7 +132,7 @@ abstract class Response implements Frame, Stringable {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readExtraData(): void {
+    private function readExtraData(): void {
         $flags = $this->header->flags;
 
         if ($flags & Flag::TRACING) {

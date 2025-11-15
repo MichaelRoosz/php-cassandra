@@ -28,7 +28,7 @@ final class Startup extends Request {
      *
      * @param array<string, string> $options
      */
-    public function __construct(protected array $options = []) {
+    public function __construct(private array $options = []) {
         parent::__construct(Opcode::REQUEST_STARTUP);
     }
 

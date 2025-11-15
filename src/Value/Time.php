@@ -16,7 +16,7 @@ use Exception as PhpException;
 final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodings {
     final public const VALUE_MAX = 86399999999999;
 
-    protected readonly int $value;
+    private readonly int $value;
 
     /**
      * @throws \Cassandra\Exception\ValueException

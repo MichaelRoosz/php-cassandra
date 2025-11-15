@@ -7,11 +7,11 @@ namespace Cassandra\Connection;
 use Cassandra\Request\Request;
 
 abstract class NodeImplementation implements Node {
-    protected const BUFFER_SIZE = 2048;
+    private const BUFFER_SIZE = 2048;
 
-    protected string $readBuffer = '';
-    protected int $readBufferLength = 0;
-    protected int $readBufferOffset = 0;
+    private string $readBuffer = '';
+    private int $readBufferLength = 0;
+    private int $readBufferOffset = 0;
 
     #[\Override]
     abstract public function close(): void;
@@ -88,7 +88,7 @@ abstract class NodeImplementation implements Node {
      * 
      * @throws \Cassandra\Exception\NodeException
      */
-    protected function readFromNode(int $missingLength, bool $waitForData): int {
+    private function readFromNode(int $missingLength, bool $waitForData): int {
 
         $readMaxLength = max($missingLength, self::BUFFER_SIZE);
         $data = $this->readAvailableDataFromSource($missingLength, $readMaxLength, $waitForData);
@@ -118,7 +118,7 @@ abstract class NodeImplementation implements Node {
      * 
      * @throws \Cassandra\Exception\NodeException
      */
-    protected function updateReadBuffer(int $expectedLength, bool $waitForData): int {
+    private function updateReadBuffer(int $expectedLength, bool $waitForData): int {
 
         $availableLength = $this->readBufferLength - $this->readBufferOffset;
         $missingLength = $expectedLength - $availableLength;

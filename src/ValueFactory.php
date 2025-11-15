@@ -201,7 +201,7 @@ final class ValueFactory {
      *
      * @throws \Cassandra\Exception\ValueFactoryException
      */
-    protected static function getClassForDataType(Type $type): string {
+    private static function getClassForDataType(Type $type): string {
 
         $typeClassMap = self::getTypeToValueClassMap();
 
@@ -221,7 +221,7 @@ final class ValueFactory {
      * 
      * @return array<int, class-string<\Cassandra\Value\ValueBase>>
      */
-    protected static function getTypeToValueClassMap(): array {
+    private static function getTypeToValueClassMap(): array {
         return [
             Type::ASCII->value => Values\Ascii::class,
             Type::BIGINT->value => Values\Bigint::class,

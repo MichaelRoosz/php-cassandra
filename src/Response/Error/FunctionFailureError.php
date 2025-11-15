@@ -33,7 +33,7 @@ final class FunctionFailureError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): FunctionFailureContext {
+    private function readContext(): FunctionFailureContext {
 
         $keyspace = $this->stream->readString();
         $function = $this->stream->readString();

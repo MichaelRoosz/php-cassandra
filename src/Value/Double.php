@@ -13,7 +13,7 @@ use Cassandra\TypeInfo\TypeInfo;
  * Double-precision floating-point number (same as a PHP "float", 64-bit precision)
  */
 final class Double extends ValueWithFixedLength {
-    protected readonly float $value;
+    private readonly float $value;
 
     final public function __construct(float $value) {
         $this->value = $value;

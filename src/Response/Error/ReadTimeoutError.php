@@ -33,7 +33,7 @@ final class ReadTimeoutError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): ReadTimeoutContext {
+    private function readContext(): ReadTimeoutContext {
 
         $consistency = $this->stream->readConsistency();
         $nodesAnswered = $this->stream->readInt();

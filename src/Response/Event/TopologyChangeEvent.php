@@ -43,7 +43,7 @@ final class TopologyChangeEvent extends Event {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readData(): TopologyChangeData {
+    private function readData(): TopologyChangeData {
 
         $changeTypeAsString = $this->stream->readString();
 

@@ -10,7 +10,7 @@ final class Register extends Request {
     /**
      * @param array<\Cassandra\EventType> $events
      */
-    public function __construct(protected array $events) {
+    public function __construct(private array $events) {
         parent::__construct(Opcode::REQUEST_REGISTER);
     }
 

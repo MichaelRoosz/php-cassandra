@@ -13,7 +13,7 @@ final class Tinyint extends ValueWithFixedLength {
     final public const VALUE_MAX = 127;
     final public const VALUE_MIN = -128;
 
-    protected readonly int $value;
+    private readonly int $value;
 
     /**
      * @throws \Cassandra\Exception\ValueException

@@ -39,7 +39,7 @@ final class WriteTimeoutError extends Error {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    protected function readContext(): WriteTimeoutContext {
+    private function readContext(): WriteTimeoutContext {
 
         $consistency = $this->stream->readConsistency();
         $nodesAcknowledged = $this->stream->readInt();

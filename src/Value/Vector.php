@@ -13,11 +13,11 @@ use Cassandra\TypeInfo\VectorInfo;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Vector extends ValueReadableWithoutLength {
-    protected VectorInfo $typeInfo;
+    private VectorInfo $typeInfo;
     /**
      * @var array<mixed> $value
      */
-    protected readonly array $value;
+    private readonly array $value;
 
     /**
      * @param array<mixed> $value

@@ -10,7 +10,7 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Boolean extends ValueWithFixedLength {
-    protected readonly bool $value;
+    private readonly bool $value;
 
     final public function __construct(bool $value) {
         $this->value = $value;

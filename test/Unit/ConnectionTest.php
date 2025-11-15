@@ -53,6 +53,7 @@ final class ConnectionTest extends AbstractUnitTestCase {
 
         $conn->setAllowedProtocolVersions([ProtocolVersion::V3]);
     }
+
     public function testSetAllowedProtocolVersionsWhenNotConnected(): void {
         $conn = new ConnectionClass(nodes: [], keyspace: '', options: new \Cassandra\Connection\ConnectionOptions());
 

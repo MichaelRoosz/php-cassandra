@@ -108,7 +108,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function extractParams(string $paramString): array {
+    private function extractParams(string $paramString): array {
 
         $params = [];
 
@@ -215,7 +215,7 @@ final class TypeNameParser {
      * 
      * @return array<string, callable(array<string>, boolean): \Cassandra\TypeInfo\TypeInfo>
      */
-    protected function getComplexTypeMap(): array {
+    private function getComplexTypeMap(): array {
         return [
             TypeName::FROZEN->value => [$this, 'parseFrozenType'],
             TypeName::REVERSED->value => [$this, 'parseReversedType'],
@@ -234,7 +234,7 @@ final class TypeNameParser {
      * 
      * @return array<string, \Cassandra\Type>
      */
-    protected function getSimpleTypeMap(): array {
+    private function getSimpleTypeMap(): array {
         return [
             TypeName::ASCII->value => Type::ASCII,
             TypeName::BOOLEAN->value => Type::BOOLEAN,
@@ -264,7 +264,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseFrozenType(array $params, bool $isFrozen): TypeInfo {
+    private function parseFrozenType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
             throw new TypeNameParserException(
@@ -287,7 +287,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseListType(array $params, bool $isFrozen): TypeInfo {
+    private function parseListType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
             throw new TypeNameParserException(
@@ -312,7 +312,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseMapType(array $params, bool $isFrozen): TypeInfo {
+    private function parseMapType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 2) {
             throw new TypeNameParserException(
@@ -338,7 +338,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseReversedType(array $params, bool $isFrozen): TypeInfo {
+    private function parseReversedType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
             throw new TypeNameParserException(
@@ -361,7 +361,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseSetType(array $params, bool $isFrozen): TypeInfo {
+    private function parseSetType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 1) {
             throw new TypeNameParserException(
@@ -386,7 +386,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseTupleType(array $params, bool $isFrozen): TypeInfo {
+    private function parseTupleType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) < 1) {
             throw new TypeNameParserException(
@@ -415,7 +415,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseUDTType(array $params, bool $isFrozen): TypeInfo {
+    private function parseUDTType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) < 3) {
             throw new TypeNameParserException(
@@ -461,7 +461,7 @@ final class TypeNameParser {
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
-    protected function parseVectorType(array $params, bool $isFrozen): TypeInfo {
+    private function parseVectorType(array $params, bool $isFrozen): TypeInfo {
 
         if (count($params) !== 2) {
             throw new TypeNameParserException(

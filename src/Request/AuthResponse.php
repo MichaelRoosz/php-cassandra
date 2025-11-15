@@ -8,8 +8,8 @@ use Cassandra\Protocol\Opcode;
 
 final class AuthResponse extends Request {
     public function __construct(
-        protected string $username,
-        protected string $password
+        private string $username,
+        private string $password
     ) {
         parent::__construct(Opcode::REQUEST_AUTH_RESPONSE);
     }

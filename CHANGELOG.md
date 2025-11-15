@@ -9,20 +9,24 @@
 * Exception context: type of `protocol_version` changed from `int` to `string`
 
 ### Changed
-* Cassandra\Connection: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
-* Cassandra\Protocol\Frame: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
-* Cassandra\Request\Request: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
-* Cassandra\Response\Response: function `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Cassandra\Connection: method `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Cassandra\Protocol\Frame: method `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Cassandra\Request\Request: method `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Cassandra\Response\Response: method `getVersion()` is now deprecated, use `getProtocolVersion()` instead
+* Changed visibility of some properties and methods from `protected` to `private` to clarify public api
 
 ### Added
-* Cassandra\Connection: added function `getProtocolVersion(): ProtocolVersion`
-* Cassandra\Connection: added function `setAllowedProtocolVersions(array $versions)`
-* Cassandra\Connection: added function `getAllowedProtocolVersions(): array`
+* Cassandra\Connection: added method `getProtocolVersion(): ProtocolVersion`
+* Cassandra\Connection: added method `setAllowedProtocolVersions(array $versions)`
+* Cassandra\Connection: added method `getAllowedProtocolVersions(): array`
 * Cassandra\Connection: added exception `CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED`
-* Cassandra\Protocol\Frame: added function `getProtocolVersion(): ProtocolVersion`
-* Cassandra\Request\Request: added function `getProtocolVersion(): ProtocolVersion`
-* Cassandra\Response\Response: added function `getProtocolVersion(): ProtocolVersion`
+* Cassandra\Protocol\Frame: added method `getProtocolVersion(): ProtocolVersion`
+* Cassandra\Request\Request: added method `getProtocolVersion(): ProtocolVersion`
+* Cassandra\Response\Response: added method `getProtocolVersion(): ProtocolVersion`
 * Added enum `Cassandra\Protocol\ProtocolVersion`
+
+### Removed
+* Cassandra\Connection: removed method `onWarnings()`
 
 ## v1.0.1
 

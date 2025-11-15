@@ -12,11 +12,11 @@ use Iterator;
  * @implements Iterator<\Cassandra\Response\Result\RowClassInterface|array<array-key, mixed>|false>
  */
 final class ResultIterator implements Iterator {
-    protected int $currentRow;
-    protected bool $needToRewindRow;
+    private int $currentRow;
+    private bool $needToRewindRow;
 
     public function __construct(
-        protected RowsResult $rowsResult,
+        private RowsResult $rowsResult,
     ) {
         $this->currentRow = 0;
         $this->needToRewindRow = false;

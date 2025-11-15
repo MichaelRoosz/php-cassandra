@@ -15,13 +15,13 @@ use Cassandra\Response\Result\PreparedResult;
 use Cassandra\Response\Result\RowsResult;
 
 final class Execute extends Request {
-    protected string $queryId = '';
-    protected ?string $rowsMetadataId = null;
+    private string $queryId = '';
+    private ?string $rowsMetadataId = null;
 
     /**
      * @var array<mixed> $values
      */
-    protected $values;
+    private $values;
 
     /**
      * @param array<mixed> $values
@@ -31,10 +31,10 @@ final class Execute extends Request {
      * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function __construct(
-        protected Result $previousResult,
+        private Result $previousResult,
         array $values,
-        protected Consistency $consistency = Consistency::ONE,
-        protected ExecuteOptions $options = new ExecuteOptions()
+        private Consistency $consistency = Consistency::ONE,
+        private ExecuteOptions $options = new ExecuteOptions()
     ) {
         parent::__construct(Opcode::REQUEST_EXECUTE);
 

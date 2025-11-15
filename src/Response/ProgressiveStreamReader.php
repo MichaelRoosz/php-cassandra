@@ -11,7 +11,7 @@ use Cassandra\TypeNameParser;
 use Cassandra\VIntCodec;
 
 final class ProgressiveStreamReader extends StreamReader {
-    protected ?Node $source = null;
+    private ?Node $source = null;
 
     public function __construct(string $data = '') {
         $this->data = $data;
