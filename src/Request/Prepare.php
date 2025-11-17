@@ -39,8 +39,8 @@ final class Prepare extends Request {
                     context: [
                         'request' => 'PREPARE',
                         'option' => 'keyspace',
-                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
-                        'actual_protocol_version' => $this->version->toOptionFormat(),
+                        'required_protocol_version' => ProtocolVersion::V5->inOptionFormat(),
+                        'actual_protocol_version' => $this->version->inOptionFormat(),
                         'keyspace' => $this->options->keyspace,
                     ]
                 );

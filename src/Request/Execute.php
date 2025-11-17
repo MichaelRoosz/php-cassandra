@@ -114,7 +114,7 @@ final class Execute extends Request {
                     message: 'Missing result metadata id for protocol v5 execute request',
                     code: ExceptionCode::REQUEST_EXECUTE_MISSING_RESULT_METADATA_ID->value,
                     context: [
-                        'protocol_version' => $this->version->toOptionFormat(),
+                        'protocol_version' => $this->version->inOptionFormat(),
                         'query_id' => $this->queryId,
                     ]
                 );

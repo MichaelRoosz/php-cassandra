@@ -68,7 +68,7 @@ enum ProtocolVersion: int {
         return $this->value >= $other->value;
     }
 
-    public function toOptionFormat(): string {
+    public function inOptionFormat(): string {
         return match ($this) {
             self::V3 => self::OPTION_FORMAT_V3,
             self::V4 => self::OPTION_FORMAT_V4,

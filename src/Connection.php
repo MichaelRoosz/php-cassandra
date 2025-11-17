@@ -191,9 +191,7 @@ final class Connection {
             ]);
         }
 
-        $this->configureOptions($response);
-
-        $startupOptions = $this->options->asStartupOptions();
+        $startupOptions = $this->configureStartupOptions($response);
         $response = $this->syncRequest(new Request\Startup($startupOptions));
 
         if ($response instanceof Response\Authenticate) {
@@ -1084,10 +1082,13 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\ResponseException
+     * 
+     * @return array<string,string>
      */
-    private function configureOptions(Response\Supported $supportedReponse): void {
+    private function configureStartupOptions(Response\Supported $supportedReponse): array {
         $serverOptions = $supportedReponse->getData();
 
+        // configure protocol version
         if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
             $versionsSupportedByServer = [ProtocolVersion::V3];
         } else {
@@ -1103,13 +1104,22 @@ final class Connection {
 
         $protocolVersion = ProtocolVersion::getHighestSupportedVersion($versionsSupportedByServer, $this->options->allowedProtocolVersions);
         if ($protocolVersion === null) {
+
+            $allowedProtocolVersionsInOptionFormat = array_map(
+                fn (ProtocolVersion $v) => $v->inOptionFormat(),
+                $this->options->allowedProtocolVersions
+            );
+
             throw new ConnectionException('Server does not support a compatible protocol version.', ExceptionCode::CONNECTION_SERVER_PROTOCOL_UNSUPPORTED->value, [
                 'proocol_versions_supported_by_server' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
                 'proocol_versions_supported_by_client' => ProtocolVersion::CASES_IN_OPTION_FORMAT,
+                'proocol_versions_allowed_by_connection_options' => $allowedProtocolVersionsInOptionFormat,
             ]);
         }
 
         $this->version = $protocolVersion;
+
+        // configure startup options
         $startupOptions = $this->options->asStartupOptions();
 
         if (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION']
@@ -1147,6 +1157,8 @@ final class Connection {
             unset($startupOptions['DRIVER_NAME']);
             unset($startupOptions['DRIVER_VERSION']);
         }
+
+        return $startupOptions;
     }
 
     private function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {

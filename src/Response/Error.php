@@ -118,7 +118,7 @@ class Error extends Response {
         $baseContext = [
             'error_code' => $this->code,
             'error_type' => $this->type->name,
-            'protocol_version' => $this->getProtocolVersion()->toOptionFormat(),
+            'protocol_version' => $this->getProtocolVersion()->inOptionFormat(),
             'stream_id' => $this->getStream(),
             'tracing_uuid' => $this->getTracingUuid(),
             'warnings' => $this->getWarnings(),

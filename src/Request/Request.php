@@ -184,8 +184,8 @@ abstract class Request implements Frame, Stringable {
                     context: [
                         'request' => 'QUERY',
                         'option' => 'keyspace',
-                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
-                        'actual_protocol_version' => $version->toOptionFormat(),
+                        'required_protocol_version' => ProtocolVersion::V5->inOptionFormat(),
+                        'actual_protocol_version' => $version->inOptionFormat(),
                         'keyspace' => $options->keyspace,
                     ]
                 );
@@ -203,8 +203,8 @@ abstract class Request implements Frame, Stringable {
                     context: [
                         'request' => 'QUERY',
                         'option' => 'now_in_seconds',
-                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
-                        'actual_protocol_version' => $version->toOptionFormat(),
+                        'required_protocol_version' => ProtocolVersion::V5->inOptionFormat(),
+                        'actual_protocol_version' => $version->inOptionFormat(),
                         'now_in_seconds' => $options->nowInSeconds,
                     ]
                 );

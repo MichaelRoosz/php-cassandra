@@ -123,8 +123,8 @@ final class Batch extends Request {
                     context: [
                         'request' => 'BATCH',
                         'option' => 'keyspace',
-                        'required_protocol_verison' => ProtocolVersion::V5->toOptionFormat(),
-                        'actual_protocol_version' => $version->toOptionFormat(),
+                        'required_protocol_verison' => ProtocolVersion::V5->inOptionFormat(),
+                        'actual_protocol_version' => $version->inOptionFormat(),
                         'keyspace' => $options->keyspace,
                     ]
                 );
@@ -142,8 +142,8 @@ final class Batch extends Request {
                     context: [
                         'request' => 'BATCH',
                         'option' => 'now_in_seconds',
-                        'required_protocol_version' => ProtocolVersion::V5->toOptionFormat(),
-                        'actual_protocol_version' => $version->toOptionFormat(),
+                        'required_protocol_version' => ProtocolVersion::V5->inOptionFormat(),
+                        'actual_protocol_version' => $version->inOptionFormat(),
                         'now_in_seconds' => $options->nowInSeconds,
                     ]
                 );
