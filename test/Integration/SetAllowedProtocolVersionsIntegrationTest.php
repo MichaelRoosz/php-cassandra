@@ -15,11 +15,11 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
     public function testSetAllowedProtocolVersionsToV3(): void {
 
         $this->connection = $this->newConnection(
-            self::$defaultKeyspace, 
+            self::$defaultKeyspace,
             connect: false,
             options: new ConnectionOptions(
                 allowedProtocolVersions: [ProtocolVersion::V3],
-            ) 
+            )
         );
 
         $this->connection->registerWarningsListener($this);
@@ -31,11 +31,11 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
     public function testSetAllowedProtocolVersionsToV3OrV4(): void {
 
         $this->connection = $this->newConnection(
-            self::$defaultKeyspace, 
+            self::$defaultKeyspace,
             connect: false,
             options: new ConnectionOptions(
                 allowedProtocolVersions: [ProtocolVersion::V3, ProtocolVersion::V4],
-            ) 
+            )
         );
 
         $this->connection->registerWarningsListener($this);
