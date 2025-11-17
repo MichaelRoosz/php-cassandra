@@ -64,15 +64,15 @@ enum ProtocolVersion: int {
         return null;
     }
 
-    public function supports(ProtocolVersion $other): bool {
-        return $this->value >= $other->value;
-    }
-
     public function inOptionFormat(): string {
         return match ($this) {
             self::V3 => self::OPTION_FORMAT_V3,
             self::V4 => self::OPTION_FORMAT_V4,
             self::V5 => self::OPTION_FORMAT_V5,
         };
+    }
+
+    public function supports(ProtocolVersion $other): bool {
+        return $this->value >= $other->value;
     }
 }
