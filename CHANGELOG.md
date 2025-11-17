@@ -1,5 +1,9 @@
 ## v1.1.0
 
+This release introduces the ability to override the default pool of allowed protocol versions (v5, v4, v3) via the new `allowedProtocolVersions` property in `ConnectionOptions`. This is a low-level feature intended for advanced use cases and should not be used by most users. The default behavior, which attempts to negotiate the highest supported version (v5 > v4 > v3), is recommended for the majority of situations.
+
+All breaking changes affect low-level API only, which is unlikely to be used by most users.
+
 ### Breaking Changes
 * Cassandra\Protocol\Header: type of `$version` changed from `int` to `Cassandra\Protocol\ProtocolVersion`
 * These methods now expect for `$version` a value of type `Cassandra\Protocol\ProtocolVersion` instead of `int`:
@@ -16,14 +20,12 @@
 * Changed visibility of some properties and methods from `protected` to `private` to clarify public api
 
 ### Added
+* Added enum `Cassandra\Protocol\ProtocolVersion`
+* Cassandra\Connection\ConnectionOptions: added property `allowedProtocolVersions` (array of enum `Cassandra\Protocol\ProtocolVersion` )
 * Cassandra\Connection: added method `getProtocolVersion(): ProtocolVersion`
-* Cassandra\Connection: added method `setAllowedProtocolVersions(array $versions)`
-* Cassandra\Connection: added method `getAllowedProtocolVersions(): array`
-* Cassandra\Connection: added exception `CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED`
 * Cassandra\Protocol\Frame: added method `getProtocolVersion(): ProtocolVersion`
 * Cassandra\Request\Request: added method `getProtocolVersion(): ProtocolVersion`
 * Cassandra\Response\Response: added method `getProtocolVersion(): ProtocolVersion`
-* Added enum `Cassandra\Protocol\ProtocolVersion`
 
 ### Removed
 * Cassandra\Connection: removed method `onWarnings()`

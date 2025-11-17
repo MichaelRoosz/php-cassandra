@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Integration;
 
 use Cassandra\Connection;
+use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Consistency;
@@ -77,18 +78,26 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return (int) $port;
     }
 
-    protected static function newConnection(string $keyspace, bool $connect = true): Connection {
+    protected static function newConnection(
+        string $keyspace,
+        bool $connect = true,
+        ConnectionOptions $options = new ConnectionOptions()
+    ): Connection {
 
         $mode = getenv('APP_CASSANDRA_CONNECTION_MODE') ?: 'socket';
 
         return match ($mode) {
-            'socket' => self::newSocketConnection($keyspace, $connect),
-            'stream' => self::newStreamConnection($keyspace, $connect),
-            default => self::newSocketConnection($keyspace, $connect),
+            'socket' => self::newSocketConnection($keyspace, $connect, $options),
+            'stream' => self::newStreamConnection($keyspace, $connect, $options),
+            default => self::newSocketConnection($keyspace, $connect, $options),
         };
     }
 
-    protected static function newSocketConnection(string $keyspace, bool $connect = true): Connection {
+    protected static function newSocketConnection(
+        string $keyspace,
+        bool $connect = true,
+        ConnectionOptions $options = new ConnectionOptions()
+    ): Connection {
 
         $nodes = [
             new SocketNodeConfig(
@@ -99,7 +108,7 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
             ),
         ];
 
-        $conn = new Connection($nodes, $keyspace);
+        $conn = new Connection($nodes, $keyspace, $options);
         $conn->setConsistency(Consistency::ONE);
 
         if ($connect) {
@@ -109,7 +118,11 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return $conn;
     }
 
-    protected static function newStreamConnection(string $keyspace, bool $connect = true): Connection {
+    protected static function newStreamConnection(
+        string $keyspace,
+        bool $connect = true,
+        ConnectionOptions $options = new ConnectionOptions()
+    ): Connection {
 
         $nodes = [
             new StreamNodeConfig(
@@ -120,7 +133,7 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
             ),
         ];
 
-        $conn = new Connection($nodes, $keyspace);
+        $conn = new Connection($nodes, $keyspace, $options);
         $conn->setConsistency(Consistency::ONE);
 
         if ($connect) {

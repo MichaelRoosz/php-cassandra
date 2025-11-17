@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\ReleaseConstants;
 
 final class ConnectionOptions {
@@ -12,6 +13,9 @@ final class ConnectionOptions {
         public readonly bool $throwOnOverload = false,
         public readonly NodeSelectionStrategy $nodeSelectionStrategy = NodeSelectionStrategy::Random,
         public readonly int $preparedResultCacheSize = 100,
+
+        /** @var ProtocolVersion[] $allowedProtocolVersions */
+        public readonly array $allowedProtocolVersions = ProtocolVersion::PREFRED_ORDER,
     ) {
 
     }
@@ -19,7 +23,7 @@ final class ConnectionOptions {
     /**
      * @return array<string,string>
      */
-    public function toArray(): array {
+    public function asStartupOptions(): array {
 
         $options = [
             'CQL_VERSION' => '3.0.0',
@@ -36,5 +40,13 @@ final class ConnectionOptions {
         }
 
         return $options;
+    }
+
+    /**
+     * @deprecated Use asStartupOptions() instead.
+     * @return array<string,string>
+     */
+    public function toArray(): array {
+        return $this->asStartupOptions();
     }
 }

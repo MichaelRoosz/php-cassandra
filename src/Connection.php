@@ -26,9 +26,6 @@ use Cassandra\Value\ValueEncodeConfig;
 use SplQueue;
 
 final class Connection {
-    /** @var  array<\Cassandra\Protocol\ProtocolVersion> $allowedProtocolVersions */
-    private array $allowedProtocolVersions;
-
     private Consistency $consistency = Consistency::ONE;
 
     /**
@@ -51,10 +48,7 @@ final class Connection {
 
     private Connection\NodeSelector $nodeSelector;
 
-    /**
-     * @var array<string,string> $options
-     */
-    private array $options;
+    private ConnectionOptions $options;
 
     /**
      * @var array<string, \Cassandra\Response\Result\CachedPreparedResult> $preparedResultCache
@@ -96,8 +90,7 @@ final class Connection {
 
         $this->nodes = $nodes;
         $this->keyspace = $keyspace;
-        $this->options = $options->toArray();
-        $this->allowedProtocolVersions = ProtocolVersion::PREFRED_ORDER;
+        $this->options = $options;
         $this->nodeSelector = $options->nodeSelectionStrategy->createSelector();
         $this->nodeHealth = new Connection\NodeHealth();
         $this->responseReader = new ResponseReader();
@@ -200,7 +193,8 @@ final class Connection {
 
         $this->configureOptions($response);
 
-        $response = $this->syncRequest(new Request\Startup($this->options));
+        $startupOptions = $this->options->asStartupOptions();
+        $response = $this->syncRequest(new Request\Startup($startupOptions));
 
         if ($response instanceof Response\Authenticate) {
             $nodeConfig = $node->getConfig();
@@ -215,7 +209,7 @@ final class Connection {
             }
 
             if ($this->version->value >= ProtocolVersion::V5->value) {
-                $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
+                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
             }
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
@@ -229,7 +223,7 @@ final class Connection {
             }
         } elseif ($response instanceof Response\Ready) {
             if ($this->version->value >= ProtocolVersion::V5->value) {
-                $node = $this->node = new FrameCodec($node, $this->options['COMPRESSION'] ?? '');
+                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
             }
         } else {
             $nodeConfig = $node->getConfig();
@@ -412,17 +406,14 @@ final class Connection {
         return $statement;
     }
 
-    /**
-     * @return array<\Cassandra\Protocol\ProtocolVersion>
-     */
-    public function getAllowedProtocolVersions(): array {
-        return $this->allowedProtocolVersions;
-    }
-
     public function getNode(): ?Connection\Node {
         return $this->node;
     }
 
+    /**
+     * Returns the protocol version used by this connection.
+     * Before connecting, it will always return ProtocolVersion::V3.
+     */
     public function getProtocolVersion(): ProtocolVersion {
         return $this->version;
     }
@@ -625,23 +616,6 @@ final class Connection {
 
     public function registerWarningsListener(WarningsListener $warningsListener): void {
         $this->warningsListeners[] = $warningsListener;
-    }
-
-    /**
-     * @param array<\Cassandra\Protocol\ProtocolVersion> $versions
-     * 
-     * @throws \Cassandra\Exception\ConnectionException
-     */
-    public function setAllowedProtocolVersions(array $versions): void {
-
-        if ($this->isConnected()) {
-            throw new ConnectionException(
-                'Cannot change allowed protocol versions when already connected.',
-                ExceptionCode::CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED->value
-            );
-        }
-
-        $this->allowedProtocolVersions = $versions;
     }
 
     public function setConsistency(Consistency $consistency): void {
@@ -1127,7 +1101,7 @@ final class Connection {
             }
         }
 
-        $protocolVersion = ProtocolVersion::getHighestSupportedVersion($versionsSupportedByServer, $this->allowedProtocolVersions);
+        $protocolVersion = ProtocolVersion::getHighestSupportedVersion($versionsSupportedByServer, $this->options->allowedProtocolVersions);
         if ($protocolVersion === null) {
             throw new ConnectionException('Server does not support a compatible protocol version.', ExceptionCode::CONNECTION_SERVER_PROTOCOL_UNSUPPORTED->value, [
                 'proocol_versions_supported_by_server' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
@@ -1136,11 +1110,12 @@ final class Connection {
         }
 
         $this->version = $protocolVersion;
+        $startupOptions = $this->options->asStartupOptions();
 
-        if (isset($this->options['COMPRESSION']) && $this->options['COMPRESSION']
+        if (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION']
             && isset($serverOptions['COMPRESSION']) && $serverOptions['COMPRESSION']
         ) {
-            $compressionAlgo = strtolower($this->options['COMPRESSION']);
+            $compressionAlgo = strtolower($startupOptions['COMPRESSION']);
 
             if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
                 $nodeConfig = $this->node?->getConfig();
@@ -1153,24 +1128,24 @@ final class Connection {
                 ]);
             }
 
-            $this->options['COMPRESSION'] = $compressionAlgo;
+            $startupOptions['COMPRESSION'] = $compressionAlgo;
         } else {
-            unset($this->options['COMPRESSION']);
+            unset($startupOptions['COMPRESSION']);
         }
 
         if ($this->version->value >= ProtocolVersion::V4->value) {
-            if (isset($this->options['THROW_ON_OVERLOAD']) && $this->options['THROW_ON_OVERLOAD']) {
-                $this->options['THROW_ON_OVERLOAD'] = '1';
+            if ($this->options->throwOnOverload) {
+                $startupOptions['THROW_ON_OVERLOAD'] = '1';
             } else {
-                $this->options['THROW_ON_OVERLOAD'] = '0';
+                $startupOptions['THROW_ON_OVERLOAD'] = '0';
             }
         } else {
-            unset($this->options['THROW_ON_OVERLOAD']);
+            unset($startupOptions['THROW_ON_OVERLOAD']);
         }
 
         if ($this->version->value < ProtocolVersion::V5->value) {
-            unset($this->options['DRIVER_NAME']);
-            unset($this->options['DRIVER_VERSION']);
+            unset($startupOptions['DRIVER_NAME']);
+            unset($startupOptions['DRIVER_VERSION']);
         }
     }
 

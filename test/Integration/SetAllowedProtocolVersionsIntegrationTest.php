@@ -4,40 +4,43 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
-use Cassandra\Exception\ConnectionException;
-use Cassandra\Exception\ExceptionCode;
+use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Protocol\ProtocolVersion;
 
 final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegrationTestCase {
     protected function setUp(): void {
-
-        $this->connection = $this->newConnection(self::$defaultKeyspace, connect: false);
-        $this->connection->registerWarningsListener($this);
         $this->keyspace = self::$defaultKeyspace;
     }
 
-    public function testSetAllowedProtocolVersionsWhenConnectedThrows(): void {
+    public function testSetAllowedProtocolVersionsToV3(): void {
 
+        $this->connection = $this->newConnection(
+            self::$defaultKeyspace, 
+            connect: false,
+            options: new ConnectionOptions(
+                allowedProtocolVersions: [ProtocolVersion::V3],
+            ) 
+        );
+
+        $this->connection->registerWarningsListener($this);
         $this->connection->connect();
 
-        $this->expectException(ConnectionException::class);
-        $this->expectExceptionCode(ExceptionCode::CONNECTION_SET_ALLOWED_PROTOCOL_VERSIONS_WHEN_ALREADY_CONNECTED->value);
-
-        $this->connection->setAllowedProtocolVersions([
-            ProtocolVersion::V3,
-        ]);
+        $this->assertEquals($this->connection->getProtocolVersion(), ProtocolVersion::V3);
     }
 
-    public function testSetAllowedProtocolVersionsWhenNotConnected(): void {
+    public function testSetAllowedProtocolVersionsToV3OrV4(): void {
 
-        $allowedVersions = [
-            ProtocolVersion::V3,
-        ];
-        $this->connection->setAllowedProtocolVersions($allowedVersions);
+        $this->connection = $this->newConnection(
+            self::$defaultKeyspace, 
+            connect: false,
+            options: new ConnectionOptions(
+                allowedProtocolVersions: [ProtocolVersion::V3, ProtocolVersion::V4],
+            ) 
+        );
 
-        $this->assertSame($allowedVersions, $this->connection->getAllowedProtocolVersions());
-
+        $this->connection->registerWarningsListener($this);
         $this->connection->connect();
-        $this->assertContains($this->connection->getProtocolVersion(), $allowedVersions);
+
+        $this->assertEquals($this->connection->getProtocolVersion(), ProtocolVersion::V4);
     }
 }
