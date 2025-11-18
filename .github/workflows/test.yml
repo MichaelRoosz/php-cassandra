@@ -126,6 +126,14 @@ jobs:
     - name: Check PHP version
       run: php -v
 
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.13' 
+
+    - name: Install
+      run: pip install --break-package-system -U cqlsh
+
     - name: PHPUnit integration tests
       run: CASSANDRA_VERSION=${{ matrix.cassandra }} composer run test:integration
 
@@ -137,7 +145,7 @@ jobs:
     strategy:
       matrix:
         php: ["8.4"]
-        scylladb: ["2025.1", "2025.2", "2025.3"]
+        scylladb: ["6.2", "2025.1", "2025.2", "2025.3"]
 
     name: Integration test - PHP ${{ matrix.php }} - ScyllaDB ${{ matrix.scylladb }}
 
