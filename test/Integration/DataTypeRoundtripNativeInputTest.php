@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Value;
 use DateInterval;
 use DateTimeImmutable;
@@ -284,6 +285,10 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
             $this->markTestSkipped('Date requires 64-bit integer');
         }
 
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V4)) {
+            $this->markTestSkipped('Date type requires Protocol v4 or higher');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_date (id int PRIMARY KEY, value date)'
         );
@@ -461,6 +466,10 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
 
         if (!$this->integerHasAtLeast64Bits()) {
             $this->markTestSkipped('Duration requires 64-bit integer');
+        }
+
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V5) && !self::isScyllaDb()) {
+            $this->markTestSkipped('Duration type requires Protocol v5 or higher');
         }
 
         $this->connection->query(
@@ -1133,6 +1142,11 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testSmallintRoundtrip(): void {
+
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V4)) {
+            $this->markTestSkipped('SmallInt type requires Protocol v4 or higher');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_smallint (id int PRIMARY KEY, value smallint)'
         );
@@ -1173,6 +1187,10 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
 
         if (!$this->integerHasAtLeast64Bits()) {
             $this->markTestSkipped('Time requires 64-bit integer');
+        }
+
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V4)) {
+            $this->markTestSkipped('Time type requires Protocol v4 or higher');
         }
 
         $this->connection->query(
@@ -1367,6 +1385,11 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testTinyintRoundtrip(): void {
+
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V4)) {
+            $this->markTestSkipped('TinyInt type requires Protocol v4 or higher');
+        }
+
         $this->connection->query(
             'CREATE TABLE IF NOT EXISTS test_tinyint (id int PRIMARY KEY, value tinyint)'
         );
@@ -1506,6 +1529,12 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
     }
 
     public function testUdtRoundtrip(): void {
+
+        $serverRequiresFrozen = !self::cassandraVersionIsAtLeast('4.0') && !self::isScyllaDb();
+        if ($serverRequiresFrozen) {
+            $this->markTestSkipped('UDT without frozen requires Cassandra 4.0 or higher or ScyllaDB');
+        }
+
         // Create a User Defined Type in Cassandra
         $this->connection->query(
             'CREATE TYPE IF NOT EXISTS address (street varchar, city varchar, zip int)'

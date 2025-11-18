@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Integration;
 
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Value;
 use Cassandra\Value\EncodeOption\DateEncodeOption;
 use Cassandra\Value\EncodeOption\DurationEncodeOption;
@@ -18,7 +19,11 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     public function testDateEncodeOptions(): void {
 
         if (!$this->integerHasAtLeast64Bits()) {
-            $this->markTestSkipped('Date requires 64-bit integer');
+            $this->markTestSkipped('Date type requires 64-bit integer');
+        }
+
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V4)) {
+            $this->markTestSkipped('Date type requires Protocol v4 or higher');
         }
 
         $this->connection->query('TRUNCATE test_enc_date');
@@ -61,6 +66,10 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
 
         if (!$this->integerHasAtLeast64Bits()) {
             $this->markTestSkipped('Duration requires 64-bit integer');
+        }
+
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V5) && !self::isScyllaDb()) {
+            $this->markTestSkipped('Duration type requires Protocol v5 or higher');
         }
 
         $this->connection->query('TRUNCATE test_enc_duration');
@@ -117,7 +126,11 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     public function testTimeEncodeOptions(): void {
 
         if (!$this->integerHasAtLeast64Bits()) {
-            $this->markTestSkipped('Time requires 64-bit integer');
+            $this->markTestSkipped('Time type requires 64-bit integer');
+        }
+
+        if (!$this->connection->getProtocolVersion()->supports(ProtocolVersion::V4)) {
+            $this->markTestSkipped('Time type requires Protocol v4 or higher');
         }
 
         $this->connection->query('TRUNCATE test_enc_time');
@@ -159,7 +172,7 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     public function testTimestampEncodeOptions(): void {
 
         if (!$this->integerHasAtLeast64Bits()) {
-            $this->markTestSkipped('Timestamp requires 64-bit integer');
+            $this->markTestSkipped('Timestamp type requires 64-bit integer');
         }
 
         $this->connection->query('TRUNCATE test_enc_timestamp');
@@ -247,11 +260,17 @@ final class ValueEncodeOptionsTest extends AbstractIntegrationTestCase {
     protected static function setupTable(): void {
         $conn = self::newConnection(self::$defaultKeyspace);
 
-        $conn->query('CREATE TABLE IF NOT EXISTS test_enc_date (id int PRIMARY KEY, v date)');
-        $conn->query('CREATE TABLE IF NOT EXISTS test_enc_time (id int PRIMARY KEY, v time)');
         $conn->query('CREATE TABLE IF NOT EXISTS test_enc_timestamp (id int PRIMARY KEY, v timestamp)');
-        $conn->query('CREATE TABLE IF NOT EXISTS test_enc_duration (id int PRIMARY KEY, v duration)');
         $conn->query('CREATE TABLE IF NOT EXISTS test_enc_varint (id int PRIMARY KEY, v varint)');
+
+        if ($conn->getProtocolVersion()->supports(ProtocolVersion::V4)) {
+            $conn->query('CREATE TABLE IF NOT EXISTS test_enc_date (id int PRIMARY KEY, v date)');
+            $conn->query('CREATE TABLE IF NOT EXISTS test_enc_time (id int PRIMARY KEY, v time)');
+        }
+
+        if ($conn->getProtocolVersion()->supports(ProtocolVersion::V5) || self::isScyllaDb()) {
+            $conn->query('CREATE TABLE IF NOT EXISTS test_enc_duration (id int PRIMARY KEY, v duration)');
+        }
 
         $conn->disconnect();
     }

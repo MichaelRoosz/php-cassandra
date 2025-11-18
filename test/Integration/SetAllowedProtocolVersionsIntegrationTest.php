@@ -27,7 +27,7 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
         $this->connection->registerWarningsListener($this);
         $this->connection->connect();
 
-        $this->assertEquals($this->connection->getProtocolVersion(), ProtocolVersion::V3);
+        $this->assertEquals(ProtocolVersion::V3, $this->connection->getProtocolVersion());
     }
 
     public function testSetAllowedProtocolVersionsToV3OrV4(): void {
@@ -42,9 +42,13 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
                 initialProtocolVersion: ProtocolVersion::V4,
             );
         } else {
+            // Protocol negiotiation is supported since Cassandra 4.x,
+            // and should pick V4 when both V3 and V4 are allowed.
+            // If the server is older than 4.x, the protocol version is fixed to the inital version.
+            $initialVersion = self::cassandraVersionIsAtLeast('4.0') ? ProtocolVersion::V3 : ProtocolVersion::V4;
             $options = new ConnectionOptions(
                 allowedProtocolVersions: [ProtocolVersion::V3, ProtocolVersion::V4],
-                initialProtocolVersion: ProtocolVersion::V3,
+                initialProtocolVersion: $initialVersion,
             );
         }
 
@@ -58,7 +62,7 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
         $this->connection->registerWarningsListener($this);
         $this->connection->connect();
 
-        $this->assertEquals($this->connection->getProtocolVersion(), ProtocolVersion::V4);
+        $this->assertEquals(ProtocolVersion::V4, $this->connection->getProtocolVersion());
     }
 
     public function testSetAllowedProtocolVersionsToV4(): void {
@@ -80,7 +84,7 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
         $this->connection->registerWarningsListener($this);
         $this->connection->connect();
 
-        $this->assertEquals($this->connection->getProtocolVersion(), ProtocolVersion::V4);
+        $this->assertEquals(ProtocolVersion::V4, $this->connection->getProtocolVersion());
     }
 
     public function testSetAllowedProtocolVersionsToV5(): void {
@@ -102,6 +106,6 @@ final class SetAllowedProtocolVersionsIntegrationTest extends AbstractIntegratio
         $this->connection->registerWarningsListener($this);
         $this->connection->connect();
 
-        $this->assertEquals($this->connection->getProtocolVersion(), ProtocolVersion::V5);
+        $this->assertEquals(ProtocolVersion::V5, $this->connection->getProtocolVersion());
     }
 }

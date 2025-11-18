@@ -411,7 +411,8 @@ final class Connection {
 
     /**
      * Returns the protocol version used by this connection.
-     * Before connecting, it will always return ProtocolVersion::V3.
+     * Before connecting, it will return the initial protocol version,
+     * as set in the connection options.
      */
     public function getProtocolVersion(): ProtocolVersion {
         return $this->version;

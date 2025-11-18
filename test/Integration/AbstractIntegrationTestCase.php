@@ -126,6 +126,20 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return true;
     }
 
+    protected static function cassandraVersionIsAtLeast(string $version): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        $cassandraVersion = getenv('CASSANDRA_VERSION');
+        if ($cassandraVersion && version_compare($cassandraVersion, $version, '<')) {
+            return false;
+        }
+
+        return true;
+    }
+
     protected static function isScyllaDb(): bool {
         return getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
     }
