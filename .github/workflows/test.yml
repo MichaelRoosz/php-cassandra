@@ -132,7 +132,7 @@ jobs:
         python-version: '3.13' 
 
     - name: Install
-      run: pip install --break-package-system -U cqlsh
+      run: pip install -U cqlsh
 
     - name: PHPUnit integration tests
       run: CASSANDRA_VERSION=${{ matrix.cassandra }} composer run test:integration
