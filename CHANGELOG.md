@@ -1,3 +1,8 @@
+## v1.2.0
+
+### Fixed
+* Fixed lz4 decompression for protocol v3 and v4
+
 ## v1.1.0
 
 This release introduces the ability to override the default pool of allowed protocol versions (v5, v4, v3) via the new `allowedProtocolVersions` property in `ConnectionOptions`. This is a low-level feature intended for advanced use cases and should not be used by most users. The default behavior, which attempts to negotiate the highest supported version (v5 > v4 > v3), is recommended for the majority of situations.

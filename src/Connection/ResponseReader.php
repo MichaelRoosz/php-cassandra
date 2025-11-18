@@ -63,8 +63,28 @@ final class ResponseReader {
             && $header->length > 0
             && $header->flags & Flag::COMPRESSION
         ) {
-            $this->lz4Decompressor->setInput($body);
+            $uncompressedLength = unpack('N', substr($body, 0, 4));
+            if ($uncompressedLength === false) {
+                throw new ConnectionException(
+                    'Cannot read uncompressed length from compressed frame',
+                    ExceptionCode::CONNECTION_CANNOT_READ_DECOMPRESSED_FRAME_LENGTH->value,
+                    []
+                );
+            }
+
+            $this->lz4Decompressor->setInput(substr($body, 4));
             $body = $this->lz4Decompressor->decompressBlock();
+
+            if ($uncompressedLength[1] !== strlen($body)) {
+                throw new ConnectionException(
+                    'Decompressed frame length does not match expected length',
+                    ExceptionCode::CONNECTION_DECOMPRESSED_FRAME_LENGTH_MISMATCH->value,
+                    [
+                        'expected_length' => $uncompressedLength,
+                        'actual_length' => strlen($body),
+                    ]
+                );
+            }
         }
 
         return $this->createResponse($header, $body);

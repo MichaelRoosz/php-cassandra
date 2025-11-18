@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
+use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\ReleaseConstants;
 
 final class ConnectionOptions {
+    /**
+     * @throws \Cassandra\Exception\ConnectionException
+     */
     public function __construct(
         public readonly bool $enableCompression = false,
         public readonly bool $throwOnOverload = false,
@@ -19,6 +24,16 @@ final class ConnectionOptions {
         public readonly ProtocolVersion $initialProtocolVersion = ProtocolVersion::V3,
     ) {
 
+        if (!in_array($this->initialProtocolVersion, $this->allowedProtocolVersions, true)) {
+            throw new ConnectionException(
+                'The initial protocol version must be one of the allowed protocol versions.',
+                ExceptionCode::CONNECTION_INITIAL_PROTOCOL_VERSION_NOT_IN_ALLOWED_VERSIONS->value,
+                [
+                    'initialProtocolVersion' => $this->initialProtocolVersion,
+                    'allowedProtocolVersions' => $this->allowedProtocolVersions,
+                ]
+            );
+        }
     }
 
     /**

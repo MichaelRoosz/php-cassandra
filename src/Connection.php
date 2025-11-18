@@ -1106,13 +1106,18 @@ final class Connection {
         $protocolVersion = ProtocolVersion::getHighestSupportedVersion($versionsSupportedByServer, $this->options->allowedProtocolVersions);
         if ($protocolVersion === null) {
 
+            $versionsSupportedByServerInOptionFormat = array_map(
+                fn (ProtocolVersion $v) => $v->inOptionFormat(),
+                $versionsSupportedByServer
+            );
+
             $allowedProtocolVersionsInOptionFormat = array_map(
                 fn (ProtocolVersion $v) => $v->inOptionFormat(),
                 $this->options->allowedProtocolVersions
             );
 
             throw new ConnectionException('Server does not support a compatible protocol version.', ExceptionCode::CONNECTION_SERVER_PROTOCOL_UNSUPPORTED->value, [
-                'proocol_versions_supported_by_server' => $serverOptions['PROTOCOL_VERSIONS'] ?? null,
+                'proocol_versions_supported_by_server' => $versionsSupportedByServerInOptionFormat,
                 'proocol_versions_supported_by_client' => ProtocolVersion::CASES_IN_OPTION_FORMAT,
                 'proocol_versions_allowed_by_connection_options' => $allowedProtocolVersionsInOptionFormat,
             ]);

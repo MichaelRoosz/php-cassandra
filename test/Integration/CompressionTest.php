@@ -8,11 +8,46 @@ use Cassandra\Connection;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Options\QueryOptions;
 
 final class CompressionTest extends AbstractIntegrationTestCase {
-    // todo: test with v3,v4,v5 protocol versions
-    public function testNegotiatesCompressionAndDecodesCompressedFrames(): void {
+    public function testNegotiatesCompressionAndDecodesCompressedFramesV3(): void {
+
+        $options = new ConnectionOptions(
+            enableCompression: true,
+            allowedProtocolVersions: [ProtocolVersion::V3],
+        );
+
+        $this->testCompression($options);
+    }
+
+    public function testNegotiatesCompressionAndDecodesCompressedFramesV4(): void {
+
+        $options = new ConnectionOptions(
+            enableCompression: true,
+            allowedProtocolVersions: [ProtocolVersion::V4],
+            initialProtocolVersion: self::isScyllaDb() ? ProtocolVersion::V4 : ProtocolVersion::V3,
+        );
+
+        $this->testCompression($options);
+    }
+
+    public function testNegotiatesCompressionAndDecodesCompressedFramesV5(): void {
+
+        if (self::isScyllaDb()) {
+            $this->markTestSkipped('Skipping V5 compression test on ScyllaDB');
+        }
+
+        $options = new ConnectionOptions(
+            enableCompression: true,
+            allowedProtocolVersions: [ProtocolVersion::V5],
+        );
+
+        $this->testCompression($options);
+    }
+
+    private function testCompression(ConnectionOptions $options): void {
 
         $nodes = [
             new SocketNodeConfig(
@@ -23,7 +58,6 @@ final class CompressionTest extends AbstractIntegrationTestCase {
             ),
         ];
 
-        $options = new ConnectionOptions(enableCompression: true);
         $conn = new Connection($nodes, self::$defaultKeyspace, $options);
         $conn->setConsistency(Consistency::ONE);
         $conn->connect();
