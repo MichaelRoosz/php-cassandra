@@ -69,6 +69,20 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return $keyspace;
     }
 
+    protected static function cassandraVersionIsAtLeast(string $version): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        $cassandraVersion = getenv('CASSANDRA_VERSION');
+        if ($cassandraVersion && version_compare($cassandraVersion, $version, '<')) {
+            return false;
+        }
+
+        return true;
+    }
+
     protected static function cqlshSupportsVectorsWithDynamicLengthDataType(): bool {
         if (self::isScyllaDb()) {
             // note: scylladb's cqlsh does not support vectors currently
@@ -120,20 +134,6 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
 
         $cassandraVersion = getenv('CASSANDRA_VERSION');
         if ($cassandraVersion && version_compare($cassandraVersion, $neededVersion, '<')) {
-            return false;
-        }
-
-        return true;
-    }
-
-    protected static function cassandraVersionIsAtLeast(string $version): bool {
-
-        if (self::isScyllaDb()) {
-            return false;
-        }
-
-        $cassandraVersion = getenv('CASSANDRA_VERSION');
-        if ($cassandraVersion && version_compare($cassandraVersion, $version, '<')) {
             return false;
         }
 
