@@ -18,7 +18,7 @@ final class ConnectionIntegrationTest extends AbstractIntegrationTestCase {
     public function testBatchInsert(): void {
 
         $conn = $this->connection;
-        if ($conn->getProtocolVersion()->supports(ProtocolVersion::V5) ) {
+        if ($conn->getProtocolVersion()->supports(ProtocolVersion::V5)) {
             $options = new BatchOptions(keyspace: $this->keyspace);
         } else {
             $options = new BatchOptions();

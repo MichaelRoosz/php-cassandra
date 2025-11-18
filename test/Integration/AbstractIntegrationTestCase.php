@@ -79,6 +79,10 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return (int) $port;
     }
 
+    protected static function isScyllaDb(): bool {
+        return getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
+    }
+
     protected static function newConnection(
         string $keyspace,
         bool $connect = true,
@@ -177,9 +181,5 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         $connection = self::newConnection('system');
         $connection->query("DROP KEYSPACE IF EXISTS {$keyspace}");
         $connection->disconnect();
-    }
-
-    protected static function isScyllaDb(): bool {
-        return getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
     }
 }

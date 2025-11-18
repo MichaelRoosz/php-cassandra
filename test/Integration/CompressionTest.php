@@ -11,6 +11,7 @@ use Cassandra\Consistency;
 use Cassandra\Request\Options\QueryOptions;
 
 final class CompressionTest extends AbstractIntegrationTestCase {
+    // todo: test with v3,v4,v5 protocol versions
     public function testNegotiatesCompressionAndDecodesCompressedFrames(): void {
 
         $nodes = [
