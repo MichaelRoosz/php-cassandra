@@ -4,15 +4,10 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
-use Cassandra\Exception\ConnectionException;
-use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\ReleaseConstants;
 
 final class ConnectionOptions {
-    /**
-     * @throws \Cassandra\Exception\ConnectionException
-     */
     public function __construct(
         public readonly bool $enableCompression = false,
         public readonly bool $throwOnOverload = false,
@@ -21,7 +16,7 @@ final class ConnectionOptions {
 
         /** @var ProtocolVersion[] $allowedProtocolVersions */
         public readonly array $allowedProtocolVersions = ProtocolVersion::PREFRED_ORDER,
-        public readonly ProtocolVersion $initialProtocolVersion = ProtocolVersion::V3,
+        public readonly ProtocolVersion $initialProtocolVersion = ProtocolVersion::V4,
     ) {
     }
 

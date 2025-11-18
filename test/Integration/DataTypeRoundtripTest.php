@@ -242,6 +242,11 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
     }
 
     public function testCustomRoundtrip(): void {
+
+        if (self::isScyllaDb()) {
+            $this->markTestSkipped('Custom data types are not supported by ScyllaDB');
+        }
+
         $this->connection->query(
             "CREATE TABLE IF NOT EXISTS test_custom (id int PRIMARY KEY, value 'org.apache.cassandra.db.marshal.BytesType')"
         );
@@ -1758,9 +1763,8 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
 
     public function testVectorRoundtrip(): void {
 
-        $cassandraVersion = getenv('CASSANDRA_VERSION');
-        if ($cassandraVersion && version_compare($cassandraVersion, '5.0', '<')) {
-            $this->markTestSkipped('Vectors are not supported in Cassandra versions before 5.0');
+        if (!self::isVectorDataTypeSupported()) {
+            $this->markTestSkipped('Vectors are not supported by the server.');
         }
 
         // test vector of 3 float values (data type with fixed length)
@@ -1809,7 +1813,9 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
             }
         }
 
-        $this->compareWithCqlsh('test_vector_float3', 'id', 'value', $testValues, 'vector');
+        if (self::cqlshSupportsVectorsWithFixedLengthDataType()) {
+            $this->compareWithCqlsh('test_vector_float3', 'id', 'value', $testValues, 'vector');
+        }
 
         // test vector of 4 varint values (data type with variable length)
         $this->connection->query(
@@ -1859,7 +1865,8 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
             }
         }
 
-        // cqlsh does not support varint vectors currently
-        //$this->compareWithCqlsh('test_vector_varint4', 'id', 'value', $testValues, 'vector');
+        if (self::cqlshSupportsVectorsWithDynamicLengthDataType()) {
+            $this->compareWithCqlsh('test_vector_varint4', 'id', 'value', $testValues, 'vector');
+        }
     }
 }

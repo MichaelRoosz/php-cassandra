@@ -162,6 +162,15 @@ trait CompareAgainstCqlsh {
                     }
 
                     break;
+                case 'duration':
+                    $this->assertIsString($phpValue);
+                    $this->assertIsString($cqlshValue);
+                    if (self::isScyllaDb()) {
+                        // ScyllaDB appends a fraction to each part of the duration,
+                        // because it is missing the fix of https://issues.apache.org/jira/browse/CASSANDRA-18141
+                        $cqlshValue = preg_replace('/(-?\d+)\.[0-9]*([a-z]+)/', '$1$2', $cqlshValue);
+                    }
+                    $this->assertSame((string) $phpValue, (string) $cqlshValue, 'PHP value should match cqlsh output');
                 default:
                     $this->assertIsString($phpValue);
                     $this->assertIsString($cqlshValue);

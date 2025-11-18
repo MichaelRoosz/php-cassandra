@@ -69,6 +69,25 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return $keyspace;
     }
 
+    protected static function cqlshSupportsVectorsWithDynamicLengthDataType(): bool {
+        if (self::isScyllaDb()) {
+            // note: scylladb's cqlsh does not support vectors currently
+            return false;
+        }
+
+        // note: cqlsh does not support vectors of dynamic length data types currently
+        return false;
+    }
+
+    protected static function cqlshSupportsVectorsWithFixedLengthDataType(): bool {
+        if (self::isScyllaDb()) {
+            // note: scylladb's cqlsh does not support vectors currently
+            return false;
+        }
+
+        return true;
+    }
+
     protected static function getHost(): string {
         return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
     }
@@ -79,14 +98,56 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return (int) $port;
     }
 
+    protected static function isProtocolVersionSupported(ProtocolVersion $version): bool {
+
+        if (self::isScyllaDb()) {
+            return in_array($version, [
+                ProtocolVersion::V3,
+                ProtocolVersion::V4,
+            ], true);
+        }
+
+        /*
+        * v3: supported in Cassandra 2.1-->3.x+
+        * v4: supported in Cassandra 2.2-->3.x+
+        * v5: in beta from 3.x+. Finalised in 4.0-beta5
+        */
+        $neededVersion = match ($version) {
+            ProtocolVersion::V3 => '2.1',
+            ProtocolVersion::V4 => '2.2',
+            ProtocolVersion::V5 => '4.0',
+        };
+
+        $cassandraVersion = getenv('CASSANDRA_VERSION');
+        if ($cassandraVersion && version_compare($cassandraVersion, $neededVersion, '<')) {
+            return false;
+        }
+
+        return true;
+    }
+
     protected static function isScyllaDb(): bool {
         return getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
+    }
+
+    protected static function isVectorDataTypeSupported(): bool {
+        if (self::isScyllaDb()) {
+            return true;
+        }
+
+        $cassandraVersion = getenv('CASSANDRA_VERSION');
+        if ($cassandraVersion && version_compare($cassandraVersion, '5.0', '<')) {
+            return false;
+        }
+
+        return true;
     }
 
     protected static function newConnection(
         string $keyspace,
         bool $connect = true,
-        ConnectionOptions $options = new ConnectionOptions()
+        ConnectionOptions $options = new ConnectionOptions(),
+        bool $forceInitialProtocolVersion = false
     ): Connection {
 
         if (self::isScyllaDb()) {
@@ -96,7 +157,7 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
                 nodeSelectionStrategy: $options->nodeSelectionStrategy,
                 preparedResultCacheSize: $options->preparedResultCacheSize,
                 allowedProtocolVersions: $options->allowedProtocolVersions,
-                initialProtocolVersion: ProtocolVersion::V4,
+                initialProtocolVersion: $forceInitialProtocolVersion ? $options->initialProtocolVersion : ProtocolVersion::V4,
             );
         }
 

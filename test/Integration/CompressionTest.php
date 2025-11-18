@@ -17,6 +17,7 @@ final class CompressionTest extends AbstractIntegrationTestCase {
         $options = new ConnectionOptions(
             enableCompression: true,
             allowedProtocolVersions: [ProtocolVersion::V3],
+            initialProtocolVersion: ProtocolVersion::V3,
         );
 
         $this->testCompression($options);
@@ -24,10 +25,14 @@ final class CompressionTest extends AbstractIntegrationTestCase {
 
     public function testNegotiatesCompressionAndDecodesCompressedFramesV4(): void {
 
+        if (self::isProtocolVersionSupported(ProtocolVersion::V4) === false) {
+            $this->markTestSkipped('Protocol V4 is not supported by the server.');
+        }
+
         $options = new ConnectionOptions(
             enableCompression: true,
             allowedProtocolVersions: [ProtocolVersion::V4],
-            initialProtocolVersion: self::isScyllaDb() ? ProtocolVersion::V4 : ProtocolVersion::V3,
+            initialProtocolVersion: ProtocolVersion::V4,
         );
 
         $this->testCompression($options);
@@ -35,8 +40,8 @@ final class CompressionTest extends AbstractIntegrationTestCase {
 
     public function testNegotiatesCompressionAndDecodesCompressedFramesV5(): void {
 
-        if (self::isScyllaDb()) {
-            $this->markTestSkipped('Skipping V5 compression test on ScyllaDB');
+        if (self::isProtocolVersionSupported(ProtocolVersion::V5) === false) {
+            $this->markTestSkipped('Protocol V5 is not supported by the server.');
         }
 
         $options = new ConnectionOptions(

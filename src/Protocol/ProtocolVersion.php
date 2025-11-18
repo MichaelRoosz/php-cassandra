@@ -5,6 +5,17 @@ declare(strict_types=1);
 namespace Cassandra\Protocol;
 
 enum ProtocolVersion: int {
+    /*
+     * Known protocol versions:
+     * 
+     * v1: supported in Cassandra 1.2-->2.2 > not supported, too old
+     * v2: supported in Cassandra 2.0-->2.2 > not supported, too old
+     * v3: supported in Cassandra 2.1-->3.x+ > supported
+     * v4: supported in Cassandra 2.2-->3.x+ > supported
+     * v5: in beta from 3.x+. Finalised in 4.0-beta5 > supported
+     * v6: in beta from 4.0-beta5 > not supported yet, spec not finalised
+    */
+
     case V3 = 3;
     case V4 = 4;
     case V5 = 5;

@@ -1,7 +1,15 @@
 ## v1.2.0
 
+This release fixes lz4 decompression for protocol v3 and v4 (Cassandra 3 and older) and adds full support for ScyllaDB.
+
 ### Fixed
-* Fixed lz4 decompression for protocol v3 and v4
+* Fixed lz4 decompression for protocol v3 and v4 (Cassandra 3 and older)
+
+### Added
+* Full support for ScyllaDB (2024.1, 2025.1, 2025.2, 2025.3)
+
+### Changed
+* Initial protocol version while connecting is now V4 (was V3). To connect to Cassandra version 2.1, `initialProtocolVersion` in `ConnectionOptions` has to be set to `ProtocolVersion::V3`.
 
 ## v1.1.0
 
