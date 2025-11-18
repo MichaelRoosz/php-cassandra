@@ -137,7 +137,7 @@ jobs:
     strategy:
       matrix:
         php: ["8.4"]
-        scylladb: ["2024.1", "2025.1", "2025.2", "2025.3"]
+        scylladb: ["2025.1", "2025.2", "2025.3"]
 
     name: Integration test - PHP ${{ matrix.php }} - ScyllaDB ${{ matrix.scylladb }}
 
