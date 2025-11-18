@@ -1,3 +1,4 @@
+name: php-cassandra
 services:
   cassandra:
     image: cassandra:${CASSANDRA_VERSION:-5.0}

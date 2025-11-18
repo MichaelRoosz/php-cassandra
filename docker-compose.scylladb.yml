@@ -1,3 +1,4 @@
+name: php-cassandra-scylladb
 services:
   scylladb:
     image: scylladb/scylla:${SCYLLADB_VERSION:-2025.3.3}
@@ -8,7 +9,7 @@ services:
       - --broadcast-rpc-address
       - 127.0.0.1
     ports:
-      - "9142:9042"
+      - "9242:9042"
     healthcheck:
       test: ["CMD", "bash", "-lc", "cqlsh -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
       interval: 10s
