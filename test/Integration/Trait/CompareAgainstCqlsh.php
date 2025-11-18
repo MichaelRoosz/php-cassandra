@@ -316,7 +316,12 @@ trait CompareAgainstCqlsh {
 
     protected function runCqlShInDocker(string $command): string {
 
-        $containerName = 'php-cassandra-test-db';
+        $isScyllaDb = getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
+        if ($isScyllaDb) {
+            $containerName = 'php-scylladb-test-db';
+        } else {
+            $containerName = 'php-cassandra-test-db';
+        }
 
         $dockerCommand = "docker exec {$containerName} {$command}";
 

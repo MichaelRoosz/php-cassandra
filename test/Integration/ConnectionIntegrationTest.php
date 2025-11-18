@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Integration;
 
 use Cassandra\Consistency;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\BatchOptions;
@@ -17,7 +18,13 @@ final class ConnectionIntegrationTest extends AbstractIntegrationTestCase {
     public function testBatchInsert(): void {
 
         $conn = $this->connection;
-        $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE, new BatchOptions(keyspace: $this->keyspace));
+        if ($conn->getProtocolVersion()->supports(ProtocolVersion::V5) ) {
+            $options = new BatchOptions(keyspace: $this->keyspace);
+        } else {
+            $options = new BatchOptions();
+        }
+
+        $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE, $options);
         for ($i = 0; $i < 10; $i++) {
             $batch->appendQuery(
                 'INSERT INTO storage(filename, ukey, value) VALUES (?, ?, ?)',

@@ -9,6 +9,7 @@ use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Consistency;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Request;
 use Cassandra\Response\Response;
 use Cassandra\WarningsListener;
@@ -83,6 +84,17 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         bool $connect = true,
         ConnectionOptions $options = new ConnectionOptions()
     ): Connection {
+
+        if (self::isScyllaDb()) {
+            $options = new ConnectionOptions(
+                enableCompression: $options->enableCompression,
+                throwOnOverload: $options->throwOnOverload,
+                nodeSelectionStrategy: $options->nodeSelectionStrategy,
+                preparedResultCacheSize: $options->preparedResultCacheSize,
+                allowedProtocolVersions: $options->allowedProtocolVersions,
+                initialProtocolVersion: ProtocolVersion::V4,
+            );
+        }
 
         $mode = getenv('APP_CASSANDRA_CONNECTION_MODE') ?: 'socket';
 
@@ -165,5 +177,9 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         $connection = self::newConnection('system');
         $connection->query("DROP KEYSPACE IF EXISTS {$keyspace}");
         $connection->disconnect();
+    }
+
+    protected static function isScyllaDb(): bool {
+        return getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
     }
 }

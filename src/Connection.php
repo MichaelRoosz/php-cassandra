@@ -72,7 +72,7 @@ final class Connection {
 
     private ?ValueEncodeConfig $valueEncodeConfig = null;
 
-    private ProtocolVersion $version = ProtocolVersion::V3;
+    private ProtocolVersion $version;
 
     /**
      * @var array<WarningsListener> $warningsListeners
@@ -91,6 +91,7 @@ final class Connection {
         $this->nodes = $nodes;
         $this->keyspace = $keyspace;
         $this->options = $options;
+        $this->version = $options->initialProtocolVersion;
         $this->nodeSelector = $options->nodeSelectionStrategy->createSelector();
         $this->nodeHealth = new Connection\NodeHealth();
         $this->responseReader = new ResponseReader();
@@ -1090,7 +1091,7 @@ final class Connection {
 
         // configure protocol version
         if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
-            $versionsSupportedByServer = [ProtocolVersion::V3];
+            $versionsSupportedByServer = [$this->version];
         } else {
             $versionsSupportedByServer = [];
 

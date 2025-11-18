@@ -16,6 +16,7 @@ final class ConnectionOptions {
 
         /** @var ProtocolVersion[] $allowedProtocolVersions */
         public readonly array $allowedProtocolVersions = ProtocolVersion::PREFRED_ORDER,
+        public readonly ProtocolVersion $initialProtocolVersion = ProtocolVersion::V3,
     ) {
 
     }
