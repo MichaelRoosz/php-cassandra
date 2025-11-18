@@ -23,17 +23,6 @@ final class ConnectionOptions {
         public readonly array $allowedProtocolVersions = ProtocolVersion::PREFRED_ORDER,
         public readonly ProtocolVersion $initialProtocolVersion = ProtocolVersion::V3,
     ) {
-
-        if (!in_array($this->initialProtocolVersion, $this->allowedProtocolVersions, true)) {
-            throw new ConnectionException(
-                'The initial protocol version must be one of the allowed protocol versions.',
-                ExceptionCode::CONNECTION_INITIAL_PROTOCOL_VERSION_NOT_IN_ALLOWED_VERSIONS->value,
-                [
-                    'initialProtocolVersion' => $this->initialProtocolVersion,
-                    'allowedProtocolVersions' => $this->allowedProtocolVersions,
-                ]
-            );
-        }
     }
 
     /**
