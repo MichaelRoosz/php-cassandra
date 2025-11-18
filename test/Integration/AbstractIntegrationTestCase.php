@@ -146,6 +146,11 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
 
     protected static function isVectorDataTypeSupported(): bool {
         if (self::isScyllaDb()) {
+            $scyllaDbVersion = getenv('SCYLLADB_VERSION');
+            if ($scyllaDbVersion && version_compare($scyllaDbVersion, '2025.2', '<')) {
+                return false;
+            }
+
             return true;
         }
 

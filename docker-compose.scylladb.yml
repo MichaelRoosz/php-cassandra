@@ -1,7 +1,7 @@
 name: php-cassandra-scylladb
 services:
   scylladb:
-    image: scylladb/scylla:${SCYLLADB_VERSION:-2025.3.3}
+    image: scylladb/scylla:${SCYLLADB_VERSION:-2025.3}
     container_name: php-scylladb-test-db
     command:
       - --rpc-address
