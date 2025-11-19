@@ -10,7 +10,7 @@ php-cassandra: A modern Cassandra client for PHP
 [![Static Analysis: Psalm](https://img.shields.io/badge/Static%20analysis-Psalm-4A41BE?logo=psalm&logoColor=white)](https://psalm.dev)
 [![Tests: PHPUnit](https://img.shields.io/badge/Tests-PHPUnit-6C78AF?logo=phpunit&logoColor=white)](https://phpunit.de)
 
-php-cassandra is a pure-PHP client for Apache Cassandra with support for CQL binary protocol v3, v4 and v5 (Cassandra 4.x/5.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.
+php-cassandra is a pure-PHP client for Apache Cassandra and ScyllaDB with support for CQL binary protocol v3, v4 and v5 (Cassandra 2.1+ incl. 3.x–5.x; ScyllaDB 6.2 and 2025.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.
 
 **Packagist:** [mroosz/php-cassandra](https://packagist.org/packages/mroosz/php-cassandra)  
 **Repository:** [GitHub – MichaelRoosz/php-cassandra](https://github.com/MichaelRoosz/php-cassandra)
@@ -91,6 +91,7 @@ Table of contents
   - [Performance tips](#performance-tips)
   - [Benchmarks](#benchmarks)
   - [Version support](#version-support)
+    - [Server compatibility and required settings](#server-compatibility-and-required-settings)
   - [API reference (essentials)](#api-reference-essentials)
   - [Changelog](#changelog)
   - [License](#license)
