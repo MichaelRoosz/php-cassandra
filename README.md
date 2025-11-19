@@ -1787,7 +1787,45 @@ Notes:
 Version support
 ---------------
 
-- Cassandra 4.x/5.x tested. Protocols v3/v4/v5 supported; features like per-request keyspace/now_in_seconds require v5.
+- Protocol versions **v3**, **v4**, and **v5** are supported. Features like per-request `keyspace` / `now_in_seconds` require protocol **v5**.
+- Cassandra **3.0**, **3.11**, **4.x**, **5.x** and ScyllaDB **6.2, 2025.1, 2025.2, 2025.3** are part of the regular test matrix.
+
+### Server compatibility and required settings
+
+| Server version | Supported? | Protocol(s) | Notes / required settings |
+|----------------|------------|-------------|---------------------------|
+| **Apache Cassandra 2.1.x** | ✅ With manual configuration | v3 | Cassandra 2.1 only supports protocol v3 and does **not** support protocol negotiation. You must set the initial protocol explicitly: `new ConnectionOptions(initialProtocolVersion: ProtocolVersion::V3)`. Optionally, also restrict `allowedProtocolVersions` to `[ProtocolVersion::V3]`. |
+| **Apache Cassandra 2.2.x / 3.x** | ✅ (3.0 / 3.11 tested) | v4 | These versions speak protocol v4 but do not support protocol negotiation. The default `initialProtocolVersion` is `ProtocolVersion::V4`, so no special configuration is required. |
+| **Apache Cassandra 4.x** | ✅ (tested) | v4 / v5 | Protocol negotiation is supported from 4.x; the driver will automatically negotiate the highest mutually supported protocol (v5, then v4, then v3) using the default `ConnectionOptions`. |
+| **Apache Cassandra 5.x** | ✅ (tested) | v5 | Fully supported with protocol negotiation. No special configuration is required; v5 will be negotiated when available. |
+| **ScyllaDB 6.2, 2025.1, 2025.2, 2025.3** | ✅ (tested) | v4 | ScyllaDB currently supports protocol v4 and does **not** support protocol negotiation. The default `initialProtocolVersion` is `ProtocolVersion::V4`, so no special configuration is required. |
+
+For example, to connect to a Cassandra **2.1** cluster:
+
+```php
+use Cassandra\Connection;
+use Cassandra\Connection\StreamNodeConfig;
+use Cassandra\Connection\ConnectionOptions;
+use Cassandra\Protocol\ProtocolVersion;
+
+$nodes = [
+    new StreamNodeConfig(
+        host: '127.0.0.1',
+        port: 9042,
+        username: 'cassandra',
+        password: 'cassandra',
+    ),
+];
+
+$options = new ConnectionOptions(
+    initialProtocolVersion: ProtocolVersion::V3,
+    // Optional but recommended for Cassandra 2.1:
+    // allowedProtocolVersions: [ProtocolVersion::V3],
+);
+
+$conn = new Connection($nodes, keyspace: 'my_keyspace', options: $options);
+$conn->connect();
+```
 
 
 API reference (essentials)

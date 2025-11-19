@@ -131,7 +131,7 @@ jobs:
       with:
         python-version: '3.13' 
 
-    - name: Install
+    - name: Install cqlsh
       run: pip install -U cqlsh
 
     - name: PHPUnit integration tests
