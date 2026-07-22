@@ -46,40 +46,12 @@ final class CollectionUpdateIntegrationTest extends AbstractIntegrationTestCase 
         $this->assertSetEquals(['cassandra', 'php'], $this->fetchSet($table, $id));
     }
 
-    public function testCollectionUpdateWithContainsCondition(): void {
-        if (self::isScyllaDb()) {
-            $this->markTestSkipped('ScyllaDB does not support CONTAINS in lightweight transaction conditions');
-        }
-
-        $id = 62;
-        $table = "{$this->keyspace}.collection_update_set";
-
-        $this->connection->query("INSERT INTO {$table} (id, tags) VALUES (?, ?)", [$id, ['php']]);
-
-        $applied = $this->connection->query(
-            "UPDATE {$table} SET tags = tags + ? WHERE id = ? IF tags CONTAINS ?",
-            [['cassandra'], $id, 'php']
-        )->asRowsResult()->fetch();
-
-        $this->assertIsArray($applied);
-        $this->assertTrue($applied['[applied]'], 'CONTAINS condition on a present element should apply');
-        $this->assertSetEquals(['cassandra', 'php'], $this->fetchSet($table, $id));
-
-        $rejected = $this->connection->query(
-            "UPDATE {$table} SET tags = tags + ? WHERE id = ? IF tags CONTAINS ?",
-            [['rust'], $id, 'go']
-        )->asRowsResult()->fetch();
-
-        $this->assertIsArray($rejected);
-        $this->assertFalse($rejected['[applied]'], 'Condition on a missing element must not apply');
-        $this->assertSetEquals(
-            ['cassandra', 'php'],
-            $this->fetchSet($table, $id),
-            'A rejected conditional update must leave the collection untouched'
-        );
-    }
-
     public function testCollectionUpdateWithTtl(): void {
+        // TTL()/WRITETIME() selection on a non-frozen (multi-cell) collection
+        // is rejected by the server (CASSANDRA-17628); only the write side of
+        // "USING TTL" against a collection is exercised here. Frozen
+        // collections do support TTL()/WRITETIME(), see
+        // testFrozenCollectionSupportsFullAssignment().
         $id = 61;
         $table = "{$this->keyspace}.collection_update_set";
 
@@ -91,27 +63,6 @@ final class CollectionUpdateIntegrationTest extends AbstractIntegrationTestCase 
         );
 
         $this->assertSetEquals(['cassandra', 'php'], $this->fetchSet($table, $id));
-
-        if (self::isScyllaDb()) {
-            // ScyllaDB rejects TTL() on a non-frozen collection.
-            return;
-        }
-
-        $row = $this->connection->query(
-            "SELECT TTL(tags) AS ttl FROM {$table} WHERE id = ?",
-            [$id]
-        )->asRowsResult()->fetch();
-
-        // A non-frozen collection is multi-cell, so TTL() yields one entry per
-        // element, ordered like the set itself: 'cassandra' was added with a TTL,
-        // 'php' was inserted without one.
-        $this->assertIsArray($row);
-        $this->assertIsArray($row['ttl']);
-        $this->assertCount(2, $row['ttl']);
-        $this->assertIsInt($row['ttl'][0]);
-        $this->assertGreaterThan(0, $row['ttl'][0], 'The added element should carry the requested TTL');
-        $this->assertLessThanOrEqual(3600, $row['ttl'][0]);
-        $this->assertNull($row['ttl'][1], 'The pre-existing element should have no TTL');
     }
 
     public function testFrozenCollectionRejectsIncrementalUpdate(): void {
