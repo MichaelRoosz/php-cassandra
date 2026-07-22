@@ -124,7 +124,7 @@ abstract class DecimalCalculator {
         $bytes = [];
         while ($decimal !== '0') {
             ['quotient' => $decimal, 'remainder' => $remainder] = $this->divideBy256($decimal);
-            $bytes[] = chr($remainder);
+            $bytes[] = chr($remainder & 0xFF);
         }
 
         $binary = count($bytes) > 0 ? implode('', array_reverse($bytes)) : '';

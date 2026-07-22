@@ -58,8 +58,8 @@ final class CompressionTest extends AbstractIntegrationTestCase {
             new SocketNodeConfig(
                 host: self::getHost(),
                 port: self::getPort(),
-                username: '',
-                password: ''
+                username: self::getUsername(),
+                password: self::getPassword()
             ),
         ];
 

@@ -28,7 +28,7 @@ final class Native extends DecimalCalculator {
 
         for ($i = $length - 1; $i >= 0; $i--) {
             if ($decimal[$i] !== '9') {
-                $decimal[$i] = chr(ord($decimal[$i]) + 1);
+                $decimal[$i] = chr((ord($decimal[$i]) + 1) & 0xFF);
                 $carry = false;
 
                 break;
@@ -125,7 +125,7 @@ final class Native extends DecimalCalculator {
             $q = intdiv($acc, 256);
             $carry = $acc % 256;
             if ($q !== 0 || $started) {
-                $out[] = chr(48 + $q);
+                $out[] = chr((48 + $q) & 0xFF);
                 $started = true;
             }
         }
@@ -205,7 +205,7 @@ final class Native extends DecimalCalculator {
         $length = strlen($decimal);
         for ($i = $length - 1; $i >= 0; $i--) {
             if ($decimal[$i] !== '0') {
-                $decimal[$i] = chr(ord($decimal[$i]) - 1);
+                $decimal[$i] = chr((ord($decimal[$i]) - 1) & 0xFF);
 
                 break;
             }

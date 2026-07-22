@@ -40,12 +40,12 @@
     "require-dev": {
         "ext-bcmath": "*",
         "ext-gmp": "*",
-        "friendsofphp/php-cs-fixer": "^3.89.2",
-        "phpstan/phpstan": "^2.1.32",
-        "phpunit/phpunit": "^10.5.58",
-        "vimeo/psalm": "^7.0.0-beta11",
-        "phpbench/phpbench": "^1.4.3",
-        "bartlett/php-compatinfo": "^7.2.4"
+        "friendsofphp/php-cs-fixer": "^3.95.15",
+        "phpstan/phpstan": "^2.2.5",
+        "phpunit/phpunit": "^10.5.64",
+        "vimeo/psalm": "^7.0.0-beta19",
+        "phpbench/phpbench": "^1.7.0",
+        "bartlett/php-compatinfo": "^7.2.6"
     },
     "scripts": {
         "lint": "vendor/bin/php-cs-fixer check",
@@ -62,6 +62,13 @@
         "test:integration:run:stream": "APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9142 APP_CASSANDRA_CONNECTION_MODE=stream vendor/bin/phpunit --testsuite integration",
         "test:integration:down": "docker compose down -v",
         "test:integration": "composer test:integration:up && composer test:integration:init && composer test:integration:run && composer test:integration:down",
+        "test:integration_auth:up": "docker compose -f docker-compose.auth.yml up -d",
+        "test:integration_auth:init": "bash .docker/wait-for-cassandra-auth.sh",
+        "test:integration_auth:run": "composer test:integration_auth:run:socket && composer test:integration_auth:run:stream",
+        "test:integration_auth:run:socket": "APP_CASSANDRA_AUTH_ENABLED=1 APP_CASSANDRA_USERNAME=cassandra APP_CASSANDRA_PASSWORD=cassandra APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9342 APP_CASSANDRA_CONNECTION_MODE=socket vendor/bin/phpunit --testsuite integration",
+        "test:integration_auth:run:stream": "APP_CASSANDRA_AUTH_ENABLED=1 APP_CASSANDRA_USERNAME=cassandra APP_CASSANDRA_PASSWORD=cassandra APP_CASSANDRA_DEBUG=1 APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9342 APP_CASSANDRA_CONNECTION_MODE=stream vendor/bin/phpunit --testsuite integration",
+        "test:integration_auth:down": "docker compose -f docker-compose.auth.yml down -v",
+        "test:integration_auth": "composer test:integration_auth:up && composer test:integration_auth:init && composer test:integration_auth:run && composer test:integration_auth:down",
         "test:integration_scylladb:up": "docker compose -f docker-compose.scylladb.yml up -d",
         "test:integration_scylladb:init": "bash .docker/wait-for-scylladb.sh",
         "test:integration_scylladb:run": "composer test:integration_scylladb:run:socket && composer test:integration_scylladb:run:stream",

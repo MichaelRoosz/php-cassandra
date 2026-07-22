@@ -106,10 +106,26 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return getenv('APP_CASSANDRA_HOST') ?: '127.0.0.1';
     }
 
+    protected static function getPassword(): string {
+        return getenv('APP_CASSANDRA_PASSWORD') ?: '';
+    }
+
     protected static function getPort(): int {
         $port = getenv('APP_CASSANDRA_PORT') ?: '9042';
 
         return (int) $port;
+    }
+
+    protected static function getUsername(): string {
+        return getenv('APP_CASSANDRA_USERNAME') ?: '';
+    }
+
+    /**
+     * True when the test cluster runs with authentication and authorization
+     * enabled (see docker-compose.auth.yml).
+     */
+    protected static function isAuthEnabled(): bool {
+        return getenv('APP_CASSANDRA_AUTH_ENABLED') === '1';
     }
 
     protected static function isProtocolVersionSupported(ProtocolVersion $version): bool {
@@ -199,8 +215,8 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
             new SocketNodeConfig(
                 host: self::getHost(),
                 port: self::getPort(),
-                username: '',
-                password: ''
+                username: self::getUsername(),
+                password: self::getPassword()
             ),
         ];
 
@@ -224,8 +240,8 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
             new StreamNodeConfig(
                 host: self::getHost(),
                 port: self::getPort(),
-                username: '',
-                password: ''
+                username: self::getUsername(),
+                password: self::getPassword()
             ),
         ];
 

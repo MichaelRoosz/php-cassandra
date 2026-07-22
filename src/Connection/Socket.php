@@ -326,7 +326,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
         } while (true);
 
-        return $readData; /** @phpstan-ignore return.type */
+        return $readData;
     }
 
     /**

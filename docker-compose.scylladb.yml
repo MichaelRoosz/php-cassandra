@@ -8,6 +8,10 @@ services:
       - 0.0.0.0
       - --broadcast-rpc-address
       - 127.0.0.1
+      # User-defined functions/aggregates are experimental in ScyllaDB and off by
+      # default. Materialized views are enabled out of the box.
+      - --experimental-features=udf
+      - --enable-user-defined-functions=true
     ports:
       - "9242:9042"
     healthcheck:

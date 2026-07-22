@@ -5,12 +5,24 @@ services:
     container_name: php-cassandra-test-db
     ports:
       - "9142:9042"
+    # Enable user-defined functions/aggregates, materialized views and SASI
+    # indexes, which are off by default. Cassandra 4.0 and 4.1+ spell these
+    # settings differently, so toggle whichever name is present.
+    command:
+      - bash
+      - -c
+      - |
+        conf=/etc/cassandra/cassandra.yaml
+        for setting in user_defined_functions materialized_views sasi_indexes; do
+          sed -i -E "s/^[# ]*(enable_$${setting}|$${setting}_enabled) *: *false/\1: true/" "$$conf"
+        done
+        exec docker-entrypoint.sh cassandra -f
     environment:
       - CASSANDRA_START_RPC=false
       - MAX_HEAP_SIZE=512M
       - HEAP_NEWSIZE=128M
     healthcheck:
-      test: ["CMD", "bash", "-lc", "cqlsh -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
+      test: ["CMD", "bash", "-lc", "/opt/cassandra/bin/cqlsh -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
       interval: 10s
       timeout: 5s
       retries: 30

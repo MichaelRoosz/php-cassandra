@@ -151,7 +151,7 @@ final class Batch extends Request {
         }
 
         if ($version->value < ProtocolVersion::V5->value) {
-            return pack('n', $consistency->value) . chr($flags) . $optional;
+            return pack('n', $consistency->value) . chr($flags & 0xFF) . $optional;
         } else {
             return pack('n', $consistency->value) . pack('N', $flags) . $optional;
         }

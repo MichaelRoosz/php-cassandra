@@ -182,6 +182,21 @@ trait CompareAgainstCqlsh {
     }
 
     /**
+     * cqlsh needs the same credentials as the driver when the cluster runs with
+     * authentication enabled.
+     */
+    protected function cqlshCredentials(): string {
+        $username = getenv('APP_CASSANDRA_USERNAME') ?: '';
+        $password = getenv('APP_CASSANDRA_PASSWORD') ?: '';
+
+        if ($username === '' || $password === '') {
+            return '';
+        }
+
+        return '-u ' . escapeshellarg($username) . ' -p ' . escapeshellarg($password) . ' ';
+    }
+
+    /**
      * @return array<mixed>
      */
     protected function dumpTableWithCqlsh(string $keyspace, string $tableName, string $idColumn, string $valueColumn): array {
@@ -275,7 +290,11 @@ trait CompareAgainstCqlsh {
 
         $rows = [];
         foreach ($rowData as $row) {
-            $rows[$row[$idColumn]] = $row;
+            $id = $row[$idColumn];
+            if ($id === null) {
+                $this->fail("ID column '{$idColumn}' must not be null in cqlsh output");
+            }
+            $rows[$id] = $row;
         }
 
         return $rows;
@@ -290,13 +309,16 @@ trait CompareAgainstCqlsh {
                 $useDocker = true;
             }
         }
+
+        $credentials = $this->cqlshCredentials();
+
         if ($useDocker) {
-            return $this->runCqlShInDocker("cqlsh {$cqlshArguments} localhost 9042 2>&1");
+            return $this->runCqlShInDocker("cqlsh {$credentials}{$cqlshArguments} localhost 9042 2>&1");
         } else {
             $host = getenv('APP_CASSANDRA_HOST') ?: 'localhost';
             $port = getenv('APP_CASSANDRA_PORT') ?: '9142';
 
-            return $this->runCqlShInCqlSh("cqlsh {$cqlshArguments} {$host} {$port} 2>&1");
+            return $this->runCqlShInCqlSh("cqlsh {$credentials}{$cqlshArguments} {$host} {$port} 2>&1");
         }
     }
 
@@ -307,9 +329,7 @@ trait CompareAgainstCqlsh {
             $this->fail("Failed to execute cqlsh command: {$command}");
         }
 
-        $lines = explode("\n", $output);
-        $lines = array_filter($lines, fn($line) => !str_starts_with($line, 'WARNING:'));
-        $output = implode("\n", $lines);
+        $output = $this->stripCqlshNotices($output);
 
         if (
             str_contains($output, 'Connection error')
@@ -328,6 +348,8 @@ trait CompareAgainstCqlsh {
         $isScyllaDb = getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
         if ($isScyllaDb) {
             $containerName = 'php-scylladb-test-db';
+        } elseif (getenv('APP_CASSANDRA_AUTH_ENABLED') === '1') {
+            $containerName = 'php-cassandra-auth-test-db';
         } else {
             $containerName = 'php-cassandra-test-db';
         }
@@ -339,9 +361,7 @@ trait CompareAgainstCqlsh {
             $this->fail("Failed to execute cqlsh command in container: {$dockerCommand}");
         }
 
-        $lines = explode("\n", $output);
-        $lines = array_filter($lines, fn($line) => !str_starts_with($line, 'WARNING:'));
-        $output = implode("\n", $lines);
+        $output = $this->stripCqlshNotices($output);
 
         if (
             str_contains($output, 'Connection error')
@@ -353,6 +373,23 @@ trait CompareAgainstCqlsh {
         }
 
         return $output;
+    }
+
+    /**
+     * cqlsh prints warnings and recommendations (for example when a password is
+     * passed on the command line) before the actual result. Drop them so the
+     * caller sees the CSV output on its own.
+     */
+    protected function stripCqlshNotices(string $output): string {
+        $lines = explode("\n", $output);
+
+        $lines = array_filter($lines, static function (string $line): bool {
+            return !str_starts_with($line, 'WARNING:')
+                && !str_starts_with($line, 'Warning:')
+                && !str_starts_with($line, 'Recommendation:');
+        });
+
+        return ltrim(implode("\n", $lines), "\n");
     }
 
     /**

@@ -12,6 +12,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\DurationEncodeOption;
 use Cassandra\VIntCodec;
 use DateInterval;
+use Exception as PhpException;
 
 final class Duration extends ValueReadableWithoutLength implements ValueWithMultipleEncodings {
     private const INT32_MAX = 2147483647;
@@ -179,7 +180,19 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             }
         }
 
-        $interval = DateInterval::createFromDateString($duration);
+        try {
+            $interval = DateInterval::createFromDateString($duration);
+        } catch (PhpException $e) {
+            throw new ValueException(
+                'Cannot convert Duration to DateInterval',
+                ExceptionCode::VALUE_DURATION_TO_DATEINTERVAL_FAILED->value, [
+                    'duration_string' => $duration,
+                    'value' => $this->value,
+                ],
+                $e
+            );
+        }
+
         if ($interval === false) {
             throw new ValueException(
                 'Cannot convert Duration to DateInterval',

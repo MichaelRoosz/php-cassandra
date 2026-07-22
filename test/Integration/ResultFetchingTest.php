@@ -34,7 +34,11 @@ final class ResultFetchingTest extends AbstractIntegrationTestCase {
         $all = [];
         foreach ($rows as $row) {
             $this->assertIsArray($row);
-            $all[] = $row['ukey'];
+            $ukey = $row['ukey'] ?? '';
+            if (!is_string($ukey)) {
+                $this->fail('ukey must be a string');
+            }
+            $all[] = $ukey;
         }
         $sorted = $all;
         sort($sorted, SORT_STRING);
@@ -57,7 +61,13 @@ final class ResultFetchingTest extends AbstractIntegrationTestCase {
         $this->assertArrayHasKey(0, $thirdBoth);
         $this->assertSame($thirdBoth['ukey'], $thirdBoth[0]);
 
-        $fetchedKeys = [$first['ukey'], $secondNum[0], $thirdBoth['ukey']];
+        $firstKey = $first['ukey'];
+        $secondKey = $secondNum[0];
+        $thirdKey = $thirdBoth['ukey'];
+        if (!is_string($firstKey) || !is_string($secondKey) || !is_string($thirdKey)) {
+            $this->fail('ukey must be a string');
+        }
+        $fetchedKeys = [$firstKey, $secondKey, $thirdKey];
         sort($fetchedKeys, SORT_STRING);
         $this->assertSame(['k0', 'k1', 'k2'], $fetchedKeys);
 

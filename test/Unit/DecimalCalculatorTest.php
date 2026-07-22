@@ -347,7 +347,7 @@ class DecimalCalculatorTest extends AbstractUnitTestCase {
             if ($part === '') {
                 continue;
             }
-            $bin .= chr((int) hexdec(substr($part, 0, 2)));
+            $bin .= chr((int) hexdec(substr($part, 0, 2)) & 0xFF);
         }
 
         return $bin;

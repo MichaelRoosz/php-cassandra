@@ -550,7 +550,6 @@ class TypeNameParserTest extends AbstractUnitTestCase {
 
         $reflection = new ReflectionClass($this->parser);
         $method = $reflection->getMethod('extractParams');
-        $method->setAccessible(true);
 
         foreach ($testCases as [$paramString, $expectedParams]) {
             $result = $method->invoke($this->parser, $paramString);
@@ -561,7 +560,6 @@ class TypeNameParserTest extends AbstractUnitTestCase {
     public function testParameterExtractionDoubleColonThrowsException(): void {
         $reflection = new ReflectionClass($this->parser);
         $method = $reflection->getMethod('extractParams');
-        $method->setAccessible(true);
 
         $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_UDT_PARAMS_MULTIPLE_COLONS->value);
@@ -572,7 +570,6 @@ class TypeNameParserTest extends AbstractUnitTestCase {
     public function testParameterExtractionWithComplexNesting(): void {
         $reflection = new ReflectionClass($this->parser);
         $method = $reflection->getMethod('extractParams');
-        $method->setAccessible(true);
 
         $complexCases = [
             [
@@ -602,7 +599,6 @@ class TypeNameParserTest extends AbstractUnitTestCase {
     public function testParameterExtractionWithEdgeCases(): void {
         $reflection = new ReflectionClass($this->parser);
         $method = $reflection->getMethod('extractParams');
-        $method->setAccessible(true);
 
         $edgeCases = [
             [' param1 ', ['param1']],

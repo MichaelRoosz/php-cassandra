@@ -10,7 +10,7 @@ services:
       - MAX_HEAP_SIZE=512M
       - HEAP_NEWSIZE=128M
     healthcheck:
-      test: ["CMD", "bash", "-lc", "cqlsh -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
+      test: ["CMD", "bash", "-lc", "/opt/cassandra/bin/cqlsh -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
       interval: 10s
       timeout: 5s
       retries: 30

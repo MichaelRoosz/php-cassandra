@@ -1,0 +1,45 @@
+name: php-cassandra-auth
+services:
+  cassandra:
+    image: cassandra:${CASSANDRA_VERSION:-5.0}
+    container_name: php-cassandra-auth-test-db
+    ports:
+      - "9342:9042"
+    # Same optional features as docker-compose.yml, plus authentication and
+    # authorization, so the whole integration suite can run against an
+    # authenticated cluster. The auth caches are disabled so a GRANT/REVOKE takes
+    # effect immediately instead of after the default 2s validity window.
+    command:
+      - bash
+      - -c
+      - |
+        conf=/etc/cassandra/cassandra.yaml
+        for setting in user_defined_functions materialized_views sasi_indexes; do
+          sed -i -E "s/^[# ]*(enable_$${setting}|$${setting}_enabled) *: *false/\1: true/" "$$conf"
+        done
+        sed -i -E 's/^authenticator: .*/authenticator: PasswordAuthenticator/' "$$conf"
+        sed -i -E 's/^authorizer: .*/authorizer: CassandraAuthorizer/' "$$conf"
+        names='roles_validity|permissions_validity|credentials_validity'
+        # Cassandra 4.0 takes a bare number of milliseconds, 4.1+ requires a unit.
+        sed -i -E "s/^[# ]*($$names)_in_ms *:.*/\1_in_ms: 0/" "$$conf"
+        sed -i -E "s/^[# ]*($$names) *:.*/\1: 0ms/" "$$conf"
+        exec docker-entrypoint.sh cassandra -f
+    environment:
+      - CASSANDRA_START_RPC=false
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "/opt/cassandra/bin/cqlsh -u cassandra -p cassandra -e 'DESCRIBE KEYSPACES' 127.0.0.1 9042"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - php_cassandra_auth_net
+
+networks:
+  php_cassandra_auth_net:
+    driver: bridge
