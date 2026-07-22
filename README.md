@@ -45,6 +45,9 @@ Table of contents
   - [Object mapping](#object-mapping)
   - [Data types](#data-types)
   - [Type definition syntax for complex values](#type-definition-syntax-for-complex-values)
+  - [Collection updates](#collection-updates)
+  - [Lightweight transactions (LWT)](#lightweight-transactions-lwt)
+  - [JSON support](#json-support)
   - [Events](#events)
   - [Tracing and custom payloads (advanced)](#tracing-and-custom-payloads-advanced)
   - [Asynchronous API](#asynchronous-api)
@@ -92,6 +95,7 @@ Table of contents
   - [Benchmarks](#benchmarks)
   - [Version support](#version-support)
     - [Server compatibility and required settings](#server-compatibility-and-required-settings)
+      - [Server-side features that are off by default](#server-side-features-that-are-off-by-default)
   - [API reference (essentials)](#api-reference-essentials)
   - [Changelog](#changelog)
   - [License](#license)
@@ -131,6 +135,7 @@ php-cassandra is a modern PHP client for Apache Cassandra that prioritizes **cor
 - **Request Types**: Synchronous, Asynchronous
 - **Statements**: Prepared statements with positional/named binding, auto-prepare
 - **Data Types**: Full coverage including collections, tuples, UDTs, custom types, vectors
+- **CQL Coverage**: Incremental collection updates, lightweight transactions, JSON, TTL/timestamps
 - **Results**: Iterators, multiple fetch styles, object mapping
 - **Events**: Schema/status/topology change notifications
 - **Advanced**: LZ4 compression, server overload signaling, tracing support
@@ -896,8 +901,244 @@ SetCollection::fromValue([
 ]);
 ```
 
+Collection updates
+------------------
+
+On **non-frozen** `set`, `list`, and `map` columns you can add or remove individual elements instead of rewriting the whole collection. This is plain CQL ([DataStax docs](https://docs.datastax.com/en/cql-oss/3.3/cql/cql_using/useInsertMap.html)) — php-cassandra adds no special API: you write the `UPDATE` yourself and bind only the **delta** (the elements to add or remove) as `?`.
+
+| Operation | `set` | `list` | `map` |
+|---|---|---|---|
+| Replace whole collection | `INSERT`, or `SET col = ?` | `INSERT`, or `SET col = ?` | `INSERT`, or `SET col = ?` |
+| Add | `SET col = col + ?` (merges members) | `SET col = col + ?` (**append**)<br>`SET col = ? + col` (**prepend**) | `SET col = col + ?` (merges entries) |
+| Remove | `SET col = col - ?` (removes those members) | `SET col = col - ?` (removes **by value** — every occurrence) | `SET col = col - ?` (removes **keys**; pass a set/list of keys) |
+| Single element | – | `SET col[?] = ?` (by index)<br>`DELETE col[?] FROM …` (by index) | `SET col[?] = ?` (by key)<br>`DELETE col[?] FROM …` (by key) |
+| Clear | `SET col = {}` or `DELETE col FROM …` | `SET col = ?` with `[]`, or `DELETE col FROM …` | `SET col = {}` or `DELETE col FROM …` |
+
+Notes:
+
+- Use `?` for the whole collection operand in prepared queries. `{ ? }` / `[ ? ]` inside the query string is **not** valid CQL (curly braces and square brackets are literal syntax only). Indexes and keys in `col[?]` *are* bindable.
+- List `-` matches **by value**, not by position, and removes every occurrence. To remove by position use `DELETE col[i] FROM …`, which requires an internal read and is unsafe under concurrent writes — prefer removal by value.
+- Assigning `null` to a map key (`SET col[?] = ?` with `null`) deletes that entry.
+- An **empty** collection is stored as `null`; reading it back yields `null`, not `[]`.
+- **Frozen** collections (`frozen<set<...>>`, etc.) cannot use `+`/`-` — the server rejects it with an `InvalidException`. Assign the full value instead.
+- Incremental updates combine with `USING TTL` and with conditions (`IF …`). Because a non-frozen collection is multi-cell, `TTL(col)` returns one entry **per element**.
+- With default `autoPrepare`, plain PHP arrays work as binds (the driver prepares the statement to learn the types — see [Data types](#data-types)); passing an explicit `SetCollection` / `MapCollection` / `ListCollection` value skips that step and always works.
+
+**Set** — add and remove members:
+
+```php
+use Cassandra\Type;
+use Cassandra\Value\Int32;
+use Cassandra\Value\SetCollection;
+
+$conn->query(
+    'INSERT INTO ks.users (id, tags) VALUES (?, ?)',
+    [Int32::fromValue(1), SetCollection::fromValue(['php'], Type::VARCHAR)]
+);
+
+$conn->query(
+    'UPDATE ks.users SET tags = tags + ? WHERE id = ?',
+    [SetCollection::fromValue(['cassandra'], Type::VARCHAR), Int32::fromValue(1)]
+);
+
+$conn->query(
+    'UPDATE ks.users SET tags = tags - ? WHERE id = ?',
+    [SetCollection::fromValue(['php'], Type::VARCHAR), Int32::fromValue(1)]
+);
+
+// Clear the set (both store null)
+$conn->query('UPDATE ks.users SET tags = {} WHERE id = ?', [1]);
+$conn->query('DELETE tags FROM ks.users WHERE id = ?', [1]);
+
+// With autoPrepare (default), native arrays are enough:
+$conn->query('UPDATE ks.users SET tags = tags - ? WHERE id = ?', [['php'], 1]);
+```
+
+**Map** — merge entries, remove keys, or address a single key:
+
+```php
+use Cassandra\Type;
+use Cassandra\Value\MapCollection;
+use Cassandra\Value\SetCollection;
+use Cassandra\Value\Uuid;
+
+$id = Uuid::fromValue('5b6962dd-3f90-4c93-8f61-eabfa4a803e2');
+
+$conn->query(
+    'UPDATE ks.cyclist_teams SET teams = teams + ? WHERE id = ?',
+    [MapCollection::fromValue([2009 => 'DSB Bank'], Type::INT, Type::VARCHAR), $id]
+);
+
+// Subtraction takes a set of keys
+$conn->query(
+    'UPDATE ks.cyclist_teams SET teams = teams - ? WHERE id = ?',
+    [SetCollection::fromValue([2013, 2014], Type::INT), $id]
+);
+
+// Set one key ...
+$conn->query(
+    'UPDATE ks.cyclist_teams SET teams[?] = ? WHERE id = ?',
+    [2006, 'Team DSB - Ballast Nedam', $id]
+);
+
+// ... assign null to delete it ...
+$conn->query('UPDATE ks.cyclist_teams SET teams[?] = ? WHERE id = ?', [2006, null, $id]);
+
+// ... or delete it directly
+$conn->query('DELETE teams[?] FROM ks.cyclist_teams WHERE id = ?', [2009, $id]);
+```
+
+**List** — append, prepend, address a position, or remove by value:
+
+```php
+use Cassandra\Type;
+use Cassandra\Value\Int32;
+use Cassandra\Value\ListCollection;
+
+$id = Int32::fromValue(1);
+
+// Append
+$conn->query(
+    'UPDATE ks.users SET phones = phones + ? WHERE id = ?',
+    [ListCollection::fromValue(['555-0100'], Type::VARCHAR), $id]
+);
+
+// Prepend
+$conn->query(
+    'UPDATE ks.users SET phones = ? + phones WHERE id = ?',
+    [ListCollection::fromValue(['555-0001'], Type::VARCHAR), $id]
+);
+
+// Remove by value (every occurrence)
+$conn->query(
+    'UPDATE ks.users SET phones = phones - ? WHERE id = ?',
+    [ListCollection::fromValue(['555-0100'], Type::VARCHAR), $id]
+);
+
+// Overwrite / remove by position (needs an internal read — prefer the two calls above)
+$conn->query('UPDATE ks.users SET phones[?] = ? WHERE id = ?', [0, '555-0999', $id]);
+$conn->query('DELETE phones[?] FROM ks.users WHERE id = ?', [0, $id]);
+```
+
+**Nested collections** (`map<int, frozen<list<text>>>`, `set<frozen<list<int>>>`, `list<frozen<udt>>`) support the same `+`/`-` operations on the outer collection; the frozen inner value is always replaced as a whole.
+
+**Counter** columns use the same `+` pattern with `Counter::fromValue()`:
+
+```php
+use Cassandra\Value\Counter;
+
+$conn->query('UPDATE ks.stats SET value = value + ? WHERE id = ?', [Counter::fromValue(5), 1]);
+```
+
 Special values:
 - `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET (distinct from NULL)
+
+Lightweight transactions (LWT)
+------------------------------
+
+`INSERT`, `UPDATE` and `DELETE` accept an `IF` clause for compare-and-set semantics (see the [DataStax docs](https://docs.datastax.com/en/cql-oss/3.3/cql/cql_using/useInsertLWT.html)). No special API is needed — a conditional statement simply returns a **rows result** whose first column is `[applied]`:
+
+```php
+$result = $conn->query(
+    'INSERT INTO ks.cyclists (id, lastname, firstname) VALUES (?, ?, ?) IF NOT EXISTS',
+    [1, 'KNETEMANN', 'Roxxane']
+)->asRowsResult();
+
+$row = $result->fetch();
+
+if ($row['[applied]'] === true) {
+    // the row was created; [applied] is the only column returned
+} else {
+    // not applied - the conflicting row is returned alongside [applied]
+    echo $row['lastname'];
+}
+```
+
+The same applies to conditional updates and deletes:
+
+```php
+// Only update when the current value matches
+$conn->query(
+    'UPDATE ks.cyclists SET firstname = ? WHERE id = ? IF firstname = ?',
+    ['Roxane', 1, 'Roxxane']
+);
+
+// Non-equal operators are supported: <, <=, >, >=, != and IN
+$conn->query('UPDATE ks.cyclists SET firstname = ? WHERE id = ? IF age > ?', ['Roxane', 1, 20]);
+$conn->query('UPDATE ks.cyclists SET firstname = ? WHERE id = ? IF lastname IN ?', ['Roxane', 1, ['VOS', 'BRAND']]);
+
+// Guard against a missing / existing row
+$conn->query('UPDATE ks.cyclists SET firstname = ? WHERE id = ? IF EXISTS', ['Roxane', 1]);
+$conn->query('DELETE FROM ks.cyclists WHERE id = ? IF EXISTS', [1]);
+
+// Conditions on collections
+$conn->query('UPDATE ks.users SET tags = tags + ? WHERE id = ? IF tags CONTAINS ?', [['go'], 1, 'php']);
+```
+
+Use `serialConsistency` to choose the Paxos consistency level, and read back with `Consistency::SERIAL` / `Consistency::LOCAL_SERIAL` to observe in-progress transactions:
+
+```php
+use Cassandra\Consistency;
+use Cassandra\Request\Options\QueryOptions;
+use Cassandra\SerialConsistency;
+
+$conn->query(
+    'UPDATE ks.cyclists SET firstname = ? WHERE id = ? IF lastname = ?',
+    ['Roxane', 1, 'KNETEMANN'],
+    Consistency::ONE,
+    new QueryOptions(serialConsistency: SerialConsistency::LOCAL_SERIAL)
+);
+
+$conn->query('SELECT * FROM ks.cyclists WHERE id = ?', [1], Consistency::SERIAL);
+```
+
+Conditional statements also work inside a batch (all statements must target the same partition):
+
+```php
+use Cassandra\Consistency;
+use Cassandra\Request\BatchType;
+
+$batch = $conn->createBatchRequest(BatchType::LOGGED, Consistency::ONE);
+$batch->appendQuery('INSERT INTO ks.cyclists (id, lastname) VALUES (?, ?) IF NOT EXISTS', [2, 'VOS']);
+
+$applied = $conn->batch($batch)->asRowsResult()->fetch()['[applied]'];
+```
+
+Notes:
+
+- LWT costs roughly four extra round-trips compared to a normal write — use it only where you need it.
+- `USING TIMESTAMP` is not allowed together with `IF NOT EXISTS`; the timestamp comes from the transaction itself.
+
+JSON support
+------------
+
+CQL can read and write rows as JSON documents (see the [DataStax docs](https://docs.datastax.com/en/cql-oss/3.3/cql/cql_using/useInsertJSON.html)). The driver transports the document as a plain `varchar`, so no dedicated API is required:
+
+```php
+// Insert a whole row from a JSON document (note: no VALUES keyword, no column list)
+$conn->query(
+    'INSERT INTO ks.cyclist_category JSON ?',
+    [json_encode(['id' => 1, 'lastname' => 'SUTHERLAND', 'category' => 'GC', 'points' => 780])]
+);
+
+// Read a row back as JSON: a single column named [json]
+$row = $conn->query('SELECT JSON * FROM ks.cyclist_category WHERE id = ?', [1])
+    ->asRowsResult()
+    ->fetch();
+
+$data = json_decode($row['[json]'], true);
+
+// fromJson() / toJson() work on individual columns
+$conn->query('INSERT INTO ks.cyclist_category (id, tags) VALUES (?, fromJson(?))', [2, '["a","b"]']);
+$conn->query('SELECT toJson(tags) AS tags_json FROM ks.cyclist_category WHERE id = ?', [2]);
+```
+
+By default a column that is absent from the document is written as `null`. Append `DEFAULT UNSET` to leave such columns untouched instead:
+
+```php
+$conn->query('INSERT INTO ks.cyclist_category JSON ? DEFAULT UNSET', ['{"id": 1, "points": 900}']);
+$conn->query('INSERT INTO ks.cyclist_category JSON ? DEFAULT NULL', ['{"id": 1, "points": 900}']);
+```
 
 Events
 ------
@@ -1522,6 +1763,10 @@ $address = UDT::fromValue(
 );
 ```
 
+**Q: How do I add or remove items from a set, list, or map?**
+
+A: Use CQL `UPDATE` with `+` / `-` and bind the delta as `?` (not `{ ? }`). See [Collection updates](#collection-updates) for set/map/list examples and a syntax table.
+
 **Q: How do I work with timestamps?**
 
 A: Use the Timestamp value class:
@@ -1827,6 +2072,16 @@ $options = new ConnectionOptions(
 $conn = new Connection($nodes, keyspace: 'my_keyspace', options: $options);
 $conn->connect();
 ```
+
+#### Server-side features that are off by default
+
+A few CQL features need to be enabled on the server before any driver can use them. They are pure server configuration — nothing changes on the client side.
+
+| Feature | Apache Cassandra | ScyllaDB |
+|---|---|---|
+| User-defined functions / aggregates | `user_defined_functions_enabled: true` in `cassandra.yaml` (called `enable_user_defined_functions` in 4.0) | `--experimental-features=udf` **and** `--enable-user-defined-functions=true`; bodies are written in Lua, not Java |
+| Materialized views | `materialized_views_enabled: true` in `cassandra.yaml` (called `enable_materialized_views` in 4.0); every `CREATE MATERIALIZED VIEW` returns a warning that the feature is experimental | Enabled by default |
+| SASI indexes (`CREATE CUSTOM INDEX … USING 'org.apache.cassandra.index.sasi.SASIIndex'`, `LIKE`) | `sasi_indexes_enabled: true` in `cassandra.yaml` (called `enable_sasi_indexes` in 4.0) | Not supported |
 
 
 API reference (essentials)
