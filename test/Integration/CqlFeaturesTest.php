@@ -119,15 +119,21 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     public function testBuiltInScalarFunctions(): void {
         $table = "{$this->keyspace}.cql_numbers";
 
+        // ScyllaDB does not support arithmetic expressions (e.g. "n + 5") in
+        // the selection clause, so that part is only exercised on Cassandra.
+        $arithmeticSelector = self::isScyllaDb() ? '' : 'n + 5 AS plus, ';
+
         $row = $this->connection->query(
-            'SELECT CAST(n AS text) AS as_text, n + 5 AS plus, blobAsInt(intAsBlob(n)) AS roundtrip '
+            "SELECT CAST(n AS text) AS as_text, {$arithmeticSelector}blobAsInt(intAsBlob(n)) AS roundtrip "
             . "FROM {$table} WHERE pk = ? AND ck = ?",
             [1, 1]
         )->asRowsResult()->fetch();
 
         $this->assertIsArray($row);
         $this->assertSame('10', $row['as_text'], 'CAST converts an int column to text');
-        $this->assertSame(15, $row['plus'], 'Arithmetic is evaluated server side');
+        if (!self::isScyllaDb()) {
+            $this->assertSame(15, $row['plus'], 'Arithmetic is evaluated server side');
+        }
         $this->assertSame(10, $row['roundtrip'], 'intAsBlob/blobAsInt round-trip the value');
 
         $generated = $this->connection->query(
@@ -162,6 +168,10 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     }
 
     public function testCustomPayloadIsAccepted(): void {
+        if (self::isScyllaDb()) {
+            $this->markTestSkipped('ScyllaDB rejects requests carrying a custom payload with a protocol error');
+        }
+
         $request = new Query("SELECT * FROM {$this->keyspace}.cql_numbers WHERE pk = 1 AND ck = 1");
         $request->setPayload(['my-key' => 'my-value']);
 
