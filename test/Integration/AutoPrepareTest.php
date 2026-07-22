@@ -11,6 +11,40 @@ use Cassandra\Value;
 
 final class AutoPrepareTest extends AbstractIntegrationTestCase {
     /**
+     * The async path builds its auto-prepare request internally, so that request
+     * has to be given the negotiated protocol version and the stream id. On
+     * protocol v5 the driver adds a per-request keyspace, which a request left at
+     * the default version cannot encode.
+     */
+    public function testQueryAsyncWithAutoPrepareEnabled(): void {
+        $conn = $this->connection;
+        $conn->query('TRUNCATE auto_prepare_test');
+
+        $id = Value\Uuid::fromValue(self::uuidV4());
+
+        $insert = $conn->queryAsync(
+            "INSERT INTO {$this->keyspace}.auto_prepare_test (id, name, age) VALUES (?, ?, ?)",
+            [$id, 'Dana', 41.0],
+            Consistency::ONE,
+            new QueryOptions(autoPrepare: true)
+        );
+        $insert->waitForResponse();
+
+        // A native (untyped) bind value is what triggers auto-preparation.
+        $select = $conn->queryAsync(
+            "SELECT * FROM {$this->keyspace}.auto_prepare_test WHERE id = ?",
+            [$id],
+            Consistency::ONE,
+            new QueryOptions(autoPrepare: true)
+        );
+
+        $row = $select->getRowsResult()->fetch();
+
+        $this->assertIsArray($row);
+        $this->assertSame('Dana', $row['name']);
+        $this->assertSame(41.0, $row['age']);
+    }
+    /**
      * Test that disabling auto-prepare does NOT trigger automatic preparation.
      * A php float value will be sent as a double, which is not supported by the server.
      */

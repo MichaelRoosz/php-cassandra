@@ -58,6 +58,27 @@ final class AsyncTest extends AbstractIntegrationTestCase {
         $this->assertIsString($r2->fetch()['release_version'] ?? null);
     }
 
+    public function testWaitForAllPendingStatementsAfterReconnectDoesNotHang(): void {
+
+        $conn = $this->connection;
+
+        // Fire an async request but do not resolve it, then drop the connection.
+        // Its stream lives on the now-dead socket and can never respond.
+        $orphan = $conn->queryAsync('SELECT key FROM system.local');
+        $this->assertFalse($orphan->isResultReady());
+
+        $conn->disconnect();
+
+        // Reconnect implicitly with a fresh async request.
+        $live = $conn->queryAsync('SELECT release_version FROM system.local');
+
+        // Must not block on the orphaned statement from the previous connection.
+        $conn->waitForAllPendingStatements();
+
+        $this->assertTrue($live->isResultReady());
+        $this->assertSame(1, $live->getRowsResult()->getRowCount());
+    }
+
     protected static function setupTable(): void {
         $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS storage(filename varchar, ukey varchar, value map<varchar, varchar>, PRIMARY KEY (filename, ukey))');

@@ -192,7 +192,7 @@ final class Connection {
             ]);
         }
 
-        $startupOptions = $this->configureStartupOptions($response);
+        $startupOptions = $this->configureStartupOptions($response, $node);
         $response = $this->syncRequest(new Request\Startup($startupOptions));
 
         if ($response instanceof Response\Authenticate) {
@@ -259,6 +259,13 @@ final class Connection {
     public function disconnect(): void {
 
         $this->preparedResultCache = [];
+
+        $this->statements = [];
+        $this->lastStreamId = 0;
+
+        /** @var SplQueue<int> $recycledStreams */
+        $recycledStreams = new SplQueue();
+        $this->recycledStreams = $recycledStreams;
 
         if ($this->node === null) {
             return;
@@ -897,7 +904,7 @@ final class Connection {
     }
 
     /**
-     * Wit until any of the given statements becomes ready and return that statement.
+     * Wait until any of the given statements becomes ready and return that statement.
      *
      * @param array<Statement> $statements
      *
@@ -912,12 +919,13 @@ final class Connection {
      */
     public function waitForAnyStatement(array $statements): Statement {
         while (true) {
-            $this->readResponse(waitForResponse: true);
             foreach ($statements as $s) {
                 if ($s->isResultReady()) {
                     return $s;
                 }
             }
+
+            $this->readResponse(waitForResponse: true);
         }
     }
 
@@ -1025,10 +1033,12 @@ final class Connection {
         }
 
         $cachedResult = new Response\Result\CachedPreparedResult(
-            new Header(version: ProtocolVersion::V5, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
+            new Header(version: $this->version, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
             new StreamReader(''),
             $result->getPreparedData(),
         );
+
+        $cachedResult->setRequest($request);
 
         if (count($this->preparedResultCache) >= $this->preparedResultCacheSize) {
             $this->preparedResultCache = array_slice(
@@ -1087,8 +1097,8 @@ final class Connection {
      * 
      * @return array<string,string>
      */
-    private function configureStartupOptions(Response\Supported $supportedReponse): array {
-        $serverOptions = $supportedReponse->getData();
+    private function configureStartupOptions(Response\Supported $supportedResponse, Connection\Node $node): array {
+        $serverOptions = $supportedResponse->getData();
 
         // configure protocol version
         if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
@@ -1118,9 +1128,9 @@ final class Connection {
             );
 
             throw new ConnectionException('Server does not support a compatible protocol version.', ExceptionCode::CONNECTION_SERVER_PROTOCOL_UNSUPPORTED->value, [
-                'proocol_versions_supported_by_server' => $versionsSupportedByServerInOptionFormat,
-                'proocol_versions_supported_by_client' => ProtocolVersion::CASES_IN_OPTION_FORMAT,
-                'proocol_versions_allowed_by_connection_options' => $allowedProtocolVersionsInOptionFormat,
+                'protocol_versions_supported_by_server' => $versionsSupportedByServerInOptionFormat,
+                'protocol_versions_supported_by_client' => ProtocolVersion::CASES_IN_OPTION_FORMAT,
+                'protocol_versions_allowed_by_connection_options' => $allowedProtocolVersionsInOptionFormat,
             ]);
         }
 
@@ -1135,11 +1145,11 @@ final class Connection {
             $compressionAlgo = strtolower($startupOptions['COMPRESSION']);
 
             if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
-                $nodeConfig = $this->node?->getConfig();
+                $nodeConfig = $node->getConfig();
 
                 throw new ConnectionException('Compression "' . $compressionAlgo . '" not supported by server.', ExceptionCode::CONNECTION_COMPRESSION_NOT_SUPPORTED->value, [
-                    'host' => $nodeConfig->host ?? null,
-                    'port' => $nodeConfig->port ?? null,
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
                     'compression' => $compressionAlgo,
                     'server_supported' => $serverOptions['COMPRESSION'],
                 ]);
@@ -1200,6 +1210,7 @@ final class Connection {
 
                     $prepareOptions = new PrepareOptions(keyspace: $queryOptions->keyspace);
                     $prepareRequest = new Request\Prepare($request->getQuery(), $prepareOptions);
+                    $prepareRequest->setVersion($this->version);
 
                     return $prepareRequest;
                 }
@@ -1468,20 +1479,14 @@ final class Connection {
 
             $newPrepareRequest = new Request\Prepare($prevRequest->getQuery(), $prevRequest->getOptions());
 
+            $this->invalidateCachedPrepareResult($newPrepareRequest);
+
             if ($statement !== null) {
                 $statement->setStatus(StatementStatus::REPREPARING);
 
-                $cachedResult = $this->getCachedPrepareResult($newPrepareRequest);
-                if ($cachedResult !== null) {
-                    $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
+                $this->chainAsyncRequest($newPrepareRequest, $statement);
 
-                    return $this->handleReprepareResult($newPrepareRequest, $cachedResult, statement: $statement);
-
-                } else {
-                    $this->chainAsyncRequest($newPrepareRequest, $statement);
-
-                    return null;
-                }
+                return null;
             }
 
             $prepareResponse = $this->syncRequest($newPrepareRequest);
@@ -1560,6 +1565,11 @@ final class Connection {
             $request instanceof Request\Execute => $this->handleResponseExecuteResult($request, $result, $statement),
             default => $result,
         };
+    }
+
+    private function invalidateCachedPrepareResult(Request\Prepare $request): void {
+
+        unset($this->preparedResultCache[$request->getHash()]);
     }
 
     private function onEvent(Response\Event $event): void {
@@ -1710,6 +1720,8 @@ final class Connection {
         $originalRequest = $request;
         $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
         if ($autoPrepareRequest !== null) {
+            $autoPrepareRequest->setStream($streamId);
+
             $request = $autoPrepareRequest;
         }
 

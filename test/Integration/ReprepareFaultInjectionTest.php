@@ -68,9 +68,59 @@ final class ReprepareFaultInjectionTest extends AbstractIntegrationTestCase {
         $this->assertSame(1, $count);
     }
 
+    /**
+     * A schema change invalidates the statement server side without dropping the
+     * driver's prepare cache - unlike a disconnect, which clears it. The
+     * repreparation therefore has to evict the cached entry, otherwise it is
+     * answered from the cache with the same invalidated statement id.
+     */
+    public function testReprepareAfterSchemaChangeAsync(): void {
+
+        $conn = $this->connection;
+        $table = "{$this->keyspace}.reprepare_schema_async";
+
+        $conn->query("INSERT INTO {$table} (id, v) VALUES (?, ?)", [1, 'a']);
+
+        // Run twice so the second execute is served from the prepare cache.
+        $conn->query("SELECT * FROM {$table} WHERE id = ?", [1]);
+        $conn->query("SELECT * FROM {$table} WHERE id = ?", [1]);
+
+        $conn->query("ALTER TABLE {$table} ADD extra int");
+
+        $stmt = $conn->queryAsync("SELECT * FROM {$table} WHERE id = ?", [1]);
+        $row = $stmt->getRowsResult()->fetch();
+
+        $this->assertIsArray($row);
+        $this->assertSame('a', $row['v']);
+        $this->assertArrayHasKey('extra', $row, 'The reprepared statement should expose the new column');
+    }
+
+    public function testReprepareAfterSchemaChangeSync(): void {
+
+        $conn = $this->connection;
+        $table = "{$this->keyspace}.reprepare_schema_sync";
+
+        $conn->query("INSERT INTO {$table} (id, v) VALUES (?, ?)", [1, 'a']);
+
+        // Run twice so the second execute is served from the prepare cache.
+        $conn->query("SELECT * FROM {$table} WHERE id = ?", [1]);
+        $conn->query("SELECT * FROM {$table} WHERE id = ?", [1]);
+
+        $conn->query("ALTER TABLE {$table} ADD extra int");
+
+        // Must transparently reprepare instead of failing or looping.
+        $row = $conn->query("SELECT * FROM {$table} WHERE id = ?", [1])->asRowsResult()->fetch();
+
+        $this->assertIsArray($row);
+        $this->assertSame('a', $row['v']);
+        $this->assertArrayHasKey('extra', $row, 'The reprepared statement should expose the new column');
+    }
+
     protected static function setupTable(): void {
         $conn = self::newConnection(self::$defaultKeyspace);
         $conn->query('CREATE TABLE IF NOT EXISTS reprepare_users(org_id int, id uuid, name varchar, PRIMARY KEY ((org_id), id))');
+        $conn->query('CREATE TABLE IF NOT EXISTS reprepare_schema_sync(id int PRIMARY KEY, v varchar)');
+        $conn->query('CREATE TABLE IF NOT EXISTS reprepare_schema_async(id int PRIMARY KEY, v varchar)');
         $conn->disconnect();
     }
 

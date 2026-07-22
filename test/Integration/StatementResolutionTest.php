@@ -142,6 +142,41 @@ final class StatementResolutionTest extends AbstractIntegrationTestCase {
         $this->assertTrue($s2->isResultReady());
     }
 
+    public function testWaitForAnyStatementReturnsAReadyStatement(): void {
+
+        $conn = $this->connection;
+
+        // Neither statement is resolved yet, so this must block until one
+        // completes and then return it.
+        $s1 = $conn->queryAsync('SELECT key FROM system.local');
+        $s2 = $conn->queryAsync('SELECT release_version FROM system.local');
+
+        $ready = $conn->waitForAnyStatement([$s1, $s2]);
+
+        $this->assertContains($ready, [$s1, $s2]);
+        $this->assertTrue($ready->isResultReady());
+    }
+
+    public function testWaitForAnyStatementWithAlreadyResolvedStatements(): void {
+
+        $conn = $this->connection;
+
+        $s1 = $conn->queryAsync('SELECT key FROM system.local');
+        $s2 = $conn->queryAsync('SELECT release_version FROM system.local');
+
+        // Resolve both up front, so no further responses are pending on the wire.
+        $conn->waitForStatements([$s1, $s2]);
+        $this->assertTrue($s1->isResultReady());
+        $this->assertTrue($s2->isResultReady());
+
+        // Must return immediately rather than blocking on a response that will
+        // never arrive.
+        $ready = $conn->waitForAnyStatement([$s1, $s2]);
+
+        $this->assertContains($ready, [$s1, $s2]);
+        $this->assertTrue($ready->isResultReady());
+    }
+
     public function testWaitForStatementsWithAlreadyResolvedStatements(): void {
 
         $conn = $this->connection;

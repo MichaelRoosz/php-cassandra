@@ -123,7 +123,7 @@ final class Batch extends Request {
                     context: [
                         'request' => 'BATCH',
                         'option' => 'keyspace',
-                        'required_protocol_verison' => ProtocolVersion::V5->inOptionFormat(),
+                        'required_protocol_version' => ProtocolVersion::V5->inOptionFormat(),
                         'actual_protocol_version' => $version->inOptionFormat(),
                         'keyspace' => $options->keyspace,
                     ]
