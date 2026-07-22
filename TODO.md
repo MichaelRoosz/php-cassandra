@@ -3,7 +3,6 @@
 ## Features
 
 ## Tests
-* Test authentication
 
 ## Documentation
 
