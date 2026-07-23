@@ -119,19 +119,26 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     public function testBuiltInScalarFunctions(): void {
         $table = "{$this->keyspace}.cql_numbers";
 
+        // CAST() was only added in Cassandra 3.2, so it is only exercised where
+        // it is supported.
+        $castSelector = self::isCastFunctionSupported() ? 'CAST(n AS text) AS as_text, ' : '';
+
         // ScyllaDB does not support arithmetic expressions (e.g. "n + 5") in
-        // the selection clause, so that part is only exercised on Cassandra.
-        $arithmeticSelector = self::isScyllaDb() ? '' : 'n + 5 AS plus, ';
+        // the selection clause, and Cassandra only added them in 4.0, so that
+        // part is only exercised where it is supported.
+        $arithmeticSelector = self::isArithmeticInSelectClauseSupported() ? 'n + 5 AS plus, ' : '';
 
         $row = $this->connection->query(
-            "SELECT CAST(n AS text) AS as_text, {$arithmeticSelector}blobAsInt(intAsBlob(n)) AS roundtrip "
+            "SELECT {$castSelector}{$arithmeticSelector}blobAsInt(intAsBlob(n)) AS roundtrip "
             . "FROM {$table} WHERE pk = ? AND ck = ?",
             [1, 1]
         )->asRowsResult()->fetch();
 
         $this->assertIsArray($row);
-        $this->assertSame('10', $row['as_text'], 'CAST converts an int column to text');
-        if (!self::isScyllaDb()) {
+        if (self::isCastFunctionSupported()) {
+            $this->assertSame('10', $row['as_text'], 'CAST converts an int column to text');
+        }
+        if (self::isArithmeticInSelectClauseSupported()) {
             $this->assertSame(15, $row['plus'], 'Arithmetic is evaluated server side');
         }
         $this->assertSame(10, $row['roundtrip'], 'intAsBlob/blobAsInt round-trip the value');
@@ -168,8 +175,8 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     }
 
     public function testCustomPayloadIsAccepted(): void {
-        if (self::isScyllaDb()) {
-            $this->markTestSkipped('ScyllaDB rejects requests carrying a custom payload with a protocol error');
+        if (!self::isCustomPayloadSupported()) {
+            $this->markTestSkipped('ScyllaDB does not honor the custom payload frame flag');
         }
 
         $request = new Query("SELECT * FROM {$this->keyspace}.cql_numbers WHERE pk = 1 AND ck = 1");
@@ -184,8 +191,8 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     }
 
     public function testDescribeOverCql(): void {
-        if (self::isScyllaDb()) {
-            $this->markTestSkipped('DESCRIBE over CQL returns a different shape on ScyllaDB');
+        if (!self::isDescribeOverCqlSupported()) {
+            $this->markTestSkipped('DESCRIBE over CQL requires Cassandra 4.0+ (ScyllaDB returns a different shape)');
         }
 
         $rows = $this->connection->query("DESCRIBE TABLE {$this->keyspace}.cql_numbers")
@@ -198,6 +205,10 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     }
 
     public function testGroupByAndPerPartitionLimit(): void {
+        if (!self::isGroupBySupported()) {
+            $this->markTestSkipped('GROUP BY / PER PARTITION LIMIT require Cassandra 3.10+');
+        }
+
         $table = "{$this->keyspace}.cql_numbers";
 
         $grouped = $this->connection->query("SELECT pk, COUNT(*) AS c FROM {$table} GROUP BY pk")
@@ -327,8 +338,8 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     }
 
     public function testVirtualTables(): void {
-        if (self::isScyllaDb()) {
-            $this->markTestSkipped('ScyllaDB exposes a different set of virtual tables');
+        if (!self::isVirtualTablesSupported()) {
+            $this->markTestSkipped('Virtual tables (system_views) require Cassandra 4.1+ (ScyllaDB exposes a different set)');
         }
 
         $views = self::newConnection('system_views');

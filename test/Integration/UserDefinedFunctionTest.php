@@ -70,11 +70,12 @@ final class UserDefinedFunctionTest extends AbstractIntegrationTestCase {
     }
 
     public function testFunctionWithBoundArgument(): void {
-        if (self::isScyllaDb()) {
+        if (!self::isBindMarkerInFunctionArgumentSupported()) {
             // ScyllaDB rejects a bind marker in a function call argument with
             // "Bind variables cannot be used for keyspace names", with or
-            // without a cast or a keyspace-qualified function name.
-            $this->markTestSkipped('ScyllaDB does not support bind markers as function arguments');
+            // without a cast or a keyspace-qualified function name. Cassandra
+            // only added support in 3.6 (CASSANDRA-10783).
+            $this->markTestSkipped('Bind markers as function arguments require Cassandra 3.6+ (unsupported by ScyllaDB)');
         }
 
         $row = $this->connection->query(

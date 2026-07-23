@@ -74,8 +74,8 @@ final class SecondaryIndexTest extends AbstractIntegrationTestCase {
     }
 
     public function testSasiIndexWithLikeContains(): void {
-        if (self::isScyllaDb()) {
-            $this->markTestSkipped('ScyllaDB does not support SASI indexes');
+        if (!self::isSasiIndexSupported()) {
+            $this->markTestSkipped('SASI indexes are not supported (Cassandra 3.4+ only)');
         }
 
         $ids = $this->queryIds(
@@ -87,8 +87,8 @@ final class SecondaryIndexTest extends AbstractIntegrationTestCase {
     }
 
     public function testSasiIndexWithLikePrefix(): void {
-        if (self::isScyllaDb()) {
-            $this->markTestSkipped('ScyllaDB does not support SASI indexes');
+        if (!self::isSasiIndexSupported()) {
+            $this->markTestSkipped('SASI indexes are not supported (Cassandra 3.4+ only)');
         }
 
         $ids = $this->queryIds(
@@ -135,7 +135,7 @@ final class SecondaryIndexTest extends AbstractIntegrationTestCase {
         $conn->query('CREATE INDEX IF NOT EXISTS idx_teams_entries ON index_riders (ENTRIES(teams))');
         $conn->query('CREATE INDEX IF NOT EXISTS idx_career_teams ON index_riders (FULL(career_teams))');
 
-        if (!self::isScyllaDb()) {
+        if (self::isSasiIndexSupported()) {
             // SASI is a Cassandra-only index implementation. PREFIX is the default
             // mode; CONTAINS additionally matches in the middle of a value.
             $conn->query(

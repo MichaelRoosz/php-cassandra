@@ -53,6 +53,10 @@ final class JsonSupportTest extends AbstractIntegrationTestCase {
     }
 
     public function testInsertJsonWithDefaultNullOverwritesOmittedColumns(): void {
+        if (!self::isInsertJsonDefaultClauseSupported()) {
+            $this->markTestSkipped('INSERT JSON ... DEFAULT NULL requires Cassandra 3.10+');
+        }
+
         $table = "{$this->keyspace}.json_category";
 
         $this->connection->query(
@@ -73,6 +77,10 @@ final class JsonSupportTest extends AbstractIntegrationTestCase {
     }
 
     public function testInsertJsonWithDefaultUnsetKeepsOmittedColumns(): void {
+        if (!self::isInsertJsonDefaultClauseSupported()) {
+            $this->markTestSkipped('INSERT JSON ... DEFAULT UNSET requires Cassandra 3.10+');
+        }
+
         $table = "{$this->keyspace}.json_category";
 
         $this->connection->query(

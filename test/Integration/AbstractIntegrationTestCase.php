@@ -128,6 +128,127 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return getenv('APP_CASSANDRA_AUTH_ENABLED') === '1';
     }
 
+    /**
+     * Arithmetic expressions in the selection clause (e.g. "n + 5") were added
+     * in Cassandra 4.0 (CASSANDRA-11935) and are not supported by ScyllaDB.
+     */
+    protected static function isArithmeticInSelectClauseSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        return self::cassandraVersionIsAtLeast('4.0');
+    }
+
+    /**
+     * Bind markers as function-call arguments in the selection clause were added
+     * in Cassandra 3.6 (CASSANDRA-10783). ScyllaDB rejects them with
+     * "Bind variables cannot be used for keyspace names".
+     */
+    protected static function isBindMarkerInFunctionArgumentSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        return self::cassandraVersionIsAtLeast('3.6');
+    }
+
+    /**
+     * Sending a request with the CUSTOM_PAYLOAD frame flag set. Stock Cassandra
+     * accepts (and ignores) the payload. ScyllaDB never parsed the request-side
+     * custom payload [bytes map]: it left the bytes in the frame and mis-parsed
+     * the body, failing with a "truncated frame" protocol error (verified
+     * against ScyllaDB 6.2 over protocol v4). This is SCYLLADB-745, fixed on
+     * ScyllaDB master on 2026-05-21; once a release that contains the fix is
+     * tested, add a `version_compare(getenv('SCYLLADB_VERSION'), ...)` gate here
+     * instead of skipping every ScyllaDB version.
+     */
+    protected static function isCustomPayloadSupported(): bool {
+
+        return !self::isScyllaDb();
+    }
+
+    /**
+     * The CAST() function in the selection clause was added in Cassandra 3.2
+     * (CASSANDRA-10310). ScyllaDB supports it.
+     */
+    protected static function isCastFunctionSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return true;
+        }
+
+        return self::cassandraVersionIsAtLeast('3.2');
+    }
+
+    /**
+     * GROUP BY was added in Cassandra 3.10 (CASSANDRA-10707). ScyllaDB supports
+     * it. (PER PARTITION LIMIT, added in Cassandra 3.6, is subsumed by this.)
+     */
+    protected static function isGroupBySupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return true;
+        }
+
+        return self::cassandraVersionIsAtLeast('3.10');
+    }
+
+    /**
+     * The "INSERT ... JSON ? DEFAULT NULL|UNSET" clause was added in Cassandra
+     * 3.10 (CASSANDRA-11424). ScyllaDB supports it.
+     */
+    protected static function isInsertJsonDefaultClauseSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return true;
+        }
+
+        return self::cassandraVersionIsAtLeast('3.10');
+    }
+
+    /**
+     * DESCRIBE over CQL was added in Cassandra 4.0 (CASSANDRA-14825). ScyllaDB
+     * returns a different result shape and is excluded.
+     */
+    protected static function isDescribeOverCqlSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        return self::cassandraVersionIsAtLeast('4.0');
+    }
+
+    /**
+     * Virtual tables were introduced in Cassandra 4.0, but the
+     * system_views.settings rows queried by the tests only exist from 4.1.
+     * ScyllaDB exposes a different set and is excluded.
+     */
+    protected static function isVirtualTablesSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        return self::cassandraVersionIsAtLeast('4.1');
+    }
+
+    /**
+     * SASI is a Cassandra-only custom index implementation (available since
+     * Cassandra 3.4, CASSANDRA-10661). ScyllaDB does not support it.
+     */
+    protected static function isSasiIndexSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        return self::cassandraVersionIsAtLeast('3.4');
+    }
+
     protected static function isProtocolVersionSupported(ProtocolVersion $version): bool {
 
         if (self::isScyllaDb()) {
