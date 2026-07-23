@@ -14,6 +14,7 @@
 * Added integration tests for the ScyllaDB-only `BYPASS CACHE` and `USING TIMEOUT` CQL extensions, asserting both that they work on ScyllaDB and that Apache Cassandra rejects them.
 * Added a unit test for the binary encoding of the `serialConsistency` request option.
 * The test containers now enable user-defined functions, materialized views and SASI indexes (disabled by default), and a dedicated `docker-compose.auth.yml` runs the suite against an authenticated cluster.
+* Extended the CI test matrix to cover PHP 8.5 and ScyllaDB 2026.1 and 2026.2.
 
 ### Documentation
 * README: added a "Collection updates" section covering incremental `+`/`-` updates, prepend, indexed assignment, single-element deletion, clearing, and frozen and nested collections.
