@@ -21,6 +21,7 @@
 * `Cassandra\Connection\Socket::write()`: after a partial write the inner loop re-invoked `socket_write()` without re-entering `selectSocketForWrite()`, so against a slow peer it busy-spun on `EAGAIN`/zero-byte writes (burning CPU) until `sendTimeout` elapsed. The loop now returns to the outer loop and waits for the socket to become writable again before retrying.
 * `Cassandra\Connection\Socket::connect()`: the socket was always created with `AF_INET`, so connecting to an IPv6 host failed. The address family is now chosen based on the configured host, using `AF_INET6` for IPv6 literals.
 * `Cassandra\Value\UDT` / `Cassandra\Value\Tuple`: a serialized value carrying fewer fields than its type declares (for example UDT rows written before an `ALTER TYPE ... ADD`) was decoded by reading past the value's declared length into whatever bytes followed, desyncing the row decoder. Decoding now stops at the declared length and null-fills the remaining trailing fields.
+* `Cassandra\Value\Vector`: fixed two element-framing bugs. `vector<smallint>`/`vector<tinyint>` are variable-length inside vectors ([CASSANDRA-14476](https://issues.apache.org/jira/browse/CASSANDRA-14476)), but `fromStream()` expected no length prefix and misread them; and `getBinary()` wrote the variable-length prefix as a two's-complement varint rather than an unsigned VInt, corrupting elements of 128 bytes or more (e.g. a long `vector<text>`). Both paths now use unsigned-VInt prefixes and agree.
 
 ### Performance
 * Response and value dispatch maps (`Cassandra\Response\Response`, `Result`, `Error`, `Event`, `Cassandra\ValueFactory`, `Cassandra\TypeNameParser`) are now lazily cached instead of being rebuilt on every call.
@@ -32,6 +33,7 @@
 * Added integration tests for the ScyllaDB-only `BYPASS CACHE` and `USING TIMEOUT` CQL extensions, asserting both that they work on ScyllaDB and that Apache Cassandra rejects them.
 * Added a unit test for the binary encoding of the `serialConsistency` request option.
 * Added integration tests for empty (zero-length) values of fixed-length types, asserting that empty values are decoded as `null` and do not desync the row decoder.
+* Added regression tests for `vector<smallint>`/`vector<tinyint>` framing and for variable-length vector elements of 128 bytes or more (`vector<text>`).
 * Added compression benchmarks running against a real Cassandra/ScyllaDB node with several-megabyte payloads: `benchmarks/CompressionBench.php` (phpbench) measures a large-blob round-trip with compression on vs. off, and `benchmarks/compression-network-bench.php` compares the two across a range of simulated network bandwidths (via a bandwidth-throttling transport) to show where compression starts to pay off.
 * The test containers now enable user-defined functions, materialized views and SASI indexes (disabled by default), and a dedicated `docker-compose.auth.yml` runs the suite against an authenticated cluster.
 * Extended the CI test matrix to cover PHP 8.5 and ScyllaDB 2026.1 and 2026.2.

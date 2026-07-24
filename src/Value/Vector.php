@@ -11,6 +11,7 @@ use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\VectorInfo;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\VIntCodec;
 
 final class Vector extends ValueReadableWithoutLength {
     private VectorInfo $typeInfo;
@@ -98,9 +99,18 @@ final class Vector extends ValueReadableWithoutLength {
 
         $valueType = $typeInfo->valueType;
 
-        $serializedLength = ValueFactory::getSerializedLengthOfType($valueType->type);
+        // The element framing is decided by whether Cassandra treats the element
+        // type as fixed length (isValueLengthFixed()). This must match the write
+        // side in getBinary(); note that smallint/tinyint have a positive
+        // fixedLength() but are still serialized as variable length (see
+        // CASSANDRA-14476), so isSerializedAsFixedLength() — not fixedLength() —
+        // is the authoritative predicate.
+        // https://issues.apache.org/jira/browse/CASSANDRA-14476
+        $isFixedLength = ValueFactory::isSerializedAsFixedLength($valueType->type);
 
-        if ($serializedLength > 0) {
+        if ($isFixedLength) {
+            $serializedLength = ValueFactory::getSerializedLengthOfType($valueType->type);
+
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
 
                 $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
@@ -156,6 +166,7 @@ final class Vector extends ValueReadableWithoutLength {
     /**
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\VIntCodecException
      */
     #[\Override]
     public function getBinary(): string {
@@ -163,6 +174,8 @@ final class Vector extends ValueReadableWithoutLength {
         $value = $this->value;
 
         $isSerializedAsFixedLength = ValueFactory::isSerializedAsFixedLength($this->typeInfo->valueType->type);
+
+        $vIntCodec = new VIntCodec();
 
         for ($i = 0; $i < $this->typeInfo->dimensions; ++$i) {
             $valueBinary = $value[$i] instanceof ValueBase
@@ -173,7 +186,7 @@ final class Vector extends ValueReadableWithoutLength {
                 $binary .= $valueBinary;
             } else {
                 $length = strlen($valueBinary);
-                $lengthBinary = (new Varint($length))->getBinary();
+                $lengthBinary = $vIntCodec->encodeUnsignedVint32($length);
                 $binary .= $lengthBinary . $valueBinary;
             }
         }

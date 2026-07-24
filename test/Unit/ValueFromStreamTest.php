@@ -194,6 +194,82 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
             $this->assertEquals((string) $varintVec[$i], (string) $decoded[$i]);
         }
     }
+
+    /**
+     * smallint/tinyint have a positive fixedLength() but Cassandra still
+     * serializes them as variable-length inside vectors (CASSANDRA-14476 is
+     * unmerged in cassandra-5.0/trunk: ShortType/ByteType do not override
+     * valueLengthIfFixed()). So each element must carry an unsigned-VInt length
+     * prefix on the wire, and the read and write paths must agree on that.
+     */
+    public function testVectorFromStreamSmallintTinyintUseVariableLengthFraming(): void {
+        // vector<smallint,4>
+        $smallintVec = [1, -2, 300, 32767];
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition(
+            ['type' => Type::VECTOR, 'valueType' => Type::SMALLINT, 'dimensions' => 4]
+        );
+        $binary = ValueFactory::getBinaryByTypeInfo($typeInfo, $smallintVec);
+
+        // Each of the 4 elements: 1-byte unsigned-VInt length (0x02) + 2 bytes.
+        $this->assertSame(4 * 3, strlen($binary));
+        foreach ([0, 3, 6, 9] as $elementOffset) {
+            $this->assertSame(0x02, ord($binary[$elementOffset]), 'missing unsigned-VInt length prefix');
+        }
+
+        $decoded = $this->decodeViaFromStream(
+            Type::VECTOR,
+            $smallintVec,
+            ['valueType' => Type::SMALLINT, 'dimensions' => 4]
+        )->getValue();
+        $this->assertSame($smallintVec, $decoded);
+
+        // vector<tinyint,3>
+        $tinyintVec = [1, -2, 127];
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition(
+            ['type' => Type::VECTOR, 'valueType' => Type::TINYINT, 'dimensions' => 3]
+        );
+        $binary = ValueFactory::getBinaryByTypeInfo($typeInfo, $tinyintVec);
+
+        // Each of the 3 elements: 1-byte unsigned-VInt length (0x01) + 1 byte.
+        $this->assertSame(3 * 2, strlen($binary));
+        foreach ([0, 2, 4] as $elementOffset) {
+            $this->assertSame(0x01, ord($binary[$elementOffset]), 'missing unsigned-VInt length prefix');
+        }
+
+        $decoded = $this->decodeViaFromStream(
+            Type::VECTOR,
+            $tinyintVec,
+            ['valueType' => Type::TINYINT, 'dimensions' => 3]
+        )->getValue();
+        $this->assertSame($tinyintVec, $decoded);
+    }
+
+    /**
+     * A variable-length element whose serialized size is >= 128 bytes must have
+     * its length prefix written as an unsigned VInt (Cassandra's
+     * putUnsignedVInt32), not a two's-complement varint. The two encodings only
+     * diverge at length >= 128, so this needs a large element to catch it.
+     */
+    public function testVectorFromStreamVariableLengthElementOver127Bytes(): void {
+        $longText = str_repeat('x', 200);
+        $textVec = [$longText, 'short'];
+
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition(
+            ['type' => Type::VECTOR, 'valueType' => Type::VARCHAR, 'dimensions' => 2]
+        );
+        $binary = ValueFactory::getBinaryByTypeInfo($typeInfo, $textVec);
+
+        // 200 as an unsigned VInt is 0x80 0xC8 (a two's-complement varint would
+        // instead be 0x00 0xC8, which the reader would misinterpret).
+        $this->assertSame("\x80\xC8", substr($binary, 0, 2), 'length prefix must be an unsigned VInt');
+
+        $decoded = $this->decodeViaFromStream(
+            Type::VECTOR,
+            $textVec,
+            ['valueType' => Type::VARCHAR, 'dimensions' => 2]
+        )->getValue();
+        $this->assertSame($textVec, $decoded);
+    }
     /**
      * @template T
      * @param T $phpValue
