@@ -136,7 +136,9 @@ final class SetCollection extends ValueReadableWithoutLength {
 
         /** @var mixed $val */
         foreach ($this->value as $val) {
-            $itemPacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
+            $itemPacked = $val instanceof ValueBase
+                ? $val->getBinary()
+                : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
             $binary .= pack('N', strlen($itemPacked)) . $itemPacked;
         }
 

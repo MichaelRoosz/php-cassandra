@@ -286,6 +286,34 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testListCollectionWithValueObjects(): void {
+        // Elements provided as pre-built Value objects must encode identically
+        // to the same elements provided as raw PHP values (regression: getBinary()
+        // previously rejected ValueBase elements).
+        $definition = Type::INT;
+
+        $rawBinary = (Value\ListCollection::fromValue([1, 2, 3], $definition))->getBinary();
+
+        $objectBinary = (Value\ListCollection::fromValue([
+            Value\Int32::fromValue(1),
+            Value\Int32::fromValue(2),
+            Value\Int32::fromValue(3),
+        ], $definition))->getBinary();
+
+        $this->assertSame(bin2hex($rawBinary), bin2hex($objectBinary));
+
+        $this->assertSame(
+            [1, 2, 3],
+            Value\ListCollection::fromBinary(
+                $objectBinary,
+                ValueFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::LIST,
+                    'valueType' => $definition,
+                ])
+            )->getValue()
+        );
+    }
+
     public function testMapCollection(): void {
         $value = [
             'a' => 1,
@@ -390,6 +418,34 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             $value,
             Value\SetCollection::fromBinary(
                 (Value\SetCollection::fromValue($value, $definition))->getBinary(),
+                ValueFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::SET,
+                    'valueType' => $definition,
+                ])
+            )->getValue()
+        );
+    }
+
+    public function testSetCollectionWithValueObjects(): void {
+        // Elements provided as pre-built Value objects must encode identically
+        // to the same elements provided as raw PHP values (regression: getBinary()
+        // previously rejected ValueBase elements).
+        $definition = Type::INT;
+
+        $rawBinary = (Value\SetCollection::fromValue([1, 2, 3], $definition))->getBinary();
+
+        $objectBinary = (Value\SetCollection::fromValue([
+            Value\Int32::fromValue(1),
+            Value\Int32::fromValue(2),
+            Value\Int32::fromValue(3),
+        ], $definition))->getBinary();
+
+        $this->assertSame(bin2hex($rawBinary), bin2hex($objectBinary));
+
+        $this->assertSame(
+            [1, 2, 3],
+            Value\SetCollection::fromBinary(
+                $objectBinary,
                 ValueFactory::getTypeInfoFromTypeDefinition([
                     'type' => Type::SET,
                     'valueType' => $definition,
