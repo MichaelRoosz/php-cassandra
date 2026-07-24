@@ -8,6 +8,7 @@ use Cassandra\Connection\FrameCodec;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Protocol\ProtocolVersion;
+use Cassandra\Connection\RequestCompressor;
 use Cassandra\Connection\ResponseReader;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
@@ -209,6 +210,8 @@ final class Connection {
 
             if ($this->version->value >= ProtocolVersion::V5->value) {
                 $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
+            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
+                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
             }
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
@@ -223,6 +226,8 @@ final class Connection {
         } elseif ($response instanceof Response\Ready) {
             if ($this->version->value >= ProtocolVersion::V5->value) {
                 $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
+            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
+                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
             }
         } else {
             $nodeConfig = $node->getConfig();

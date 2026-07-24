@@ -5,6 +5,8 @@ parameters:
         - src
         - php-cassandra.php
     treatPhpDocTypesAsCertain: false
+    stubFiles:
+        - stubs/lz4.stub
     exceptions:
         implicitThrows: false
         check:

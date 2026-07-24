@@ -93,6 +93,59 @@ vendor/bin/phpbench run --report=default
 vendor/bin/phpbench run benchmarks/QueryBench.php --report=aggregate
 ```
 
+### Compression benchmarks
+
+LZ4 (de)compression uses the optional native `lz4` PHP extension when it is
+installed, and falls back to a pure-PHP implementation otherwise — so it is
+worth knowing whether compressing frames actually pays off or just burns CPU,
+and how much the extension matters. Two benchmarks — both against a real node —
+answer this:
+
+```bash
+# 1) Real server, several-MB blob, compression on vs. off (full local speed).
+#    Requires a reachable node (set APP_CASSANDRA_HOST / APP_CASSANDRA_PORT).
+vendor/bin/phpbench run benchmarks/CompressionBench.php --report=aggregate
+
+# 2) Real server round-trips of a several-MB blob over a range of SIMULATED
+#    network bandwidths, compression on vs. off, printed as a speed-up table.
+APP_CASSANDRA_HOST=127.0.0.1 APP_CASSANDRA_PORT=9042 \
+    php benchmarks/compression-network-bench.php
+```
+
+The network benchmark (2) is the one that answers the practical question. It
+uses a `ThrottledSocket` transport that sleeps in proportion to the bytes it
+transfers, so slower links spend proportionally more time on the wire.
+
+With the native `lz4` extension installed, compression wins everywhere — even on
+a full-speed local socket:
+
+```
+network link           |   uncompressed |     compressed |  speed-up
+---------------------------------------------------------------------
+full speed (local)     |       0.070 s |       0.050 s |    1.41x
+50 MB/s (fast LAN)     |       0.240 s |       0.054 s |    4.46x
+10 MB/s (100 Mbit)     |       0.923 s |       0.054 s |   16.95x
+2 MB/s (slow WAN)      |       4.266 s |       0.069 s |   61.87x
+0.5 MB/s (mobile)      |      16.855 s |       0.131 s |  128.88x
+```
+
+With the pure-PHP fallback, compression costs more CPU than a fast local socket
+saves, but is still a large win from a fast LAN downwards:
+
+```
+network link           |   uncompressed |     compressed |  speed-up
+---------------------------------------------------------------------
+full speed (local)     |       0.058 s |       0.189 s |    0.31x
+50 MB/s (fast LAN)     |       0.233 s |       0.188 s |    1.24x
+10 MB/s (100 Mbit)     |       0.904 s |       0.183 s |    4.93x
+2 MB/s (slow WAN)      |       4.264 s |       0.204 s |   20.91x
+0.5 MB/s (mobile)      |      16.859 s |       0.263 s |   64.02x
+```
+
+In other words: install `ext-lz4` if you use compression; without it,
+compression is a net loss only on a fast local socket and a growing win
+as the network gets slower.
+
 ## Results
 
 Benchmark results are saved to `benchmarks/results/` with timestamps. Each run produces three files:

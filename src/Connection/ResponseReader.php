@@ -63,6 +63,7 @@ final class ResponseReader {
             && $header->length > 0
             && $header->flags & Flag::COMPRESSION
         ) {
+            /** @var false|array<int> $uncompressedLength */
             $uncompressedLength = unpack('N', substr($body, 0, 4));
             if ($uncompressedLength === false) {
                 throw new ConnectionException(
@@ -73,7 +74,7 @@ final class ResponseReader {
             }
 
             $this->lz4Decompressor->setInput(substr($body, 4));
-            $body = $this->lz4Decompressor->decompressBlock();
+            $body = $this->lz4Decompressor->decompressBlock($uncompressedLength[1]);
 
             if ($uncompressedLength[1] !== strlen($body)) {
                 throw new ConnectionException(

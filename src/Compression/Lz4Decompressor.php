@@ -41,7 +41,22 @@ final class Lz4Decompressor {
     private string $output;
     private int $outputLength;
 
-    public function __construct(?string $compressedData = null, int $inputOffset = 0, int $inputLength = 0) {
+    private readonly bool $useExtension;
+
+    /**
+     * @param bool $preferExtension Use the native LZ4 PHP extension when it is
+     *   available (much faster). Only applies to {@see decompressBlock()} when an
+     *   expected uncompressed length is supplied; pass false to force the
+     *   pure-PHP implementation.
+     */
+    public function __construct(
+        ?string $compressedData = null,
+        int $inputOffset = 0,
+        int $inputLength = 0,
+        bool $preferExtension = true
+    ) {
+        $this->useExtension = $preferExtension && Lz4Extension::isAvailable();
+
         if ($compressedData !== null) {
             $this->setInput($compressedData, $inputOffset, $inputLength);
         } else {
@@ -91,9 +106,28 @@ final class Lz4Decompressor {
     }
 
     /**
+     * Decompress the raw LZ4 block set via {@see setInput()}.
+     *
+     * When the caller knows the uncompressed length (it comes from the frame
+     * header on v5 and the 4-byte body prefix on v3/v4) and the native LZ4
+     * extension is available, decompression is delegated to it; otherwise the
+     * pure-PHP decoder is used.
+     *
      * @throws \Cassandra\Exception\CompressionException
      */
-    public function decompressBlock(): string {
+    public function decompressBlock(?int $expectedUncompressedLength = null): string {
+        if ($this->useExtension && $expectedUncompressedLength !== null && $expectedUncompressedLength > 0) {
+            $block = substr($this->input, $this->inputOffset, $this->inputLength - $this->inputOffset);
+
+            $result = Lz4Extension::decompressBlock($block, $expectedUncompressedLength);
+            if ($result !== null) {
+                $this->output = $result;
+                $this->outputLength = strlen($result);
+
+                return $result;
+            }
+        }
+
         $this->decompressBlockAtOffset($this->inputOffset, $this->inputLength);
 
         return $this->output;
@@ -234,10 +268,19 @@ final class Lz4Decompressor {
             }
             $matchLength += 4;
 
-            $j = $matchStart;
-            $k = $matchLength;
-            while ($k--) {
-                $this->output .= $this->output[$j++];
+            if ($offset >= $matchLength) {
+                // Non-overlapping match: the entire source region is already in
+                // the output, so copy it in one shot instead of byte-by-byte.
+                $this->output .= substr($this->output, $matchStart, $matchLength);
+            } elseif ($offset === 1) {
+                // Single-byte run (RLE): repeat the one byte.
+                $this->output .= str_repeat($this->output[$matchStart], $matchLength);
+            } else {
+                // Overlapping match: the source overlaps the bytes being written,
+                // which by definition repeats the last $offset bytes. Rebuild the
+                // run from that period with bulk string ops.
+                $pattern = substr($this->output, $matchStart, $offset);
+                $this->output .= substr(str_repeat($pattern, intdiv($matchLength, $offset) + 1), 0, $matchLength);
             }
 
             $this->outputLength += $matchLength;
@@ -433,8 +476,13 @@ final class Lz4Decompressor {
             return false;
         }
 
-        $isUncompressed = $blockSizeRaw & 0x80;
-        $blockSize = $blockSizeRaw & 0x7F;
+        // The 32-bit block size field stores the "uncompressed" flag in the high
+        // bit and the block length in the low 31 bits. The flag is read with a
+        // shift rather than an `& 0x80000000` mask because 0x80000000 exceeds
+        // PHP_INT_MAX on 32-bit PHP (it would be a float); the >> 31 works on both
+        // architectures, and 0x7FFFFFFF is a valid int everywhere.
+        $isUncompressed = ($blockSizeRaw >> 31) & 0x1;
+        $blockSize = $blockSizeRaw & 0x7FFFFFFF;
         $blockStart = $this->inputOffset;
 
         if ($blockSize > 0) {
