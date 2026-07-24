@@ -85,12 +85,17 @@ class Error extends Response {
     }
 
     /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
+     * @var ?array<int, class-string<\Cassandra\Response\Error>>
+     */
+    private static ?array $errorClassMap = null;
+
+    /**
      * @return array<int, class-string<\Cassandra\Response\Error>>
      */
     public static function getErrorClassMap(): array {
-        return [
+        // Cached because enum `->value` cannot be used in a constant expression
+        // on PHP 8.1; once 8.1 support is dropped this can become a real `const`.
+        return self::$errorClassMap ??= [
             ErrorType::ALREADY_EXISTS->value => Error\AlreadyExistsError::class,
             ErrorType::AUTHENTICATION_ERROR->value => Error\AuthenticationError::class,
             ErrorType::CAS_WRITE_UNKNOWN->value => Error\CasWriteUnknownError::class,

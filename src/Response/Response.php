@@ -84,12 +84,17 @@ abstract class Response implements Frame, Stringable {
     }
 
     /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
+     * @var ?array<int, class-string<\Cassandra\Response\Response>>
+     */
+    private static ?array $responseClassMap = null;
+
+    /**
      * @return array<int, class-string<\Cassandra\Response\Response>>
      */
     public static function getResponseClassMap(): array {
-        return [
+        // Cached because enum `->value` cannot be used in a constant expression
+        // on PHP 8.1; once 8.1 support is dropped this can become a real `const`.
+        return self::$responseClassMap ??= [
             Opcode::RESPONSE_ERROR->value => Error::class,
             Opcode::RESPONSE_READY->value => Ready::class,
             Opcode::RESPONSE_AUTHENTICATE->value => Authenticate::class,

@@ -26,12 +26,17 @@ class Event extends Response {
     }
 
     /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
+     * @var ?array<string, class-string<\Cassandra\Response\Event>>
+     */
+    private static ?array $eventClassMap = null;
+
+    /**
      * @return array<string, class-string<\Cassandra\Response\Event>>
      */
     public static function getEventClassMap(): array {
-        return [
+        // Cached because enum `->value` cannot be used in a constant expression
+        // on PHP 8.1; once 8.1 support is dropped this can become a real `const`.
+        return self::$eventClassMap ??= [
             EventType::SCHEMA_CHANGE->value => Event\SchemaChangeEvent::class,
             EventType::STATUS_CHANGE->value => Event\StatusChangeEvent::class,
             EventType::TOPOLOGY_CHANGE->value => Event\TopologyChangeEvent::class,

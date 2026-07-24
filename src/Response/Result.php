@@ -129,12 +129,17 @@ class Result extends Response implements IteratorAggregate {
     }
 
     /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
+     * @var ?array<int, class-string<\Cassandra\Response\Result>>
+     */
+    private static ?array $resultClassMap = null;
+
+    /**
      * @return array<int, class-string<\Cassandra\Response\Result>>
      */
     public static function getResultClassMap(): array {
-        return [
+        // Cached because enum `->value` cannot be used in a constant expression
+        // on PHP 8.1; once 8.1 support is dropped this can become a real `const`.
+        return self::$resultClassMap ??= [
             ResultKind::PREPARED->value => Result\PreparedResult::class,
             ResultKind::ROWS->value => Result\RowsResult::class,
             ResultKind::SCHEMA_CHANGE->value => Result\SchemaChangeResult::class,

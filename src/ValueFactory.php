@@ -21,6 +21,11 @@ use Cassandra\Value\ValueEncodeConfig;
 
 final class ValueFactory {
     /**
+     * @var ?array<int, class-string<\Cassandra\Value\ValueBase>>
+     */
+    private static ?array $typeToValueClassMap = null;
+
+    /**
      * @param mixed $value
      *
      * @throws \Cassandra\Exception\ValueFactoryException
@@ -217,12 +222,12 @@ final class ValueFactory {
     }
 
     /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
      * @return array<int, class-string<\Cassandra\Value\ValueBase>>
      */
     private static function getTypeToValueClassMap(): array {
-        return [
+        // Cached because enum `->value` cannot be used in a constant expression
+        // on PHP 8.1; once 8.1 support is dropped this can become a real `const`.
+        return self::$typeToValueClassMap ??= [
             Type::ASCII->value => Values\Ascii::class,
             Type::BIGINT->value => Values\Bigint::class,
             Type::BLOB->value => Values\Blob::class,

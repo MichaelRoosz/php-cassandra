@@ -18,6 +18,11 @@ use Cassandra\TypeInfo\VectorInfo;
 
 final class TypeNameParser {
     /**
+     * @var ?array<string, \Cassandra\Type>
+     */
+    private static ?array $simpleTypeMap = null;
+
+    /**
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     public function parse(string $typeString, bool $isFrozen = false): TypeInfo {
@@ -93,9 +98,22 @@ final class TypeNameParser {
             return new SimpleTypeInfo($simpleTypeMap[$typeName]);
         }
 
-        $complexTypeMap = $this->getComplexTypeMap();
-        if (isset($complexTypeMap[$typeName])) {
-            return $complexTypeMap[$typeName]($params, $isFrozen);
+        $complexTypeInfo = match ($typeName) {
+            TypeName::FROZEN->value => $this->parseFrozenType($params, $isFrozen),
+            TypeName::REVERSED->value => $this->parseReversedType($params, $isFrozen),
+
+            TypeName::MAP->value => $this->parseMapType($params, $isFrozen),
+            TypeName::LIST->value => $this->parseListType($params, $isFrozen),
+            TypeName::SET->value => $this->parseSetType($params, $isFrozen),
+            TypeName::TUPLE->value => $this->parseTupleType($params, $isFrozen),
+            TypeName::UDT->value => $this->parseUDTType($params, $isFrozen),
+            TypeName::VECTOR->value => $this->parseVectorType($params, $isFrozen),
+
+            default => null,
+        };
+
+        if ($complexTypeInfo !== null) {
+            return $complexTypeInfo;
         }
 
         return new CustomInfo(
@@ -211,31 +229,12 @@ final class TypeNameParser {
     }
 
     /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
-     * @return array<string, callable(array<string>, boolean): \Cassandra\TypeInfo\TypeInfo>
-     */
-    private function getComplexTypeMap(): array {
-        return [
-            TypeName::FROZEN->value => [$this, 'parseFrozenType'],
-            TypeName::REVERSED->value => [$this, 'parseReversedType'],
-
-            TypeName::MAP->value => [$this, 'parseMapType'],
-            TypeName::LIST->value => [$this, 'parseListType'],
-            TypeName::SET->value => [$this, 'parseSetType'],
-            TypeName::TUPLE->value => [$this, 'parseTupleType'],
-            TypeName::UDT->value => [$this, 'parseUDTType'],
-            TypeName::VECTOR->value => [$this, 'parseVectorType'],
-        ];
-    }
-
-    /**
-     * @todo this should be moved to a const class value once support for php 8.1 is dropped
-     * 
      * @return array<string, \Cassandra\Type>
      */
     private function getSimpleTypeMap(): array {
-        return [
+        // Cached because enum `->value` cannot be used in a constant expression
+        // on PHP 8.1; once 8.1 support is dropped this can become a real `const`.
+        return self::$simpleTypeMap ??= [
             TypeName::ASCII->value => Type::ASCII,
             TypeName::BOOLEAN->value => Type::BOOLEAN,
             TypeName::BYTE->value => Type::TINYINT,
