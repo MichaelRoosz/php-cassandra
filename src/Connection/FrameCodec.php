@@ -344,12 +344,9 @@ final class FrameCodec extends NodeImplementation {
         $payloadLength = $frameHeader['payloadLength'];
         $uncompressedLength = $frameHeader['uncompressedLength'];
 
-        if ($payloadLength === 0) {
-            $this->currentFrameHeader = null;
-
-            return '';
-        }
-
+        // Note that a zero-length payload is not a special case: the frame still
+        // carries its 4-byte payload CRC32 trailer (writeFrame() emits one), so
+        // it has to be read and verified like any other, or the stream desyncs.
         $payload = $this->node->read($payloadLength + 4, $waitForData);
         if ($payload === '') {
             return null;
