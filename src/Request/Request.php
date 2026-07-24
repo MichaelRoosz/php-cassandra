@@ -20,6 +20,9 @@ use DateTimeInterface;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
+    private const INT32_MAX = 2147483647;
+    private const INT32_MIN = -2147483647 - 1;
+
     /**
      * @param ?array<string,string> $payload
      */
@@ -245,6 +248,27 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 case is_int($value):
+                    // Untyped values carry no type tag, so the server validates
+                    // the byte width against the target column: an int column
+                    // requires exactly 4 bytes. We therefore encode ints as
+                    // int32. A value outside that range would be silently
+                    // truncated by pack('N'), so reject it here — the caller must
+                    // wrap it (e.g. Cassandra\Value\Bigint) or use a prepared
+                    // statement, where the bind-marker type drives the encoding.
+                    if ($value < self::INT32_MIN || $value > self::INT32_MAX) {
+                        throw new RequestException(
+                            message: 'Integer bound value is outside the 32-bit range and would be truncated; wrap it in a typed value (e.g. Cassandra\\Value\\Bigint) or use a prepared statement',
+                            code: ExceptionCode::REQUEST_VALUES_INT_OUT_OF_INT32_RANGE->value,
+                            context: [
+                                'stage' => 'values_encoding',
+                                'name' => $name,
+                                'value' => $value,
+                                'min' => self::INT32_MIN,
+                                'max' => self::INT32_MAX,
+                            ]
+                        );
+                    }
+
                     $binary = pack('N', $value);
 
                     break;
@@ -265,9 +289,22 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 case $value instanceof DateTimeInterface:
-                    $binary = $value->format('Y-m-d H:i:s.vO');
-
-                    break;
+                    // A DateTime has no unambiguous untyped encoding: a timestamp
+                    // column expects an 8-byte long, date/time expect their own
+                    // fixed widths, and only a text column would accept a
+                    // formatted string. Rather than guess a format that is wrong
+                    // for every temporal column, require an explicit typed value
+                    // (Cassandra\Value\Timestamp / Date / Time) or a prepared
+                    // statement, where the bind-marker type drives the encoding.
+                    throw new RequestException(
+                        message: 'DateTime bound value has no unambiguous untyped encoding; wrap it in a typed value (e.g. Cassandra\\Value\\Timestamp, Date or Time) or use a prepared statement',
+                        code: ExceptionCode::REQUEST_VALUES_AMBIGUOUS_DATETIME->value,
+                        context: [
+                            'stage' => 'values_encoding',
+                            'name' => $name,
+                            'php_type' => get_class($value),
+                        ]
+                    );
 
                 default:
                     throw new RequestException(

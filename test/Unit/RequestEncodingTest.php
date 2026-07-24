@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Consistency;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\RequestException;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
@@ -13,11 +15,30 @@ use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Query;
 use Cassandra\Request\QueryFlag;
 use Cassandra\SerialConsistency;
+use DateTimeImmutable;
 
 /**
  * Unit tests for the binary encoding of request options.
  */
 final class RequestEncodingTest extends AbstractUnitTestCase {
+    /**
+     * @return array<string, array{int}>
+     */
+    public static function outOfInt32RangeProvider(): array {
+        // On 32-bit PHP the out-of-range literals below overflow to float, which
+        // would TypeError against the int parameter under strict_types. A PHP int
+        // can never exceed int32 there anyway, so provide a benign value that the
+        // test skips.
+        if (PHP_INT_SIZE < 8) {
+            return ['n/a on 32-bit' => [0]];
+        }
+
+        return [
+            'just above max' => [2147483648],
+            'just below min' => [-2147483649],
+            'php int max' => [PHP_INT_MAX],
+        ];
+    }
     /**
      * @return array<string, array{SerialConsistency}>
      */
@@ -46,6 +67,22 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
             $tail,
             'Batch must encode the serial consistency code, not the enum instance'
         );
+    }
+
+    public function testQueryEncodesInInt32RangeIntAsFourBytes(): void {
+        $request = new Query(
+            query: 'INSERT INTO t (id) VALUES (?)',
+            values: [2147483647],
+            consistency: Consistency::ONE,
+            options: new QueryOptions()
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        // The single bound value's [bytes] frame is the tail of the body:
+        // 4-byte length prefix followed by the 4-byte int32.
+        $body = $request->getBody();
+
+        $this->assertSame(pack('N', 4) . pack('N', 2147483647), substr($body, -8));
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('serialConsistencyProvider')]
@@ -96,6 +133,41 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
             $this->unpackInt('N', substr($body, $offset + 2, 4)) & QueryFlag::WITH_SERIAL_CONSISTENCY,
             'The serial consistency flag must not be set when the option is unused'
         );
+    }
+
+    public function testQueryRejectsDateTimeInUntypedPath(): void {
+        $request = new Query(
+            query: 'INSERT INTO t (ts) VALUES (?)',
+            values: [new DateTimeImmutable('2024-01-01 00:00:00')],
+            consistency: Consistency::ONE,
+            options: new QueryOptions()
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_AMBIGUOUS_DATETIME->value);
+
+        $request->getBody();
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('outOfInt32RangeProvider')]
+    public function testQueryRejectsOutOfInt32RangeIntInUntypedPath(int $value): void {
+        if (PHP_INT_SIZE < 8) {
+            $this->markTestSkipped('a PHP int is always within int32 range on 32-bit');
+        }
+
+        $request = new Query(
+            query: 'INSERT INTO t (id) VALUES (?)',
+            values: [$value],
+            consistency: Consistency::ONE,
+            options: new QueryOptions()
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_INT_OUT_OF_INT32_RANGE->value);
+
+        $request->getBody();
     }
 
     private function unpackInt(string $format, string $bytes): int {

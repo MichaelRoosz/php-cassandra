@@ -677,7 +677,9 @@ Data types
 
 All native Cassandra types are supported via classes in `Cassandra\Value\*`. You may pass either:
 - A concrete `Value\...` instance, or
-- A PHP scalar/array matching the type; the driver will convert it when metadata is available
+- A PHP scalar/array matching the type; the driver will convert it when metadata is available (prepared statements, or `query()` with the default `autoPrepare`).
+
+Without that metadata (e.g. `query(..., autoPrepare: false)` or `Batch::appendQuery()` simple-query values) a bare PHP `int` is encoded as 32-bit `int`, and a bare `DateTime` has no unambiguous encoding — wrap large integers in `Value\Bigint` and temporal values in `Value\Timestamp`/`Date`/`Time` (or use a prepared statement). The driver throws rather than silently sending a wrong value.
 
 Examples:
 ```php
