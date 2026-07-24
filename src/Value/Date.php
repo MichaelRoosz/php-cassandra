@@ -12,6 +12,7 @@ use Cassandra\Value\EncodeOption\DateEncodeOption;
 use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
+use DateTimeZone;
 use Exception as PhpException;
 
 final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodings {
@@ -56,7 +57,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             }
 
             try {
-                $valueAsDate = new DateTimeImmutable($value);
+                $valueAsDate = new DateTimeImmutable($value, new DateTimeZone('UTC'));
             } catch (PhpException $e) {
                 throw new ValueException('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
                     'value' => $value,
@@ -64,7 +65,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
                 ], $e);
             }
 
-            $baseDate = new DateTimeImmutable('1970-01-01');
+            $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
             $interval = $baseDate->diff($valueAsDate);
 
             $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
@@ -81,8 +82,12 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
         } else { // DateTimeInterface
 
-            $baseDate = new DateTimeImmutable('1970-01-01');
-            $interval = $baseDate->diff($value);
+            // Anchor both ends at UTC midnight so the day count is exact and
+            // independent of the ambient timezone. The value's own calendar date
+            // (as it presents in its timezone) is what the user means by "date".
+            $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
+            $valueAsDate = new DateTimeImmutable($value->format('Y-m-d'), new DateTimeZone('UTC'));
+            $interval = $baseDate->diff($valueAsDate);
 
             $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
 
