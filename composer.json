@@ -37,6 +37,13 @@
     "require": {
         "php": ">=8.1"
     },
+    "suggest": {
+        "ext-lz4": "Native LZ4 (de)compression, used automatically when present for much faster compressed connections; a pure-PHP fallback is used otherwise",
+        "ext-sockets": "Socket transport (required for SocketNodeConfig connections)",
+        "ext-bcmath": "Faster large-integer math for the Varint and Decimal types",
+        "ext-gmp": "Faster large-integer math for the Varint and Decimal types",
+        "ext-openssl": "SSL/TLS encrypted connections"
+    },
     "require-dev": {
         "ext-bcmath": "*",
         "ext-gmp": "*",
