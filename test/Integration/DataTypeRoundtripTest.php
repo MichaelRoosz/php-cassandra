@@ -1897,5 +1897,77 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
         if (self::cqlshSupportsVectorsWithDynamicLengthDataType()) {
             $this->compareWithCqlsh('test_vector_varint4', 'id', 'value', $testValues, 'vector');
         }
+
+        // test vector of 4 smallint values. smallint has a fixed physical size
+        // but Cassandra still serializes it as variable length inside vectors
+        // (CASSANDRA-14476), so each element carries an unsigned-VInt length
+        // prefix on the wire.
+        $this->connection->query(
+            'CREATE TABLE IF NOT EXISTS test_vector_smallint4 (id int PRIMARY KEY, value vector<smallint, 4>)'
+        );
+
+        $testValues = [
+            [0, 0, 0, 0],
+            [1, -2, 300, 32767],
+            [-32768, 32767, -1, 1],
+        ];
+
+        foreach ($testValues as $index => $testValue) {
+            $this->connection->query(
+                'INSERT INTO test_vector_smallint4 (id, value) VALUES (?, ?)',
+                [Value\Int32::fromValue($index), Value\Vector::fromValue($testValue, Type::SMALLINT, 4)],
+            );
+
+            $result = $this->connection->query(
+                'SELECT value FROM test_vector_smallint4 WHERE id = ?',
+                [Value\Int32::fromValue($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertIsArray($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertIsArray($retrievedValue, 'Vector should be returned as an array');
+            $this->assertSame($testValue, $retrievedValue, "smallint vector should round-trip for index $index");
+        }
+
+        if (self::cqlshSupportsVectorsWithDynamicLengthDataType()) {
+            $this->compareWithCqlsh('test_vector_smallint4', 'id', 'value', $testValues, 'vector');
+        }
+
+        // test vector of 2 text values with an element longer than 127 bytes, so
+        // the unsigned-VInt length prefix spans more than a single byte.
+        $this->connection->query(
+            'CREATE TABLE IF NOT EXISTS test_vector_text2 (id int PRIMARY KEY, value vector<text, 2>)'
+        );
+
+        $testValues = [
+            ['', 'short'],
+            ['short', str_repeat('x', 200)],
+            [str_repeat('a', 200), str_repeat('b', 130)],
+        ];
+
+        foreach ($testValues as $index => $testValue) {
+            $this->connection->query(
+                'INSERT INTO test_vector_text2 (id, value) VALUES (?, ?)',
+                [Value\Int32::fromValue($index), Value\Vector::fromValue($testValue, Type::TEXT, 2)],
+            );
+
+            $result = $this->connection->query(
+                'SELECT value FROM test_vector_text2 WHERE id = ?',
+                [Value\Int32::fromValue($index)]
+            )->asRowsResult();
+
+            $row = $result->fetch();
+            $this->assertIsArray($row, "Row should exist for index $index");
+            $retrievedValue = $row['value'];
+
+            $this->assertIsArray($retrievedValue, 'Vector should be returned as an array');
+            $this->assertSame($testValue, $retrievedValue, "text vector should round-trip for index $index");
+        }
+
+        if (self::cqlshSupportsVectorsWithDynamicLengthDataType()) {
+            $this->compareWithCqlsh('test_vector_text2', 'id', 'value', $testValues, 'vector');
+        }
     }
 }
