@@ -3,3 +3,8 @@ parameters:
     paths:
         - test
     treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        -
+            path: test/Unit/Lz4CompressorTest.php
+            identifier: throws.notThrowable
+            reportUnmatched: false
