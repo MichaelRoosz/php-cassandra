@@ -10,9 +10,9 @@
 /**
  * @return string|false
  */
-function lz4_compress(string $data, int $level = 0, ?string $extra = null): string|false;
+function lz4_compress(string $data, int $level = 0, ?string $extra = null): string|false {}
 
 /**
  * @return string|false
  */
-function lz4_uncompress(string $data, ?string $extra = null): string|false;
+function lz4_uncompress(string $data, ?string $extra = null): string|false {}
