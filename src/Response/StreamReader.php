@@ -207,6 +207,56 @@ class StreamReader {
     }
 
     /**
+     * Reads an IEEE-754 big-endian double (8 bytes).
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    final public function readDouble(): float {
+
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('E', $this->read(8));
+        if ($unpacked === false) {
+            throw new ResponseException(
+                message: 'Cannot unpack double',
+                code: ExceptionCode::RESPONSE_SR_UNPACK_DOUBLE_FAIL->value,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
+
+        return $unpacked[1];
+    }
+
+    /**
+     * Reads an IEEE-754 big-endian float (4 bytes).
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    final public function readFloat(): float {
+
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('G', $this->read(4));
+        if ($unpacked === false) {
+            throw new ResponseException(
+                message: 'Cannot unpack float',
+                code: ExceptionCode::RESPONSE_SR_UNPACK_FLOAT_FAIL->value,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
+
+        return $unpacked[1];
+    }
+
+    /**
      * @throws \Cassandra\Exception\ResponseException
      */
     final public function readInt(): int {
@@ -519,36 +569,13 @@ class StreamReader {
      */
     final public function readUuid(): string {
 
-        $binary = $this->read(16);
+        $hex = bin2hex($this->read(16));
 
-        /**
-         * @var false|array<int> $data
-         */
-        $data = unpack('n8', $binary);
-        if ($data === false) {
-            throw new ResponseException(
-                message: 'Cannot unpack UUID',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_UUID_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'offset' => $this->pos(),
-                    'binary_length' => strlen($binary),
-                    'expected_length' => 16,
-                ]
-            );
-        }
-
-        return sprintf(
-            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            $data[1],
-            $data[2],
-            $data[3],
-            $data[4],
-            $data[5],
-            $data[6],
-            $data[7],
-            $data[8]
-        );
+        return substr($hex, 0, 8) . '-'
+            . substr($hex, 8, 4) . '-'
+            . substr($hex, 12, 4) . '-'
+            . substr($hex, 16, 4) . '-'
+            . substr($hex, 20, 12);
     }
 
     /**
@@ -581,6 +608,69 @@ class StreamReader {
             );
         }
 
+        // Fast path: return exactly what the matching Cassandra\Value\*
+        // getValue() would, but without allocating a Value object — the dominant
+        // per-cell cost. The scalar branches decode directly because their value
+        // is independent of $valueEncodeConfig; list/set recurse through
+        // readValue (which forwards the config), so config-dependent elements are
+        // still handled correctly. Maps, UDTs, tuples, vectors and the
+        // config-dependent temporal/varint scalars fall through to the object
+        // path below.
+        switch ($typeInfo->type) {
+            case Type::INT:
+                return $this->readInt();
+
+            case Type::VARCHAR:
+            case Type::TEXT:
+            case Type::ASCII:
+            case Type::BLOB:
+                return $this->read($length);
+
+            case Type::UUID:
+            case Type::TIMEUUID:
+                return $this->readUuid();
+
+            case Type::DOUBLE:
+                return $this->readDouble();
+
+            case Type::FLOAT:
+                return $this->readFloat();
+
+            case Type::BOOLEAN:
+                return $this->read(1) !== "\0";
+
+            case Type::BIGINT:
+            case Type::COUNTER:
+                // Bigint/Counter need special handling on 32-bit PHP (see
+                // Value\Bigint); only take the fast path where readLong() is safe.
+                if (PHP_INT_SIZE >= 8) {
+                    return $this->readLong();
+                }
+
+                break;
+
+            case Type::LIST:
+                // List/Set decode to a plain array of their elements (see
+                // Value\ListCollection/SetCollection::getValue), so build it
+                // directly. Elements recurse through readValue, so they take
+                // these fast paths too.
+                if ($typeInfo instanceof ListCollectionInfo) {
+                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig);
+                }
+
+                break;
+
+            case Type::SET:
+                if ($typeInfo instanceof SetCollectionInfo) {
+                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig);
+                }
+
+                break;
+
+            default:
+                break;
+        }
+
         $valueObject = ValueFactory::getValueObjectFromStream($typeInfo, $length, $this, $valueEncodeConfig);
 
         if ($valueObject instanceof ValueWithMultipleEncodings) {
@@ -588,6 +678,28 @@ class StreamReader {
         } else {
             return $valueObject->getValue();
         }
+    }
+
+    /**
+     * Reads a count-prefixed sequence of values of a single element type — the
+     * body of a list or set collection.
+     *
+     * @return array<mixed>
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     */
+    private function readCollectionValues(TypeInfo $elementType, ValueEncodeConfig $valueEncodeConfig): array {
+        $count = $this->readInt();
+
+        $values = [];
+        for ($i = 0; $i < $count; ++$i) {
+            /** @psalm-suppress MixedAssignment */
+            $values[] = $this->readValue($elementType, $valueEncodeConfig);
+        }
+
+        return $values;
     }
 
     public function reset(): void {
