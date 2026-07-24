@@ -65,7 +65,11 @@ final class Socket extends NodeImplementation implements IoNode {
             return;
         }
 
-        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        $addressFamily = filter_var($this->config->host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? AF_INET6
+            : AF_INET;
+
+        $socket = socket_create($addressFamily, SOCK_STREAM, SOL_TCP);
         if ($socket === false) {
             $errorCode = socket_last_error();
 
@@ -75,6 +79,7 @@ final class Socket extends NodeImplementation implements IoNode {
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
+                    'address_family' => $addressFamily === AF_INET6 ? 'AF_INET6' : 'AF_INET',
                     'operation' => 'socket_create',
                     'system_error_code' => $errorCode,
                 ]
@@ -368,7 +373,9 @@ final class Socket extends NodeImplementation implements IoNode {
                 if ($sentBytes === 0) {
                     $this->checkForWriteTimeout($start);
 
-                    continue;
+                    // Back to the outer loop so the socket is selected for
+                    // writability again instead of spinning on socket_write().
+                    continue 2;
                 }
 
                 if ($sentBytes === false) {
@@ -382,7 +389,9 @@ final class Socket extends NodeImplementation implements IoNode {
 
                         $this->checkForWriteTimeout($start);
 
-                        continue;
+                        // Back to the outer loop so the socket is selected for
+                        // writability again instead of spinning on socket_write().
+                        continue 2;
                     }
 
                     if (
