@@ -7,6 +7,7 @@ namespace Cassandra\Test\Unit;
 use Cassandra\Consistency;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ResponseException as ResponseException;
+use Cassandra\Exception\VIntCodecException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\Value\ValueEncodeConfig;
@@ -28,6 +29,20 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $reader->reset();
         $this->assertSame(0, $reader->pos());
         $this->assertSame('ab', $reader->read(2));
+    }
+
+    /**
+     * Truncated vint data must be rejected rather than decoded as if the missing
+     * bytes were zero.
+     */
+    public function testDecodeTruncatedVintThrows(): void {
+        $codec = new VIntCodec();
+
+        $encoded = $codec->encodeUnsignedVint64(1 << 40);
+        $this->assertGreaterThan(2, strlen($encoded));
+
+        $this->expectException(VIntCodecException::class);
+        $codec->decodeUnsignedVint64(substr($encoded, 0, -1));
     }
 
     public function testReadBeyondAvailableThrows(): void {
@@ -210,6 +225,68 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $this->assertSame($uuid, $reader->readUuid());
     }
 
+    /**
+     * Cassandra distinguishes null (length -1) from empty (length 0), and empty is
+     * legal for every type. A fixed-length decoder must not read its fixed size
+     * anyway — that consumes the following cell and desyncs the rest of the row.
+     */
+    public function testReadValueEmptyFixedLengthValueDoesNotConsumeNextValue(): void {
+        $cfg = new ValueEncodeConfig();
+
+        $fixedLengthTypes = [
+            Type::BIGINT,
+            Type::BOOLEAN,
+            Type::DOUBLE,
+            Type::FLOAT,
+            Type::INT,
+            Type::SMALLINT,
+            Type::TIMESTAMP,
+            Type::TIMEUUID,
+            Type::TINYINT,
+            Type::UUID,
+        ];
+
+        foreach ($fixedLengthTypes as $type) {
+            // an empty cell, followed by a varchar cell holding "next"
+            $bin = pack('N', 0) . pack('N', 4) . 'next';
+            $reader = new StreamReader($bin);
+
+            $this->assertNull(
+                $reader->readValue(ValueFactory::getTypeInfoFromType($type), $cfg),
+                'empty ' . $type->name . ' should decode to null'
+            );
+            $this->assertSame(4, $reader->pos(), 'empty ' . $type->name . ' must consume exactly 0 bytes of body');
+            $this->assertSame(
+                'next',
+                $reader->readValue(ValueFactory::getTypeInfoFromType(Type::VARCHAR), $cfg),
+                'the value after an empty ' . $type->name . ' must still decode'
+            );
+        }
+    }
+
+    public function testReadValueEmptyValuePerTypeRepresentation(): void {
+        $cfg = new ValueEncodeConfig();
+
+        // Raw-byte-string types represent an empty cell as an empty string.
+        foreach ([Type::ASCII, Type::BLOB, Type::TEXT, Type::VARCHAR] as $type) {
+            $reader = new StreamReader(pack('N', 0));
+            $this->assertSame('', $reader->readValue(ValueFactory::getTypeInfoFromType($type), $cfg), $type->name);
+        }
+
+        // Collections represent it as an empty collection.
+        $reader = new StreamReader(pack('N', 0));
+        $this->assertSame([], $reader->readValue(
+            ValueFactory::getTypeInfoFromTypeDefinition(['type' => Type::LIST, 'valueType' => Type::INT]),
+            $cfg
+        ));
+
+        $reader = new StreamReader(pack('N', 0));
+        $this->assertSame([], $reader->readValue(
+            ValueFactory::getTypeInfoFromTypeDefinition(['type' => Type::MAP, 'keyType' => Type::VARCHAR, 'valueType' => Type::INT]),
+            $cfg
+        ));
+    }
+
     public function testReadValueHappyPaths(): void {
         // Value reading relies on length(int) + binary value according to TypeInfo
         // Example: int value 123
@@ -238,6 +315,25 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $this->expectException(ResponseException::class);
         $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value);
         $reader->readValue($typeInfo, new ValueEncodeConfig());
+    }
+
+    /**
+     * A cell whose declared length disagrees with what the decoder consumed must
+     * fail loudly instead of silently shifting every following value.
+     */
+    public function testReadValueLengthMismatchThrows(): void {
+        // an int cell claiming 8 bytes; the decoder only consumes 4
+        $bin = pack('N', 8) . pack('N', 1) . pack('N', 2);
+        $reader = new StreamReader($bin);
+
+        $this->assertSame(1, $reader->readValue(ValueFactory::getTypeInfoFromType(Type::INT), new ValueEncodeConfig()));
+        // the trailing 4 declared-but-unconsumed bytes are skipped, not re-read
+        $this->assertSame(12, $reader->pos());
+
+        // a uuid cell claiming 4 bytes, where the decoder would want 16
+        $reader = new StreamReader(pack('N', 4) . 'abcd');
+        $this->expectException(ResponseException::class);
+        $reader->readValue(ValueFactory::getTypeInfoFromType(Type::UUID), new ValueEncodeConfig());
     }
 
     public function testReadVIntVariants(): void {
