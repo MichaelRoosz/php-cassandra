@@ -63,6 +63,11 @@ class Error extends Response {
     ];
 
     private readonly int $code;
+
+    /**
+     * @var ?array<int, class-string<\Cassandra\Response\Error>>
+     */
+    private static ?array $errorClassMap = null;
     private readonly string $message;
     private readonly ErrorType $type;
 
@@ -83,11 +88,6 @@ class Error extends Response {
     public function getContext(): ErrorContext {
         return new ErrorContext();
     }
-
-    /**
-     * @var ?array<int, class-string<\Cassandra\Response\Error>>
-     */
-    private static ?array $errorClassMap = null;
 
     /**
      * @return array<int, class-string<\Cassandra\Response\Error>>

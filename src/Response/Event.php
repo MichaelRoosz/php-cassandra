@@ -13,6 +13,10 @@ use TypeError;
 use ValueError;
 
 class Event extends Response {
+    /**
+     * @var ?array<string, class-string<\Cassandra\Response\Event>>
+     */
+    private static ?array $eventClassMap = null;
     private EventType $type;
 
     public function __construct(Header $header, StreamReader $stream) {
@@ -24,11 +28,6 @@ class Event extends Response {
     public function getData(): EventData {
         return new EventData();
     }
-
-    /**
-     * @var ?array<string, class-string<\Cassandra\Response\Event>>
-     */
-    private static ?array $eventClassMap = null;
 
     /**
      * @return array<string, class-string<\Cassandra\Response\Event>>

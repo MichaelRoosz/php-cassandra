@@ -10,6 +10,23 @@ use Cassandra\Compression\Lz4Decompressor;
 class Lz4CompressorTest extends AbstractUnitTestCase {
     /**
      * @return array<string, array{0: string}>
+     *
+     * @throws \Random\RandomException
+     */
+    public static function frameRoundTripProvider(): array {
+        return [
+            'empty' => [''],
+            'short' => ['hello lz4 frame'],
+            'compressible' => [str_repeat('The quick brown fox. ', 5000)],
+            'incompressible' => [random_bytes(70000)],
+            // Larger than the 4 MiB frame block max: exercises multiple blocks.
+            'multi-block compressible' => [str_repeat('0123456789abcdef', 300000)],
+            // Multiple blocks that are each stored uncompressed.
+            'multi-block incompressible' => [random_bytes(5 * 1024 * 1024)],
+        ];
+    }
+    /**
+     * @return array<string, array{0: string}>
      */
     public static function parsingRestrictionsProvider(): array {
         // A 4-byte sequence ("MNOP") that recurs 10 bytes before the end. With the
@@ -33,23 +50,6 @@ class Lz4CompressorTest extends AbstractUnitTestCase {
         }
 
         return $cases;
-    }
-    /**
-     * @return array<string, array{0: string}>
-     *
-     * @throws \Random\RandomException
-     */
-    public static function frameRoundTripProvider(): array {
-        return [
-            'empty' => [''],
-            'short' => ['hello lz4 frame'],
-            'compressible' => [str_repeat('The quick brown fox. ', 5000)],
-            'incompressible' => [random_bytes(70000)],
-            // Larger than the 4 MiB frame block max: exercises multiple blocks.
-            'multi-block compressible' => [str_repeat('0123456789abcdef', 300000)],
-            // Multiple blocks that are each stored uncompressed.
-            'multi-block incompressible' => [random_bytes(5 * 1024 * 1024)],
-        ];
     }
 
     /**
@@ -121,21 +121,6 @@ class Lz4CompressorTest extends AbstractUnitTestCase {
     }
 
     /**
-     * @dataProvider roundTripProvider
-     */
-    public function testRoundTrip(string $input): void {
-        $compressor = new Lz4Compressor(preferExtension: false);
-        $decompressor = new Lz4Decompressor();
-
-        $compressed = $compressor->compressBlock($input);
-
-        $decompressor->setInput($compressed);
-        $decompressed = $decompressor->decompressBlock();
-
-        $this->assertSame($input, $decompressed);
-    }
-
-    /**
      * compress() must produce a standard LZ4 frame that our own frame decoder
      * reads back byte-for-byte, including the multi-block case (input larger than
      * the 4 MiB frame block max) and stored-uncompressed incompressible blocks.
@@ -147,6 +132,21 @@ class Lz4CompressorTest extends AbstractUnitTestCase {
 
         $frame = $compressor->compress($input);
         $decompressed = (new Lz4Decompressor($frame))->decompress();
+
+        $this->assertSame($input, $decompressed);
+    }
+
+    /**
+     * @dataProvider roundTripProvider
+     */
+    public function testRoundTrip(string $input): void {
+        $compressor = new Lz4Compressor(preferExtension: false);
+        $decompressor = new Lz4Decompressor();
+
+        $compressed = $compressor->compressBlock($input);
+
+        $decompressor->setInput($compressed);
+        $decompressed = $decompressor->decompressBlock();
 
         $this->assertSame($input, $decompressed);
     }

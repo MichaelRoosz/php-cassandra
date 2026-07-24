@@ -32,6 +32,11 @@ class Result extends Response implements IteratorAggregate {
     protected ?Request $request = null;
 
     /**
+     * @var ?array<int, class-string<\Cassandra\Response\Result>>
+     */
+    private static ?array $resultClassMap = null;
+
+    /**
      * @throws \Cassandra\Exception\ResponseException
      */
     public function __construct(Header $header, StreamReader $stream) {
@@ -127,11 +132,6 @@ class Result extends Response implements IteratorAggregate {
     public function getRequest(): ?Request {
         return $this->request;
     }
-
-    /**
-     * @var ?array<int, class-string<\Cassandra\Response\Result>>
-     */
-    private static ?array $resultClassMap = null;
 
     /**
      * @return array<int, class-string<\Cassandra\Response\Result>>

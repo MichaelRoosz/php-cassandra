@@ -15,6 +15,11 @@ use Cassandra\Compression\Lz4Extension;
  * extension is not installed.
  */
 class Lz4ExtensionTest extends AbstractUnitTestCase {
+    protected function setUp(): void {
+        if (!Lz4Extension::isAvailable()) {
+            $this->markTestSkipped('The native lz4 extension is not available.');
+        }
+    }
     /**
      * @return array<string, array{0: string}>
      */
@@ -35,12 +40,6 @@ class Lz4ExtensionTest extends AbstractUnitTestCase {
         }
 
         return $cases;
-    }
-
-    protected function setUp(): void {
-        if (!Lz4Extension::isAvailable()) {
-            $this->markTestSkipped('The native lz4 extension is not available.');
-        }
     }
 
     /**

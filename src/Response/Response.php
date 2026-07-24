@@ -20,6 +20,11 @@ abstract class Response implements Frame, Stringable {
      */
     private ?array $payload = null;
 
+    /**
+     * @var ?array<int, class-string<\Cassandra\Response\Response>>
+     */
+    private static ?array $responseClassMap = null;
+
     private ?string $tracingUuid = null;
 
     /**
@@ -82,11 +87,6 @@ abstract class Response implements Frame, Stringable {
     public function getProtocolVersion(): ProtocolVersion {
         return $this->header->version;
     }
-
-    /**
-     * @var ?array<int, class-string<\Cassandra\Response\Response>>
-     */
-    private static ?array $responseClassMap = null;
 
     /**
      * @return array<int, class-string<\Cassandra\Response\Response>>

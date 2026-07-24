@@ -154,6 +154,56 @@ class StreamReader {
     }
 
     /**
+     * Reads an IEEE-754 big-endian double (8 bytes).
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    final public function readDouble(): float {
+
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('E', $this->read(8));
+        if ($unpacked === false) {
+            throw new ResponseException(
+                message: 'Cannot unpack double',
+                code: ExceptionCode::RESPONSE_SR_UNPACK_DOUBLE_FAIL->value,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
+
+        return $unpacked[1];
+    }
+
+    /**
+     * Reads an IEEE-754 big-endian float (4 bytes).
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    final public function readFloat(): float {
+
+        /**
+         * @var false|array<float> $unpacked
+         */
+        $unpacked = unpack('G', $this->read(4));
+        if ($unpacked === false) {
+            throw new ResponseException(
+                message: 'Cannot unpack float',
+                code: ExceptionCode::RESPONSE_SR_UNPACK_FLOAT_FAIL->value,
+                context: [
+                    'method' => __METHOD__,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
+
+        return $unpacked[1];
+    }
+
+    /**
      * @return array{
      *   ip: string,
      *   port: int,
@@ -204,56 +254,6 @@ class StreamReader {
         }
 
         return $inet;
-    }
-
-    /**
-     * Reads an IEEE-754 big-endian double (8 bytes).
-     *
-     * @throws \Cassandra\Exception\ResponseException
-     */
-    final public function readDouble(): float {
-
-        /**
-         * @var false|array<float> $unpacked
-         */
-        $unpacked = unpack('E', $this->read(8));
-        if ($unpacked === false) {
-            throw new ResponseException(
-                message: 'Cannot unpack double',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_DOUBLE_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'offset' => $this->pos(),
-                ]
-            );
-        }
-
-        return $unpacked[1];
-    }
-
-    /**
-     * Reads an IEEE-754 big-endian float (4 bytes).
-     *
-     * @throws \Cassandra\Exception\ResponseException
-     */
-    final public function readFloat(): float {
-
-        /**
-         * @var false|array<float> $unpacked
-         */
-        $unpacked = unpack('G', $this->read(4));
-        if ($unpacked === false) {
-            throw new ResponseException(
-                message: 'Cannot unpack float',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_FLOAT_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'offset' => $this->pos(),
-                ]
-            );
-        }
-
-        return $unpacked[1];
     }
 
     /**
@@ -680,6 +680,10 @@ class StreamReader {
         }
     }
 
+    public function reset(): void {
+        $this->offset = $this->extraDataOffset;
+    }
+
     /**
      * Reads a count-prefixed sequence of values of a single element type — the
      * body of a list or set collection.
@@ -700,9 +704,5 @@ class StreamReader {
         }
 
         return $values;
-    }
-
-    public function reset(): void {
-        $this->offset = $this->extraDataOffset;
     }
 }

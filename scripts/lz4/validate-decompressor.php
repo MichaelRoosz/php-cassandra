@@ -433,6 +433,7 @@ foreach ($inputs as $label => $data) {
     // 2) Per-block decode (the driver's path). Only meaningful when the frame's
     //    blocks are independent, which our encoder settings guarantee.
     $blockNote = '';
+
     try {
         $parsed = extractFrameBlocks($frame);
         if ($parsed['independent']) {

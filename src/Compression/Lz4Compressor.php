@@ -41,6 +41,14 @@ namespace Cassandra\Compression;
  * runs in plain PHP.
  */
 final class Lz4Compressor {
+    /**
+     * LZ4 frame format constants used by {@see compress()}. The BD "block
+     * maximum size" id 7 = 4 MiB; input is split into blocks no larger than this
+     * so the produced frame is spec-conformant.
+     */
+    private const FRAME_BLOCK_MAX_SIZE = 4 * 1024 * 1024;
+    private const FRAME_BLOCK_MAX_SIZE_ID = 7;
+    private const FRAME_MAGIC = 0x184D2204;
     private const HASH_LOG = 16;
 
     /**
@@ -84,15 +92,6 @@ final class Lz4Compressor {
     private const MIN_MATCH = 4;
 
     private const RUN_MASK = 0x0F;
-
-    /**
-     * LZ4 frame format constants used by {@see compress()}. The BD "block
-     * maximum size" id 7 = 4 MiB; input is split into blocks no larger than this
-     * so the produced frame is spec-conformant.
-     */
-    private const FRAME_BLOCK_MAX_SIZE = 4 * 1024 * 1024;
-    private const FRAME_BLOCK_MAX_SIZE_ID = 7;
-    private const FRAME_MAGIC = 0x184D2204;
 
     private readonly bool $useExtension;
 
