@@ -217,11 +217,18 @@ final class ResponseReader {
             ]);
         }
 
+        // The stream id is a signed [short]; server-initiated responses (events)
+        // use -1. unpack('n') gives it to us unsigned, so restore the sign.
+        $stream = $headerData['stream'];
+        if ($stream > 0x7FFF) {
+            $stream -= 0x10000;
+        }
+
         try {
             $header = new Header(
                 version: $version,
                 flags: $headerData['flags'],
-                stream: $headerData['stream'],
+                stream: $stream,
                 opcode: Opcode::from($headerData['opcode']),
                 length: $headerData['length'],
             );
