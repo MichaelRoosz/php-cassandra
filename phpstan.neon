@@ -4,9 +4,9 @@ parameters:
         - scripts
         - src
         - php-cassandra.php
+    scanFiles:
+        - phpstan/ext-lz4.php
     treatPhpDocTypesAsCertain: false
-    stubFiles:
-        - stubs/lz4.stub
     exceptions:
         implicitThrows: false
         check:
