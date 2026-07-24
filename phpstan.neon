@@ -33,3 +33,7 @@ parameters:
             path: scripts/lz4/validate-decompressor.php
             identifier: throws.notThrowable
             reportUnmatched: false
+        -
+            path: test/Unit/Lz4CompressorTest.php
+            identifier: throws.notThrowable
+            reportUnmatched: false
