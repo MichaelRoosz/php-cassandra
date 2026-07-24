@@ -924,6 +924,8 @@ Notes:
 - Incremental updates combine with `USING TTL` and with conditions (`IF …`). Because a non-frozen collection is multi-cell, `TTL(col)` returns one entry **per element**.
 - With default `autoPrepare`, plain PHP arrays work as binds (the driver prepares the statement to learn the types — see [Data types](#data-types)); passing an explicit `SetCollection` / `MapCollection` / `ListCollection` value skips that step and always works.
 
+Each example below is shown twice: first with explicit `Value\...::fromValue()` objects (always works, no prepare step), then with plain PHP values (relies on the default `autoPrepare`, which prepares the statement to learn the column types).
+
 **Set** — add and remove members:
 
 ```php
@@ -931,6 +933,7 @@ use Cassandra\Type;
 use Cassandra\Value\Int32;
 use Cassandra\Value\SetCollection;
 
+// --- With ::fromValue() ---
 $conn->query(
     'INSERT INTO ks.users (id, tags) VALUES (?, ?)',
     [Int32::fromValue(1), SetCollection::fromValue(['php'], Type::VARCHAR)]
@@ -946,12 +949,14 @@ $conn->query(
     [SetCollection::fromValue(['php'], Type::VARCHAR), Int32::fromValue(1)]
 );
 
+// --- With plain PHP values (autoPrepare) ---
+$conn->query('INSERT INTO ks.users (id, tags) VALUES (?, ?)', [1, ['php']]);
+$conn->query('UPDATE ks.users SET tags = tags + ? WHERE id = ?', [['cassandra'], 1]);
+$conn->query('UPDATE ks.users SET tags = tags - ? WHERE id = ?', [['php'], 1]);
+
 // Clear the set (both store null)
 $conn->query('UPDATE ks.users SET tags = {} WHERE id = ?', [1]);
 $conn->query('DELETE tags FROM ks.users WHERE id = ?', [1]);
-
-// With autoPrepare (default), native arrays are enough:
-$conn->query('UPDATE ks.users SET tags = tags - ? WHERE id = ?', [['php'], 1]);
 ```
 
 **Map** — merge entries, remove keys, or address a single key:
@@ -962,6 +967,7 @@ use Cassandra\Value\MapCollection;
 use Cassandra\Value\SetCollection;
 use Cassandra\Value\Uuid;
 
+// --- With ::fromValue() ---
 $id = Uuid::fromValue('5b6962dd-3f90-4c93-8f61-eabfa4a803e2');
 
 $conn->query(
@@ -986,6 +992,14 @@ $conn->query('UPDATE ks.cyclist_teams SET teams[?] = ? WHERE id = ?', [2006, nul
 
 // ... or delete it directly
 $conn->query('DELETE teams[?] FROM ks.cyclist_teams WHERE id = ?', [2009, $id]);
+
+// --- With plain PHP values (autoPrepare) ---
+$id = '5b6962dd-3f90-4c93-8f61-eabfa4a803e2';
+
+$conn->query('UPDATE ks.cyclist_teams SET teams = teams + ? WHERE id = ?', [[2009 => 'DSB Bank'], $id]);
+$conn->query('UPDATE ks.cyclist_teams SET teams = teams - ? WHERE id = ?', [[2013, 2014], $id]);
+$conn->query('UPDATE ks.cyclist_teams SET teams[?] = ? WHERE id = ?', [2006, 'Team DSB - Ballast Nedam', $id]);
+$conn->query('DELETE teams[?] FROM ks.cyclist_teams WHERE id = ?', [2009, $id]);
 ```
 
 **List** — append, prepend, address a position, or remove by value:
@@ -995,6 +1009,7 @@ use Cassandra\Type;
 use Cassandra\Value\Int32;
 use Cassandra\Value\ListCollection;
 
+// --- With ::fromValue() ---
 $id = Int32::fromValue(1);
 
 // Append
@@ -1018,6 +1033,15 @@ $conn->query(
 // Overwrite / remove by position (needs an internal read — prefer the two calls above)
 $conn->query('UPDATE ks.users SET phones[?] = ? WHERE id = ?', [0, '555-0999', $id]);
 $conn->query('DELETE phones[?] FROM ks.users WHERE id = ?', [0, $id]);
+
+// --- With plain PHP values (autoPrepare) ---
+$id = 1;
+
+$conn->query('UPDATE ks.users SET phones = phones + ? WHERE id = ?', [['555-0100'], $id]); // append
+$conn->query('UPDATE ks.users SET phones = ? + phones WHERE id = ?', [['555-0001'], $id]); // prepend
+$conn->query('UPDATE ks.users SET phones = phones - ? WHERE id = ?', [['555-0100'], $id]); // remove by value
+$conn->query('UPDATE ks.users SET phones[?] = ? WHERE id = ?', [0, '555-0999', $id]);
+$conn->query('DELETE phones[?] FROM ks.users WHERE id = ?', [0, $id]);
 ```
 
 **Nested collections** (`map<int, frozen<list<text>>>`, `set<frozen<list<int>>>`, `list<frozen<udt>>`) support the same `+`/`-` operations on the outer collection; the frozen inner value is always replaced as a whole.
@@ -1027,7 +1051,11 @@ $conn->query('DELETE phones[?] FROM ks.users WHERE id = ?', [0, $id]);
 ```php
 use Cassandra\Value\Counter;
 
+// With ::fromValue()
 $conn->query('UPDATE ks.stats SET value = value + ? WHERE id = ?', [Counter::fromValue(5), 1]);
+
+// With a plain PHP value (autoPrepare)
+$conn->query('UPDATE ks.stats SET value = value + ? WHERE id = ?', [5, 1]);
 ```
 
 Special values:
@@ -1312,6 +1340,7 @@ $conn = new Connection(
 Notes:
 - Compression is negotiated during STARTUP. When enabled, the client accepts server-compressed frames and transparently decompresses them.
 - The client may still send some frames uncompressed depending on size/heuristics; this is allowed by the protocol.
+- LZ4 works out of the box with a pure-PHP implementation. If the native [`lz4` PHP extension](https://github.com/kjdev/php-ext-lz4) is installed it is detected and used automatically for substantially faster (de)compression — no configuration or code change required.
 
 Error handling
 --------------
