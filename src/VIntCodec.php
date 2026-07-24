@@ -92,8 +92,17 @@ final class VIntCodec {
 
         $decodedValue = ($firstByte & 0x7F) >> $extraBytesCount;
 
-        $totalBytesCount = $extraBytesCount + 2;
-        for ($i = 2; $i < $totalBytesCount; $i++) {
+        // The vint consists of one leading byte plus the extra (continuation) bytes.
+        $requiredByteCount = $extraBytesCount + 1;
+        if (count($data) < $requiredByteCount) {
+            throw new VIntCodecException('Truncated vint binary data', ExceptionCode::VINTCODEC_VINT64_UNPACK_FAILED->value, [
+                'binary_length' => strlen($binary),
+                'required_length' => $requiredByteCount,
+            ]);
+        }
+
+        // $data is 1-indexed; index 1 is the leading byte, so continuation bytes start at index 2.
+        for ($i = 2; $i <= $requiredByteCount; $i++) {
             $decodedValue <<= 8;
             $decodedValue |= $data[$i];
         }
