@@ -121,14 +121,6 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
     }
 
     /**
-     * True when the test cluster runs with authentication and authorization
-     * enabled (see docker-compose.auth.yml).
-     */
-    protected static function isAuthEnabled(): bool {
-        return getenv('APP_CASSANDRA_AUTH_ENABLED') === '1';
-    }
-
-    /**
      * Arithmetic expressions in the selection clause (e.g. "n + 5") were added
      * in Cassandra 4.0 (CASSANDRA-11935) and are not supported by ScyllaDB.
      */
@@ -139,6 +131,14 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         }
 
         return self::cassandraVersionIsAtLeast('4.0');
+    }
+
+    /**
+     * True when the test cluster runs with authentication and authorization
+     * enabled (see docker-compose.auth.yml).
+     */
+    protected static function isAuthEnabled(): bool {
+        return getenv('APP_CASSANDRA_AUTH_ENABLED') === '1';
     }
 
     /**
@@ -153,6 +153,19 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         }
 
         return self::cassandraVersionIsAtLeast('3.6');
+    }
+
+    /**
+     * The CAST() function in the selection clause was added in Cassandra 3.2
+     * (CASSANDRA-10310). ScyllaDB supports it.
+     */
+    protected static function isCastFunctionSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return true;
+        }
+
+        return self::cassandraVersionIsAtLeast('3.2');
     }
 
     /**
@@ -171,16 +184,16 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
     }
 
     /**
-     * The CAST() function in the selection clause was added in Cassandra 3.2
-     * (CASSANDRA-10310). ScyllaDB supports it.
+     * DESCRIBE over CQL was added in Cassandra 4.0 (CASSANDRA-14825). ScyllaDB
+     * returns a different result shape and is excluded.
      */
-    protected static function isCastFunctionSupported(): bool {
+    protected static function isDescribeOverCqlSupported(): bool {
 
         if (self::isScyllaDb()) {
-            return true;
+            return false;
         }
 
-        return self::cassandraVersionIsAtLeast('3.2');
+        return self::cassandraVersionIsAtLeast('4.0');
     }
 
     /**
@@ -207,46 +220,6 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         }
 
         return self::cassandraVersionIsAtLeast('3.10');
-    }
-
-    /**
-     * DESCRIBE over CQL was added in Cassandra 4.0 (CASSANDRA-14825). ScyllaDB
-     * returns a different result shape and is excluded.
-     */
-    protected static function isDescribeOverCqlSupported(): bool {
-
-        if (self::isScyllaDb()) {
-            return false;
-        }
-
-        return self::cassandraVersionIsAtLeast('4.0');
-    }
-
-    /**
-     * Virtual tables were introduced in Cassandra 4.0, but the
-     * system_views.settings rows queried by the tests only exist from 4.1.
-     * ScyllaDB exposes a different set and is excluded.
-     */
-    protected static function isVirtualTablesSupported(): bool {
-
-        if (self::isScyllaDb()) {
-            return false;
-        }
-
-        return self::cassandraVersionIsAtLeast('4.1');
-    }
-
-    /**
-     * SASI is a Cassandra-only custom index implementation (available since
-     * Cassandra 3.4, CASSANDRA-10661). ScyllaDB does not support it.
-     */
-    protected static function isSasiIndexSupported(): bool {
-
-        if (self::isScyllaDb()) {
-            return false;
-        }
-
-        return self::cassandraVersionIsAtLeast('3.4');
     }
 
     protected static function isProtocolVersionSupported(ProtocolVersion $version): bool {
@@ -277,6 +250,19 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         return true;
     }
 
+    /**
+     * SASI is a Cassandra-only custom index implementation (available since
+     * Cassandra 3.4, CASSANDRA-10661). ScyllaDB does not support it.
+     */
+    protected static function isSasiIndexSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        return self::cassandraVersionIsAtLeast('3.4');
+    }
+
     protected static function isScyllaDb(): bool {
         return getenv('APP_CASSANDRA_DB_TYPE') === 'scylladb';
     }
@@ -297,6 +283,20 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         }
 
         return true;
+    }
+
+    /**
+     * Virtual tables were introduced in Cassandra 4.0, but the
+     * system_views.settings rows queried by the tests only exist from 4.1.
+     * ScyllaDB exposes a different set and is excluded.
+     */
+    protected static function isVirtualTablesSupported(): bool {
+
+        if (self::isScyllaDb()) {
+            return false;
+        }
+
+        return self::cassandraVersionIsAtLeast('4.1');
     }
 
     protected static function newConnection(
