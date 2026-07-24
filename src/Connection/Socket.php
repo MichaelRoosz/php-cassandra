@@ -457,7 +457,7 @@ final class Socket extends NodeImplementation implements IoNode {
                 $bufferErrors = 0;
                 $data = substr($data, $sentBytes);
 
-            } while ($data);
+            } while ($data !== '');
 
             break;
 
