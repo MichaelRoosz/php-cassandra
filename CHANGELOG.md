@@ -1,6 +1,13 @@
 ## Unreleased
 
+### Added
+* `Cassandra\Compression\Lz4Compressor`: a pure-PHP LZ4 block compressor. When compression is negotiated, outgoing request frames are now compressed as well as incoming responses — previously only responses were decompressed and requests were always sent uncompressed.
+* Optional native LZ4 acceleration: when the `lz4` PHP extension is installed it is used automatically for block (de)compression (much faster), with the pure-PHP implementation as a transparent fallback.
+
 ### Fixed
+* `Cassandra\Connection\FrameCodec`: a request larger than the maximum frame payload size (128 KiB) triggered an infinite loop, because the chunking offset and remaining-length counters were reset on every iteration. Large requests are now split into frames correctly.
+* `Cassandra\Connection\Socket` / `Cassandra\Connection\Stream`: the partial-write loop used `while ($data)`, which treats a remaining single byte `"0"` (`0x30`) as falsy and stops early, silently dropping that byte and sending a truncated frame to the server. The loop now terminates on `$data !== ''`.
+* `Cassandra\Connection\FrameCodec`: a request whose serialized size was exactly the maximum frame payload size (131071 bytes) was sent through the multi-frame path as a single non-self-contained frame instead of one self-contained frame. The boundary is now handled by the single-frame path.
 * `Cassandra\Request\Query` / `Cassandra\Request\Execute`: the `serialConsistency` request option was encoded as the enum instance instead of its protocol code, so any query using it was rejected by the server with "Invalid consistency for conditional update". Lightweight transactions with an explicit `SerialConsistency` now work.
 * `Cassandra\Connection`: cached prepared statements could not be reprepared after the server invalidated them (for example following a schema change). A cache hit returned a result with no associated request, and the repreparation then consulted the same stale cache entry and looped forever. Prepared statements now reprepare transparently after invalidation.
 * `Cassandra\Connection::queryAsync()`: an asynchronous query that relied on auto-preparation (any native, untyped bind value) failed on protocol v5 with `Server protocol version does not support request option "keyspace"`, because the internally built prepare request was left at the default protocol version and stream id.
@@ -8,11 +15,16 @@
 * `Cassandra\Connection::disconnect()`: unresolved asynchronous statements from the previous connection were left registered, so `waitForAllPendingStatements()` blocked forever after a reconnect. The per-connection stream state is now reset on disconnect.
 * Fixed several misspelled exception context keys (`proocol_versions_*` → `protocol_versions_*`, `required_protocol_verison` → `required_protocol_version`).
 
+### Performance
+* Response and value dispatch maps (`Cassandra\Response\Response`, `Result`, `Error`, `Event`, `Cassandra\ValueFactory`, `Cassandra\TypeNameParser`) are now lazily cached instead of being rebuilt on every call.
+* `Cassandra\Response\StreamReader::readValue()`: scalar, list and set cells are now decoded directly without allocating an intermediate `Value` object per cell.
+
 ### Tests
 * Added integration tests for collection updates (incremental `+`/`-`, prepend, indexed assignment, single-element deletion, clearing, TTL, conditional updates, and frozen and nested collections), lightweight transactions, CQL JSON (`INSERT JSON`, `SELECT JSON`, `fromJson()`/`toJson()`, `DEFAULT UNSET`/`DEFAULT NULL`), user-defined functions and aggregates, materialized views, secondary indexes (including `KEYS()`, `ENTRIES()`, `FULL()` and SASI/`LIKE` index targets), authentication (roles, `GRANT`/`REVOKE`, permissions), and further CQL features (tracing, virtual tables, TTL/`WRITETIME`, schema evolution, aggregates, static columns and counter batches).
 * Added regression tests for prepared-statement repreparation, asynchronous auto-preparation, `waitForAnyStatement()` and reconnect after `disconnect()`.
 * Added integration tests for the ScyllaDB-only `BYPASS CACHE` and `USING TIMEOUT` CQL extensions, asserting both that they work on ScyllaDB and that Apache Cassandra rejects them.
 * Added a unit test for the binary encoding of the `serialConsistency` request option.
+* Added compression benchmarks running against a real Cassandra/ScyllaDB node with several-megabyte payloads: `benchmarks/CompressionBench.php` (phpbench) measures a large-blob round-trip with compression on vs. off, and `benchmarks/compression-network-bench.php` compares the two across a range of simulated network bandwidths (via a bandwidth-throttling transport) to show where compression starts to pay off.
 * The test containers now enable user-defined functions, materialized views and SASI indexes (disabled by default), and a dedicated `docker-compose.auth.yml` runs the suite against an authenticated cluster.
 * Extended the CI test matrix to cover PHP 8.5 and ScyllaDB 2026.1 and 2026.2.
 
