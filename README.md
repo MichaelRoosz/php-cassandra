@@ -2042,11 +2042,11 @@ benchSimpleSelect
 ==================================================================================================================================
 Benchmark                                     php-cassandra   DataStax        ScyllaDB        vs DataStax          vs ScyllaDB    
 ----------------------------------------------------------------------------------------------------------------------------------
-benchInsertAndSelectWithoutTypeInfo           3.7949s         6.6016s         6.6054s         1.74x faster         1.74x faster   
-benchInsertAndSelectWithTypeInfo              3.7741s         6.5143s         6.5288s         1.73x faster         1.73x faster   
-benchPagedQuery                               361.60ms        551.67ms        552.76ms        1.53x faster         1.53x faster   
-benchPreparedInsert                           1.8508s         3.0090s         2.9760s         1.63x faster         1.61x faster   
-benchSimpleSelect                             151.33ms        316.87ms        331.51ms        2.09x faster         2.19x faster   
+benchInsertAndSelectWithoutTypeInfo           3.9017s         6.8185s         7.4834s         1.75x faster         1.92x faster   
+benchInsertAndSelectWithTypeInfo              3.8260s         6.6074s         6.8760s         1.73x faster         1.80x faster   
+benchPagedQuery                               251.83ms        561.52ms        554.07ms        2.23x faster         2.20x faster   
+benchPreparedInsert                           1.8196s         3.0907s         3.0200s         1.70x faster         1.66x faster   
+benchSimpleSelect                             152.25ms        329.02ms        359.00ms        2.16x faster         2.36x faster   
 ==================================================================================================================================
 
 Notes:

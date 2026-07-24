@@ -1,78 +1,74 @@
-=== ScyllaDB PHP Driver Benchmarks ===
-PHP Version: 8.2.29
-ScyllaDB Extension Version: 1.4.0-dev
+=== php-cassandra Library Benchmarks ===
+PHP Version: 8.5.8
 
-Connected to Cassandra successfully
-===== Using optimized driver!!! =====
-===== Using optimized driver!!! =====
 Running benchInsertAndSelectWithoutTypeInfo...
   Description: 100 inserts + 100 selects per round (without type hints) (rounds=100, iterations=30)
-  Total Time: 198.1612s | Avg/Iteration: 6.6054s | Ops/s: 15.14
+  Total Time: 117.0514s | Avg/Iteration: 3.9017s | Ops/s: 25.63
 
 Running benchInsertAndSelectWithTypeInfo...
   Description: 100 inserts + 100 selects per round (with type hints) (rounds=100, iterations=30)
-  Total Time: 195.8628s | Avg/Iteration: 6.5288s | Ops/s: 15.32
+  Total Time: 114.7793s | Avg/Iteration: 3.8260s | Ops/s: 26.14
 
 Running benchPagedQuery...
   Description: 1 paged query per round (500 rows, page size 50) (rounds=100, iterations=30)
-  Total Time: 16.5827s | Avg/Iteration: 0.5528s | Ops/s: 180.91
+  Total Time: 7.5550s | Avg/Iteration: 0.2518s | Ops/s: 397.09
 
 Running benchPreparedInsert...
   Description: 100 inserts per round (prepared statement) (rounds=100, iterations=30)
-  Total Time: 89.2792s | Avg/Iteration: 2.9760s | Ops/s: 33.60
+  Total Time: 54.5891s | Avg/Iteration: 1.8196s | Ops/s: 54.96
 
 Running benchSimpleSelect...
   Description: 1 simple select per round (rounds=700, iterations=30)
-  Total Time: 9.9453s | Avg/Iteration: 0.3315s | Ops/s: 2111.54
+  Total Time: 4.5675s | Avg/Iteration: 0.1522s | Ops/s: 4597.75
 
 
 === JSON Results ===
 {
-    "driver": "scylladb",
+    "driver": "php-cassandra",
     "results": [
         {
             "name": "benchInsertAndSelectWithoutTypeInfo",
             "rounds": 100,
             "iterations": 30,
-            "total_time": 198.16119813919067,
-            "avg_time": 6.605373271306356,
-            "ops_per_second": 15.13918985235831,
+            "total_time": 117.05144500732422,
+            "avg_time": 3.901714833577474,
+            "ops_per_second": 25.629756213708273,
             "description": "100 inserts + 100 selects per round (without type hints)"
         },
         {
             "name": "benchInsertAndSelectWithTypeInfo",
             "rounds": 100,
             "iterations": 30,
-            "total_time": 195.86279559135437,
-            "avg_time": 6.528759853045146,
-            "ops_per_second": 15.316844584712053,
+            "total_time": 114.77928757667542,
+            "avg_time": 3.825976252555847,
+            "ops_per_second": 26.13711988755746,
             "description": "100 inserts + 100 selects per round (with type hints)"
         },
         {
             "name": "benchPagedQuery",
             "rounds": 100,
             "iterations": 30,
-            "total_time": 16.58273434638977,
-            "avg_time": 0.5527578115463256,
-            "ops_per_second": 180.911057087104,
+            "total_time": 7.5549540519714355,
+            "avg_time": 0.2518318017323812,
+            "ops_per_second": 397.09043620419664,
             "description": "1 paged query per round (500 rows, page size 50)"
         },
         {
             "name": "benchPreparedInsert",
             "rounds": 100,
             "iterations": 30,
-            "total_time": 89.27915596961975,
-            "avg_time": 2.9759718656539915,
-            "ops_per_second": 33.60246820681024,
+            "total_time": 54.58905816078186,
+            "avg_time": 1.819635272026062,
+            "ops_per_second": 54.9560681403233,
             "description": "100 inserts per round (prepared statement)"
         },
         {
             "name": "benchSimpleSelect",
             "rounds": 700,
             "iterations": 30,
-            "total_time": 9.9453284740448,
-            "avg_time": 0.33151094913482665,
-            "ops_per_second": 2111.5441339927133,
+            "total_time": 4.567452907562256,
+            "avg_time": 0.15224843025207518,
+            "ops_per_second": 4597.748553735639,
             "description": "1 simple select per round"
         }
     ]
