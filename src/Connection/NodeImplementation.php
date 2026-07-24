@@ -21,8 +21,12 @@ abstract class NodeImplementation implements Node {
 
     /**
      * Returns exactly $length bytes of data, or an empty string if not enough data is available.
-     * If $waitForData is true, it will block until $length bytes are available.
-     * 
+     *
+     * If $waitForData is true this blocks until the data source yields something, but a single
+     * call still performs a single read: a short read (the peer sent only part of what we asked
+     * for) returns an empty string. Whatever arrived stays buffered, so callers that need all
+     * $length bytes must call again until they get a non-empty result.
+     *
      * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
