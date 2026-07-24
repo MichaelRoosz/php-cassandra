@@ -14,9 +14,9 @@ echo "Cassandra PHP Driver Benchmark Comparison"
 echo "================================================"
 echo ""
 echo "This will compare performance between:"
-echo "  1. php-cassandra library (PHP 8.2)"
+echo "  1. php-cassandra library (PHP 8.5)"
 echo "  2. DataStax PHP driver via PECL (PHP 7.1)"
-echo "  3. ScyllaDB PHP driver (PHP 8.2)"
+echo "  3. ScyllaDB PHP driver (PHP 8.5)"
 echo ""
 echo "Ensuring Cassandra is ready..."
 echo ""
@@ -49,7 +49,7 @@ mkdir -p "$RESULTS_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 echo "================================================"
-echo "Running php-cassandra Benchmarks (PHP 8.2)"
+echo "Running php-cassandra Benchmarks (PHP 8.5)"
 echo "================================================"
 echo ""
 
@@ -73,7 +73,7 @@ echo "Results saved to: $RESULTS_DIR/datastax_${TIMESTAMP}.txt"
 echo ""
 
 echo "================================================"
-echo "Running ScyllaDB Driver Benchmarks (PHP 8.2)"
+echo "Running ScyllaDB Driver Benchmarks (PHP 8.5)"
 echo "================================================"
 echo ""
 
@@ -89,13 +89,13 @@ echo "Raw Benchmark Output"
 echo "================================================"
 echo ""
 
-echo "--- php-cassandra Library (PHP 8.2) ---"
+echo "--- php-cassandra Library (PHP 8.5) ---"
 grep -A 50 "=== php-cassandra Library Benchmarks ===" "$RESULTS_DIR/php-cassandra_${TIMESTAMP}.txt" | grep -v "JSON Results" | head -n 20
 echo ""
 echo "--- DataStax Driver (PHP 7.1) ---"
 grep -A 50 "=== DataStax PHP Driver Benchmarks ===" "$RESULTS_DIR/datastax_${TIMESTAMP}.txt" | grep -v "JSON Results" | head -n 20
 echo ""
-echo "--- ScyllaDB Driver (PHP 8.2) ---"
+echo "--- ScyllaDB Driver (PHP 8.5) ---"
 grep -A 50 "=== ScyllaDB PHP Driver Benchmarks ===" "$RESULTS_DIR/scylladb_${TIMESTAMP}.txt" | grep -v "JSON Results" | head -n 20
 echo ""
 

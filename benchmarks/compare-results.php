@@ -147,7 +147,7 @@ function main(array $argv): int {
         echo "\nNotes:\n";
         echo "  Times are average per iteration. Each iteration runs multiple rounds of operations.\n";
         echo "  'Xx faster/slower' compares php-cassandra to the other driver (lower time is better)\n";
-        echo "  php-cassandra: PHP 8.2 | DataStax: PHP 7.1 | ScyllaDB: PHP 8.2\n";
+        echo "  php-cassandra: PHP 8.5 | DataStax: PHP 7.1 | ScyllaDB: PHP 8.5\n";
 
         return 0;
     } catch (Exception $e) {

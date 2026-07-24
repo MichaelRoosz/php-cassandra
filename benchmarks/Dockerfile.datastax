@@ -21,9 +21,9 @@ RUN apt-get update && apt-get install -y \
 
 # Install DataStax C++ driver from source (for multi-arch support)
 WORKDIR /tmp
-RUN wget https://github.com/datastax/cpp-driver/archive/refs/tags/2.16.2.tar.gz \
-    && tar xzf 2.16.2.tar.gz \
-    && cd cpp-driver-2.16.2 \
+RUN wget https://github.com/apache/cassandra-cpp-driver/archive/refs/tags/2.17.1.tar.gz \
+    && tar xzf 2.17.1.tar.gz \
+    && cd cassandra-cpp-driver-2.17.1 \
     && mkdir build && cd build \
     && cmake .. \
     && make -j$(nproc) \

@@ -5,9 +5,9 @@ This directory contains benchmarks comparing the performance of `php-cassandra` 
 ## Overview
 
 The benchmarks compare:
-- **php-cassandra**: Modern PHP library (PHP 8.2) - this project
+- **php-cassandra**: Modern PHP library (PHP 8.5) - this project
 - **DataStax PHP Driver**: Legacy PECL extension (PHP 7.1)
-- **ScyllaDB PHP Driver**: Modern PECL extension fork (PHP 8.2) - [he4rt/scylladb-php-driver](https://github.com/he4rt/scylladb-php-driver)
+- **ScyllaDB PHP Driver**: Modern PECL extension fork (PHP 8.5) - [he4rt/scylladb-php-driver](https://github.com/he4rt/scylladb-php-driver)
 
 All drivers are tested against the same Cassandra instance running in Docker, performing identical operations to ensure fair comparison.
 
@@ -179,8 +179,8 @@ CASSANDRA_VERSION=4.1 ./benchmarks/run-comparison.sh
 ## Benchmark Environment
 
 ### php-cassandra Container
-- **Base Image**: php:8.2-cli
-- **PHP Version**: 8.2
+- **Base Image**: php:8.5-cli
+- **PHP Version**: 8.5
 - **Extensions**: zip, sockets
 - **Dependencies**: Full project dependencies via Composer
 - **Connection**: Socket or Stream mode (configurable via `APP_CASSANDRA_CONNECTION_MODE`)
@@ -193,8 +193,8 @@ CASSANDRA_VERSION=4.1 ./benchmarks/run-comparison.sh
 - **Connection**: Native driver connection
 
 ### ScyllaDB Driver Container
-- **Base Image**: php:8.2-cli
-- **PHP Version**: 8.2
+- **Base Image**: php:8.5-cli
+- **PHP Version**: 8.5
 - **Extensions**: cassandra (1.3.x from source)
 - **Dependencies**: ScyllaDB C++ driver (2.17.1, built from source)
 - **Connection**: Native driver connection with ScyllaDB shard-aware optimizations
@@ -218,7 +218,7 @@ CASSANDRA_VERSION=4.1 ./benchmarks/run-comparison.sh
 1. **Network Overhead**: Each driver uses different protocols and connection handling
 2. **Serialization**: Type handling and encoding differ between drivers
 3. **Connection Mode**: Socket vs Stream (php-cassandra only)
-4. **PHP Version**: PHP 8.2 vs PHP 8.2 vs PHP 7.1 have different performance characteristics
+4. **PHP Version**: PHP 8.5 vs PHP 7.1 have different performance characteristics
 5. **Prepared Statements**: Caching and reuse strategies differ
 6. **C++ Driver**: ScyllaDB driver includes shard-aware optimizations not present in DataStax driver
 

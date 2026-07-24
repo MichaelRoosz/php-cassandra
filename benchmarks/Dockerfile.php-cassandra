@@ -1,5 +1,5 @@
-# Dockerfile for php-cassandra library benchmarks (PHP 8.2)
-FROM php:8.2-cli
+# Dockerfile for php-cassandra library benchmarks (PHP 8.5)
+FROM php:8.5-cli
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \

@@ -2052,11 +2052,11 @@ benchSimpleSelect                             151.33ms        316.87ms        33
 Notes:
   Times are average per iteration. Each iteration runs multiple rounds of operations.
   'Xx faster/slower' compares php-cassandra to the other driver (lower time is better)
-  php-cassandra: PHP 8.2 | DataStax: PHP 7.1 | ScyllaDB: PHP 8.2
+  php-cassandra: PHP 8.5 | DataStax: PHP 7.1 | ScyllaDB: PHP 8.5
 ```
 
 Notes:
-- The DataStax driver runs on PHP 7.1; ScyllaDB and php-cassandra ran on PHP 8.2.
+- The DataStax driver runs on PHP 7.1; ScyllaDB and php-cassandra ran on PHP 8.5.
 - Environment details and exact commands are in `benchmarks/README.md`.
 
 Version support

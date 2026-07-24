@@ -24,7 +24,7 @@ services:
     networks:
       - php_cassandra_bench_net
 
-  # Benchmark container for php-cassandra library (PHP 8.2)
+  # Benchmark container for php-cassandra library
   bench-php-cassandra:
     build:
       context: ..
@@ -40,7 +40,7 @@ services:
       - php_cassandra_bench_net
     command: php benchmarks/run-bench-php-cassandra.php
 
-  # Benchmark container for DataStax PHP driver (PHP 7.1)
+  # Benchmark container for DataStax PHP driver
   bench-datastax:
     build:
       context: ..
@@ -56,7 +56,7 @@ services:
       - php_cassandra_bench_net
     command: php benchmarks/datastax/run-bench.php
 
-  # Benchmark container for ScyllaDB PHP driver (PHP 8.2)
+  # Benchmark container for ScyllaDB PHP driver
   bench-scylladb:
     build:
       context: ..
