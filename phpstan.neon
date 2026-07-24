@@ -25,3 +25,11 @@ parameters:
             path: src/Value/Uuid.php
             message: '#Method Cassandra\\Value\\Uuid::random\(\) throws checked exception Random\\RandomException but it''s missing from the PHPDoc @throws tag\.#'
             reportUnmatched: false
+        -
+            path: scripts/lz4/validate-compressor.php
+            identifier: throws.notThrowable
+            reportUnmatched: false
+        -
+            path: scripts/lz4/validate-decompressor.php
+            identifier: throws.notThrowable
+            reportUnmatched: false
