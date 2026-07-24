@@ -327,7 +327,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
             $data = substr($data, $sentBytes);
 
-        } while ($data);
+        } while ($data !== '');
     }
 
     /**
