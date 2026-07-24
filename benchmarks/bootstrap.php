@@ -202,7 +202,7 @@ final class BenchEnv {
         $systemConn = new Connection($nodes, 'system');
         $systemConn->setConsistency(Consistency::ONE);
         $systemConn->connect();
-        $systemConn->query("CREATE KEYSPACE IF NOT EXISTS {$keyspace} WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}");
+        $systemConn->query("CREATE KEYSPACE IF NOT EXISTS {$keyspace} WITH REPLICATION = {'class': 'NetworkTopologyStrategy', 'dc1': 1}");
         $systemConn->disconnect();
 
         $conn = new Connection($nodes, $keyspace);
@@ -233,7 +233,7 @@ final class BenchEnv {
 
     private static function ensureKeyspace(Connection $conn): void {
         $keyspace = self::DEFAULT_KEYSPACE;
-        $conn->query("CREATE KEYSPACE IF NOT EXISTS {$keyspace} WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}");
+        $conn->query("CREATE KEYSPACE IF NOT EXISTS {$keyspace} WITH REPLICATION = {'class': 'NetworkTopologyStrategy', 'dc1': 1}");
     }
 
     private static function ensureTables(Connection $conn): void {

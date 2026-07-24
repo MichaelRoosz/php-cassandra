@@ -381,10 +381,18 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
         $keyspace = self::$defaultKeyspace;
         $connection = self::newConnection('system');
         $connection->query("DROP KEYSPACE IF EXISTS {$keyspace}");
-        $connection->query(
-            "CREATE KEYSPACE {$keyspace} WITH REPLICATION = " .
-            "{'class': 'SimpleStrategy', 'replication_factor': 1}"
-        );
+
+        if (self::isScyllaDb()) {
+            $connection->query(
+                "CREATE KEYSPACE {$keyspace} WITH REPLICATION = " .
+                "{'class': 'NetworkTopologyStrategy', 'dc1': 1} AND TABLETS = {'enabled': false};"
+            );
+        } else {
+            $connection->query(
+                "CREATE KEYSPACE {$keyspace} WITH REPLICATION = " .
+                "{'class': 'NetworkTopologyStrategy', 'dc1': 1}"
+            );
+        }
         $connection->disconnect();
     }
 

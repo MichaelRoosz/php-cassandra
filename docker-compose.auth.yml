@@ -26,6 +26,9 @@ services:
         exec docker-entrypoint.sh cassandra -f
     environment:
       - CASSANDRA_START_RPC=false
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - CASSANDRA_DC=dc1
+      - CASSANDRA_RACK=rack1
       - MAX_HEAP_SIZE=512M
       - HEAP_NEWSIZE=128M
     healthcheck:

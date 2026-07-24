@@ -8,6 +8,8 @@ services:
       - 0.0.0.0
       - --broadcast-rpc-address
       - 127.0.0.1
+      - --endpoint-snitch
+      - GossipingPropertyFileSnitch
       # User-defined functions/aggregates are experimental in ScyllaDB and off by
       # default. Materialized views are enabled out of the box.
       - --experimental-features=udf
@@ -25,6 +27,8 @@ services:
         hard: -1
     networks:
       - php_scylladb_net
+    volumes:
+      - ./.docker/node1-rackdc.properties:/etc/scylla/cassandra-rackdc.properties:ro
 
 networks:
   php_scylladb_net:

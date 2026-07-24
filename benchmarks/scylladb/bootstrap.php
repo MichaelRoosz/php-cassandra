@@ -77,7 +77,7 @@ final class ScyllaDBBenchEnv {
 
     private static function ensureKeyspace($session) {
         $keyspace = self::DEFAULT_KEYSPACE;
-        $query = "CREATE KEYSPACE IF NOT EXISTS {$keyspace} WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}";
+        $query = "CREATE KEYSPACE IF NOT EXISTS {$keyspace} WITH REPLICATION = {'class': 'NetworkTopologyStrategy', 'dc1': 1}";
         $session->execute($query, ['consistency' => \Cassandra::CONSISTENCY_ONE]);
     }
 

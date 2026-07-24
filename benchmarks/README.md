@@ -202,7 +202,7 @@ CASSANDRA_VERSION=4.1 ./benchmarks/run-comparison.sh
 ### Cassandra Container
 - **Image**: cassandra:5.0 (configurable)
 - **Port**: 9042 (exposed as 9142 on host)
-- **Configuration**: 512MB heap, SimpleStrategy replication
+- **Configuration**: 512MB heap, NetworkTopologyStrategy replication
 
 ## Interpreting Results
 
