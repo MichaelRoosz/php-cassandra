@@ -13,6 +13,7 @@
 * `Cassandra\Connection::queryAsync()`: an asynchronous query that relied on auto-preparation (any native, untyped bind value) failed on protocol v5 with `Server protocol version does not support request option "keyspace"`, because the internally built prepare request was left at the default protocol version and stream id.
 * `Cassandra\Connection::waitForAnyStatement()`: hung when every supplied statement had already been resolved, because it blocked on a response before checking readiness.
 * `Cassandra\Connection::disconnect()`: unresolved asynchronous statements from the previous connection were left registered, so `waitForAllPendingStatements()` blocked forever after a reconnect. The per-connection stream state is now reset on disconnect.
+* `Cassandra\Response\StreamReader::readValue()`: zero-length ("empty") values for fixed-length types desynced the row decoder. Cassandra distinguishes null (`[bytes]` length `-1`) from empty (length `0`), and an empty value is legal for every fixed-length type. Both the fast path (`INT`, `DOUBLE`, `BOOLEAN`, `UUID`, `BIGINT`, …) and the `Cassandra\Value\ValueWithFixedLength` path (`TIMESTAMP`, `DATE`, `TIME`, `SMALLINT`, `TINYINT`, `FLOAT`, …) ignored the declared length and always read a fixed number of bytes, consuming bytes belonging to the next column and misaligning the rest of the row and every remaining row in the page. `readValue()` is now authoritative about the cell frame: it maps a zero length to `null` (consistent with `-1`/`-2`) and forces the stream offset to the end of the declared value after decoding, and `Cassandra\Value\ValueWithFixedLength::fromStream()` honours the passed length.
 * Fixed several misspelled exception context keys (`proocol_versions_*` → `protocol_versions_*`, `required_protocol_verison` → `required_protocol_version`).
 
 ### Performance
@@ -24,6 +25,7 @@
 * Added regression tests for prepared-statement repreparation, asynchronous auto-preparation, `waitForAnyStatement()` and reconnect after `disconnect()`.
 * Added integration tests for the ScyllaDB-only `BYPASS CACHE` and `USING TIMEOUT` CQL extensions, asserting both that they work on ScyllaDB and that Apache Cassandra rejects them.
 * Added a unit test for the binary encoding of the `serialConsistency` request option.
+* Added integration tests for empty (zero-length) values of fixed-length types, asserting that empty values are decoded as `null` and do not desync the row decoder.
 * Added compression benchmarks running against a real Cassandra/ScyllaDB node with several-megabyte payloads: `benchmarks/CompressionBench.php` (phpbench) measures a large-blob round-trip with compression on vs. off, and `benchmarks/compression-network-bench.php` compares the two across a range of simulated network bandwidths (via a bandwidth-throttling transport) to show where compression starts to pay off.
 * The test containers now enable user-defined functions, materialized views and SASI indexes (disabled by default), and a dedicated `docker-compose.auth.yml` runs the suite against an authenticated cluster.
 * Extended the CI test matrix to cover PHP 8.5 and ScyllaDB 2026.1 and 2026.2.

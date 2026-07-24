@@ -608,6 +608,35 @@ class StreamReader {
             );
         }
 
+        if ($length === 0) {
+            return $this->emptyValue($typeInfo);
+        }
+
+        $startOffset = $this->offset;
+
+        /** @psalm-suppress MixedAssignment */
+        $value = $this->decodeValue($typeInfo, $length, $valueEncodeConfig);
+
+        $this->resyncAfterValue($typeInfo, $startOffset, $length);
+
+        /** @psalm-suppress MixedReturnStatement */
+        return $value;
+    }
+
+    public function reset(): void {
+        $this->offset = $this->extraDataOffset;
+    }
+
+    /**
+     * Decodes a single value of $length bytes, positioned at the start of the
+     * value body.
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     */
+    private function decodeValue(TypeInfo $typeInfo, int $length, ValueEncodeConfig $valueEncodeConfig): mixed {
+
         // Fast path: return exactly what the matching Cassandra\Value\*
         // getValue() would, but without allocating a Value object — the dominant
         // per-cell cost. The scalar branches decode directly because their value
@@ -680,8 +709,22 @@ class StreamReader {
         }
     }
 
-    public function reset(): void {
-        $this->offset = $this->extraDataOffset;
+    /**
+     * The value a zero-length ("empty") cell decodes to.
+     *
+     * Cassandra distinguishes null (length -1) from empty (length 0), and empty
+     * is a legal value for every type. Only the types whose serialization is a
+     * raw byte string or a counted collection can represent it; for everything
+     * else — in particular the fixed-length scalars, whose decoders would
+     * otherwise read past the end of the cell and desync the rest of the row —
+     * an empty cell is reported as null.
+     */
+    private function emptyValue(TypeInfo $typeInfo): mixed {
+        return match ($typeInfo->type) {
+            Type::ASCII, Type::BLOB, Type::CUSTOM, Type::TEXT, Type::VARCHAR => '',
+            Type::LIST, Type::MAP, Type::SET => [],
+            default => null,
+        };
     }
 
     /**
@@ -704,5 +747,41 @@ class StreamReader {
         }
 
         return $values;
+    }
+
+    /**
+     * Makes the cell length authoritative: a decoder that consumed fewer bytes
+     * than the cell declares leaves the reader positioned at the next cell
+     * instead of drifting, and one that consumed more is a protocol error
+     * rather than silent corruption of every following value.
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    private function resyncAfterValue(TypeInfo $typeInfo, int $startOffset, int $length): void {
+
+        $consumed = $this->offset - $startOffset;
+
+        if ($consumed === $length) {
+            return;
+        }
+
+        if ($consumed > $length) {
+            throw new ResponseException(
+                message: 'Value decoder read beyond the declared value length',
+                code: ExceptionCode::RESPONSE_SR_VALUE_LENGTH_MISMATCH->value,
+                context: [
+                    'method' => __METHOD__,
+                    'type' => $typeInfo->type->name,
+                    'declared_length' => $length,
+                    'consumed_length' => $consumed,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
+
+        // Skip the trailing bytes the decoder did not consume. read() applies
+        // the same bounds checks (and, for the progressive reader, the same
+        // on-demand fetching) as any other read.
+        $this->read($length - $consumed);
     }
 }

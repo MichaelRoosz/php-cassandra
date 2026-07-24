@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Response\StreamReader;
 use Cassandra\TypeInfo\TypeInfo;
 
@@ -31,6 +33,17 @@ abstract class ValueWithFixedLength extends ValueBase {
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
+
+        // A declared length that disagrees with the type's fixed size means the
+        // stream and our idea of the schema have diverged; reading fixedLength()
+        // bytes anyway would silently corrupt every value after this one.
+        if ($length !== null && $length !== static::fixedLength()) {
+            throw new ValueException('Invalid data length for fixed-length type', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
+                'class' => static::class,
+                'length' => $length,
+                'expected_length' => static::fixedLength(),
+            ]);
+        }
 
         $binary = $stream->read(static::fixedLength());
 
