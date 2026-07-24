@@ -92,8 +92,18 @@ final class Tuple extends ValueReadableWithoutLength {
 
         $valueEncodeConfig ??= ValueEncodeConfig::default();
 
+        // As with UDTs, a serialized tuple may stop short of the declared arity;
+        // the missing trailing elements are null rather than encoded.
+        $endOffset = $length === null ? null : $stream->pos() + $length;
+
         $tuple = [];
         foreach ($typeInfo->valueTypes as $key => $type) {
+            if ($endOffset !== null && $stream->pos() >= $endOffset) {
+                $tuple[$key] = null;
+
+                continue;
+            }
+
             /** @psalm-suppress MixedAssignment */
             $tuple[$key] = $stream->readValue($type, $valueEncodeConfig);
         }

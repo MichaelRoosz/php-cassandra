@@ -96,8 +96,21 @@ final class UDT extends ValueReadableWithoutLength {
 
         $valueEncodeConfig ??= ValueEncodeConfig::default();
 
+        // A serialized UDT may carry fewer fields than the type declares: rows
+        // written before an ALTER TYPE ... ADD keep their original, shorter
+        // encoding. The trailing fields are absent rather than null-encoded, so
+        // stop at the declared length and null-fill the rest instead of reading
+        // into whatever follows this value.
+        $endOffset = $length === null ? null : $stream->pos() + $length;
+
         $udt = [];
         foreach ($typeInfo->valueTypes as $key => $type) {
+            if ($endOffset !== null && $stream->pos() >= $endOffset) {
+                $udt[$key] = null;
+
+                continue;
+            }
+
             /** @psalm-suppress MixedAssignment */
             $udt[$key] = $stream->readValue($type, $valueEncodeConfig);
         }
