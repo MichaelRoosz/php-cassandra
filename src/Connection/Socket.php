@@ -76,117 +76,30 @@ final class Socket extends NodeImplementation implements IoNode {
             );
         }
 
-        $addressFamily = filter_var($this->config->host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
-            ? AF_INET6
-            : AF_INET;
+        $addresses = $this->resolveHost();
 
-        $socket = socket_create($addressFamily, SOCK_STREAM, SOL_TCP);
-        if ($socket === false) {
-            $errorCode = socket_last_error();
+        $lastException = null;
 
-            throw new SocketException(
-                message: 'Socket create failed: ' . socket_strerror($errorCode),
-                code: ExceptionCode::SOCKET_CREATE_FAILED->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'address_family' => $addressFamily === AF_INET6 ? 'AF_INET6' : 'AF_INET',
-                    'operation' => 'socket_create',
-                    'system_error_code' => $errorCode,
-                ]
-            );
-        }
+        foreach ($addresses as ['family' => $addressFamily, 'address' => $address]) {
+            try {
+                $this->socket = $this->connectToAddress($addressFamily, $address);
 
-        socket_set_option($socket, SOL_TCP, TCP_NODELAY, 1);
+                return;
 
-        foreach ($this->config->socketOptions as $optname => $optval) {
-            socket_set_option($socket, SOL_SOCKET, (int) $optname, $optval);
-        }
-
-        $this->isBlockingIo = socket_set_nonblock($socket) === false;
-
-        $start = microtime(true);
-        do {
-            $result = socket_connect($socket, $this->config->host, $this->config->port);
-            if ($result === false) {
-
-                $errorCode = socket_last_error($socket);
-
-                if ($errorCode === SOCKET_EISCONN) {
-                    break;
-                }
-
-                if ($errorCode === SOCKET_EINTR) {
-
-                    if (microtime(true) - $start > $this->sendTimeout) {
-                        $this->closeSocket($socket, false);
-
-                        throw new SocketException(
-                            message: 'Socket connect timed out',
-                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
-                            context: [
-                                'host' => $this->config->host,
-                                'port' => $this->config->port,
-                                'operation' => 'connect',
-                                'socket_options' => $this->config->socketOptions,
-                            ]
-                        );
-                    }
-
-                    continue;
-                }
-
-                if (
-                    $errorCode === SOCKET_EINPROGRESS
-                    || $errorCode === SOCKET_EALREADY
-                    || $errorCode === SOCKET_EAGAIN
-                ) {
-
-                    try {
-                        $this->waitForConnect($socket, $start);
-
-                    } catch (SocketException $e) {
-                        $this->closeSocket($socket, false);
-
-                        throw $e;
-                    }
-
-                    break;
-                }
-
-                if ($errorCode === SOCKET_ETIMEDOUT) {
-                    $this->closeSocket($socket, false);
-
-                    throw new SocketException(
-                        message: 'Socket connect timed out',
-                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'connect',
-                            'socket_options' => $this->config->socketOptions,
-                            'system_error_code' => $errorCode,
-                        ]
-                    );
-                }
-
-                $this->closeSocket($socket, false);
-
-                throw new SocketException(
-                    message: 'Socket connect failed: ' . socket_strerror($errorCode),
-                    code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
-                    context: [
-                        'host' => $this->config->host,
-                        'port' => $this->config->port,
-                        'operation' => 'connect',
-                        'socket_options' => $this->config->socketOptions,
-                        'system_error_code' => $errorCode,
-                    ]
-                );
+            } catch (SocketException $e) {
+                $lastException = $e;
             }
-        } while ($result === false);
+        }
 
-        $this->socket = $socket;
+        throw $lastException ?? new SocketException(
+            message: 'Socket connect failed: no usable address for host',
+            code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
+            context: [
+                'host' => $this->config->host,
+                'port' => $this->config->port,
+                'operation' => 'connect',
+            ]
+        );
     }
 
     #[\Override]
@@ -547,6 +460,129 @@ final class Socket extends NodeImplementation implements IoNode {
     }
 
     /**
+     * Open a connection to one already-resolved address.
+     *
+     * The address is always a numeric IP literal, so the retry loop below cannot
+     * trigger repeated name resolution.
+     *
+     * @throws \Cassandra\Exception\SocketException
+     */
+    private function connectToAddress(int $addressFamily, string $address): PhpSocket {
+
+        $socket = socket_create($addressFamily, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            $errorCode = socket_last_error();
+
+            throw new SocketException(
+                message: 'Socket create failed: ' . socket_strerror($errorCode),
+                code: ExceptionCode::SOCKET_CREATE_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'resolved_address' => $address,
+                    'address_family' => $addressFamily === AF_INET6 ? 'AF_INET6' : 'AF_INET',
+                    'operation' => 'socket_create',
+                    'system_error_code' => $errorCode,
+                ]
+            );
+        }
+
+        socket_set_option($socket, SOL_TCP, TCP_NODELAY, 1);
+
+        foreach ($this->config->socketOptions as $optname => $optval) {
+            socket_set_option($socket, SOL_SOCKET, (int) $optname, $optval);
+        }
+
+        $this->isBlockingIo = socket_set_nonblock($socket) === false;
+
+        $start = microtime(true);
+        do {
+            $result = socket_connect($socket, $address, $this->config->port);
+            if ($result === false) {
+
+                $errorCode = socket_last_error($socket);
+
+                if ($errorCode === SOCKET_EISCONN) {
+                    break;
+                }
+
+                if ($errorCode === SOCKET_EINTR) {
+
+                    if (microtime(true) - $start > $this->sendTimeout) {
+                        $this->closeSocket($socket, false);
+
+                        throw new SocketException(
+                            message: 'Socket connect timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'resolved_address' => $address,
+                                'operation' => 'connect',
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (
+                    $errorCode === SOCKET_EINPROGRESS
+                    || $errorCode === SOCKET_EALREADY
+                    || $errorCode === SOCKET_EAGAIN
+                ) {
+
+                    try {
+                        $this->waitForConnect($socket, $start);
+
+                    } catch (SocketException $e) {
+                        $this->closeSocket($socket, false);
+
+                        throw $e;
+                    }
+
+                    break;
+                }
+
+                if ($errorCode === SOCKET_ETIMEDOUT) {
+                    $this->closeSocket($socket, false);
+
+                    throw new SocketException(
+                        message: 'Socket connect timed out',
+                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'resolved_address' => $address,
+                            'operation' => 'connect',
+                            'socket_options' => $this->config->socketOptions,
+                            'system_error_code' => $errorCode,
+                        ]
+                    );
+                }
+
+                $this->closeSocket($socket, false);
+
+                throw new SocketException(
+                    message: 'Socket connect failed: ' . socket_strerror($errorCode),
+                    code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'resolved_address' => $address,
+                        'operation' => 'connect',
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
+                    ]
+                );
+            }
+        } while ($result === false);
+
+        return $socket;
+    }
+
+    /**
      * @return array{
      *   sendTimeout: int,
      *   receiveTimeout: int,
@@ -581,6 +617,69 @@ final class Socket extends NodeImplementation implements IoNode {
             'sendTimeout' => max(1, $sendTimeout),
             'receiveTimeout' => max(1, $receiveTimeout),
         ];
+    }
+
+    /**
+     * Resolve the configured host into the list of candidate addresses to try.
+     *
+     * getaddrinfo() handles IPv4 literals, IPv6 literals and DNS names uniformly and
+     * reports the address family of every result, so a host that only publishes AAAA
+     * records connects just as well as an A-only one. Every candidate is returned so
+     * that connect() can fall back to the next address when one is unreachable.
+     *
+     * @return list<array{family: int, address: string}>
+     *
+     * @throws \Cassandra\Exception\SocketException
+     */
+    private function resolveHost(): array {
+
+        $host = $this->config->host;
+
+        // getaddrinfo() only understands the bare form of an IPv6 literal, but the
+        // bracketed form is what users copy out of URLs and connection strings.
+        if (strlen($host) > 2 && $host[0] === '[' && $host[-1] === ']') {
+            $host = substr($host, 1, -1);
+        }
+
+        // "ai_family" is deliberately not set: PHP has no AF_UNSPEC constant, and leaving
+        // the hint at its zero default is exactly AF_UNSPEC, so both families are returned.
+        $addressInfoList = socket_addrinfo_lookup($host, (string) $this->config->port, [
+            'ai_socktype' => SOCK_STREAM,
+            'ai_protocol' => SOL_TCP,
+        ]);
+
+        $addresses = [];
+
+        foreach ($addressInfoList === false ? [] : $addressInfoList as $addressInfo) {
+            $info = socket_addrinfo_explain($addressInfo);
+
+            $family = $info['ai_family'] ?? null;
+            $socketAddress = $info['ai_addr'] ?? null;
+            if (!is_int($family) || !is_array($socketAddress)) {
+                continue;
+            }
+
+            $address = $socketAddress['sin6_addr'] ?? $socketAddress['sin_addr'] ?? null;
+            if (!is_string($address) || $address === '') {
+                continue;
+            }
+
+            $addresses[] = ['family' => $family, 'address' => $address];
+        }
+
+        if ($addresses === []) {
+            throw new SocketException(
+                message: 'Could not resolve host to any usable address',
+                code: ExceptionCode::SOCKET_HOST_RESOLUTION_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'socket_addrinfo_lookup',
+                ]
+            );
+        }
+
+        return $addresses;
     }
 
     /**
