@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Type;
 use Cassandra\Value;
 use Cassandra\ValueFactory;
@@ -29,6 +30,12 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     public function testBoolean(): void {
         $this->assertSame(false, Value\Boolean::fromBinary((Value\Boolean::fromValue(false))->getBinary())->getValue());
         $this->assertSame(true, Value\Boolean::fromBinary((Value\Boolean::fromValue(true))->getBinary())->getValue());
+    }
+
+    public function testBooleanEmptyCellDecodesAsFalse(): void {
+        // A zero-length (empty, non-null) cell is a legal boolean value and
+        // must decode as false, matching the other drivers.
+        $this->assertSame(false, Value\Boolean::fromBinary('')->getValue());
     }
 
     public function testCounter(): void {
@@ -72,6 +79,74 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
         $decimal = '34345454545';
         $this->assertSame($decimal, Value\Decimal::fromBinary((Value\Decimal::fromValue($decimal))->getBinary())->getValue());
+    }
+
+    public function testDecimalFromBinaryRejectsOutOfRangeScale(): void {
+        // Decoding expands the value into a plain string whose length grows with
+        // the scale, so an absurd (positive or negative) scale — cheap to send,
+        // expensive to expand — must be rejected rather than allocating gigabytes.
+        foreach ([200000000, -200000000] as $scale) {
+            $binary = pack('N', $scale & 0xFFFFFFFF) . (new Value\Varint(1))->getBinary();
+
+            try {
+                Value\Decimal::fromBinary($binary);
+                $this->fail('Expected ValueException for decimal scale ' . $scale);
+            } catch (\Cassandra\Exception\ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_DECIMAL_SCALE_OUT_OF_RANGE->value, $e->getCode());
+            }
+        }
+    }
+
+    public function testDecimalFromBinaryWithNegativeScale(): void {
+        // scale is a signed int32; -3 with unscaled 12 means 12 * 10^3.
+        $binary = pack('N', 0xFFFFFFFD) . (new Value\Varint(12))->getBinary();
+        $this->assertSame('12000', Value\Decimal::fromBinary($binary)->getValue());
+    }
+
+    public function testDecimalFromFloatKeepsFractionalValue(): void {
+        foreach ([
+            [1.5, '1.5'],
+            [0.1, '0.1'],
+            [-0.5, '-0.5'],
+            [100.0, '100'],
+            [1.0E-5, '0.00001'],
+        ] as [$float, $expected]) {
+            $this->assertSame($expected, (new Value\Decimal($float))->getValue());
+            $this->assertSame($expected, Value\Decimal::fromBinary((new Value\Decimal($float))->getBinary())->getValue());
+        }
+
+        $this->expectException(\Cassandra\Exception\ValueException::class);
+        new Value\Decimal(INF);
+    }
+
+    public function testDecimalNormalizesNumericStrings(): void {
+        // is_numeric() accepts these string forms, but the varint wire encoding
+        // cannot express an exponent or a leading "+"/whitespace. They must be
+        // normalized at construction so the value is encodable by getBinary().
+        foreach ([
+            ['1e5', '100000'],
+            ['1.5e3', '1500'],
+            ['1.5E3', '1500'],
+            ['2e-3', '0.002'],
+            ['+1.5', '1.5'],
+            ['-2E2', '-200'],
+            ['.5', '0.5'],
+            ['5.', '5'],
+            ['  1.5  ', '1.5'],
+        ] as [$input, $expected]) {
+            $decimal = new Value\Decimal($input);
+            $this->assertSame($expected, $decimal->getValue(), "value for input '{$input}'");
+            $this->assertSame(
+                $expected,
+                Value\Decimal::fromBinary($decimal->getBinary())->getValue(),
+                "roundtrip for input '{$input}'"
+            );
+        }
+
+        // Plain decimal strings keep their explicit scale (trailing zeros) verbatim.
+        foreach (['1.50', '34345454545.120', '-0.100', '42'] as $plain) {
+            $this->assertSame($plain, (new Value\Decimal($plain))->getValue(), "verbatim for '{$plain}'");
+        }
     }
 
     public function testDouble(): void {
@@ -241,6 +316,21 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             (Value\Duration::fromValue('1d' . PHP_INT_MAX . 'ns'))
                 ->asDateInterval()->format('%R %yY %mM %dD %hH %iM %sS %fF')
         );
+    }
+
+    public function testDurationRejectsInvalidStrings(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Duration requires 64-bit integer');
+        }
+
+        foreach (['hello world', '5x2d', 'P', '-', '', '1d nonsense'] as $invalid) {
+            try {
+                new Value\Duration($invalid);
+                $this->fail('Expected ValueException for duration string: "' . $invalid . '"');
+            } catch (\Cassandra\Exception\ValueException $e) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     public function testFloat32(): void {
@@ -485,6 +575,37 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame($timeUuid, Value\Timeuuid::fromBinary((Value\Timeuuid::fromValue($timeUuid))->getBinary())->getValue());
     }
 
+    public function testTimeuuidAcceptsUndashedHexForm(): void {
+        $timeuuid = 'bd23b48a-99de-11ed-a8fc-0242ac120002';
+        $undashed = str_replace('-', '', $timeuuid);
+
+        $this->assertSame($timeuuid, Value\Timeuuid::fromValue($undashed)->getValue());
+        $this->assertSame(
+            Value\Timeuuid::fromValue($timeuuid)->getBinary(),
+            Value\Timeuuid::fromValue($undashed)->getBinary()
+        );
+    }
+
+    public function testTimeuuidRejectsMalformedValue(): void {
+        // Without validation these would be silently packed into wrong-length or
+        // corrupt binary by getBinary() (non-hex coerced to 0).
+        foreach ([
+            'garbage',
+            '12345',
+            'bd23b48a-99de-11ed-a8fc-0242ac12000',           // one digit short
+            'zd23b48a-99de-11ed-a8fc-0242ac120002',          // non-hex digit
+            'bd23b48a99de11eda8fc0242ac12000',               // undashed, one digit short (31)
+            'bd23b48a99de11eda8fc0242ac1200022',             // undashed, one digit too many (33)
+        ] as $invalid) {
+            try {
+                Value\Timeuuid::fromValue($invalid);
+                $this->fail('Expected ValueException for timeuuid: "' . $invalid . '"');
+            } catch (\Cassandra\Exception\ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_UUID_INVALID_FORMAT->value, $e->getCode());
+            }
+        }
+    }
+
     public function testTinyint(): void {
         $int1 = 127;
         $this->assertSame($int1, Value\Tinyint::fromBinary((Value\Tinyint::fromValue($int1))->getBinary())->getValue());
@@ -544,6 +665,61 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame($uuid, Value\Uuid::fromBinary((Value\Uuid::fromValue($uuid))->getBinary())->getValue());
     }
 
+    public function testUuidAcceptsRawBinaryForm(): void {
+        // The raw 16-byte wire form is accepted directly (e.g. re-binding a value
+        // read with UuidEncodeOption::AS_BINARY) and normalizes to the canonical
+        // lowercase string.
+        $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
+        $raw = pack('H*', str_replace('-', '', $uuid));
+
+        $fromRaw = Value\Uuid::fromValue($raw);
+        $this->assertSame($raw, $fromRaw->getBinary());
+        $this->assertSame($uuid, $fromRaw->getValue());
+
+        // getBinary() is now a no-op round-trip of the raw bytes.
+        $this->assertSame($raw, Value\Uuid::fromValue($uuid)->getBinary());
+    }
+
+    public function testUuidAcceptsUndashedHexForm(): void {
+        // The compact 32-character undashed hex form is accepted and normalizes
+        // to the canonical dashed lowercase string, matching the dashed form.
+        $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
+        $undashed = str_replace('-', '', $uuid);
+
+        $this->assertSame($uuid, Value\Uuid::fromValue($undashed)->getValue());
+        $this->assertSame(
+            Value\Uuid::fromValue($uuid)->getBinary(),
+            Value\Uuid::fromValue($undashed)->getBinary()
+        );
+    }
+
+    public function testUuidAcceptsUppercase(): void {
+        $uuid = '346C9059-7D07-47E6-91C8-092B50E8306F';
+        $this->assertSame(16, strlen(Value\Uuid::fromValue($uuid)->getBinary()));
+    }
+
+    public function testUuidRejectsMalformedValue(): void {
+        // Without validation these would be silently packed into wrong-length or
+        // corrupt binary by getBinary() (non-hex coerced to 0). None is exactly
+        // 16 bytes, so none is mistaken for the accepted raw binary form.
+        foreach ([
+            'garbage',
+            '12345',
+            '346c9059-7d07-47e6-91c8-092b50e8306',           // one digit short
+            '346c9059-7d07-47e6-91c8-092b50e8306fx',         // trailing junk
+            'zzzzzzzz-7d07-47e6-91c8-092b50e8306f',          // non-hex digits
+            '346c90597d0747e691c8092b50e8306',               // undashed, one digit short (31)
+            '346c90597d0747e691c8092b50e8306ff',             // undashed, one digit too many (33)
+        ] as $invalid) {
+            try {
+                Value\Uuid::fromValue($invalid);
+                $this->fail('Expected ValueException for uuid: "' . $invalid . '"');
+            } catch (\Cassandra\Exception\ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_UUID_INVALID_FORMAT->value, $e->getCode());
+            }
+        }
+    }
+
     public function testVarchar(): void {
         $varchar = 'abcABC123!#_';
         $this->assertSame($varchar, Value\Varchar::fromBinary((Value\Varchar::fromValue($varchar))->getBinary())->getValue());
@@ -595,5 +771,37 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame("\xFF", (Value\Varint::fromValue(-1))->getBinary());
         $this->assertSame("\x80", (Value\Varint::fromValue(-128))->getBinary());
         $this->assertSame("\xFF\x7F", (Value\Varint::fromValue(-129))->getBinary());
+    }
+
+    public function testVectorRejectsAssociativeValue(): void {
+        $this->expectException(\Cassandra\Exception\ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_VECTOR_INVALID_VALUE_TYPE->value);
+
+        // Non-0-indexed (associative) keys cannot be positionally serialized.
+        Value\Vector::fromValue([10 => 1.0, 11 => 2.0, 12 => 3.0], Type::FLOAT, 3);
+    }
+
+    public function testVectorRejectsElementCountMismatch(): void {
+        // Too many elements would be silently truncated; too few would index a
+        // missing slot. Both must be rejected up front.
+        foreach ([
+            [1.0, 2.0],                 // fewer than dimensions
+            [1.0, 2.0, 3.0, 4.0, 5.0],  // more than dimensions
+        ] as $value) {
+            try {
+                Value\Vector::fromValue($value, Type::FLOAT, 3);
+                $this->fail('Expected ValueException for vector with ' . count($value) . ' elements and 3 dimensions');
+            } catch (\Cassandra\Exception\ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_VECTOR_DIMENSION_MISMATCH->value, $e->getCode());
+            }
+        }
+    }
+
+    public function testVectorRoundTripEncodesAllElements(): void {
+        $value = [1.5, -2.5, 3.5];
+        $binary = Value\Vector::fromValue($value, Type::FLOAT, 3)->getBinary();
+
+        // 3 float32 elements, fixed-length framing (no length prefixes).
+        $this->assertSame(12, strlen($binary));
     }
 }
