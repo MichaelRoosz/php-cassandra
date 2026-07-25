@@ -104,6 +104,6 @@ class Custom extends ValueReadableWithLength {
 
     #[\Override]
     final public static function requiresDefinition(): bool {
-        return false;
+        return true;
     }
 }
