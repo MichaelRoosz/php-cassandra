@@ -80,7 +80,7 @@ foreach ($phpFiles as $path) {
         if ($used) {
             continue; // already found
         }
-        if (mb_strpos($contents, 'ExceptionCode::' . $caseName) !== false) {
+        if (strpos($contents, 'ExceptionCode::' . $caseName) !== false) {
             $caseNameToUsed[$caseName] = true;
         }
     }
