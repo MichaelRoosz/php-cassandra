@@ -17,6 +17,7 @@ use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeNameParser;
+use Cassandra\Value\EncodeOption\UuidEncodeOption;
 use Cassandra\Value\ValueEncodeConfig;
 use Cassandra\Value\ValueWithMultipleEncodings;
 use TypeError;
@@ -638,13 +639,14 @@ class StreamReader {
     private function decodeValue(TypeInfo $typeInfo, int $length, ValueEncodeConfig $valueEncodeConfig): mixed {
 
         // Fast path: return exactly what the matching Cassandra\Value\*
-        // getValue() would, but without allocating a Value object — the dominant
-        // per-cell cost. The scalar branches decode directly because their value
-        // is independent of $valueEncodeConfig; list/set recurse through
-        // readValue (which forwards the config), so config-dependent elements are
-        // still handled correctly. Maps, UDTs, tuples, vectors and the
-        // config-dependent temporal/varint scalars fall through to the object
-        // path below.
+        // getValue()/asConfigured() would, but without allocating a Value object
+        // — the dominant per-cell cost. Most scalar branches decode directly
+        // because their value is independent of $valueEncodeConfig; uuid/timeuuid
+        // are the exception and honour $valueEncodeConfig->uuidEncodeOption
+        // inline. list/set recurse through readValue (which forwards the config),
+        // so config-dependent elements are still handled correctly. Maps, UDTs,
+        // tuples, vectors and the config-dependent temporal/varint scalars fall
+        // through to the object path below.
         switch ($typeInfo->type) {
             case Type::INT:
                 return $this->readInt();
@@ -657,7 +659,29 @@ class StreamReader {
 
             case Type::UUID:
             case Type::TIMEUUID:
-                return $this->readUuid();
+                // A uuid/timeuuid is always exactly 16 bytes; validate before
+                // decoding so a corrupt cell length is rejected here rather than
+                // silently yielding a wrong-length binary value on the AS_BINARY
+                // path (the object path in Value\Uuid::fromBinary enforces the
+                // same). AS_BINARY returns the raw 16 bytes, skipping the
+                // hex/format step (see Value\Uuid::asConfigured); AS_STRING (the
+                // default) returns the canonical string form.
+                if ($length !== 16) {
+                    throw new ResponseException(
+                        message: 'Invalid uuid value length; expected 16 bytes',
+                        code: ExceptionCode::RESPONSE_SR_UNPACK_UUID_FAIL->value,
+                        context: [
+                            'method' => __METHOD__,
+                            'type' => $typeInfo->type->name,
+                            'length' => $length,
+                            'offset' => $this->pos(),
+                        ]
+                    );
+                }
+
+                return $valueEncodeConfig->uuidEncodeOption === UuidEncodeOption::AS_BINARY
+                    ? $this->read(16)
+                    : $this->readUuid();
 
             case Type::DOUBLE:
                 return $this->readDouble();

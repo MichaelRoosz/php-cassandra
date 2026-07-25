@@ -10,6 +10,7 @@ use Cassandra\Exception\ResponseException as ResponseException;
 use Cassandra\Exception\VIntCodecException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
+use Cassandra\Value\EncodeOption\UuidEncodeOption;
 use Cassandra\Value\ValueEncodeConfig;
 use Cassandra\ValueFactory;
 use Cassandra\VIntCodec;
@@ -350,5 +351,58 @@ final class StreamReaderTest extends AbstractUnitTestCase {
             $reader = new StreamReader($codec->encodeUnsignedVint64($n));
             $this->assertSame($n, $reader->readUnsignedVInt64());
         }
+    }
+
+    public function testUuidEncodeOptions(): void {
+        $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
+        $raw = pack('H*', str_replace('-', '', $uuid));
+        $cell = pack('N', strlen($raw)) . $raw;
+
+        foreach ([Type::UUID, Type::TIMEUUID] as $type) {
+            $typeInfo = ValueFactory::getTypeInfoFromType($type);
+
+            // default: canonical string form
+            $reader = new StreamReader($cell);
+            $this->assertSame(
+                $uuid,
+                $reader->readValue($typeInfo, new ValueEncodeConfig()),
+                $type->name . ' default should decode to the canonical string'
+            );
+            $this->assertSame(20, $reader->pos());
+
+            // AS_STRING explicit
+            $reader = new StreamReader($cell);
+            $cfg = new ValueEncodeConfig(uuidEncodeOption: UuidEncodeOption::AS_STRING);
+            $this->assertSame($uuid, $reader->readValue($typeInfo, $cfg));
+
+            // AS_BINARY: the raw 16 bytes, no formatting
+            $reader = new StreamReader($cell);
+            $cfg = new ValueEncodeConfig(uuidEncodeOption: UuidEncodeOption::AS_BINARY);
+            $decoded = $reader->readValue($typeInfo, $cfg);
+            $this->assertSame($raw, $decoded, $type->name . ' AS_BINARY should decode to raw bytes');
+            $this->assertSame(16, strlen((string) $decoded));
+            $this->assertSame(20, $reader->pos(), 'AS_BINARY must consume the whole cell body');
+        }
+    }
+
+    public function testUuidEncodeOptionsInsideCollection(): void {
+        // A list<uuid> element recurses through readValue, so the config must
+        // reach nested values too.
+        $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
+        $raw = pack('H*', str_replace('-', '', $uuid));
+
+        $listBody = pack('N', 1) . pack('N', strlen($raw)) . $raw; // count=1, one element
+        $cell = pack('N', strlen($listBody)) . $listBody;
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::LIST,
+            'valueType' => Type::UUID,
+        ]);
+
+        $reader = new StreamReader($cell);
+        $this->assertSame([$uuid], $reader->readValue($typeInfo, new ValueEncodeConfig()));
+
+        $reader = new StreamReader($cell);
+        $cfg = new ValueEncodeConfig(uuidEncodeOption: UuidEncodeOption::AS_BINARY);
+        $this->assertSame([$raw], $reader->readValue($typeInfo, $cfg));
     }
 }
