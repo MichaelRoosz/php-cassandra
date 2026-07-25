@@ -38,11 +38,11 @@
         "php": ">=8.1"
     },
     "suggest": {
-        "ext-lz4": "Native LZ4 (de)compression, used automatically when present for much faster compressed connections; a pure-PHP fallback is used otherwise",
-        "ext-sockets": "Socket transport (required for SocketNodeConfig connections)",
-        "ext-bcmath": "Faster large-integer math for the Varint and Decimal types",
-        "ext-gmp": "Faster large-integer math for the Varint and Decimal types",
-        "ext-openssl": "SSL/TLS encrypted connections"
+        "ext-sockets": "Socket transport, required for connections configured with SocketNodeConfig; StreamNodeConfig connections need no extension",
+        "ext-openssl": "TLS/SSL encrypted connections, required for tls:// connections configured with StreamNodeConfig",
+        "ext-lz4": "Native LZ4 (de)compression, used automatically when present for much faster compressed connections; a pure-PHP implementation is the transparent fallback",
+        "ext-gmp": "Faster large-integer math for the Varint and Decimal types, preferred over bcmath when both are present; a pure-PHP calculator is the fallback",
+        "ext-bcmath": "Faster large-integer math for the Varint and Decimal types, used when gmp is not present; a pure-PHP calculator is the fallback"
     },
     "require-dev": {
         "ext-bcmath": "*",
