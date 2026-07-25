@@ -9,7 +9,7 @@ final class SchemaChangeData extends EventData {
         public readonly SchemaChangeType $changeType,
         public readonly SchemaChangeTarget $target,
         public readonly string $keyspace,
-        public readonly string $name,
+        public readonly ?string $name = null,
 
         /** @var ?string[] $argumentTypes */
         public readonly ?array $argumentTypes = null,

@@ -93,6 +93,11 @@ final class SchemaChangeResult extends Result {
         $argumentTypes = null;
 
         switch ($target) {
+            case SchemaChangeTarget::KEYSPACE:
+                $name = null;
+
+                break;
+
             case SchemaChangeTarget::TABLE:
             case SchemaChangeTarget::TYPE:
                 $name = $this->stream->readString();
@@ -105,12 +110,6 @@ final class SchemaChangeResult extends Result {
                 $argumentTypes = $this->stream->readStringList();
 
                 break;
-
-            default:
-                throw new ResponseException('Invalid schema change target', ExceptionCode::RESPONSE_SCHEMA_CHANGE_UNEXPECTED_TARGET_VALUE->value, [
-                    'operation' => 'SchemaChangeResult::getSchemaChangeData',
-                    'schema_change_target' => $target->value,
-                ]);
         }
 
         return new SchemaChangeData(
