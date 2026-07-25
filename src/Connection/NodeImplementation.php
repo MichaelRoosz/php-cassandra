@@ -101,7 +101,13 @@ abstract class NodeImplementation implements Node {
 
             $dataLength = strlen($data);
 
-            if ($this->readBufferOffset < $this->readBufferLength) {
+            if ($this->readBufferOffset === 0 && $this->readBufferLength > 0) {
+                // Nothing consumed yet (e.g. a large body arriving in pieces):
+                // append instead of rebuilding the buffer, which would copy the
+                // whole accumulated prefix on every partial read.
+                $this->readBuffer .= $data;
+                $this->readBufferLength += $dataLength;
+            } elseif ($this->readBufferOffset < $this->readBufferLength) {
                 $remainingLength = $this->readBufferLength - $this->readBufferOffset;
                 $this->readBuffer = substr($this->readBuffer, $this->readBufferOffset, $remainingLength) . $data;
                 $this->readBufferOffset = 0;
