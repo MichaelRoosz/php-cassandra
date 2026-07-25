@@ -55,7 +55,9 @@ final class Prepare extends Request {
     }
 
     public function getHash(): string {
-        return hash('sha256', $this->query . ($this->options->keyspace ?? ''));
+        // "\0" separates query and keyspace so that (query, keyspace) pairs like
+        // ("SELECT…x", "y") and ("SELECT…xy", "") cannot share a cache slot.
+        return hash('sha256', $this->query . "\0" . ($this->options->keyspace ?? ''));
     }
 
     public function getOptions(): PrepareOptions {
