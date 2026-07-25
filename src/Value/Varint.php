@@ -8,6 +8,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StringMathException;
 use Cassandra\Exception\ValueException;
 use Cassandra\StringMath\DecimalCalculator;
+use Cassandra\StringUtil;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\VarintEncodeOption;
@@ -26,7 +27,7 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
             return;
         }
 
-        $isInteger = str_starts_with($value, '-') ? ctype_digit(substr($value, 1)) : ctype_digit($value);
+        $isInteger = str_starts_with($value, '-') ? StringUtil::isDigits(substr($value, 1)) : StringUtil::isDigits($value);
         if (!$isInteger) {
             throw new ValueException('Invalid varint value; expected int or integer string', ExceptionCode::VALUE_VARINT_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),

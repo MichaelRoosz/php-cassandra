@@ -7,6 +7,7 @@ namespace Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
+use Cassandra\StringUtil;
 
 final class Native extends DecimalCalculator {
     /**
@@ -15,7 +16,7 @@ final class Native extends DecimalCalculator {
     #[\Override]
     public function add1(string $decimal): string {
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
@@ -52,7 +53,7 @@ final class Native extends DecimalCalculator {
     #[\Override]
     public function addUnsignedInt8(string $decimal, int $addend): string {
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
@@ -106,7 +107,7 @@ final class Native extends DecimalCalculator {
             ];
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
@@ -152,7 +153,7 @@ final class Native extends DecimalCalculator {
             return '0';
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,
@@ -194,7 +195,7 @@ final class Native extends DecimalCalculator {
             return '0';
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_NATIVE_INVALID_DECIMAL->value,

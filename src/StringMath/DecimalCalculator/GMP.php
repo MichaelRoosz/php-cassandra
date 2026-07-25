@@ -7,6 +7,7 @@ namespace Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
+use Cassandra\StringUtil;
 use GMP as GMPValue;
 
 use function gmp_add, gmp_init, gmp_mul, gmp_strval, gmp_sub, gmp_intval, gmp_div_qr;
@@ -30,7 +31,7 @@ final class GMP extends DecimalCalculator {
     #[\Override]
     public function add1(string $decimal): string {
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
@@ -49,7 +50,7 @@ final class GMP extends DecimalCalculator {
     #[\Override]
     public function addUnsignedInt8(string $decimal, int $addend): string {
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
@@ -86,7 +87,7 @@ final class GMP extends DecimalCalculator {
             ];
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
@@ -113,7 +114,7 @@ final class GMP extends DecimalCalculator {
             return '0';
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,
@@ -137,7 +138,7 @@ final class GMP extends DecimalCalculator {
             return '0';
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_GMP_INVALID_DECIMAL->value,

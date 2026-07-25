@@ -16,6 +16,17 @@ use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\VectorInfo;
 
+/**
+ * Parser for the Java class name strings Cassandra uses to describe column types
+ * (org.apache.cassandra.db.marshal.*).
+ *
+ * The grammar is ASCII-only: Cassandra's own TypeParser.isIdentifierChar() accepts
+ * exactly [0-9a-zA-Z-+._&], plus "(", ")", ",", ":" as structure and space/tab/newline
+ * as separators. Non-ASCII UDT type and field names are hex-encoded precisely so that
+ * they can round-trip through that grammar. This parser is therefore byte-oriented and
+ * needs no mbstring; the only place arbitrary bytes can appear is after hex-decoding a
+ * UDT name, which decodeUdtName() validates as UTF-8.
+ */
 final class TypeNameParser {
     /**
      * @var ?array<string, \Cassandra\Type>
@@ -27,7 +38,7 @@ final class TypeNameParser {
      */
     public function parse(string $typeString, bool $isFrozen = false): TypeInfo {
 
-        $firstBracketIndex = mb_strpos($typeString, '(');
+        $firstBracketIndex = strpos($typeString, '(');
         if ($firstBracketIndex === false) {
 
             if (str_contains($typeString, ')')) {
@@ -45,8 +56,8 @@ final class TypeNameParser {
             $params = [];
 
         } else {
-            $typeName = trim(mb_substr($typeString, 0, $firstBracketIndex));
-            $paramString = trim(mb_substr($typeString, $firstBracketIndex + 1));
+            $typeName = trim(substr($typeString, 0, $firstBracketIndex));
+            $paramString = trim(substr($typeString, $firstBracketIndex + 1));
 
             if (!str_ends_with($paramString, ')')) {
                 throw new TypeNameParserException(
@@ -61,7 +72,7 @@ final class TypeNameParser {
                 );
             }
 
-            $paramStringWithoutLastBracket = mb_substr($paramString, 0, -1);
+            $paramStringWithoutLastBracket = substr($paramString, 0, -1);
 
             $params = $this->extractParams($paramStringWithoutLastBracket);
         }
@@ -135,7 +146,7 @@ final class TypeNameParser {
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     private function decodeUdtName(string $name): string {
-        if ($name !== '' && ((strlen($name) % 2) !== 0 || !ctype_xdigit($name))) {
+        if ($name !== '' && ((strlen($name) % 2) !== 0 || !StringUtil::isHexDigits($name))) {
             throw new TypeNameParserException(
                 'Invalid UDT type params: name is not hex-encoded',
                 ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value,
@@ -148,7 +159,7 @@ final class TypeNameParser {
 
         $decoded = $name === '' ? '' : hex2bin($name);
 
-        if ($decoded === false || !mb_check_encoding($decoded, 'UTF-8')) {
+        if ($decoded === false || preg_match('//u', $decoded) !== 1) {
             throw new TypeNameParserException(
                 'Invalid UDT type params: name does not decode to valid UTF-8',
                 ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value,
@@ -179,7 +190,7 @@ final class TypeNameParser {
 
         $params = [];
 
-        $length = mb_strlen($paramString);
+        $length = strlen($paramString);
         if ($length === 0) {
             return $params;
         }
@@ -189,7 +200,7 @@ final class TypeNameParser {
         $bracketsOpened = 0;
 
         for ($i = 0; $i < $length; $i++) {
-            $char = mb_substr($paramString, $i, 1);
+            $char = $paramString[$i];
 
             if ($char === '(') {
                 $bracketsOpened++;
@@ -235,14 +246,14 @@ final class TypeNameParser {
                     );
                 }
 
-                $name = trim(mb_substr($paramString, $startCurrentParam, $i - $startCurrentParam));
+                $name = trim(substr($paramString, $startCurrentParam, $i - $startCurrentParam));
                 $startCurrentParam = $i + 1;
             }
 
             if ($char === ',') {
                 $params[] = [
                     'name' => $name,
-                    'value' => trim(mb_substr($paramString, $startCurrentParam, $i - $startCurrentParam)),
+                    'value' => trim(substr($paramString, $startCurrentParam, $i - $startCurrentParam)),
                 ];
                 $name = null;
 
@@ -265,7 +276,7 @@ final class TypeNameParser {
         if ($startCurrentParam < $length) {
             $params[] = [
                 'name' => $name,
-                'value' => trim(mb_substr($paramString, $startCurrentParam)),
+                'value' => trim(substr($paramString, $startCurrentParam)),
             ];
         }
 

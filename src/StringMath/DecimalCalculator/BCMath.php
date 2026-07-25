@@ -7,6 +7,7 @@ namespace Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StringMathException;
 use Cassandra\StringMath\DecimalCalculator;
+use Cassandra\StringUtil;
 use DivisionByZeroError;
 
 use function bcadd, bcdiv, bcmod, bcmul, bcsub;
@@ -30,7 +31,7 @@ final class BCMath extends DecimalCalculator {
     #[\Override]
     public function add1(string $decimal): string {
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
@@ -47,7 +48,7 @@ final class BCMath extends DecimalCalculator {
     #[\Override]
     public function addUnsignedInt8(string $decimal, int $addend): string {
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
@@ -82,7 +83,7 @@ final class BCMath extends DecimalCalculator {
             ];
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
@@ -114,7 +115,7 @@ final class BCMath extends DecimalCalculator {
             return '0';
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
@@ -136,7 +137,7 @@ final class BCMath extends DecimalCalculator {
             return '0';
         }
 
-        if (!ctype_digit($decimal)) {
+        if (!StringUtil::isDigits($decimal)) {
             throw new StringMathException(
                 'Invalid decimal string',
                 ExceptionCode::STRINGMATH_BCMATH_INVALID_DECIMAL->value,
