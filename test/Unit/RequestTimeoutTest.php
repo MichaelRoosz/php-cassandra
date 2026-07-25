@@ -9,6 +9,7 @@ use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\RequestException;
 use Cassandra\Exception\RequestTimeoutException;
 use Cassandra\Exception\StatementException;
 use Cassandra\Request\Options\QueryOptions;
@@ -59,6 +60,35 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             }
 
             $this->assertCount(3, $this->orphanedStreamsOf($connection));
+        }
+    }
+
+    public function testAnExpiredBudgetIsReportedWithoutWaitingOutAnotherTransportTimeout(): void {
+        // The budget is long gone by the time the caller starts waiting, so
+        // there is nothing left to wait for: reporting it must not first block
+        // in a read until the transport's much longer stall window is over.
+        $connection = $this->connect(
+            'defer-slow',
+            delaySeconds: 30.0,
+            requestTimeoutInSeconds: 0.5,
+            receiveTimeoutSeconds: 5.0,
+        );
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW');
+        usleep(1_000_000);
+
+        $start = microtime(true);
+
+        try {
+            $connection->waitForStatements([$statement]);
+            $this->fail('expected the request timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $this->assertSame([$statement], $e->getTimedOutStatements());
+            $this->assertLessThan(
+                2.0,
+                microtime(true) - $start,
+                'an already expired budget must not cost another transport stall window'
+            );
         }
     }
 
@@ -149,6 +179,28 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertFalse($statement->isTimedOut(), 'the statement still has budget left');
         $this->assertSame([], $this->orphanedStreamsOf($connection));
         $this->assertTrue($connection->isConnected());
+    }
+
+    public function testAWaitBoundOfZeroDoesNotBlockOnTheTransport(): void {
+        // A bound of 0 asks for a look, not a wait: it costs one read, but a
+        // non-blocking one, so it must return long before the transport's stall
+        // window is over.
+        $connection = $this->connect(
+            'defer-slow',
+            delaySeconds: 30.0,
+            requestTimeoutInSeconds: 30.0,
+            receiveTimeoutSeconds: 5.0,
+        );
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW');
+
+        $start = microtime(true);
+        $connection->waitForStatements([$statement], timeoutInSeconds: 0.0);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertLessThan(2.0, $elapsed, 'a bound of 0 must not wait on the transport');
+        $this->assertFalse($statement->isResultReady());
+        $this->assertFalse($statement->isTimedOut(), 'the statement still has its full budget');
     }
 
     public function testDeadConnectionIsDetectedByTheHeartbeatLongBeforeTheRequestTimeout(): void {
@@ -332,6 +384,33 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testStreamIdIsReclaimedWhenARequestCannotBeEncoded(): void {
+        // A request that fails to encode never reaches the node, so its stream
+        // id was never in use. Keeping it would burn one id of the pool per
+        // failure until the connection is replaced.
+        $connection = $this->connect('idle');
+
+        $options = new QueryOptions(autoPrepare: false);
+
+        $before = $this->recycledStreamCountOf($connection);
+
+        for ($i = 0; $i < 3; $i++) {
+            try {
+                $connection->query('SELECT * FROM quick WHERE id = ?', [new \stdClass()], options: $options);
+                $this->fail('expected the request to fail encoding');
+            } catch (RequestException $e) {
+                $this->assertSame(ExceptionCode::REQUEST_VALUES_UNSUPPORTED_VALUE_TYPE->value, $e->getCode());
+            }
+        }
+
+        $this->assertSame($before + 3, $this->recycledStreamCountOf($connection), 'each unused stream id must go back into the pool');
+
+        $this->assertTrue($connection->isConnected(), 'the connection is fine — nothing reached the node');
+        $this->assertSame([], $this->orphanedStreamsOf($connection), 'an unsent request is not an unanswered one');
+
+        $connection->query('SELECT * FROM quick');
+    }
+
     public function testStreamIdOfATimedOutStatementIsReclaimedWhenTheLateAnswerArrives(): void {
         $connection = $this->connect('defer-slow', delaySeconds: 2.0, requestTimeoutInSeconds: 0.5);
 
@@ -477,6 +556,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $orphaned = (new ReflectionProperty(Connection::class, 'orphanedStreams'))->getValue($connection);
 
         return $orphaned;
+    }
+
+    private function recycledStreamCountOf(Connection $connection): int {
+        /** @var \SplQueue<int> $recycled */
+        $recycled = (new ReflectionProperty(Connection::class, 'recycledStreams'))->getValue($connection);
+
+        return count($recycled);
     }
 
     private function startServer(string $mode, float $delaySeconds): int {

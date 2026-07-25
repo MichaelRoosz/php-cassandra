@@ -223,9 +223,11 @@ final class Statement {
     }
 
     /**
-     * Whether the connection was closed before this statement was answered, in
-     * which case it can never be resolved and any attempt to read its result
-     * fails immediately instead of waiting for an answer that cannot arrive.
+     * Whether this statement was given up on before it was answered — the
+     * connection was closed, or a follow-up request it needed never reached the
+     * node — in which case it can never be resolved and any attempt to read its
+     * result fails immediately instead of waiting for an answer that cannot
+     * arrive.
      */
     public function isAbandoned(): bool {
         return $this->status === StatementStatus::ABANDONED;

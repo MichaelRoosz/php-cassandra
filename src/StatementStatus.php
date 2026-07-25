@@ -14,9 +14,10 @@ namespace Cassandra;
  */
 enum StatementStatus: int {
     /**
-     * The connection carrying this statement was closed before the answer
-     * arrived, so the stream id it was waiting on no longer refers to it and
-     * the statement can never be resolved.
+     * The stream id this statement was waiting on no longer refers to it, so it
+     * can never be resolved: either the connection carrying it was closed
+     * before the answer arrived, or a follow-up request it needed (a
+     * repreparation, an auto-prepared execute) failed to reach the node.
      */
     case ABANDONED = 800;
 

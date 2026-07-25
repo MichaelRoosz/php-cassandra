@@ -111,6 +111,14 @@ final class Connection {
     private ResponseReader $responseReader;
 
     /**
+     * Whether a heartbeat is currently being sent. Sending one can wait for a
+     * stream id to come free, which reads responses, which checks the heartbeat
+     * again — this keeps that from starting a second probe before the first one
+     * has been recorded as pending.
+     */
+    private bool $sendingHeartbeat = false;
+
+    /**
      * @var array<int, Statement> $statements keyed by the stream id each was sent on
      */
     private array $statements = [];
@@ -508,6 +516,8 @@ final class Connection {
     }
 
     /**
+     * Wait for this statement's answer and return it.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -527,11 +537,17 @@ final class Connection {
 
         $this->assertStatementIsResolvable($statement);
 
-        return $this->getNextResponseForStream(
+        $response = $this->getNextResponseForStream(
             streamId: $statement->getStreamId(),
             requestTimeoutInSeconds: $statement->getRequestTimeout(),
             statement: $statement,
         );
+
+        if ($response instanceof Response\Error) {
+            throw $response->getException();
+        }
+
+        return $response;
     }
 
     /**
@@ -841,8 +857,31 @@ final class Connection {
         $streamId = $this->getNewStreamId();
         $request->setStream($streamId);
 
+        $writeSucceeded = false;
+        $nodeFailed = false;
+
         try {
             $node->writeRequest($request);
+            $writeSucceeded = true;
+        } catch (NodeException $e) {
+            $nodeFailed = true;
+
+            $this->handleNodeException($node);
+
+            throw $e;
+        } finally {
+            if (!$writeSucceeded && !$nodeFailed) {
+                // Nothing reached the node — an unencodable request, say — so
+                // the stream id was never in use and goes straight back into
+                // circulation; leaving it behind would burn one id of the pool
+                // per failure for the lifetime of the connection. A node
+                // failure needs no such care, because it takes the whole pool
+                // with it.
+                $this->recycledStreams->enqueue($streamId);
+            }
+        }
+
+        try {
             $response = $this->getNextResponseForStream(
                 streamId: $streamId,
                 requestTimeoutInSeconds: $requestTimeoutInSeconds,
@@ -1046,9 +1085,9 @@ final class Connection {
      * statement that runs out of its own budget is given up on and raises a
      * RequestTimeoutException instead.
      *
-     * Even 0 costs one read on the transport, so it can block for as long as
-     * the transport's receive timeout; for a look that never blocks at all, use
-     * {@see self::tryResolveStatements()}.
+     * A timeout of 0 still costs one read, but a non-blocking one, so it does
+     * not wait on the transport either; {@see self::tryResolveStatements()} is
+     * the equivalent that never touches a deadline at all.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1080,7 +1119,13 @@ final class Connection {
                     $this->reportTimedOutStatements($expired, 'waitForAllPendingStatements');
                 }
 
-                return;
+                // As in waitForStatements(): only the caller's own bound ends
+                // the wait. A statement deadline firing without anything having
+                // expired means that statement was answered in the same pass,
+                // which is no reason to stop waiting for the rest.
+                if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                    return;
+                }
             }
         }
     }
@@ -1099,9 +1144,9 @@ final class Connection {
      * are untouched and can still be waited on. A statement that runs out of
      * its own budget is given up on and raises a RequestTimeoutException.
      *
-     * Even 0 costs one read on the transport, so it can block for as long as
-     * the transport's receive timeout; for a look that never blocks at all, use
-     * {@see self::tryResolveStatements()}.
+     * A timeout of 0 still costs one read, but a non-blocking one, so it does
+     * not wait on the transport either; {@see self::tryResolveStatements()} is
+     * the equivalent that never touches a deadline at all.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1168,8 +1213,9 @@ final class Connection {
      *   INF   wait for as long as it takes
      *
      * Returns null when the time is up without an event, leaving the connection
-     * usable. Even 0 costs one read on the transport; for a look that never
-     * blocks at all, use {@see self::tryReadNextEvent()}.
+     * usable. A timeout of 0 still costs one read, but a non-blocking one, so
+     * it does not wait on the transport either; {@see self::tryReadNextEvent()}
+     * is the equivalent that never touches a deadline at all.
      *
      * Requests already in flight keep their own deadlines while this waits, and
      * one that runs out is given up on here. It is not raised here, though: an
@@ -1200,21 +1246,24 @@ final class Connection {
             $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
 
             $event = $this->readResponseUntil($deadline, $deadlineExceeded);
-            if ($event instanceof Response\Event) {
-                return $event;
-            }
 
             $this->checkHeartbeat();
 
             if ($deadlineExceeded) {
-                // As in waitForNextResponse(): requests that ran out are finished
-                // here, but an event listener is not the one who asked about
-                // them, so its loop is not interrupted for them.
+                // Requests that ran out are finished here, but an event listener
+                // is not the one who asked about them, so its loop is not
+                // interrupted for them; the caller finds out from the statement.
+                // This runs before the event is handed back so that an overdue
+                // request is still given up on in the pass that brought one.
                 $this->timeOutExpiredStatements();
+            }
 
-                if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
-                    return null;
-                }
+            if ($event instanceof Response\Event) {
+                return $event;
+            }
+
+            if ($deadlineExceeded && $waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                return null;
             }
         }
     }
@@ -1229,9 +1278,16 @@ final class Connection {
      *   n     wait at most n seconds
      *   INF   wait for as long as it takes
      *
+     * Null means the connection's request timeout here, rather than "no bound"
+     * as it does in the waits that take statements: those are bounded by the
+     * budgets of the statements they were given, and this call has none to go
+     * by. Pass INF for a wait that only ends when something arrives.
+     *
      * Returns null when the time is up with nothing having arrived and nothing
-     * overdue. Even 0 costs one read on the transport; for a look that never
-     * blocks at all, use {@see self::tryReadNextResponse()}.
+     * overdue. A timeout of 0 still costs one read, but a non-blocking one, so
+     * it does not wait on the transport either;
+     * {@see self::tryReadNextResponse()} is the equivalent that never touches a
+     * deadline at all.
      *
      * Requests already in flight keep their own deadlines while this waits, and
      * one that runs out is given up on here. It is not raised here, though: the
@@ -1261,9 +1317,6 @@ final class Connection {
             $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
 
             $response = $this->readResponseUntil($deadline, $deadlineExceeded);
-            if ($response !== null) {
-                return $response;
-            }
 
             $this->checkHeartbeat();
 
@@ -1273,12 +1326,18 @@ final class Connection {
                 // so that is not this call's failure to report: they find out
                 // from the statement. Nothing came, which is not a failure at
                 // all — the connection and its other requests are untouched and
-                // the wait can simply be repeated.
+                // the wait can simply be repeated. This runs before the response
+                // is handed back so that an overdue request is still given up on
+                // in the pass that brought one.
                 $this->timeOutExpiredStatements();
+            }
 
-                if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
-                    return null;
-                }
+            if ($response !== null) {
+                return $response;
+            }
+
+            if ($deadlineExceeded && $waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                return null;
             }
         }
     }
@@ -1297,9 +1356,9 @@ final class Connection {
      * isResultReady() when passing a timeout. A statement that runs out of its
      * own budget is given up on and raises a RequestTimeoutException instead.
      *
-     * Even 0 costs one read on the transport, so it can block for as long as
-     * the transport's receive timeout; for a look that never blocks at all, use
-     * {@see self::tryResolveStatements()}.
+     * A timeout of 0 still costs one read, but a non-blocking one, so it does
+     * not wait on the transport either; {@see self::tryResolveStatements()} is
+     * the equivalent that never touches a deadline at all.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1395,12 +1454,12 @@ final class Connection {
 
         if ($statement->isAbandoned()) {
             throw new StatementException(
-                'The connection this statement was sent on was closed before the answer arrived, so it can no longer be resolved. Send the request again.',
+                'This statement was given up on before the answer arrived — the connection it was sent on was closed, or a follow-up request of its own never reached the node — so it can no longer be resolved. Send the request again.',
                 ExceptionCode::STATEMENT_ABANDONED->value,
                 [
                     'stream_id' => $statement->getStreamId(),
                     'request_class' => get_class($statement->getRequest()),
-                    'reason' => 'connection_closed',
+                    'reason' => 'connection_closed_or_request_not_sent',
                 ]
             );
         }
@@ -1460,13 +1519,38 @@ final class Connection {
             ]);
         }
 
+        // The statement is not among the pending ones at this point: the
+        // response that triggered the follow-up took it out of the map. Nothing
+        // else would mark it if the write fails, so it is done here — a
+        // statement left neither pending nor finished would wait on a stream id
+        // that the next connection may well hand to somebody else, and would be
+        // resolved by that request's answer.
+        $writeSucceeded = false;
+        $nodeFailed = false;
+
         try {
             $node->writeRequest($request);
+            $writeSucceeded = true;
+
             $this->nodeHealth->recordSuccess($node->getConfig());
         } catch (NodeException $e) {
+            $nodeFailed = true;
+
             $this->handleNodeException($node);
 
             throw $e;
+        } finally {
+            if (!$writeSucceeded) {
+                $statement->setStatus(StatementStatus::ABANDONED);
+
+                if (!$nodeFailed) {
+                    // Nothing reached the node, so the connection is fine and
+                    // the stream id was never in use: it goes back into
+                    // circulation instead of being burned. A node failure needs
+                    // no such care, because it takes the whole pool with it.
+                    $this->recycledStreams->enqueue($streamId);
+                }
+            }
         }
 
         $this->statements[$streamId] = $statement;
@@ -1492,8 +1576,13 @@ final class Connection {
      * This runs while waiting for a response as well as while waiting for
      * events, because the protocol multiplexes stream ids: the heartbeat is
      * answered on its own stream while a slow request is still being computed,
-     * so a dead connection is caught in interval + timeout no matter how
-     * generous the request timeout is.
+     * so a dead connection is caught in roughly interval + timeout no matter
+     * how generous the request timeout is. Roughly, because this is only
+     * reached between reads: a connection that has gone completely silent
+     * blocks the client in a read until the transport's stall window is over,
+     * so both the interval and the timeout are judged at that granularity —
+     * see {@see \Cassandra\Connection\SocketNodeConfig::__construct()} and
+     * {@see \Cassandra\Connection\StreamNodeConfig::__construct()}.
      *
      * The probe is the driver's own request, not the caller's, so it is held to
      * the heartbeat timeout alone: it is deliberately left out of the request
@@ -1521,7 +1610,7 @@ final class Connection {
 
         // The handshake itself waits for responses, but until it is through
         // the node accepts nothing besides the handshake requests.
-        if ($interval === null || !$this->handshakeComplete) {
+        if ($interval === null || !$this->handshakeComplete || $this->sendingHeartbeat) {
             return;
         }
 
@@ -1564,8 +1653,16 @@ final class Connection {
             return;
         }
 
-        $this->pendingHeartbeat = $this->sendAsyncRequest(new Request\Options());
-        $this->pendingHeartbeatSentAt = $now;
+        $this->sendingHeartbeat = true;
+
+        try {
+            // Anchored before the send: it may have to wait for a stream id to
+            // come free, and that waiting is time the node had to answer in.
+            $this->pendingHeartbeatSentAt = microtime(true);
+            $this->pendingHeartbeat = $this->sendAsyncRequest(new Request\Options());
+        } finally {
+            $this->sendingHeartbeat = false;
+        }
     }
 
     /**
@@ -1921,24 +2018,38 @@ final class Connection {
         // anchored once, now. A statement's own anchor is read per pass below.
         $sentAt = microtime(true);
 
-        do {
+        while (true) {
             // The deadline is recomputed every pass rather than taken once: a
             // chained follow-up request (repreparation, auto-prepare) restarts
             // the statement's budget, and a deadline captured before the loop
             // would hold that new request to the budget of the one it replaced.
-            $deadline = $this->deadlineFor($requestTimeoutInSeconds, $statement?->getSentAt() ?? $sentAt);
+            $ownDeadline = $this->deadlineFor($requestTimeoutInSeconds, $statement?->getSentAt() ?? $sentAt);
+
+            // The other requests in flight keep their own budgets while this
+            // one waits, so one of them going overdue is noticed here too
+            // rather than only whenever its caller next waits on it.
+            $deadline = $this->earlierDeadline($ownDeadline, $this->deadlineForStatements($this->statements));
 
             $response = $this->readResponseUntil($deadline, $deadlineExceeded);
 
             $this->checkHeartbeat();
 
+            if ($response !== null && $response->getStream() === $streamId) {
+                return $response;
+            }
+
             if ($deadlineExceeded) {
+                // The deadline that fired may well belong to another request,
+                // so everything overdue is given up on first and only then is
+                // it decided whether this request is among them.
+                $expired = $this->timeOutExpiredStatements();
+
                 $budgetWasRestarted = false;
 
                 if ($statement !== null) {
-                    $expired = $this->intersectStatements($this->timeOutExpiredStatements(), [$statement]);
-                    if ($expired !== []) {
-                        $this->reportTimedOutStatements($expired, 'getResponseForStatement');
+                    $mine = $this->intersectStatements($expired, [$statement]);
+                    if ($mine !== []) {
+                        $this->reportTimedOutStatements($mine, 'getResponseForStatement');
                     }
 
                     // Still waiting and not overdue after all, so its budget was
@@ -1947,7 +2058,11 @@ final class Connection {
                     $budgetWasRestarted = isset($this->statements[$streamId]);
                 }
 
-                if (!$budgetWasRestarted) {
+                if (
+                    !$budgetWasRestarted
+                    && $ownDeadline !== null
+                    && microtime(true) >= $ownDeadline
+                ) {
                     $this->timeOutStream(
                         $streamId,
                         $statement === null ? 'syncRequest' : 'getResponseForStatement',
@@ -1957,9 +2072,7 @@ final class Connection {
                     );
                 }
             }
-        } while ($response === null || $response->getStream() !== $streamId);
-
-        return $response;
+        }
     }
 
     /**
@@ -2379,7 +2492,8 @@ final class Connection {
     }
 
     /**
-     * Blocking read bounded by $deadline rather than by the transport timeout.
+     * One read, with $deadline rather than the transport timeout deciding when
+     * the wait is over.
      *
      * A transport read timeout only means that the connection was silent for
      * its stall window. The response reader keeps any partially consumed frame,
@@ -2388,8 +2502,18 @@ final class Connection {
      * nothing to report, has waited long enough. That decision belongs to
      * $deadline, an absolute microtime; null waits indefinitely.
      *
+     * The transport still bounds how long a single read blocks, so a read is
+     * only allowed to block while there is budget left: once $deadline has
+     * passed the read is made non-blocking, which keeps a deadline that is
+     * already in the past — an expired statement, or a caller waiting with a
+     * timeout of 0 — from costing another full stall window. Whatever has
+     * already arrived is consumed either way, so an answer sitting in the
+     * buffer resolves the wait instead of being reported as overdue.
+     *
      * Returns null when no complete response was available, with
-     * $deadlineExceeded telling the caller whether the wait may continue.
+     * $deadlineExceeded telling the caller whether the wait may continue. The
+     * two are independent: a response for some other request may well arrive
+     * after this one's deadline has passed, and the caller has to act on both.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -2406,8 +2530,10 @@ final class Connection {
 
         $node = $this->getConnectedNode();
 
+        $waitForResponse = $deadline === null || microtime(true) < $deadline;
+
         try {
-            $response = $this->responseReader->readResponse($node, $this->version, waitForResponse: true);
+            $response = $this->responseReader->readResponse($node, $this->version, $waitForResponse);
         } catch (NodeException $e) {
             if (!$e->isReadTimeout()) {
                 $this->handleNodeException($node);
@@ -2418,11 +2544,15 @@ final class Connection {
             $response = null;
         }
 
-        if ($response === null) {
-            if ($deadline !== null && microtime(true) >= $deadline) {
-                $deadlineExceeded = true;
-            }
+        // Checked after the read as well as before it: a blocking read only
+        // returns once the transport's stall window is over, which may be long
+        // after the deadline, and a connection busy answering other requests
+        // must not keep an overdue one from ever being noticed.
+        if ($deadline !== null && microtime(true) >= $deadline) {
+            $deadlineExceeded = true;
+        }
 
+        if ($response === null) {
             return null;
         }
 
@@ -2518,13 +2648,13 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function sendAsyncRequest(Request\Request $request, ?int $streamId = null, ?float $requestTimeoutInSeconds = null): Statement {
+    private function sendAsyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Statement {
 
         $node = $this->getConnectedNode();
 
         $request->setVersion($this->version);
 
-        $streamId = $streamId ?? $this->getNewStreamId();
+        $streamId = $this->getNewStreamId();
         $request->setStream($streamId);
 
         if ($request instanceof Request\Prepare) {
@@ -2562,13 +2692,30 @@ final class Connection {
             ]);
         }
 
+        $writeSucceeded = false;
+        $nodeFailed = false;
+
         try {
             $node->writeRequest($request);
+            $writeSucceeded = true;
+
             $this->nodeHealth->recordSuccess($node->getConfig());
         } catch (NodeException $e) {
+            $nodeFailed = true;
+
             $this->handleNodeException($node);
 
             throw $e;
+        } finally {
+            if (!$writeSucceeded && !$nodeFailed) {
+                // Nothing reached the node — an unencodable request, say — so
+                // the stream id was never in use and goes straight back into
+                // circulation; leaving it behind would burn one id of the pool
+                // per failure for the lifetime of the connection. A node
+                // failure needs no such care, because it takes the whole pool
+                // with it.
+                $this->recycledStreams->enqueue($streamId);
+            }
         }
 
         $statement = new Statement(
