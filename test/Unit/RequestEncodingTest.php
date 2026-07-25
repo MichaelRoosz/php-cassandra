@@ -69,6 +69,78 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testBindValuesMatchMarkerNamesCaseInsensitively(): void {
+        $markers = [self::columnInfo('userid'), self::columnInfo('name')];
+
+        $encoded = self::testableRequest()->encodeValuesForBindMarkers(
+            ['userId' => 5, 'Name' => 7],
+            $markers,
+            namesForValues: true
+        );
+
+        $this->assertSame(['userid', 'name'], array_keys($encoded));
+        $this->assertInstanceOf(\Cassandra\Value\Int32::class, $encoded['userid']);
+        $this->assertSame(5, $encoded['userid']->getValue());
+    }
+
+    public function testDuplicateNamedBindMarkerThrows(): void {
+        // Two markers reported under the same name would otherwise collapse into
+        // a single value entry, silently sending fewer values than the statement
+        // has markers.
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            ['a' => 5],
+            [self::columnInfo('a'), self::columnInfo('a')],
+            namesForValues: true
+        );
+    }
+
+    public function testEncodedValueNamesFromBindMarkersKeepExactCase(): void {
+        // A quoted identifier like "userId" is case-sensitive; the name reported
+        // by the server must be sent back unchanged.
+        $binary = self::testableRequest()->encodeValuesAsBinary(
+            ['userId' => new \Cassandra\Value\Int32(1)],
+            namesForValues: true,
+            namesAreExact: true
+        );
+
+        $this->assertStringContainsString("\x00\x06userId", $binary);
+    }
+
+    public function testExplicitNullBindValueIsAccepted(): void {
+        $encoded = self::testableRequest()->encodeValuesForBindMarkers(
+            ['userid' => null],
+            [self::columnInfo('userid')],
+            namesForValues: true
+        );
+
+        $this->assertSame(['userid' => null], $encoded);
+    }
+
+    public function testMissingNamedBindValueThrows(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_MISSING_BIND_VALUE->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            ['wrong_name' => 5],
+            [self::columnInfo('userid')],
+            namesForValues: true
+        );
+    }
+
+    public function testMissingPositionalBindValueThrows(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_MISSING_BIND_VALUE->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            [5],
+            [self::columnInfo('a'), self::columnInfo('b')],
+            namesForValues: false
+        );
+    }
+
     public function testQueryEncodesInInt32RangeIntAsFourBytes(): void {
         $request = new Query(
             query: 'INSERT INTO t (id) VALUES (?)',
@@ -170,6 +242,19 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $request->getBody();
     }
 
+    private static function columnInfo(string $name): \Cassandra\Response\Result\ColumnInfo {
+        return new \Cassandra\Response\Result\ColumnInfo(
+            keyspace: 'ks',
+            tableName: 't',
+            name: $name,
+            type: new \Cassandra\TypeInfo\SimpleTypeInfo(\Cassandra\Type::INT),
+        );
+    }
+
+    private static function testableRequest(): TestableBindMarkerRequest {
+        return new TestableBindMarkerRequest();
+    }
+
     private function unpackInt(string $format, string $bytes): int {
         $unpacked = unpack($format, $bytes);
 
@@ -177,5 +262,31 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->assertIsInt($unpacked[1]);
 
         return $unpacked[1];
+    }
+}
+
+/**
+ * Exposes the protected value-encoding helpers of {@see \Cassandra\Request\Request}
+ * for direct unit testing.
+ */
+final class TestableBindMarkerRequest extends \Cassandra\Request\Request {
+    public function __construct() {
+        parent::__construct(\Cassandra\Protocol\Opcode::REQUEST_QUERY);
+    }
+
+    /**
+     * @param array<mixed> $values
+     */
+    public function encodeValuesAsBinary(array $values, bool $namesForValues, bool $namesAreExact): string {
+        return $this->encodeQueryValuesAsBinary($values, $namesForValues, $namesAreExact);
+    }
+
+    /**
+     * @param array<mixed> $values
+     * @param array<\Cassandra\Response\Result\ColumnInfo> $bindMarkers
+     * @return array<mixed>
+     */
+    public function encodeValuesForBindMarkers(array $values, array $bindMarkers, bool $namesForValues): array {
+        return $this->encodeQueryValuesForBindMarkerTypes($values, $bindMarkers, $namesForValues);
     }
 }

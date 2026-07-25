@@ -123,7 +123,7 @@ final class Execute extends Request {
             $body .= pack('n', strlen($this->rowsMetadataId)) . $this->rowsMetadataId;
         }
 
-        $body .= self::encodeQueryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version);
+        $body .= self::encodeQueryParametersAsBinary($this->consistency, $this->values, $this->options, $this->version, namesAreExact: true);
 
         return $body;
     }

@@ -137,7 +137,8 @@ abstract class Request implements Frame, Stringable {
         Consistency $consistency,
         array $values = [],
         QueryOptions $options = new QueryOptions(),
-        ProtocolVersion $version = ProtocolVersion::V3
+        ProtocolVersion $version = ProtocolVersion::V3,
+        bool $namesAreExact = false
     ): string {
 
         $flags = 0;
@@ -145,7 +146,7 @@ abstract class Request implements Frame, Stringable {
 
         if ($values) {
             $flags |= QueryFlag::VALUES;
-            $optional .= self::encodeQueryValuesAsBinary($values, $options->namesForValues === true);
+            $optional .= self::encodeQueryValuesAsBinary($values, $options->namesForValues === true, $namesAreExact);
         }
 
         if (($options instanceof ExecuteOptions) && $options->skipMetadata) {
@@ -226,7 +227,7 @@ abstract class Request implements Frame, Stringable {
      *
      * @throws \Cassandra\Exception\RequestException
      */
-    protected function encodeQueryValuesAsBinary(array $values, bool $namesForValues = false): string {
+    protected function encodeQueryValuesAsBinary(array $values, bool $namesForValues = false, bool $namesAreExact = false): string {
         $valuesBinary = pack('n', count($values));
 
         /** @psalm-suppress MixedAssignment */
@@ -320,9 +321,12 @@ abstract class Request implements Frame, Stringable {
 
             if ($namesForValues) {
                 if (is_string($name)) {
-                    // strtolower is okay to use here, since column names are defined
-                    // as identifiers, which consist of: [A-Za-z0-9_]+.
-                    $valuesBinary .= pack('n', strlen($name)) . strtolower($name);
+                    // When the names come straight from the server's bind marker
+                    // metadata ($namesAreExact) they are sent unchanged — quoted
+                    // identifiers are case-sensitive. User-supplied names are
+                    // lowercased, matching how the server stores unquoted
+                    // identifiers.
+                    $valuesBinary .= pack('n', strlen($name)) . ($namesAreExact ? $name : strtolower($name));
                 } else {
                     throw new RequestException(
                         message: 'Invalid values format: sequential array provided while names_for_values=true expects associative array',
@@ -366,31 +370,90 @@ abstract class Request implements Frame, Stringable {
      * @param array<\Cassandra\Response\Result\ColumnInfo> $bindMarkers
      * @return array<mixed>
      *
+     * @throws \Cassandra\Exception\RequestException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
      */
     protected function encodeQueryValuesForBindMarkerTypes(array $values, array $bindMarkers, bool $namesForValues): array {
+
+        // Named values are matched to the server-reported bind marker names
+        // case-insensitively: unquoted identifiers are stored lowercase by the
+        // server, so a user-supplied key like "userId" must still bind to the
+        // marker "userid".
+        $valuesByLowercaseName = [];
+        if ($namesForValues) {
+            /** @psalm-suppress MixedAssignment */
+            foreach ($values as $name => $value) {
+                if (is_string($name)) {
+                    $valuesByLowercaseName[strtolower($name)] = $value;
+                }
+            }
+        }
+
         $encodedValues = [];
         foreach ($bindMarkers as $index => $bindMarker) {
 
             if ($namesForValues) {
                 $key = $bindMarker->name;
+
+                // Named encoding keys the resulting value set by marker name, so
+                // two markers sharing a name would collapse into one entry and
+                // silently send fewer values than the statement has markers.
+                // That is ambiguous (which value binds to which marker?), so
+                // reject it and point the caller at positional binding.
+                if (array_key_exists($key, $encodedValues)) {
+                    throw new RequestException(
+                        message: 'Duplicate bind marker name "' . $key . '"; named values cannot be bound unambiguously when a marker name repeats. Provide values as a positional (sequential) array instead.',
+                        code: ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value,
+                        context: [
+                            'stage' => 'values_encoding',
+                            'bind_marker' => $key,
+                        ]
+                    );
+                }
+
+                if (array_key_exists($key, $values)) {
+                    /** @psalm-suppress MixedAssignment */
+                    $value = $values[$key];
+                } elseif (array_key_exists(strtolower($key), $valuesByLowercaseName)) {
+                    /** @psalm-suppress MixedAssignment */
+                    $value = $valuesByLowercaseName[strtolower($key)];
+                } else {
+                    throw $this->missingBindValueException($key);
+                }
             } else {
                 $key = $index;
+
+                if (!array_key_exists($key, $values)) {
+                    throw $this->missingBindValueException($key);
+                }
+
+                /** @psalm-suppress MixedAssignment */
+                $value = $values[$key];
             }
 
-            if (!isset($values[$key])) {
-                $encodedValues[$key] = null;
-            } elseif (
-                ($values[$key] instanceof ValueBase)
-                || ($values[$key] instanceof NotSet)
+            if (
+                $value === null
+                || ($value instanceof ValueBase)
+                || ($value instanceof NotSet)
             ) {
-                $encodedValues[$key] = $values[$key];
+                $encodedValues[$key] = $value;
             } else {
-                $encodedValues[$key] = ValueFactory::getValueObjectFromValue($bindMarker->type, $values[$key]);
+                $encodedValues[$key] = ValueFactory::getValueObjectFromValue($bindMarker->type, $value);
             }
         }
 
         return $encodedValues;
+    }
+
+    private function missingBindValueException(int|string $key): RequestException {
+        return new RequestException(
+            message: 'Missing value for bind marker; provide a value for every bind marker (use null or Cassandra\\Value\\NotSet explicitly if intended)',
+            code: ExceptionCode::REQUEST_VALUES_MISSING_BIND_VALUE->value,
+            context: [
+                'stage' => 'values_encoding',
+                'bind_marker' => $key,
+            ]
+        );
     }
 }
