@@ -48,7 +48,7 @@ abstract class Response implements Frame, Stringable {
 
         return pack(
             'CCnCN',
-            $this->header->version,
+            $this->header->version->value | 0x80,
             $this->header->flags,
             $this->header->stream,
             $this->header->opcode->value,
