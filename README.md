@@ -1428,7 +1428,7 @@ Three different exceptions report a timeout, and they mean quite different thing
 | Exception | Raised by | Meaning | Node health |
 |---|---|---|---|
 | `ServerException\ReadTimeoutException` / `WriteTimeoutException` | the coordinator | the server hit *its own* `read_request_timeout` / `write_request_timeout` and said so | fine — it answered |
-| `RequestTimeoutException` | the client | the server never answered within `requestTimeoutInSeconds` | not blamed; the connection is closed but the node keeps its rating |
+| `RequestTimeoutException` | the client | the server never answered within `requestTimeoutInSeconds` | not blamed; the connection stays open and only the request that ran out is finished |
 | `SocketException` / `StreamException` (with a `SOCKET_TIMEOUT_DURING_*` / `STREAM_TIMEOUT_DURING_*` code) | the transport | the connection made no progress within the stall timeout | suspect — counted as a node failure |
 
 A `ConnectionException` naming the heartbeat is the fourth possibility: the connection went quiet and did not answer its `OPTIONS` probe, so it is treated as dead even though a request may still be outstanding.
@@ -1521,8 +1521,9 @@ function executeWithRetry(callable $operation, int $maxRetries = 3): mixed
             return $operation();
             
         // RequestTimeoutException belongs here too when the operation is safe to
-        // run twice: it closes the connection, but the next attempt reconnects
-        // on its own, and the node was not blamed for the timeout.
+        // run twice: the connection stays open and keeps its prepared
+        // statements, only the request that ran out is finished, and the node
+        // was not blamed for the timeout — so the retry costs no reconnect.
         } catch (UnavailableException | ReadTimeoutException | WriteTimeoutException | OverloadedException $e) {
             $attempt++;
             
@@ -1676,7 +1677,7 @@ $node = new SocketNodeConfig(
 );
 ```
 
-Both timeout components are honoured, so sub-second timeouts work (`['sec' => 0, 'usec' => 500000]` is half a second). Setting both to `0` disables the timeout, matching the meaning of the socket option itself; `connectTimeoutInSeconds` is separate and must stay positive, so an unreachable host can never wedge the client indefinitely.
+Both timeout components are honoured, so sub-second timeouts work (`['sec' => 0, 'usec' => 500000]` is half a second). Setting both to `0` disables the timeout, matching the meaning of the socket option itself — but see [Choosing timeout values](#choosing-timeout-values) before disabling the *receive* timeout, which is also what lets request timeouts and heartbeats be checked. `connectTimeoutInSeconds` is separate and must stay positive, so an unreachable host can never wedge the client indefinitely.
 
 ### Choosing timeout values
 
@@ -1714,7 +1715,17 @@ $conn->batch($batch);
 $conn->setRequestTimeout(120.0);
 ```
 
-`requestTimeoutInSeconds` is available on `QueryOptions`, `ExecuteOptions`, `BatchOptions` and `PrepareOptions`. Precedence runs from the most specific to the least: an explicit argument to `syncRequest()`, then the request's own options, then `setRequestTimeout()`, then `ConnectionOptions`.
+`requestTimeoutInSeconds` is available on `QueryOptions`, `ExecuteOptions`, `BatchOptions` and `PrepareOptions`. Precedence runs from the most specific to the least: an explicit argument to `syncRequest()` or `asyncRequest()`, then the request's own options, then `setRequestTimeout()`, then `ConnectionOptions`.
+
+The explicit argument bounds each request the call sends, not the call as a whole — when the driver has to prepare or reprepare the statement first, the `PREPARE` and the request it precedes each get the full budget:
+
+```php
+// The server may take up to 90s to answer, per request sent
+$conn->syncRequest(new Query('TRUNCATE big_table'), requestTimeoutInSeconds: 90.0);
+
+// The same override for an async statement, whose budget starts now
+$statement = $conn->asyncRequest(new Query('SELECT * FROM huge'), requestTimeoutInSeconds: 300.0);
+```
 
 The default of 30s is chosen to sit above Cassandra's own coordinator timeouts, so that the server answers with a proper error before the client gives up. Raise it for anything the server itself allows more time for, or that is bounded by data volume rather than by a server-side limit:
 
@@ -1753,7 +1764,7 @@ The default (`null`) is whatever makes sense for that wait:
 | `waitForNextResponse()` | the connection's request timeout. *Not* "as long as it takes": with nothing in flight no response can ever arrive, so such a wait would never end |
 | `waitForStatements()`, `waitForAnyStatement()`, `waitForAllPendingStatements()` | let the statements' own budgets bound the wait |
 
-Note that `0` is the shortest wait, not an unlimited one — the opposite of what it means for the *transport* timeouts, where `SO_RCVTIMEO => ['sec' => 0, 'usec' => 0]` disables the timeout because that is what the socket option itself means. Even `0` still costs one read on the transport; for a look that never blocks at all, use `tryReadNextEvent()` / `tryReadNextResponse()`.
+Note that `0` is the shortest wait, not an unlimited one — the opposite of what it means for the *transport* timeouts, where `SO_RCVTIMEO => ['sec' => 0, 'usec' => 0]` disables the timeout because that is what the socket option itself means. Even `0` still costs one read on the transport, which can block for as long as the transport's receive timeout; for a look that never blocks at all, use `tryReadNextEvent()` / `tryReadNextResponse()`, or `tryResolveStatement()` / `tryResolveStatements()` when waiting on statements.
 
 Every wait is bounded by whichever comes first, and a request that runs out of budget is given up on from *any* wait — so it cannot quietly outlive its budget while you are, say, listening for events. Which wait *reports* it is a separate matter: only a call that was asked about that request raises it. `waitForNextEvent()` and `waitForNextResponse()` were asked for the next event or response, not about any request in particular, so they run their course; the caller finds out when they next touch the statement, which then throws `RequestTimeoutException`.
 
@@ -1776,6 +1787,8 @@ Cassandra's own coordinator defaults are 5s for reads, 2s for writes, 10s for ra
 A `RequestTimeoutException` leaves the connection open and does **not** count the node as failed, so one expensive query neither drops your prepared statements nor pushes a healthy node out of rotation. Only the request that ran out of time is finished.
 
 Note that a deadline is only noticed once the read the client is blocked in returns, so the transport timeout is also the granularity of deadline detection: with the defaults, a request timeout against a completely silent server fires somewhere between 30s and 45s. Lower `SO_RCVTIMEO` / `timeoutInSeconds` if you need tighter deadlines.
+
+For the same reason, **do not disable the receive timeout**. `SO_RCVTIMEO => ['sec' => 0, 'usec' => 0]` and `timeoutInSeconds: 0` mean "block forever", so against a silent server the client never returns from the read — and a deadline that is never checked never fires, taking the request timeout *and* the heartbeat with it. Raise it rather than disable it.
 
 **The heartbeat** (`heartbeatIntervalInSeconds`, default 30s) is what distinguishes a dead connection from a quiet one — at the socket, a coordinator that is still thinking and a node that vanished look identical. Whenever the connection has been silent for the interval, an `OPTIONS` frame is sent; because stream ids are multiplexed, it is answered on its own stream while a slow request is still being computed. A broken connection therefore surfaces after roughly `heartbeatInterval + heartbeatTimeout` (~35s by default) as a `ConnectionException`, no matter how high the request timeout is — which is what makes generous request timeouts safe to set.
 

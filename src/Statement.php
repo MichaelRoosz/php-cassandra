@@ -24,14 +24,21 @@ final class Statement {
 
     private int $streamId;
 
-    public function __construct(Connection $connection, int $streamId, Request\Request $request, ?Request\Request $originalRequest = null) {
+    /**
+     * @param ?float $requestTimeoutInSeconds an explicit override from the
+     * caller, which wins over what the request's own options asked for. Null
+     * falls back to those, and then to the connection default.
+     */
+    public function __construct(Connection $connection, int $streamId, Request\Request $request, ?Request\Request $originalRequest = null, ?float $requestTimeoutInSeconds = null) {
         $this->connection = $connection;
         $this->streamId = $streamId;
         $this->request = $request;
         $this->originalRequest = $originalRequest ?? $request;
         $this->status = StatementStatus::CREATED;
         $this->sentAt = microtime(true);
-        $this->requestTimeout = $this->originalRequest->getRequestTimeout() ?? $request->getRequestTimeout();
+        $this->requestTimeout = $requestTimeoutInSeconds
+            ?? $this->originalRequest->getRequestTimeout()
+            ?? $request->getRequestTimeout();
     }
 
     public function getOriginalRequest(): Request\Request {

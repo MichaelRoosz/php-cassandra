@@ -12,6 +12,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\RequestTimeoutException;
 use Cassandra\Exception\StatementException;
 use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Request\Query;
 use Cassandra\Response\Event\StatusChangeEvent;
 use ReflectionProperty;
 
@@ -109,6 +110,29 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAsyncRequestTakesAPerCallTimeoutOverride(): void {
+        // The counterpart of the argument syncRequest() takes: the connection
+        // would allow 30s, the call asks for 1s for this statement alone.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
+
+        $statement = $connection->asyncRequest(
+            new Query('SELECT * FROM SLOW'),
+            requestTimeoutInSeconds: 1.0,
+        );
+
+        $this->assertSame(1.0, $statement->getRequestTimeout(), 'the override must win over the connection default');
+
+        $start = microtime(true);
+
+        try {
+            $connection->waitForStatements([$statement]);
+            $this->fail('expected the per-call timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $this->assertSame([$statement], $e->getTimedOutStatements());
+            $this->assertLessThan(10.0, microtime(true) - $start, 'the statement must be held to the overridden budget');
+        }
+    }
+
     public function testAWaitBoundEndsTheWaitWithoutTouchingTheStatements(): void {
         // The statement has a 30s budget but the caller only wants to wait 1s:
         // the wait ends, the statement keeps waiting, and nothing is given up on.
@@ -148,6 +172,26 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $this->assertSame(ExceptionCode::CONNECTION_HEARTBEAT_TIMEOUT->value, $e->getCode());
             $this->assertLessThan(10.0, $elapsed, 'the heartbeat must not wait for the request timeout');
         }
+    }
+
+    public function testDriverHeartbeatIsNotSubjectToTheRequestTimeout(): void {
+        // The heartbeat is the driver's own request, and the request timeout is
+        // the shorter of the two here. It must still be held to the heartbeat
+        // timeout alone: were it timed out as an ordinary statement it would be
+        // reported to a caller who never sent it, and would park a stream id
+        // every interval until the connection ran out of them.
+        $connection = $this->connect(
+            'deaf',
+            requestTimeoutInSeconds: 0.5,
+            heartbeatIntervalInSeconds: 0.2,
+            heartbeatTimeoutInSeconds: 30.0,
+        );
+
+        $event = $connection->waitForNextEvent(timeoutInSeconds: 2.0);
+
+        $this->assertNull($event, 'the wait must run its course rather than end on the heartbeat');
+        $this->assertSame([], $this->orphanedStreamsOf($connection), 'the heartbeat must not park a stream id');
+        $this->assertTrue($connection->isConnected(), 'the heartbeat timeout has not elapsed');
     }
 
     public function testEventWaitKeepsTheConnectionAliveWhileNothingHappens(): void {

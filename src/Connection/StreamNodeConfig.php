@@ -26,6 +26,15 @@ final class StreamNodeConfig extends NodeConfig {
          * instead of the client tearing the connection down first. Operations
          * with a higher server-side timeout — TRUNCATE defaults to 60s — need
          * a larger value.
+         *
+         * Disabling it is not recommended: a deadline is only noticed once the
+         * read the client is blocked in returns, so this is also how often
+         * request timeouts and heartbeats get to be checked. At 0 a silent
+         * server leaves the client blocked in a read forever, and neither
+         * {@see ConnectionOptions::$requestTimeoutInSeconds} nor the heartbeat
+         * can fire. Lower it instead if you want tighter deadlines — with the
+         * default of 15s, a request timeout of 30s fires somewhere between 30s
+         * and 45s.
          */
         public readonly float $timeoutInSeconds = 15,
 
