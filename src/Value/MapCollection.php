@@ -103,6 +103,17 @@ final class MapCollection extends ValueReadableWithoutLength {
         /** @psalm-suppress MixedAssignment */
         for ($i = 0; $i < $count; ++$i) {
             $key = $stream->readValue($typeInfo->keyType, $valueEncodeConfig);
+
+            // PHP array keys must be int|string. Scalar key types that decode to
+            // other PHP types are converted to a string representation (a float
+            // key must not be left as-is — PHP would silently truncate it to
+            // int); everything else cannot be represented as an array key.
+            if (is_float($key)) {
+                $key = (string) $key;
+            } elseif (is_bool($key)) {
+                $key = $key ? 1 : 0;
+            }
+
             if (!is_string($key) && !is_int($key)) {
                 throw new ValueException(
                     message: 'Invalid map key type; expected string|int',
