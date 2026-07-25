@@ -25,7 +25,10 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     private readonly int $value;
 
     /**
-     * @param int|string|DateTimeInterface $value 
+     * @param int|string|DateTimeInterface $value An integer is the raw `date`
+     *   wire value: a 32-bit unsigned integer with the epoch (1970-01-01) at the
+     *   center of the range (2^31), so 2^31 is 1970-01-01, 2^31 + 1 is
+     *   1970-01-02, and so on. A string must be in `YYYY-mm-dd` format.
      * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(int|string|DateTimeInterface $value) {
@@ -85,8 +88,14 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             // Anchor both ends at UTC midnight so the day count is exact and
             // independent of the ambient timezone. The value's own calendar date
             // (as it presents in its timezone) is what the user means by "date".
-            $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
-            $valueAsDate = new DateTimeImmutable($value->format('Y-m-d'), new DateTimeZone('UTC'));
+            try {
+                $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
+                $valueAsDate = new DateTimeImmutable($value->format('Y-m-d'), new DateTimeZone('UTC'));
+            } catch (PhpException $e) {
+                throw new ValueException('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
+                    'value' => $value->format('Y-m-d'),
+                ], $e);
+            }
             $interval = $baseDate->diff($valueAsDate);
 
             $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
@@ -203,7 +212,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
         if (!is_int($value) && !is_string($value) && !($value instanceof DateTimeInterface)) {
             throw new ValueException(
-                'Invalid date value; expected number of days since 1970-01-01 as integer, date in format YYYY-mm-dd as string, or DateTimeInterface'
+                'Invalid date value; expected a 32-bit unsigned integer with the epoch (1970-01-01) at the center of the range (2^31), a date in format YYYY-mm-dd as string, or DateTimeInterface'
                 , ExceptionCode::VALUE_DATE_INVALID_VALUE_TYPE->value,
                 [
                     'value_type' => gettype($value),
