@@ -8,12 +8,53 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\Value\EncodeOption\UuidEncodeOption;
 
-final class Timeuuid extends ValueWithFixedLength {
-    private readonly string $value;
+final class Timeuuid extends ValueWithFixedLength implements ValueWithMultipleEncodings {
+    /** The value in its raw 16-byte wire form. */
+    private readonly string $binary;
 
+    /**
+     * Accepts the canonical 36-character string form
+     * (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx), the compact 32-character undashed
+     * hex form (xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx), or the raw 16-byte binary form
+     * (for example the value returned by a UuidEncodeOption::AS_BINARY read). The
+     * three forms are distinguished by length and cannot collide (16, 32 and 36
+     * bytes respectively). The value is stored raw, so getBinary() is a no-op and
+     * the canonical string form is produced on demand.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
     final public function __construct(string $value) {
-        $this->value = $value;
+
+        if (strlen($value) === 16) {
+            $this->binary = $value;
+
+            return;
+        }
+
+        // Hex string form (canonical dashed or compact undashed): validate before
+        // packing, otherwise pack('H*', …) would silently coerce non-hex
+        // characters to 0 and produce corrupt bytes.
+        if (
+            preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value) !== 1
+            && preg_match('/^[0-9a-f]{32}$/i', $value) !== 1
+        ) {
+            throw new ValueException('Invalid timeuuid value; expected the canonical string form xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx, the 32-character undashed hex form, or a raw 16-byte binary string', ExceptionCode::VALUE_UUID_INVALID_FORMAT->value, [
+                'value' => $value,
+                'length' => strlen($value),
+            ]);
+        }
+
+        $this->binary = pack('H*', str_replace('-', '', $value));
+    }
+
+    #[\Override]
+    public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
+        return match ($valueEncodeConfig->uuidEncodeOption) {
+            UuidEncodeOption::AS_BINARY => $this->binary,
+            UuidEncodeOption::AS_STRING => $this->toCanonicalString(),
+        };
     }
 
     #[\Override]
@@ -30,12 +71,7 @@ final class Timeuuid extends ValueWithFixedLength {
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
-        /**
-         * @var false|array<int> $unpacked
-         */
-        $unpacked = unpack('n8', $binary);
-
-        if ($unpacked === false) {
+        if (strlen($binary) !== 16) {
             throw new ValueException(
                 'Cannot unpack UUID binary data',
                 ExceptionCode::VALUE_UUID_UNPACK_FAILED->value,
@@ -46,17 +82,7 @@ final class Timeuuid extends ValueWithFixedLength {
             );
         }
 
-        return new static(sprintf(
-            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            $unpacked[1],
-            $unpacked[2],
-            $unpacked[3],
-            $unpacked[4],
-            $unpacked[5],
-            $unpacked[6],
-            $unpacked[7],
-            $unpacked[8]
-        ));
+        return new static($binary);
     }
 
     /**
@@ -67,22 +93,25 @@ final class Timeuuid extends ValueWithFixedLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_string($value)) {
-            throw new ValueException('Invalid UUID value; expected string', ExceptionCode::VALUE_UUID_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid timeuuid value; expected string', ExceptionCode::VALUE_UUID_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
-                'expected_format' => 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+                'expected_format' => 'canonical string "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", 32-character undashed hex string, or raw 16-byte binary string',
             ]);
         }
 
         return new static($value);
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     final public static function fromValue(string $value): static {
         return new static($value);
     }
 
     #[\Override]
     public function getBinary(): string {
-        return pack('H*', str_replace('-', '', $this->value));
+        return $this->binary;
     }
 
     #[\Override]
@@ -92,7 +121,7 @@ final class Timeuuid extends ValueWithFixedLength {
 
     #[\Override]
     public function getValue(): string {
-        return $this->value;
+        return $this->toCanonicalString();
     }
 
     #[\Override]
@@ -103,5 +132,15 @@ final class Timeuuid extends ValueWithFixedLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
+    }
+
+    private function toCanonicalString(): string {
+        $hex = bin2hex($this->binary);
+
+        return substr($hex, 0, 8) . '-'
+            . substr($hex, 8, 4) . '-'
+            . substr($hex, 12, 4) . '-'
+            . substr($hex, 16, 4) . '-'
+            . substr($hex, 20, 12);
     }
 }

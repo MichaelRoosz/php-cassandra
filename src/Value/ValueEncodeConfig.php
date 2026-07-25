@@ -8,6 +8,7 @@ use Cassandra\Value\EncodeOption\DateEncodeOption;
 use Cassandra\Value\EncodeOption\DurationEncodeOption;
 use Cassandra\Value\EncodeOption\TimeEncodeOption;
 use Cassandra\Value\EncodeOption\TimestampEncodeOption;
+use Cassandra\Value\EncodeOption\UuidEncodeOption;
 use Cassandra\Value\EncodeOption\VarintEncodeOption;
 
 final class ValueEncodeConfig {
@@ -18,6 +19,7 @@ final class ValueEncodeConfig {
         public readonly DurationEncodeOption $durationEncodeOption = DurationEncodeOption::AS_STRING,
         public readonly TimeEncodeOption $timeEncodeOption = TimeEncodeOption::AS_STRING,
         public readonly TimestampEncodeOption $timestampEncodeOption = TimestampEncodeOption::AS_STRING,
+        public readonly UuidEncodeOption $uuidEncodeOption = UuidEncodeOption::AS_STRING,
         public readonly VarintEncodeOption $varintEncodeOption = VarintEncodeOption::AS_STRING,
     ) {
     }
