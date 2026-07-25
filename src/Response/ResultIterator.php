@@ -58,11 +58,26 @@ final class ResultIterator implements Iterator {
 
     /**
      * Move forward to next element
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
      */
     #[\Override]
     public function next(): void {
         ++$this->currentRow;
-        $this->needToRewindRow = false;
+
+        if ($this->needToRewindRow) {
+            // current() already consumed the row at the previous position.
+            $this->needToRewindRow = false;
+
+            return;
+        }
+
+        // current() was never called for the previous position (e.g. next()
+        // invoked back-to-back): skip that row so the stream cursor stays
+        // aligned with the iteration position.
+        $this->rowsResult->fetch();
     }
 
     /**
