@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Overlay for the saggre/phpdocumentor-markdown theme.
+
+    Identical to the upstream template.xml, plus the `indexes.enums` transformation:
+    the upstream theme ships no enum template, so without this every enum in the
+    library (Consistency, Type, ProtocolVersion, ExceptionCode, ...) would be
+    silently left out of the generated documentation.
+-->
+<template>
+    <name>markdown</name>
+    <author>Sakri Koskimies</author>
+    <email>sakri.koskimies@hotmail.com</email>
+    <version>1.0.0</version>
+    <transformations>
+        <transformation writer="twig" source="index.md.twig" artifact="README.md"/>
+        <transformation writer="twig" query="indexes.classes" source="class.md.twig"
+                        artifact="classes/{{FullyQualifiedStructuralElementName}}.md"/>
+        <transformation writer="twig" query="indexes.enums" source="enum.md.twig"
+                        artifact="classes/{{FullyQualifiedStructuralElementName}}.md"/>
+        <transformation writer="twig" query="indexes.traits" source="trait.md.twig"
+                        artifact="classes/{{FullyQualifiedStructuralElementName}}.md"/>
+        <transformation writer="twig" query="indexes.interfaces" source="interface.md.twig"
+                        artifact="classes/{{FullyQualifiedStructuralElementName}}.md"/>
+        <transformation writer="twig" query="indexes.functions" source="function.md.twig"
+                        artifact="functions/{{name}}.md"/>
+    </transformations>
+</template>

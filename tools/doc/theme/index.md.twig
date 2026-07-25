@@ -1,0 +1,116 @@
+{% import 'include/macros.twig' as macros %}
+{% autoescape false %}
+{% block content %}
+{#
+    Overlay for the saggre/phpdocumentor-markdown theme: same as upstream index.md.twig,
+    plus an "Enums" section per namespace, and a project title/intro suited to this library.
+#}
+# API reference
+
+Generated from the source code with [phpDocumentor](https://www.phpdoc.org/) — run `composer doc:api` to
+regenerate. Only the public API is listed; protected and private members are omitted.
+
+For guides and examples, see the [README](../../README.md).
+
+## Namespaces
+{% for namespace in project.indexes.namespaces | sort((a,b) => a.FullyQualifiedStructuralElementName <=> b.FullyQualifiedStructuralElementName) %}
+{% if (namespace.classes | length) > 0 or (namespace.enums | length) > 0 or (namespace.traits | length) > 0 or (namespace.interfaces | length) > 0 or (namespace.functions | length) > 0 %}
+
+### {{ namespace.FullyQualifiedStructuralElementName }}
+{% if namespace.classes | length > 0 %}
+
+#### Classes
+
+{% set parameters = [] %}
+{% for class in namespace.classes %}
+{% set parameters = parameters | merge([
+    {
+        link: macros.mdLink(class.FullyQualifiedStructuralElementName, null, null, 'class'),
+        description: class.summary | raw
+    }
+]) %}
+{% endfor -%}
+{{ macros.mdTable(parameters, [
+    { label: 'Class', key: 'link' },
+    { label: 'Description', key: 'description' },
+]) }}
+{%- endif %}
+{% if namespace.enums | length > 0 %}
+
+#### Enums
+
+{% set parameters = [] %}
+{% for enum in namespace.enums %}
+{% set parameters = parameters | merge([
+    {
+        link: macros.mdLink(enum.FullyQualifiedStructuralElementName, null, null, 'class'),
+        description: enum.summary | raw
+    }
+]) %}
+{% endfor -%}
+{{ macros.mdTable(parameters, [
+    { label: 'Enum', key: 'link' },
+    { label: 'Description', key: 'description' },
+]) }}
+{%- endif %}
+{% if namespace.interfaces | length > 0 %}
+
+#### Interfaces
+
+{% set parameters = [] %}
+{% for interface in namespace.interfaces %}
+{% set parameters = parameters | merge([
+    {
+        link: macros.mdLink(interface.FullyQualifiedStructuralElementName, null, null, 'class'),
+        description: interface.summary | raw
+    }
+]) %}
+{% endfor -%}
+{{ macros.mdTable(parameters, [
+    { label: 'Interface', key: 'link' },
+    { label: 'Description', key: 'description' },
+]) }}
+{%- endif %}
+{% if namespace.traits | length > 0 %}
+
+#### Traits
+
+{% set parameters = [] %}
+{% for trait in namespace.traits %}
+{% set parameters = parameters | merge([
+    {
+        link: macros.mdLink(trait.FullyQualifiedStructuralElementName, null, null, 'class'),
+        description: trait.summary | raw
+    }
+]) %}
+{% endfor -%}
+{{ macros.mdTable(parameters, [
+    { label: 'Trait', key: 'link' },
+    { label: 'Description', key: 'description' },
+]) }}
+{%- endif %}
+{% if namespace.functions | length > 0 %}
+
+#### Functions
+
+{% set parameters = [] %}
+{% for function in namespace.functions %}
+{% set parameters = parameters | merge([
+    {
+        link: macros.mdLink(function.name, null, function.name ~ '()', 'function'),
+        description: function.summary | raw
+    }
+]) %}
+{% endfor -%}
+{{ macros.mdTable(parameters, [
+    { label: 'Function', key: 'link' },
+    { label: 'Description', key: 'description' },
+]) }}
+{%- endif %}
+{% endif %}
+{% endfor %}
+{% if parameter.includeFooter == 'yes' %}
+{% include 'partials/footer.md.twig' %}
+{% endif %}
+{% endblock %}
+{% endautoescape %}

@@ -13,7 +13,8 @@ php-cassandra: A modern Cassandra client for PHP
 php-cassandra is a pure-PHP client for Apache Cassandra and ScyllaDB with support for CQL binary protocol v3, v4 and v5 (Cassandra 2.1+ incl. 3.x–5.x; ScyllaDB 6.2 and 2025.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.
 
 **Packagist:** [mroosz/php-cassandra](https://packagist.org/packages/mroosz/php-cassandra)  
-**Repository:** [GitHub – MichaelRoosz/php-cassandra](https://github.com/MichaelRoosz/php-cassandra)
+**Repository:** [GitHub – MichaelRoosz/php-cassandra](https://github.com/MichaelRoosz/php-cassandra)  
+**API reference:** [doc/api](doc/api/README.md) — generated from the source code
 
 Table of contents
 -----------------
@@ -2350,6 +2351,13 @@ A few CQL features need to be enabled on the server before any driver can use th
 
 API reference (essentials)
 --------------------------
+
+The complete, generated API reference — every public class, interface and enum with its
+constants, cases, properties and methods — lives in **[doc/api](doc/api/README.md)**.
+It is generated from the source code with [phpDocumentor](https://www.phpdoc.org/); run
+`composer doc:api` to regenerate it after changing the public API.
+
+The essentials:
 
 - `Cassandra\Connection`
   - `connect()`, `disconnect()`, `isConnected()`, `getProtocolVersion()`

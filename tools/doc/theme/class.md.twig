@@ -1,0 +1,81 @@
+{#
+    Overlay for the saggre/phpdocumentor-markdown theme: identical to the upstream
+    class.md.twig, except that a parent class outside of a namespace (\Exception and
+    friends) is printed as plain code instead of a link to a page that is not part
+    of this documentation — the same rule partials/inheritance.md.twig already applies.
+#}
+{% import 'include/macros.twig' as macros %}
+{% autoescape false %}
+{% block content %}
+{% include 'partials/header.md.twig' with { node: node } %}
+
+***
+
+* Full name: `{{ node.FullyQualifiedStructuralElementName }}`
+{% if node.parent and node.parent is not empty %}* Parent class: {% if '0' == macros.mdNestingLevel(node.parent.FullyQualifiedStructuralElementName) %}`{{ node.parent.FullyQualifiedStructuralElementName | default(node.parent.name) }}`{% else %}{{ macros.mdLink(node.parent, macros.mdClassPath(node), node.parent.FullyQualifiedStructuralElementName, 'class') }}{% endif %}
+
+{% endif %}
+{% if node.final %}* This class is marked as **final** and can't be subclassed
+{% endif %}
+{% if node.deprecated %}* **Warning:** this class is **deprecated**. This means that this class will likely be removed in a future version.
+{% endif %}
+{% if node.interfaces is not empty %}* This class implements:
+{% include 'partials/inheritance.md.twig' with { node: node, others: node.interfaces } only %}
+
+{% endif %}
+{% if node.abstract %}* This class is an **Abstract class**
+{% endif %}
+{% if node.final %}* This class is a **Final class**
+{% endif %}
+{% include 'partials/tags.md.twig' with { tags: node.tags } only %}
+{% if node.constants | length > 0 %}
+
+## Constants
+
+{% set constants = [] %}
+{% for constant in node.constants %}
+{% set constants = constants | merge([
+    {
+        name: '`' ~ constant.name ~ '`',
+        visibility: constant.visibility | default('*default*'),
+        type: constant.type ? constant.type : '',
+        value: constant.value
+    }
+]) %}
+{% endfor %}
+{{ macros.mdTable(constants, [
+    { label: 'Constant', key: 'name' },
+    { label: 'Visibility', key: 'visibility' },
+    { label: 'Type', key: 'type' },
+    { label: 'Value', key: 'value' },
+]) -}}
+{% endif %}
+{% if node.properties | length > 0 %}
+
+## Properties
+
+{% for property in node.properties %}
+{% if loop.index0 > 0 %}{{ '\n' }}{% endif %}{% include 'property.md.twig' %}
+{% endfor %}
+{% endif %}
+{% if node.methods | length > 0 %}
+
+## Methods
+
+{% for method in node.methods %}
+{% if loop.index0 > 0 %}{{ '\n' }}{% endif %}{% include 'method.md.twig' %}
+{% endfor %}
+{% endif %}
+{% if node.InheritedMethods | length > 0 %}
+
+## Inherited methods
+
+{% for method in node.InheritedMethods %}
+{% if loop.index0 > 0 %}{{ '\n' }}{% endif %}{% include 'method.md.twig' %}
+{% endfor %}
+{% endif %}
+{% if parameter.includeFooter == 'yes' %}
+{% include 'partials/footer.md.twig' %}
+{% endif %}
+{% endblock %}
+{% endautoescape %}
