@@ -695,7 +695,16 @@ final class Socket extends NodeImplementation implements IoNode {
             if ($waitForData) {
                 // Wait at most for the remaining receive timeout, so a peer that
                 // stays connected but silent cannot block reads forever.
-                $remaining = max(0.0, (float) $this->receiveTimeout - (microtime(true) - $start));
+                $remaining = (float) $this->receiveTimeout - (microtime(true) - $start);
+
+                if ($remaining <= 0.0) {
+                    // Selecting with a zero timeout would return immediately and
+                    // busy-spin, so enforce the receive timeout right away.
+                    $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
+
+                    continue;
+                }
+
                 $remainingSeconds = (int) $remaining;
 
                 $selectResult = socket_select(

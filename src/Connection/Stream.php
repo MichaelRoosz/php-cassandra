@@ -411,7 +411,16 @@ final class Stream extends NodeImplementation implements IoNode {
                 // Wait at most for the remaining receive timeout; the per-stream
                 // timeout set via stream_set_timeout() has no effect on
                 // non-blocking streams, so it must be enforced here.
-                $remaining = max(0.0, (float) $this->receiveTimeout - (microtime(true) - $start));
+                $remaining = (float) $this->receiveTimeout - (microtime(true) - $start);
+
+                if ($remaining <= 0.0) {
+                    // Selecting with a zero timeout would return immediately and
+                    // busy-spin, so enforce the receive timeout right away.
+                    $this->checkForReadTimeout($stream, $start, $expectedLength, $upperBoundaryLength, $waitForData);
+
+                    continue;
+                }
+
                 $remainingSeconds = (int) $remaining;
 
                 $selectResult = stream_select(
