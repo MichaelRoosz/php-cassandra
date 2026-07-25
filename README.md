@@ -153,11 +153,14 @@ Requirements
 
 ### PHP Extensions
 
+No PHP extension is required; the library runs on a minimal PHP build. The following are optional and only enhance functionality:
+
 | Extension | Required | Purpose | Notes |
 |-----------|----------|---------|-------|
-| **sockets** | Optional | Socket transport | Required for sockets connections configured with `SocketNodeConfig` |
-| **bcmath** or **gmp** | Optional | Performance improvement for large integer operations | Used by `Varint` and `Decimal` types |
-| **openssl** | Optional | SSL/TLS connections | Required for encrypted connections |
+| **sockets** | Optional | Socket transport | Required for connections configured with `SocketNodeConfig`; `StreamNodeConfig` connections need no extension |
+| **openssl** | Optional | TLS/SSL encrypted connections | Required for `tls://` connections configured with `StreamNodeConfig` |
+| **lz4** | Optional | Native LZ4 (de)compression | Used automatically when present for much faster compressed connections; a pure-PHP implementation is the transparent fallback |
+| **gmp** or **bcmath** | Optional | Faster large integer math | Speeds up the `Varint` and `Decimal` types; `gmp` is preferred when both are present, and a pure-PHP calculator is the fallback |
 
 ### Data Type Compatibility
 
@@ -330,9 +333,10 @@ try {
 <?php
 use Cassandra\Connection\StreamNodeConfig;
 
-// Secure connection with TLS
+// Secure connection with TLS. A non-empty sslOptions array enables TLS
+// automatically (equivalent to prefixing the host with "tls://").
 $secureNode = new StreamNodeConfig(
-    host: 'tls://cassandra.example.com',
+    host: 'cassandra.example.com',
     port: 9042,
     username: 'secure_user',
     password: 'secure_password',
@@ -359,9 +363,9 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection;
 
-// Stream transport
+// Stream transport (plaintext)
 $streamNode = new StreamNodeConfig(
-    host: 'tls://cassandra.example.com',
+    host: 'cassandra.example.com',
     port: 9042,
     username: 'user',
     password: 'secret',
@@ -369,9 +373,10 @@ $streamNode = new StreamNodeConfig(
     timeoutInSeconds: 30,
 );
 
-// Stream transport with SSL/TLS
+// Stream transport with SSL/TLS - a non-empty sslOptions array enables TLS
+// automatically; alternatively prefix the host with "tls://"
 $streamTlsNode = new StreamNodeConfig(
-    host: 'tls://cassandra.example.com',
+    host: 'cassandra.example.com',
     port: 9042,
     username: 'user',
     password: 'secret',
@@ -744,6 +749,24 @@ SetCollection::fromValue([1, 2, 3], Type::INT);
 Tuple::fromValue([1, 'x'], [Type::INT, Type::VARCHAR]);
 UDT::fromValue(['id' => 1, 'name' => 'n'], ['id' => Type::INT, 'name' => Type::VARCHAR]);
 Vector::fromValue([0.12, -0.3, 0.9], Type::FLOAT, dimensions: 3);
+```
+
+### UUID / Timeuuid input forms
+
+`Cassandra\Value\Uuid` and `Cassandra\Value\Timeuuid` accept any of three forms, distinguished by length:
+
+- the canonical 36-character string `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (case-insensitive);
+- the compact 32-character undashed hex string `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`;
+- the raw 16-byte binary form (for example a value read with `UuidEncodeOption::AS_BINARY`, which can be re-bound directly without a format→parse round-trip).
+
+The value is stored raw internally, so `getBinary()` is a no-op and `getValue()` always returns the canonical lowercase string. Any string that is none of these forms is rejected with a `Cassandra\Exception\ValueException`.
+
+```php
+use Cassandra\Value\Uuid;
+
+Uuid::fromValue('550e8400-e29b-41d4-a716-446655440000'); // canonical
+Uuid::fromValue('550e8400e29b41d4a716446655440000');     // undashed hex
+Uuid::fromValue($rawSixteenBytes);                       // raw binary
 ```
 
 Type definition syntax for complex values
@@ -1592,7 +1615,7 @@ $node = new StreamNodeConfig(
     connectTimeoutInSeconds: 10,          // Connection timeout (default: 5)
     timeoutInSeconds: 30,                 // I/O timeout (default: 30)
     persistent: true,                     // Use persistent connections
-    sslOptions: [                         // SSL/TLS options (see PHP SSL context)
+    sslOptions: [                         // SSL/TLS options (see PHP SSL context); a non-empty array enables TLS
         'verify_peer' => true,            // Verify peer certificate
         'verify_peer_name' => true,       // Verify peer name
         'cafile' => '/path/to/ca.pem',    // CA certificate file
@@ -1621,6 +1644,8 @@ $node = new SocketNodeConfig(
     ]
 );
 ```
+
+The `host` may be a hostname, an IPv4 literal, or an IPv6 literal in either bare (`::1`) or bracketed (`[::1]`) form. It is resolved with `getaddrinfo()`, so IPv4-only, IPv6-only and dual-stack hosts all work; when a name resolves to several addresses, each is tried in turn until one connects. URL schemes (`tcp://`, `tls://`) are not accepted here — use `StreamNodeConfig` for TLS.
 
 #### Connection Options
 
@@ -1700,6 +1725,7 @@ use Cassandra\Value\EncodeOption\DateEncodeOption;
 use Cassandra\Value\EncodeOption\DurationEncodeOption;
 use Cassandra\Value\EncodeOption\TimeEncodeOption;
 use Cassandra\Value\EncodeOption\TimestampEncodeOption;
+use Cassandra\Value\EncodeOption\UuidEncodeOption;
 use Cassandra\Value\EncodeOption\VarintEncodeOption;
 
 $conn->configureValueEncoding(new ValueEncodeConfig(
@@ -1707,6 +1733,10 @@ $conn->configureValueEncoding(new ValueEncodeConfig(
     durationEncodeOption: DurationEncodeOption::AS_DATEINTERVAL,
     timeEncodeOption: TimeEncodeOption::AS_DATETIME_IMMUTABLE,
     timestampEncodeOption: TimestampEncodeOption::AS_DATETIME_IMMUTABLE,
+    // uuid / timeuuid: AS_STRING (default) decodes to the canonical
+    // 36-character string; AS_BINARY decodes to the raw 16-byte form, which
+    // skips hex formatting and is worth it for large UUID-keyed result sets.
+    uuidEncodeOption: UuidEncodeOption::AS_STRING,
     varintEncodeOption: VarintEncodeOption::AS_STRING,
 ));
 ```
@@ -1766,14 +1796,15 @@ A: Yes! The library supports protocol versions v3, v4, and v5:
 
 **Q: Do I need any PHP extensions?**
 
-A: The library works with standard PHP, but some extensions enhance functionality:
-- `ext-sockets`: Required for SocketNodeConfig (alternative: StreamNodeConfig)
-- `ext-bcmath` or `ext-gmp`: Improves performance for large integer operations (Varint, Decimal)
-- `ext-openssl`: For SSL/TLS connections
+A: No. The library requires no PHP extension and works on a minimal PHP build, but some extensions enhance functionality:
+- `ext-sockets`: Required for `SocketNodeConfig` (alternative: `StreamNodeConfig`, which needs no extension)
+- `ext-openssl`: Required for `tls://` connections configured with `StreamNodeConfig`
+- `ext-lz4`: Much faster native LZ4 (de)compression; a pure-PHP implementation is used otherwise
+- `ext-gmp` or `ext-bcmath`: Faster large integer math for the `Varint` and `Decimal` types; a pure-PHP calculator is used otherwise
 
 **Q: Can I run this on 32-bit PHP?**
 
-A: Limited support. The following features are unsupported on 32-bit PHP: value types `Bigint`, `Counter`, `Date`, `Duration`, `Time`, `Timestamp`, and the `defaultTimestamp` request option. Use 64-bit PHP for full compatibility.
+A: Yes, with limited support. The following features are unsupported on 32-bit PHP: value types `Bigint`, `Counter`, `Date`, `Duration`, `Time`, `Timestamp`, and the `defaultTimestamp` request option. Use 64-bit PHP for full compatibility.
 
 ### Data Types and Modeling
 
