@@ -88,9 +88,14 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             // Anchor both ends at UTC midnight so the day count is exact and
             // independent of the ambient timezone. The value's own calendar date
             // (as it presents in its timezone) is what the user means by "date".
+            // Note: the calendar fields are transferred numerically rather than
+            // through a formatted string - PHP would re-parse a year with more
+            // than four digits (e.g. "10000-07-10") as a two-digit year.
             try {
                 $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
-                $valueAsDate = new DateTimeImmutable($value->format('Y-m-d'), new DateTimeZone('UTC'));
+                $valueAsDate = $baseDate
+                    ->setDate((int) $value->format('Y'), (int) $value->format('n'), (int) $value->format('j'))
+                    ->setTime(0, 0, 0);
             } catch (PhpException $e) {
                 throw new ValueException('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
                     'value' => $value->format('Y-m-d'),
@@ -132,7 +137,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
      * @throws \Cassandra\Exception\ValueException
      */
     public function asDateTime(): DateTimeImmutable {
-        $baseDate = new DateTimeImmutable('1970-01-01');
+        $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
         $daysSinceBaseDate = $this->value - self::VALUE_2_31;
 
         try {
