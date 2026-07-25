@@ -1,7 +1,7 @@
 {
     "name": "mroosz/php-cassandra",
     "type": "library",
-    "description": "A pure-PHP client for Apache Cassandra and ScyllaDB with support for CQL binary protocol v3, v4 and v5 (Cassandra 2.1+ incl. 3.x-5.x; ScyllaDB 6.2 and 2025.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.",
+    "description": "A pure-PHP client for Apache Cassandra and ScyllaDB with support for CQL binary protocol v3, v4 and v5 (Cassandra 2.1+ incl. 3.x-5.x; ScyllaDB 6.2, 2025.x, 2026.x), synchronous and asynchronous APIs, prepared statements, batches, result iterators, object mapping, SSL/TLS, and LZ4 compression.",
     "keywords" : [
         "cassandra",
         "nosql",
