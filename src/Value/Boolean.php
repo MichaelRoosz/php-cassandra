@@ -27,7 +27,9 @@ final class Boolean extends ValueWithFixedLength {
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
-        return new static($binary !== "\0");
+        // A zero-length (empty, non-null) cell is a legal boolean value and
+        // decodes as false, matching the other drivers.
+        return new static(($binary[0] ?? "\0") !== "\0");
     }
 
     /**
