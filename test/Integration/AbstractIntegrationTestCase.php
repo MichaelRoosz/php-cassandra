@@ -197,6 +197,18 @@ abstract class AbstractIntegrationTestCase extends TestCase implements WarningsL
     }
 
     /**
+     * Zero-length elements inside a vector (e.g. an empty string in a
+     * vector<text, n>). Cassandra stores them as an element with a
+     * zero-length VInt prefix; ScyllaDB treats a zero-length element as
+     * null and rejects the write with
+     * "[INVALID 8704] null/unset is not supported inside vectors".
+     */
+    protected static function isEmptyValueInsideVectorSupported(): bool {
+
+        return !self::isScyllaDb();
+    }
+
+    /**
      * GROUP BY was added in Cassandra 3.10 (CASSANDRA-10707). ScyllaDB supports
      * it. (PER PARTITION LIMIT, added in Cassandra 3.6, is subsumed by this.)
      */

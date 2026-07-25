@@ -1942,10 +1942,13 @@ final class DataTypeRoundtripTest extends AbstractIntegrationTestCase {
         );
 
         $testValues = [
-            ['', 'short'],
             ['short', str_repeat('x', 200)],
             [str_repeat('a', 200), str_repeat('b', 130)],
         ];
+
+        if (self::isEmptyValueInsideVectorSupported()) {
+            array_unshift($testValues, ['', 'short']);
+        }
 
         foreach ($testValues as $index => $testValue) {
             $this->connection->query(
