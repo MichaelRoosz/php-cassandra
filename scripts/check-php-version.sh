@@ -4,6 +4,12 @@
 
 set -e
 
+# compatinfo-db reports the functions that PHP 8.2 moved from ext-standard to ext-random
+# (random_bytes(), mt_rand(), …) as requiring 8.2, although they are available in every
+# PHP 7/8 build. See scripts/patch-compatinfo-db.php for details. The correction has to be
+# reapplied after every "phpcompatinfo db:init", so it runs here; it is idempotent.
+php "$(dirname "$0")/patch-compatinfo-db.php"
+
 echo "Running PHP compatibility analysis..."
 OUTPUT=$(vendor/bin/phpcompatinfo analyser:run --no-interaction src)
 
