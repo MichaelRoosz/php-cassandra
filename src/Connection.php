@@ -777,9 +777,16 @@ final class Connection {
      * with a {@see \Cassandra\Exception\RequestTimeoutException}, in seconds.
      * Null waits indefinitely.
      *
-     * Applies to every subsequent blocking call that has no explicit timeout of
-     * its own. Raise it around operations Cassandra allows more time for, such
-     * as TRUNCATE (60s server-side by default), or pass the timeout directly to
+     * Applies to every request that has no explicit timeout of its own. That
+     * includes the ones already in flight, whose budgets are measured against
+     * this value as it stands when they are looked at rather than as it stood
+     * when they were sent: lowering it can therefore expire outstanding
+     * requests at once. Requests sent with a timeout of their own — from their
+     * options, or from the argument {@see self::syncRequest()} and
+     * {@see self::asyncRequest()} take — are unaffected.
+     *
+     * Raise it around operations Cassandra allows more time for, such as
+     * TRUNCATE (60s server-side by default), or pass the timeout directly to
      * {@see self::syncRequest()} for a single request.
      */
     public function setRequestTimeout(?float $requestTimeoutInSeconds): void {
@@ -843,7 +850,7 @@ final class Connection {
                 ]);
             }
 
-            $response = $this->handleAutoPrepareResult($autoPrepareRequest, $prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+            $response = $this->handleAutoPrepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
             if ($response === null) {
                 throw new ConnectionException('Unexpected null response during autoPrepare', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESPONSE->value, [
                     'expected' => Response\Result::class,
@@ -854,7 +861,7 @@ final class Connection {
             return $response;
         }
 
-        $streamId = $this->getNewStreamId();
+        $streamId = $this->getNewStreamId($requestTimeoutInSeconds);
         $request->setStream($streamId);
 
         $writeSucceeded = false;
@@ -1656,10 +1663,16 @@ final class Connection {
         $this->sendingHeartbeat = true;
 
         try {
-            // Anchored before the send: it may have to wait for a stream id to
-            // come free, and that waiting is time the node had to answer in.
-            $this->pendingHeartbeatSentAt = microtime(true);
-            $this->pendingHeartbeat = $this->sendAsyncRequest(new Request\Options());
+            $heartbeat = $this->sendAsyncRequest(new Request\Options());
+
+            // Anchored to when the OPTIONS was actually written, not to when
+            // sending it was decided on: getting that far can wait for a stream
+            // id to come free, and that is the client's own backlog rather than
+            // time the node spent not answering. Charging it to the heartbeat
+            // budget would let a busy client declare a healthy node dead the
+            // moment the probe goes out.
+            $this->pendingHeartbeatSentAt = $heartbeat->getSentAt();
+            $this->pendingHeartbeat = $heartbeat;
         } finally {
             $this->sendingHeartbeat = false;
         }
@@ -1774,11 +1787,18 @@ final class Connection {
     /**
      * Earliest deadline among the statements still waiting for an answer, so a
      * wait over several statements ends as soon as the first of them has used
-     * up its budget. Null when nothing is pending, or when there is no timeout.
+     * up its budget. Null when none of them is bounded — nothing is pending, or
+     * every pending statement waits indefinitely.
      *
-     * Each statement is held to the timeout its own request asked for. The
-     * driver's own heartbeat is skipped: it is not one of the caller's requests
-     * and is held to {@see ConnectionOptions::$heartbeatTimeoutInSeconds} by
+     * Each statement is held to the timeout its own request asked for. One that
+     * waits indefinitely is passed over rather than making the whole result
+     * unbounded: it has no deadline of its own to contribute, but it must not
+     * cost the statements beside it theirs, or a single unbounded request would
+     * keep every other one from ever being noticed as overdue.
+     *
+     * The driver's own heartbeat is skipped as well: it is not one of the
+     * caller's requests and is held to
+     * {@see ConnectionOptions::$heartbeatTimeoutInSeconds} by
      * {@see self::checkHeartbeat()} instead of to a request budget.
      *
      * @param array<Statement> $statements
@@ -1797,7 +1817,7 @@ final class Connection {
                 $statement->getSentAt(),
             );
             if ($deadline === null) {
-                return null;
+                continue;
             }
 
             if ($earliest === null || $deadline < $earliest) {
@@ -1953,7 +1973,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function getNewStreamId(): int {
+    private function getNewStreamId(?float $requestTimeoutInSeconds = null): int {
         if ($this->nextStreamId <= self::MAX_STREAM_ID) {
             return $this->nextStreamId++;
         }
@@ -1963,7 +1983,12 @@ final class Connection {
         // read timeout here only means the connection was quiet, so it must not
         // tear the connection down, and the heartbeat is what proves the node
         // is still there while we wait.
-        $waitDeadline = $this->deadlineFor(null);
+        //
+        // The wait is part of the request that is asking for the id, so it is
+        // held to that request's own budget rather than to the connection
+        // default. With no budget at all it waits indefinitely, as every other
+        // wait in this class does — an id can still come free at any time.
+        $waitDeadline = $this->deadlineFor($requestTimeoutInSeconds);
         $deadlineExceeded = false;
 
         while ($this->recycledStreams->isEmpty()) {
@@ -1988,7 +2013,7 @@ final class Connection {
                             'max_stream_id' => self::MAX_STREAM_ID,
                             'statements_in_flight' => count($this->statements),
                             'orphaned_streams' => count($this->orphanedStreams),
-                            'request_timeout_seconds' => $this->requestTimeout,
+                            'request_timeout_seconds' => $requestTimeoutInSeconds ?? $this->requestTimeout,
                         ]
                     );
                 }
@@ -2044,7 +2069,7 @@ final class Connection {
                 // it decided whether this request is among them.
                 $expired = $this->timeOutExpiredStatements();
 
-                $budgetWasRestarted = false;
+                $statementStillPending = false;
 
                 if ($statement !== null) {
                     $mine = $this->intersectStatements($expired, [$statement]);
@@ -2052,14 +2077,17 @@ final class Connection {
                         $this->reportTimedOutStatements($mine, 'getResponseForStatement');
                     }
 
-                    // Still waiting and not overdue after all, so its budget was
-                    // restarted while we were reading: carry on against the
-                    // deadline the next pass computes.
-                    $budgetWasRestarted = isset($this->statements[$streamId]);
+                    // Not among the expired, so it is still waiting — its budget
+                    // has not run out, or a chained follow-up restarted it while
+                    // we were reading. Either way the connection's own
+                    // bookkeeping is authoritative for a statement, and the
+                    // fallback below must not second-guess it; carry on against
+                    // the deadline the next pass computes.
+                    $statementStillPending = isset($this->statements[$streamId]);
                 }
 
                 if (
-                    !$budgetWasRestarted
+                    !$statementStillPending
                     && $ownDeadline !== null
                     && microtime(true) >= $ownDeadline
                 ) {
@@ -2086,7 +2114,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function handleAutoPrepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null): ?Response\Result {
+    private function handleAutoPrepareResult(Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected result type while handling auto-prepared statement', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESULT_TYPE->value, [
@@ -2149,7 +2177,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function handleReprepareResult(Request\Prepare $request, Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null): ?Response\Result {
+    private function handleReprepareResult(Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected result type while handling reprepared statement', ExceptionCode::CONNECTION_REPREPARE_UNEXPECTED_RESULT_TYPE->value, [
@@ -2285,7 +2313,7 @@ final class Connection {
                 ]);
             }
 
-            $response = $this->handleReprepareResult($newPrepareRequest, $prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+            $response = $this->handleReprepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
         }
 
         return $response;
@@ -2294,7 +2322,7 @@ final class Connection {
     /**
      * @throws \Cassandra\Exception\ResponseException
      */
-    private function handleResponseExecuteResult(Request\Execute $request, Response\Result $result, ?Statement $statement): Response\Result {
+    private function handleResponseExecuteResult(Request\Execute $request, Response\Result $result): Response\Result {
 
         $result->setPreviousResult($request->getPreviousResult());
 
@@ -2326,10 +2354,10 @@ final class Connection {
         if ($statement !== null) {
             if ($statement->isRepreparing()) {
                 $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
-                $result = $this->handleReprepareResult($request, $result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+                $result = $this->handleReprepareResult($result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds);
             } elseif ($statement->isAutoPreparing()) {
                 $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
-                $result = $this->handleAutoPrepareResult($request, $result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+                $result = $this->handleAutoPrepareResult($result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds);
             }
         }
 
@@ -2351,7 +2379,7 @@ final class Connection {
 
         return match (true) {
             $request instanceof Request\Prepare => $this->handleResponsePrepareResult($request, $result, $statement, $requestTimeoutInSeconds),
-            $request instanceof Request\Execute => $this->handleResponseExecuteResult($request, $result, $statement),
+            $request instanceof Request\Execute => $this->handleResponseExecuteResult($request, $result),
             default => $result,
         };
     }
@@ -2654,7 +2682,10 @@ final class Connection {
 
         $request->setVersion($this->version);
 
-        $streamId = $this->getNewStreamId();
+        // Same precedence the Statement applies below: an explicit argument
+        // wins over what the request's options asked for, and only then does
+        // the connection default apply.
+        $streamId = $this->getNewStreamId($requestTimeoutInSeconds ?? $request->getRequestTimeout());
         $request->setStream($streamId);
 
         if ($request instanceof Request\Prepare) {

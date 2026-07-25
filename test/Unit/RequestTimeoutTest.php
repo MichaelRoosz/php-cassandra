@@ -115,6 +115,37 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $statement->getResult();
     }
 
+    public function testAnUnboundedStatementDoesNotSuppressAnotherStatementsBudget(): void {
+        // No connection-wide budget, so only the per-request option bounds
+        // anything. The unbounded statement has no deadline to contribute, but
+        // it must not cost the one beside it its own — otherwise the wait has
+        // nothing to end it and the bounded statement is never given up on.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: null);
+
+        $bounded = $connection->queryAsync('SELECT 1 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 1.0));
+        $unbounded = $connection->queryAsync('SELECT 2 FROM SLOW');
+
+        $start = microtime(true);
+
+        try {
+            // No wait bound either: the statements' own budgets are all there is.
+            $connection->waitForStatements([$bounded, $unbounded]);
+            $this->fail('expected the bounded request to time out');
+        } catch (RequestTimeoutException $e) {
+            $this->assertSame([$bounded], $e->getTimedOutStatements());
+        }
+
+        $this->assertLessThan(
+            5.0,
+            microtime(true) - $start,
+            'the 1s budget must end the wait, not run on until something else does'
+        );
+
+        $this->assertTrue($bounded->isTimedOut());
+        $this->assertFalse($unbounded->isTimedOut(), 'it asked for no budget, so it still has none');
+        $this->assertTrue($connection->isConnected());
+    }
+
     public function testAsyncDeadlineRunsFromSendTimeNotFromWhenWaitingStarts(): void {
         // 3s budget, nearly all of it burned before the wait even begins, so
         // the wait itself should end almost at once. Were the budget restarted

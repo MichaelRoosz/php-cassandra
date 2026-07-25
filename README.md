@@ -2359,7 +2359,7 @@ API reference (essentials)
   - `prepare(string, PrepareOptions)` / `prepareAsync(...)`
   - `execute(Result $previous, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)` / `executeAll(...)`
   - `batch(Batch)` / `batchAsync(Batch)`
-  - `syncRequest(Request, ?float $requestTimeoutInSeconds)` / `asyncRequest(Request)`
+  - `syncRequest(Request, ?float $requestTimeoutInSeconds)` / `asyncRequest(Request, ?float $requestTimeoutInSeconds)`
   - `waitForStatements(array $statements, ?float $timeoutInSeconds)` / `waitForAllPendingStatements(?float $timeoutInSeconds)` / `waitForAnyStatement(array $statements, ?float $timeoutInSeconds): ?Statement`
   - `registerEventListener(EventListener)` / `unregisterEventListener(EventListener)` / `waitForNextEvent(?float $timeoutInSeconds): ?Event`
   - `registerWarningsListener(WarningsListener)` / `unregisterWarningsListener(WarningsListener)`
