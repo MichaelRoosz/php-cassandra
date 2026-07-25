@@ -65,6 +65,17 @@ final class Socket extends NodeImplementation implements IoNode {
             return;
         }
 
+        if (str_contains($this->config->host, '://')) {
+            throw new SocketException(
+                message: 'The socket transport does not support URL schemes in the host (e.g. "tls://"); use a plain hostname or IP, or use StreamNodeConfig for TLS connections',
+                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                ]
+            );
+        }
+
         $addressFamily = filter_var($this->config->host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
             ? AF_INET6
             : AF_INET;
@@ -583,11 +594,17 @@ final class Socket extends NodeImplementation implements IoNode {
             $except = null;
 
             if ($waitForData) {
+                // Wait at most for the remaining receive timeout, so a peer that
+                // stays connected but silent cannot block reads forever.
+                $remaining = max(0.0, (float) $this->receiveTimeout - (microtime(true) - $start));
+                $remainingSeconds = (int) $remaining;
+
                 $selectResult = socket_select(
                     read: $read,
                     write: $write,
                     except: $except,
-                    seconds: null
+                    seconds: $remainingSeconds,
+                    microseconds: (int) (($remaining - (float) $remainingSeconds) * 1_000_000.0)
                 );
             } else {
                 $selectResult = socket_select(
@@ -628,6 +645,12 @@ final class Socket extends NodeImplementation implements IoNode {
             }
 
             if ($selectResult === 0) {
+                if ($waitForData) {
+                    $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
+
+                    continue;
+                }
+
                 return false;
             }
 

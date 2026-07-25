@@ -14,15 +14,17 @@ final class StreamNodeConfig extends NodeConfig {
         public readonly float $timeoutInSeconds = 30,
         public readonly bool $persistent = false,
 
-        /** 
-         * @var array<string,mixed> $sslOptions 
+        /**
+         * @var array<string,mixed> $sslOptions
          * see https://www.php.net/manual/en/context.ssl.php
+         *
+         * Passing a non-empty array enables TLS: if the host has no explicit
+         * scheme, "tls://" is used automatically. PHP's secure defaults
+         * (verify_peer, verify_peer_name enabled; allow_self_signed disabled)
+         * apply to any option not set here. An empty array connects in
+         * plaintext unless the host itself carries a "tls://"/"ssl://" scheme.
          */
-        public readonly array $sslOptions = [
-            'verify_peer' => true,
-            'verify_peer_name' => true,
-            'allow_self_signed' => false,
-        ],
+        public readonly array $sslOptions = [],
     ) {
         parent::__construct(
             host: $host,
