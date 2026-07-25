@@ -150,7 +150,7 @@ final class UDT extends ValueReadableWithoutLength {
         $value = $this->value;
 
         foreach ($this->typeInfo->valueTypes as $key => $type) {
-            if ($value[$key] === null) {
+            if (!array_key_exists($key, $value) || $value[$key] === null) {
                 $binary .= "\xff\xff\xff\xff";
             } else {
                 $valueBinary = $value[$key] instanceof ValueBase
