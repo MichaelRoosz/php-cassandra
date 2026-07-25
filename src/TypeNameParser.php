@@ -122,8 +122,57 @@ final class TypeNameParser {
     }
 
     /**
-     * @return array<string|int,string>
-     * 
+     * Decode a hex-encoded UDT name or field name as found in "UserType(...)"
+     * type strings.
+     *
+     * Cassandra hex-encodes the type name and every field name (but not the
+     * keyspace) in TypeParser::stringifyUserTypeParameters(), and requires hex
+     * when reading them back in TypeParser::getUserTypeParameters(): both are
+     * passed through ByteBufferUtil::hexToBytes(), which rejects odd-length
+     * strings and non-hex characters. Hex is therefore mandatory, not optional,
+     * and a name that is not valid hex is a malformed type string.
+     *
+     * @throws \Cassandra\Exception\TypeNameParserException
+     */
+    private function decodeUdtName(string $name): string {
+        if ($name !== '' && ((strlen($name) % 2) !== 0 || !ctype_xdigit($name))) {
+            throw new TypeNameParserException(
+                'Invalid UDT type params: name is not hex-encoded',
+                ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value,
+                [
+                    'name' => $name,
+                    'reason' => 'udt_name_not_hex_encoded',
+                ]
+            );
+        }
+
+        $decoded = $name === '' ? '' : hex2bin($name);
+
+        if ($decoded === false || !mb_check_encoding($decoded, 'UTF-8')) {
+            throw new TypeNameParserException(
+                'Invalid UDT type params: name does not decode to valid UTF-8',
+                ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value,
+                [
+                    'name' => $name,
+                    'reason' => 'udt_name_not_valid_utf8',
+                ]
+            );
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Split a bracketed parameter list into its top-level parameters.
+     *
+     * Each parameter is returned as a name/value pair; the name is the part
+     * before a top-level ":" (used by UDT field entries) or null when the
+     * parameter is unnamed. Names are kept as strings here on purpose — using
+     * them as array keys would let PHP silently coerce all-digit names (which
+     * hex-encoded UDT field names frequently are) into integers.
+     *
+     * @return list<array{name: ?string, value: string}>
+     *
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     private function extractParams(string $paramString): array {
@@ -191,14 +240,11 @@ final class TypeNameParser {
             }
 
             if ($char === ',') {
-
-                if ($name !== null) {
-                    $params[$name] = trim(mb_substr($paramString, $startCurrentParam, $i - $startCurrentParam));
-                    $name = null;
-
-                } else {
-                    $params[] = trim(mb_substr($paramString, $startCurrentParam, $i - $startCurrentParam));
-                }
+                $params[] = [
+                    'name' => $name,
+                    'value' => trim(mb_substr($paramString, $startCurrentParam, $i - $startCurrentParam)),
+                ];
+                $name = null;
 
                 $startCurrentParam = $i + 1;
             }
@@ -217,12 +263,10 @@ final class TypeNameParser {
         }
 
         if ($startCurrentParam < $length) {
-            if ($name !== null) {
-                $params[$name] = trim(mb_substr($paramString, $startCurrentParam));
-                $name = null;
-            } else {
-                $params[] = trim(mb_substr($paramString, $startCurrentParam));
-            }
+            $params[] = [
+                'name' => $name,
+                'value' => trim(mb_substr($paramString, $startCurrentParam)),
+            ];
         }
 
         return $params;
@@ -259,8 +303,8 @@ final class TypeNameParser {
     }
 
     /**
-     * @param array<string> $params
-     * 
+     * @param list<array{name: ?string, value: string}> $params
+     *
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     private function parseFrozenType(array $params, bool $isFrozen): TypeInfo {
@@ -278,11 +322,11 @@ final class TypeNameParser {
             );
         }
 
-        return $this->parse($params[0], isFrozen: true);
+        return $this->parse($params[0]['value'], isFrozen: true);
     }
 
     /**
-     * @param array<string> $params
+     * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
@@ -301,13 +345,13 @@ final class TypeNameParser {
             );
         }
 
-        $typeInfo = $this->parse($params[0]);
+        $typeInfo = $this->parse($params[0]['value']);
 
         return new ListCollectionInfo($typeInfo, $isFrozen);
     }
 
     /**
-     * @param array<string> $params
+     * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
@@ -326,14 +370,14 @@ final class TypeNameParser {
             );
         }
 
-        $keyType = $this->parse($params[0]);
-        $valueType = $this->parse($params[1]);
+        $keyType = $this->parse($params[0]['value']);
+        $valueType = $this->parse($params[1]['value']);
 
         return new MapCollectionInfo($keyType, $valueType, $isFrozen);
     }
 
     /**
-     * @param array<string> $params
+     * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
@@ -352,11 +396,11 @@ final class TypeNameParser {
             );
         }
 
-        return $this->parse($params[0], $isFrozen);
+        return $this->parse($params[0]['value'], $isFrozen);
     }
 
     /**
-     * @param array<string> $params
+     * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
@@ -375,13 +419,13 @@ final class TypeNameParser {
             );
         }
 
-        $typeInfo = $this->parse($params[0]);
+        $typeInfo = $this->parse($params[0]['value']);
 
         return new SetCollectionInfo($typeInfo, $isFrozen);
     }
 
     /**
-     * @param array<string> $params
+     * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
@@ -403,14 +447,14 @@ final class TypeNameParser {
         $valueTypes = [];
         $paramsCount = count($params);
         for ($i = 0; $i < $paramsCount; $i++) {
-            $valueTypes[] = $this->parse($params[$i]);
+            $valueTypes[] = $this->parse($params[$i]['value']);
         }
 
         return new TupleInfo($valueTypes);
     }
 
     /**
-     * @param array<string> $params
+     * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
@@ -429,34 +473,33 @@ final class TypeNameParser {
             );
         }
 
-        $keyspace = $params[0];
-        $name = $params[1];
+        $keyspace = $params[0]['value'];
+        $name = $this->decodeUdtName($params[1]['value']);
 
         $valueTypes = [];
         $udtParams = array_slice($params, 2);
-        foreach ($udtParams as $key => $value) {
+        foreach ($udtParams as $param) {
 
-            if (!is_string($key)) {
+            if ($param['name'] === null) {
                 throw new TypeNameParserException(
-                    'Invalid UDT type params: field keys must be strings',
+                    'Invalid UDT type params: field entries must be "name:type" pairs',
                     ExceptionCode::TYPENAMEPARSER_UDT_FIELD_KEY_NOT_STRING->value,
                     [
-                        'invalid_key' => $key,
-                        'key_type' => gettype($key),
+                        'invalid_field' => $param['value'],
                         'parameters' => $params,
-                        'reason' => 'udt_field_keys_must_be_strings',
+                        'reason' => 'udt_field_entries_must_be_named',
                     ]
                 );
             }
 
-            $valueTypes[$key] = $this->parse($value);
+            $valueTypes[$this->decodeUdtName($param['name'])] = $this->parse($param['value']);
         }
 
         return new UDTInfo($valueTypes, $isFrozen, $keyspace, $name);
     }
 
     /**
-     * @param array<string> $params
+     * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
      */
@@ -475,21 +518,21 @@ final class TypeNameParser {
             );
         }
 
-        $typeInfo = $this->parse($params[0]);
+        $typeInfo = $this->parse($params[0]['value']);
 
-        if (!is_numeric($params[1])) {
+        if (!is_numeric($params[1]['value'])) {
             throw new TypeNameParserException(
                 'Invalid vector type dimensions: must be numeric',
                 ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_NON_NUMERIC->value,
                 [
-                    'provided_value' => $params[1],
-                    'value_type' => gettype($params[1]),
+                    'provided_value' => $params[1]['value'],
+                    'value_type' => gettype($params[1]['value']),
                     'reason' => 'dimensions_must_be_numeric',
                 ]
             );
         }
 
-        $dimensions = (int) $params[1];
+        $dimensions = (int) $params[1]['value'];
 
         if ($dimensions < 0) {
             throw new TypeNameParserException(

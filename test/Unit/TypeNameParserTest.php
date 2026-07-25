@@ -73,7 +73,7 @@ class TypeNameParserTest extends AbstractUnitTestCase {
             $this->assertInstanceOf(TupleInfo::class, $result);
 
             // Test UDT
-            $result = $this->parser->parse(TypeName::UDT->value . '(ks,typeName,field1:' . $typeName->value . ',field2:' . TypeName::UTF8->value . ')');
+            $result = $this->parser->parse(TypeName::UDT->value . '(ks,' . bin2hex('typeName') . ',' . bin2hex('field1') . ':' . $typeName->value . ',' . bin2hex('field2') . ':' . TypeName::UTF8->value . ')');
             if (!($result instanceof UDTInfo)) {
                 $this->fail('Result is not a UDTInfo');
             }
@@ -166,7 +166,7 @@ class TypeNameParserTest extends AbstractUnitTestCase {
             TypeName::FROZEN->value . '(' .
                 TypeName::LIST->value . '(' .
                     TypeName::SET->value . '(' .
-                        TypeName::UDT->value . '(ks,typeName,field1:' . TypeName::TIMESTAMP->value . ',field2:' . TypeName::INT32->value . ')' .
+                        TypeName::UDT->value . '(ks,' . bin2hex('typeName') . ',' . bin2hex('field1') . ':' . TypeName::TIMESTAMP->value . ',' . bin2hex('field2') . ':' . TypeName::INT32->value . ')' .
                     ')' .
                 ')' .
             ')' .
@@ -371,7 +371,7 @@ class TypeNameParserTest extends AbstractUnitTestCase {
     }
 
     public function testFrozenUDTType(): void {
-        $result = $this->parser->parse(TypeName::UDT->value . '(ks,type,field1:' . TypeName::UTF8->value . ',field2:' . TypeName::INT32->value . ')', true);
+        $result = $this->parser->parse(TypeName::UDT->value . '(ks,' . bin2hex('type') . ',' . bin2hex('field1') . ':' . TypeName::UTF8->value . ',' . bin2hex('field2') . ':' . TypeName::INT32->value . ')', true);
         if (!($result instanceof UDTInfo)) {
             $this->fail('Result is not a UDTInfo');
         }
@@ -527,23 +527,30 @@ class TypeNameParserTest extends AbstractUnitTestCase {
     public function testParameterExtraction(): void {
         $testCases = [
             ['', []],
-            ['param1', ['param1']],
-            ['param1,param2,param3', ['param1', 'param2', 'param3']],
-            ['key1:value1,key2:value2', ['key1' => 'value1', 'key2' => 'value2']],
+            ['param1', [['name' => null, 'value' => 'param1']]],
+            ['param1,param2,param3', [
+                ['name' => null, 'value' => 'param1'],
+                ['name' => null, 'value' => 'param2'],
+                ['name' => null, 'value' => 'param3'],
+            ]],
+            ['key1:value1,key2:value2', [
+                ['name' => 'key1', 'value' => 'value1'],
+                ['name' => 'key2', 'value' => 'value2'],
+            ]],
             [
                 'org.apache.cassandra.db.marshal.UTF8Type,org.apache.cassandra.db.marshal.ListType(org.apache.cassandra.db.marshal.Int32Type)',
                 [
-                    'org.apache.cassandra.db.marshal.UTF8Type',
-                    'org.apache.cassandra.db.marshal.ListType(org.apache.cassandra.db.marshal.Int32Type)',
+                    ['name' => null, 'value' => 'org.apache.cassandra.db.marshal.UTF8Type'],
+                    ['name' => null, 'value' => 'org.apache.cassandra.db.marshal.ListType(org.apache.cassandra.db.marshal.Int32Type)'],
                 ],
             ],
             [
                 'keyspace,typename,field1:org.apache.cassandra.db.marshal.UTF8Type,field2:org.apache.cassandra.db.marshal.Int32Type',
                 [
-                    'keyspace',
-                    'typename',
-                    'field1' => 'org.apache.cassandra.db.marshal.UTF8Type',
-                    'field2' => 'org.apache.cassandra.db.marshal.Int32Type',
+                    ['name' => null, 'value' => 'keyspace'],
+                    ['name' => null, 'value' => 'typename'],
+                    ['name' => 'field1', 'value' => 'org.apache.cassandra.db.marshal.UTF8Type'],
+                    ['name' => 'field2', 'value' => 'org.apache.cassandra.db.marshal.Int32Type'],
                 ],
             ],
         ];
@@ -574,19 +581,27 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         $complexCases = [
             [
                 'list(map(text,set(int)))',
-                ['list(map(text,set(int)))'],
+                [['name' => null, 'value' => 'list(map(text,set(int)))']],
             ],
             [
                 'param1,list(set(text)),param3',
-                ['param1', 'list(set(text))', 'param3'],
+                [
+                    ['name' => null, 'value' => 'param1'],
+                    ['name' => null, 'value' => 'list(set(text))'],
+                    ['name' => null, 'value' => 'param3'],
+                ],
             ],
             [
                 'key:list(map(text,int))',
-                ['key' => 'list(map(text,int))'],
+                [['name' => 'key', 'value' => 'list(map(text,int))']],
             ],
             [
                 'a,b(c,d(e)),f:g(h,i)',
-                ['a', 'b(c,d(e))', 'f' => 'g(h,i)'],
+                [
+                    ['name' => null, 'value' => 'a'],
+                    ['name' => null, 'value' => 'b(c,d(e))'],
+                    ['name' => 'f', 'value' => 'g(h,i)'],
+                ],
             ],
         ];
 
@@ -601,11 +616,14 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         $method = $reflection->getMethod('extractParams');
 
         $edgeCases = [
-            [' param1 ', ['param1']],
-            ['param1 , param2', ['param1', 'param2']],
-            [' key : value ', ['key' => 'value']],
-            ['param()', ['param()']],
-            ['param((nested))', ['param((nested))']],
+            [' param1 ', [['name' => null, 'value' => 'param1']]],
+            ['param1 , param2', [
+                ['name' => null, 'value' => 'param1'],
+                ['name' => null, 'value' => 'param2'],
+            ]],
+            [' key : value ', [['name' => 'key', 'value' => 'value']]],
+            ['param()', [['name' => null, 'value' => 'param()']]],
+            ['param((nested))', [['name' => null, 'value' => 'param((nested))']]],
         ];
 
         foreach ($edgeCases as [$paramString, $expectedParams]) {
@@ -813,6 +831,38 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testUDTTypeErrorFieldNameNotHexEncoded(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value);
+
+        // "zip" is not a hex string; Cassandra always hex-encodes field names.
+        $this->parser->parse(TypeName::UDT->value . '(ks,' . bin2hex('address') . ',zip:' . TypeName::INT32->value . ')');
+    }
+
+    public function testUDTTypeErrorNameNotHexEncoded(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value);
+
+        // "address" is not a hex string; Cassandra always hex-encodes the type name.
+        $this->parser->parse(TypeName::UDT->value . '(ks,address,' . bin2hex('zip') . ':' . TypeName::INT32->value . ')');
+    }
+
+    public function testUDTTypeErrorNameNotValidUtf8(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value);
+
+        // Valid hex, but 0xFF is not a valid UTF-8 sequence.
+        $this->parser->parse(TypeName::UDT->value . '(ks,ff,' . bin2hex('zip') . ':' . TypeName::INT32->value . ')');
+    }
+
+    public function testUDTTypeErrorNameOddLengthHex(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_UDT_NAME_INVALID_HEX->value);
+
+        // Hex digits only, but an odd length cannot represent whole bytes.
+        $this->parser->parse(TypeName::UDT->value . '(ks,abc,' . bin2hex('zip') . ':' . TypeName::INT32->value . ')');
+    }
+
     // =============================================
     // UDT TYPE TESTS
     // =============================================
@@ -821,7 +871,7 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         $this->expectException(TypeNameParserException::class);
         $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_UDT_FIELD_KEY_NOT_STRING->value);
 
-        $this->parser->parse(TypeName::UDT->value . '(mykeyspace,mytype,' . TypeName::UTF8->value . ')');
+        $this->parser->parse(TypeName::UDT->value . '(mykeyspace,' . bin2hex('mytype') . ',' . TypeName::UTF8->value . ')');
     }
 
     public function testUDTTypeErrorNoParams(): void {
@@ -848,13 +898,13 @@ class TypeNameParserTest extends AbstractUnitTestCase {
     public function testUDTTypes(): void {
         $testCases = [
             [
-                TypeName::UDT->value . '(mykeyspace,mytype,field1:' . TypeName::UTF8->value . ',field2:' . TypeName::INT32->value . ')',
+                TypeName::UDT->value . '(mykeyspace,' . bin2hex('mytype') . ',' . bin2hex('field1') . ':' . TypeName::UTF8->value . ',' . bin2hex('field2') . ':' . TypeName::INT32->value . ')',
                 'mykeyspace',
                 'mytype',
                 ['field1' => Type::VARCHAR, 'field2' => Type::INT],
             ],
             [
-                TypeName::UDT->value . '(testkeyspace,testtype,name:' . TypeName::UTF8->value . ',age:' . TypeName::INT32->value . ',active:' . TypeName::BOOLEAN->value . ')',
+                TypeName::UDT->value . '(testkeyspace,' . bin2hex('testtype') . ',' . bin2hex('name') . ':' . TypeName::UTF8->value . ',' . bin2hex('age') . ':' . TypeName::INT32->value . ',' . bin2hex('active') . ':' . TypeName::BOOLEAN->value . ')',
                 'testkeyspace',
                 'testtype',
                 ['name' => Type::VARCHAR, 'age' => Type::INT, 'active' => Type::BOOLEAN],
@@ -885,8 +935,26 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testUDTTypeWithAllDigitHexEncodedNames(): void {
+        // "address" and "street" hex-encode to all-decimal-digit strings; as
+        // array keys PHP would coerce them to int, which previously made the
+        // parser reject the (server-generated) type string entirely.
+        $typeString = TypeName::UDT->value . '(ks,61646472657373,737472656574:' . TypeName::UTF8->value . ',7a6970:' . TypeName::INT32->value . ')';
+
+        $result = $this->parser->parse($typeString);
+        if (!($result instanceof UDTInfo)) {
+            $this->fail('Result is not a UDTInfo');
+        }
+
+        $this->assertEquals('ks', $result->keyspace);
+        $this->assertEquals('address', $result->name);
+        $this->assertSame(['street', 'zip'], array_keys($result->valueTypes));
+        $this->assertEquals(Type::VARCHAR, $result->valueTypes['street']->type);
+        $this->assertEquals(Type::INT, $result->valueTypes['zip']->type);
+    }
+
     public function testUDTTypeWithHexEncodedNames(): void {
-        $typeString = TypeName::UDT->value . '(foo,696e617070726f7072696174655f666565646261636a,617574686f725f66696e6765727072696e75:' . TypeName::UTF8->value . ',7375626d697373696f6e5f7473:' . TypeName::TIMESTAMP->value . ',726561736f6e5f74657874:' . TypeName::UTF8->value . ')';
+        $typeString = TypeName::UDT->value . '(foo,696E617070726F7072696174655F666565646261636B,617574686F725F66696E6765727072696E74:' . TypeName::UTF8->value . ',7375626d697373696f6e5f7473:' . TypeName::TIMESTAMP->value . ',726561736f6e5f74657874:' . TypeName::UTF8->value . ')';
 
         $result = $this->parser->parse($typeString);
         if (!($result instanceof UDTInfo)) {
@@ -895,12 +963,12 @@ class TypeNameParserTest extends AbstractUnitTestCase {
 
         $this->assertInstanceOf(UDTInfo::class, $result);
         $this->assertEquals('foo', $result->keyspace);
-        $this->assertEquals('696e617070726f7072696174655f666565646261636a', $result->name);
+        $this->assertEquals('inappropriate_feedback', $result->name);
 
         $expectedFields = [
-            '617574686f725f66696e6765727072696e75' => Type::VARCHAR,
-            '7375626d697373696f6e5f7473' => Type::TIMESTAMP,
-            '726561736f6e5f74657874' => Type::VARCHAR,
+            'author_fingerprint' => Type::VARCHAR,
+            'submission_ts' => Type::TIMESTAMP,
+            'reason_text' => Type::VARCHAR,
         ];
 
         foreach ($expectedFields as $fieldName => $expectedType) {
