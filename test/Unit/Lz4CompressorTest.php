@@ -10,19 +10,17 @@ use Cassandra\Compression\Lz4Decompressor;
 class Lz4CompressorTest extends AbstractUnitTestCase {
     /**
      * @return array<string, array{0: string}>
-     *
-     * @throws \Random\RandomException
      */
     public static function frameRoundTripProvider(): array {
         return [
             'empty' => [''],
             'short' => ['hello lz4 frame'],
             'compressible' => [str_repeat('The quick brown fox. ', 5000)],
-            'incompressible' => [random_bytes(70000)],
+            'incompressible' => [self::pseudoRandomBytes(70000, 1)],
             // Larger than the 4 MiB frame block max: exercises multiple blocks.
             'multi-block compressible' => [str_repeat('0123456789abcdef', 300000)],
             // Multiple blocks that are each stored uncompressed.
-            'multi-block incompressible' => [random_bytes(5 * 1024 * 1024)],
+            'multi-block incompressible' => [self::pseudoRandomBytes(5 * 1024 * 1024, 2)],
         ];
     }
     /**
@@ -38,8 +36,8 @@ class Lz4CompressorTest extends AbstractUnitTestCase {
             'end-match trigger' => [$endMatchTrigger],
             'repetitive' => [str_repeat('abcd', 4000)],
             'text with repeats' => [str_repeat('The quick brown fox. ', 500)],
-            'random 9973' => [random_bytes(9973)],
-            'random 131073' => [random_bytes(131073)],
+            'random 9973' => [self::pseudoRandomBytes(9973, 3)],
+            'random 131073' => [self::pseudoRandomBytes(131073, 4)],
         ];
 
         // Sequences whose final bytes repeat an earlier run, at every tail offset
@@ -172,7 +170,7 @@ class Lz4CompressorTest extends AbstractUnitTestCase {
         $compressor = new Lz4Compressor(preferExtension: false);
         $decompressor = new Lz4Decompressor();
 
-        $input = random_bytes(9973);
+        $input = self::pseudoRandomBytes(9973, 5);
 
         $compressed = $compressor->compressBlock($input);
         $decompressor->setInput($compressed);
