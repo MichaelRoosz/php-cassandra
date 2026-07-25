@@ -22,8 +22,28 @@ final class Vector extends ValueReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(array $value, VectorInfo $typeInfo) {
+
+        // The wire encoding is positional over exactly $typeInfo->dimensions
+        // elements read as $value[0..dimensions-1]. Reject anything that would
+        // make getBinary() index a missing slot or silently drop extras: the
+        // array must be a 0-indexed list whose length equals the dimensions.
+        if (!array_is_list($value)) {
+            throw new ValueException('Invalid vector value; expected a sequential (list) array', ExceptionCode::VALUE_VECTOR_INVALID_VALUE_TYPE->value, [
+                'note' => 'vector values must be a 0-indexed list of elements',
+            ]);
+        }
+
+        if (count($value) !== $typeInfo->dimensions) {
+            throw new ValueException('Vector element count does not match the declared number of dimensions', ExceptionCode::VALUE_VECTOR_DIMENSION_MISMATCH->value, [
+                'expected_dimensions' => $typeInfo->dimensions,
+                'actual_count' => count($value),
+            ]);
+        }
+
         $this->value = $value;
         $this->typeInfo = $typeInfo;
     }
