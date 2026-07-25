@@ -60,6 +60,7 @@ class RequestCompressorTest extends AbstractUnitTestCase {
         $compressor = new RequestCompressor($capture, 'lz4');
 
         $request = new Query(str_repeat('SELECT * FROM ks.tbl WHERE id = 1; ', 500), [], Consistency::ONE);
+        $request->setStream(7);
 
         $uncompressedFrame = $request->__toString();
         $uncompressedBody = substr($uncompressedFrame, 9);
@@ -104,6 +105,7 @@ class RequestCompressorTest extends AbstractUnitTestCase {
         $compressor = new RequestCompressor($capture, 'lz4');
 
         $request = new Options();
+        $request->setStream(7);
         $expected = $request->__toString();
 
         $compressor->writeRequest($request);
@@ -119,6 +121,7 @@ class RequestCompressorTest extends AbstractUnitTestCase {
         // Random bytes are incompressible, so LZ4 would expand them; the
         // compressor must fall back to sending the frame unchanged.
         $request = new Query(random_bytes(4096), [], Consistency::ONE);
+        $request->setStream(7);
         $expected = $request->__toString();
 
         $compressor->writeRequest($request);

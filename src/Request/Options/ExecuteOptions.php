@@ -16,6 +16,7 @@ final class ExecuteOptions extends QueryOptions {
         ?bool $namesForValues = null,
         ?string $keyspace = null,
         ?int $nowInSeconds = null,
+        ?float $requestTimeoutInSeconds = null,
     ) {
         parent::__construct(
             autoPrepare: false,
@@ -25,7 +26,8 @@ final class ExecuteOptions extends QueryOptions {
             defaultTimestamp: $defaultTimestamp,
             namesForValues: $namesForValues,
             keyspace: $keyspace,
-            nowInSeconds: $nowInSeconds
+            nowInSeconds: $nowInSeconds,
+            requestTimeoutInSeconds: $requestTimeoutInSeconds,
         );
     }
 
@@ -42,6 +44,7 @@ final class ExecuteOptions extends QueryOptions {
             namesForValues: $options->namesForValues,
             keyspace: $options->keyspace,
             nowInSeconds: $options->nowInSeconds,
+            requestTimeoutInSeconds: $options->requestTimeoutInSeconds,
         );
     }
 
@@ -55,7 +58,8 @@ final class ExecuteOptions extends QueryOptions {
             defaultTimestamp: $this->defaultTimestamp,
             namesForValues: $this->namesForValues,
             keyspace: $keyspace,
-            nowInSeconds: $this->nowInSeconds
+            nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
 
@@ -70,6 +74,7 @@ final class ExecuteOptions extends QueryOptions {
             namesForValues: $namesForValues,
             keyspace: $this->keyspace,
             nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
 
@@ -83,7 +88,8 @@ final class ExecuteOptions extends QueryOptions {
             defaultTimestamp: $this->defaultTimestamp,
             namesForValues: $this->namesForValues,
             keyspace: $this->keyspace,
-            nowInSeconds: $this->nowInSeconds
+            nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
 
@@ -96,7 +102,8 @@ final class ExecuteOptions extends QueryOptions {
             defaultTimestamp: $this->defaultTimestamp,
             namesForValues: $this->namesForValues,
             keyspace: $this->keyspace,
-            nowInSeconds: $this->nowInSeconds
+            nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
 }

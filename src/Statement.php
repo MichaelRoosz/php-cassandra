@@ -14,7 +14,11 @@ final class Statement {
 
     private Request\Request $request;
 
+    private ?float $requestTimeout;
+
     private ?Response\Response $response = null;
+
+    private float $sentAt;
 
     private StatementStatus $status;
 
@@ -26,6 +30,8 @@ final class Statement {
         $this->request = $request;
         $this->originalRequest = $originalRequest ?? $request;
         $this->status = StatementStatus::CREATED;
+        $this->sentAt = microtime(true);
+        $this->requestTimeout = $this->originalRequest->getRequestTimeout() ?? $request->getRequestTimeout();
     }
 
     public function getOriginalRequest(): Request\Request {
@@ -42,6 +48,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function getPreparedResult(): Response\Result\PreparedResult {
         $response = $this->getResponse();
@@ -56,19 +63,30 @@ final class Statement {
 
         return $response;
     }
+
     public function getRequest(): Request\Request {
         return $this->request;
+    }
+
+    /**
+     * The timeout this statement's request asked for, or null to use the
+     * connection default.
+     */
+    public function getRequestTimeout(): ?float {
+        return $this->requestTimeout;
     }
 
     /**
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\StatementException
      */
     public function getResponse(): Response\Response {
         if ($this->response === null) {
@@ -92,6 +110,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function getResult(): Response\Result {
         $response = $this->getResponse();
@@ -117,6 +136,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function getRowsResult(): Response\Result\RowsResult {
         $response = $this->getResponse();
@@ -142,6 +162,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function getSchemaChangeResult(): Response\Result\SchemaChangeResult {
         $response = $this->getResponse();
@@ -158,6 +179,13 @@ final class Statement {
     }
 
     /**
+     * When the request was written to the node, as a microtime.
+     */
+    public function getSentAt(): float {
+        return $this->sentAt;
+    }
+
+    /**
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\RequestException
@@ -167,6 +195,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function getSetKeyspaceResult(): Response\Result\SetKeyspaceResult {
         $response = $this->getResponse();
@@ -186,6 +215,15 @@ final class Statement {
         return $this->streamId;
     }
 
+    /**
+     * Whether the connection was closed before this statement was answered, in
+     * which case it can never be resolved and any attempt to read its result
+     * fails immediately instead of waiting for an answer that cannot arrive.
+     */
+    public function isAbandoned(): bool {
+        return $this->status === StatementStatus::ABANDONED;
+    }
+
     public function isAutoPreparing(): bool {
         return $this->status === StatementStatus::AUTO_PREPARING;
     }
@@ -196,6 +234,15 @@ final class Statement {
 
     public function isResultReady(): bool {
         return $this->status === StatementStatus::RESULT_READY;
+    }
+
+    /**
+     * Whether the client stopped waiting for this statement's answer. The
+     * connection and its other statements are unaffected; this one is simply
+     * finished and would have to be sent again.
+     */
+    public function isTimedOut(): bool {
+        return $this->status === StatementStatus::TIMED_OUT;
     }
 
     public function isWaitingForResult(): bool {
@@ -214,6 +261,14 @@ final class Statement {
         }
     }
 
+    /**
+     * Restarts the request timeout budget, for when the request behind this
+     * statement is (re)written to the node.
+     */
+    public function setSentAt(float $sentAt): void {
+        $this->sentAt = $sentAt;
+    }
+
     public function setStatus(StatementStatus $status): void {
         $this->status = $status;
     }
@@ -228,6 +283,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function tryGetPreparedResult(): ?Response\Result\PreparedResult {
         $response = $this->tryGetResponse();
@@ -253,11 +309,13 @@ final class Statement {
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\StatementException
      */
     public function tryGetResponse(): ?Response\Response {
         if ($this->response === null) {
@@ -281,6 +339,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function tryGetResult(): ?Response\Result {
         $response = $this->tryGetResponse();
@@ -310,6 +369,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function tryGetRowsResult(): ?Response\Result\RowsResult {
         $response = $this->tryGetResponse();
@@ -339,6 +399,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function tryGetSchemaChangeResult(): ?Response\Result\SchemaChangeResult {
         $response = $this->tryGetResponse();
@@ -368,6 +429,7 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\StatementException
+     * @throws \Cassandra\Exception\RequestTimeoutException
      */
     public function tryGetSetKeyspaceResult(): ?Response\Result\SetKeyspaceResult {
         $response = $this->tryGetResponse();
@@ -396,6 +458,8 @@ final class Statement {
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\StatementException
      */
     public function waitForResponse(): void {
         $this->getResponse();

@@ -127,6 +127,7 @@ final class FrameCodec extends NodeImplementation {
 
     /**
      * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
     public function writeRequest(Request $request): void {

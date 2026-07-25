@@ -82,6 +82,15 @@ final class Batch extends Request {
             . self::encodeBatchParametersAsBinary($this->consistency, [], $this->options, $this->version);
     }
 
+    public function getOptions(): BatchOptions {
+        return $this->options;
+    }
+
+    #[\Override]
+    public function getRequestTimeout(): ?float {
+        return $this->options->requestTimeoutInSeconds;
+    }
+
     /**
      * @param array<mixed> $values
      *

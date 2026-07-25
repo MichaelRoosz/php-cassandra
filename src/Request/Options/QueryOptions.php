@@ -16,6 +16,12 @@ class QueryOptions extends RequestOptions {
         public readonly ?bool $namesForValues = null,
         public readonly ?string $keyspace = null,
         public readonly ?int $nowInSeconds = null,
+
+        /**
+         * How long to wait for the server to answer this request, in seconds,
+         * overriding the connection default. Null uses the connection default.
+         */
+        public readonly ?float $requestTimeoutInSeconds = null,
     ) {
     }
 
@@ -29,6 +35,7 @@ class QueryOptions extends RequestOptions {
             namesForValues: $this->namesForValues,
             keyspace: $keyspace,
             nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
 
@@ -42,6 +49,7 @@ class QueryOptions extends RequestOptions {
             namesForValues: $namesForValues,
             keyspace: $this->keyspace,
             nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
 
@@ -55,6 +63,7 @@ class QueryOptions extends RequestOptions {
             namesForValues: $this->namesForValues,
             keyspace: $this->keyspace,
             nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
 }

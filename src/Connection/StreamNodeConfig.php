@@ -11,7 +11,24 @@ final class StreamNodeConfig extends NodeConfig {
         string $username = '',
         string $password = '',
         public readonly float $connectTimeoutInSeconds = 5,
-        public readonly float $timeoutInSeconds = 30,
+
+        /**
+         * Receive/send timeout of the transport, in seconds. Fractional values
+         * are honoured; a value of 0 (or less) disables the timeout.
+         *
+         * This is a stall timeout: it bounds how long the stream makes no
+         * progress at all, not how long a whole request body takes, so a large
+         * frame on a slow link does not trip it.
+         *
+         * The default is deliberately above Cassandra's own coordinator
+         * timeouts (range_request_timeout and request_timeout default to 10s),
+         * so that the server gets a chance to answer with a proper error
+         * instead of the client tearing the connection down first. Operations
+         * with a higher server-side timeout — TRUNCATE defaults to 60s — need
+         * a larger value.
+         */
+        public readonly float $timeoutInSeconds = 15,
+
         public readonly bool $persistent = false,
 
         /**

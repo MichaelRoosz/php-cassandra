@@ -84,6 +84,7 @@ class FrameCodecCompressionTest extends AbstractUnitTestCase {
         $codec = new FrameCodec(new LoopbackNode(), $compression);
 
         $request = new PlainBodyRequest($payload);
+        $request->setStream(7);
         $expected = $request->__toString();
 
         $codec->writeRequest($request);

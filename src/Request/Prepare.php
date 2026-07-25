@@ -67,4 +67,9 @@ final class Prepare extends Request {
     public function getQuery(): string {
         return $this->query;
     }
+
+    #[\Override]
+    public function getRequestTimeout(): ?float {
+        return $this->options->requestTimeoutInSeconds;
+    }
 }

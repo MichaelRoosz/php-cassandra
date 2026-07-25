@@ -140,6 +140,11 @@ final class Execute extends Request {
         return $this->previousResult;
     }
 
+    #[\Override]
+    public function getRequestTimeout(): ?float {
+        return $this->options->requestTimeoutInSeconds;
+    }
+
     /**
      * @return array<mixed> $values
      */

@@ -9,10 +9,16 @@ use Cassandra\Exception\StreamException;
 use Cassandra\Request\Request;
 
 final class Stream extends NodeImplementation implements IoNode {
+    /**
+     * PHP has no "never time out" value for stream_set_timeout(), so an
+     * effectively unreachable one is used when timeouts are disabled.
+     */
+    private const UNLIMITED_STREAM_TIMEOUT_SECONDS = 365 * 24 * 60 * 60;
+
     private StreamNodeConfig $config;
     private bool $isBlockingIo = false;
-    private int $receiveTimeout = 10;
-    private int $sendTimeout = 10;
+    private float $receiveTimeout = 10.0;
+    private float $sendTimeout = 10.0;
 
     /**
      * @var ?resource $stream
@@ -37,8 +43,12 @@ final class Stream extends NodeImplementation implements IoNode {
         }
         $this->config = $config;
 
-        $this->sendTimeout = max(1, (int) $config->timeoutInSeconds);
-        $this->receiveTimeout = max(1, (int) $config->timeoutInSeconds);
+        // Fractional timeouts are kept as configured; a non-positive value
+        // disables the timeout entirely.
+        $timeout = $config->timeoutInSeconds > 0.0 ? $config->timeoutInSeconds : self::NO_TIMEOUT;
+
+        $this->sendTimeout = $timeout;
+        $this->receiveTimeout = $timeout;
     }
 
     public function __destruct() {
@@ -116,9 +126,14 @@ final class Stream extends NodeImplementation implements IoNode {
 
         $this->isBlockingIo = stream_set_blocking($stream, enable: false) === false;
 
-        $timeoutSeconds = (int) floor($this->config->timeoutInSeconds);
-        $timeoutMicroseconds = (int) (($this->config->timeoutInSeconds - (float) $timeoutSeconds) * 1_000_000.0);
-        stream_set_timeout($stream, $timeoutSeconds, $timeoutMicroseconds);
+        // Only relevant when the stream could not be switched to non-blocking
+        // mode; the non-blocking paths enforce the timeouts via stream_select().
+        [$timeoutSeconds, $timeoutMicroseconds] = $this->splitTimeout($this->receiveTimeout);
+        stream_set_timeout(
+            $stream,
+            $timeoutSeconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,
+            $timeoutMicroseconds
+        );
 
         $this->stream = $stream;
     }
@@ -276,11 +291,14 @@ final class Stream extends NodeImplementation implements IoNode {
             return;
         }
 
-        $start = microtime(true);
+        // The send timeout is a stall timeout, not a deadline for the whole
+        // payload: it bounds how long the stream makes no progress at all, so
+        // writing a large frame over a slow but healthy connection cannot trip it.
+        $lastProgressAt = microtime(true);
 
         do {
             if (!$this->isBlockingIo) {
-                $canWrite = $this->selectStreamForWrite($stream, $start);
+                $canWrite = $this->selectStreamForWrite($stream, $lastProgressAt);
                 if (!$canWrite) {
                     continue;
                 }
@@ -330,18 +348,22 @@ final class Stream extends NodeImplementation implements IoNode {
 
             if ($sentBytes === 0) {
 
-                $this->checkForWriteTimeout($stream, $start);
+                $this->checkForWriteTimeout($stream, $lastProgressAt);
 
                 continue;
             }
 
             $data = substr($data, $sentBytes);
 
+            // Bytes moved, so the stall window starts over.
+            $lastProgressAt = microtime(true);
+
         } while ($data !== '');
     }
 
     /**
      * @throws \Cassandra\Exception\StreamException
+     * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
     public function writeRequest(Request $request): void {
@@ -378,9 +400,9 @@ final class Stream extends NodeImplementation implements IoNode {
      * 
      * @throws \Cassandra\Exception\StreamException
      */
-    private function checkForWriteTimeout($stream, float $start): void {
+    private function checkForWriteTimeout($stream, float $lastProgressAt): void {
 
-        if (microtime(true) - $start > $this->sendTimeout) {
+        if (microtime(true) - $lastProgressAt > $this->sendTimeout) {
             throw new StreamException(
                 message: 'Stream write timed out',
                 code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
@@ -411,7 +433,7 @@ final class Stream extends NodeImplementation implements IoNode {
                 // Wait at most for the remaining receive timeout; the per-stream
                 // timeout set via stream_set_timeout() has no effect on
                 // non-blocking streams, so it must be enforced here.
-                $remaining = (float) $this->receiveTimeout - (microtime(true) - $start);
+                $remaining = $this->receiveTimeout - (microtime(true) - $start);
 
                 if ($remaining <= 0.0) {
                     // Selecting with a zero timeout would return immediately and
@@ -421,14 +443,14 @@ final class Stream extends NodeImplementation implements IoNode {
                     continue;
                 }
 
-                $remainingSeconds = (int) $remaining;
+                [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
                 $selectResult = stream_select(
                     read: $read,
                     write: $write,
                     except: $except,
                     seconds: $remainingSeconds,
-                    microseconds: (int) (($remaining - (float) $remainingSeconds) * 1_000_000.0)
+                    microseconds: $remainingMicroseconds
                 );
             } else {
                 $selectResult = stream_select(
@@ -495,16 +517,30 @@ final class Stream extends NodeImplementation implements IoNode {
      * 
      * @throws \Cassandra\Exception\StreamException
      */
-    private function selectStreamForWrite($stream, float $start): bool {
+    private function selectStreamForWrite($stream, float $lastProgressAt): bool {
         $read = null;
         $write = [ $stream ];
         $except = null;
+
+        // Wait at most for what is left of the stall window, so that several
+        // select() calls without progress cannot add up to a multiple of the
+        // configured send timeout.
+        $remaining = $this->sendTimeout - (microtime(true) - $lastProgressAt);
+
+        if ($remaining <= 0.0) {
+            $this->checkForWriteTimeout($stream, $lastProgressAt);
+
+            return false;
+        }
+
+        [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
         $selectResult = stream_select(
             read: $read,
             write: $write,
             except: $except,
-            seconds: $this->sendTimeout,
+            seconds: $remainingSeconds,
+            microseconds: $remainingMicroseconds,
         );
 
         if ($selectResult === false) {
@@ -535,7 +571,7 @@ final class Stream extends NodeImplementation implements IoNode {
         }
 
         if ($selectResult === 0) {
-            $this->checkForWriteTimeout($stream, $start);
+            $this->checkForWriteTimeout($stream, $lastProgressAt);
 
             return false;
         }

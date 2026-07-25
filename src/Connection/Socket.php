@@ -11,9 +11,10 @@ use Cassandra\Request\Request;
 
 final class Socket extends NodeImplementation implements IoNode {
     private SocketNodeConfig $config;
+    private float $connectTimeout = 5.0;
     private bool $isBlockingIo = false;
-    private int $receiveTimeout = 10;
-    private int $sendTimeout = 10;
+    private float $receiveTimeout = 10.0;
+    private float $sendTimeout = 10.0;
     private ?PhpSocket $socket = null;
 
     /**
@@ -38,6 +39,18 @@ final class Socket extends NodeImplementation implements IoNode {
             'sendTimeout' => $this->sendTimeout,
             'receiveTimeout' => $this->receiveTimeout,
         ] = $this->getTimeoutsFromConfig();
+
+        if ($config->connectTimeoutInSeconds <= 0.0) {
+            throw new SocketException(
+                message: 'Invalid connect timeout: it must be greater than zero',
+                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                context: [
+                    'connect_timeout_seconds' => $config->connectTimeoutInSeconds,
+                ]
+            );
+        }
+
+        $this->connectTimeout = $config->connectTimeoutInSeconds;
     }
 
     public function __destruct() {
@@ -281,10 +294,14 @@ final class Socket extends NodeImplementation implements IoNode {
             return;
         }
 
-        $start = microtime(true);
+        // The send timeout is a stall timeout, not a deadline for the whole
+        // payload: it bounds how long the socket makes no progress at all, so
+        // writing a large frame over a slow but healthy connection cannot trip
+        // it. This mirrors SO_SNDTIMEO, which POSIX defines per send() call.
+        $lastProgressAt = microtime(true);
         do {
             if (!$this->isBlockingIo) {
-                $canWrite = $this->selectSocketForWrite($socket, $start);
+                $canWrite = $this->selectSocketForWrite($socket, $lastProgressAt);
                 if (!$canWrite) {
                     continue;
                 }
@@ -295,7 +312,7 @@ final class Socket extends NodeImplementation implements IoNode {
                 $sentBytes = socket_write($socket, $data);
 
                 if ($sentBytes === 0) {
-                    $this->checkForWriteTimeout($start);
+                    $this->checkForWriteTimeout($lastProgressAt);
 
                     // Back to the outer loop so the socket is selected for
                     // writability again instead of spinning on socket_write().
@@ -311,7 +328,7 @@ final class Socket extends NodeImplementation implements IoNode {
                         || $errorCode === SOCKET_EINTR
                     ) {
 
-                        $this->checkForWriteTimeout($start);
+                        $this->checkForWriteTimeout($lastProgressAt);
 
                         // Back to the outer loop so the socket is selected for
                         // writability again instead of spinning on socket_write().
@@ -390,6 +407,9 @@ final class Socket extends NodeImplementation implements IoNode {
                 $bufferErrors = 0;
                 $data = substr($data, $sentBytes);
 
+                // Bytes moved, so the stall window starts over.
+                $lastProgressAt = microtime(true);
+
             } while ($data !== '');
 
             break;
@@ -399,6 +419,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
     /**
      * @throws \Cassandra\Exception\SocketException
+     * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
     public function writeRequest(Request $request): void {
@@ -430,9 +451,9 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    private function checkForWriteTimeout(float $start): void {
+    private function checkForWriteTimeout(float $lastProgressAt): void {
 
-        if (microtime(true) - $start > $this->sendTimeout) {
+        if (microtime(true) - $lastProgressAt > $this->sendTimeout) {
             throw new SocketException(
                 message: 'Socket write timed out',
                 code: ExceptionCode::SOCKET_TIMEOUT_DURING_WRITE->value,
@@ -508,7 +529,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
                 if ($errorCode === SOCKET_EINTR) {
 
-                    if (microtime(true) - $start > $this->sendTimeout) {
+                    if (microtime(true) - $start > $this->connectTimeout) {
                         $this->closeSocket($socket, false);
 
                         throw new SocketException(
@@ -583,39 +604,75 @@ final class Socket extends NodeImplementation implements IoNode {
     }
 
     /**
+     * Read a timeout option (SO_SNDTIMEO / SO_RCVTIMEO) as fractional seconds.
+     *
+     * Both components are honoured, so a sub-second timeout expressed purely
+     * through 'usec' is not silently rounded away. A zero timeout
+     * (`['sec' => 0, 'usec' => 0]`) disables the timeout entirely, which is
+     * what the underlying socket option means as well.
+     *
+     * @throws \Cassandra\Exception\SocketException
+     */
+    private function getTimeoutFromConfig(int $option, string $name, float $default): float {
+        $value = $this->config->socketOptions[$option] ?? null;
+
+        if ($value === null) {
+            return $default;
+        }
+
+        if (!is_array($value)) {
+            throw new SocketException(
+                message: 'Invalid ' . $name . ' timeout',
+                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                context: [
+                    $name . '_timeout' => $value,
+                ]
+            );
+        }
+
+        $seconds = $value['sec'] ?? 0;
+        $microseconds = $value['usec'] ?? 0;
+
+        if (!is_int($seconds) || !is_int($microseconds) || $seconds < 0 || $microseconds < 0) {
+            throw new SocketException(
+                message: 'Invalid ' . $name . ' timeout',
+                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                context: [
+                    $name . '_timeout_sec' => $seconds,
+                    $name . '_timeout_usec' => $microseconds,
+                ]
+            );
+        }
+
+        if ($seconds === 0 && $microseconds === 0) {
+            return self::NO_TIMEOUT;
+        }
+
+        return (float) $seconds + (float) $microseconds / 1_000_000.0;
+    }
+
+    /**
      * @return array{
-     *   sendTimeout: int,
-     *   receiveTimeout: int,
+     *   sendTimeout: float,
+     *   receiveTimeout: float,
      * }
-     * 
+     *
      * @throws \Cassandra\Exception\SocketException
      */
     private function getTimeoutsFromConfig(): array {
-        $sendTimeout = $this->config->socketOptions[SO_SNDTIMEO]['sec'] ?? 10;
-        if (!is_int($sendTimeout)) {
-            throw new SocketException(
-                message: 'Invalid send timeout',
-                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
-                context: [
-                    'send_timeout' => $sendTimeout,
-                ]
-            );
-        }
-
-        $receiveTimeout = $this->config->socketOptions[SO_RCVTIMEO]['sec'] ?? 10;
-        if (!is_int($receiveTimeout)) {
-            throw new SocketException(
-                message: 'Invalid receive timeout',
-                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
-                context: [
-                    'receive_timeout' => $receiveTimeout,
-                ]
-            );
-        }
-
+        // SocketNodeConfig fills both options in, so the fallbacks only apply
+        // to a configuration that dropped them; they mirror its defaults.
         return [
-            'sendTimeout' => max(1, $sendTimeout),
-            'receiveTimeout' => max(1, $receiveTimeout),
+            'sendTimeout' => $this->getTimeoutFromConfig(
+                SO_SNDTIMEO,
+                'send',
+                (float) SocketNodeConfig::DEFAULT_SO_SNDTIMEO['sec']
+            ),
+            'receiveTimeout' => $this->getTimeoutFromConfig(
+                SO_RCVTIMEO,
+                'receive',
+                (float) SocketNodeConfig::DEFAULT_SO_RCVTIMEO['sec']
+            ),
         ];
     }
 
@@ -695,7 +752,7 @@ final class Socket extends NodeImplementation implements IoNode {
             if ($waitForData) {
                 // Wait at most for the remaining receive timeout, so a peer that
                 // stays connected but silent cannot block reads forever.
-                $remaining = (float) $this->receiveTimeout - (microtime(true) - $start);
+                $remaining = $this->receiveTimeout - (microtime(true) - $start);
 
                 if ($remaining <= 0.0) {
                     // Selecting with a zero timeout would return immediately and
@@ -705,14 +762,14 @@ final class Socket extends NodeImplementation implements IoNode {
                     continue;
                 }
 
-                $remainingSeconds = (int) $remaining;
+                [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
                 $selectResult = socket_select(
                     read: $read,
                     write: $write,
                     except: $except,
                     seconds: $remainingSeconds,
-                    microseconds: (int) (($remaining - (float) $remainingSeconds) * 1_000_000.0)
+                    microseconds: $remainingMicroseconds
                 );
             } else {
                 $selectResult = socket_select(
@@ -772,24 +829,38 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    private function selectSocketForWrite(PhpSocket $socket, float $start): bool {
+    private function selectSocketForWrite(PhpSocket $socket, float $lastProgressAt): bool {
 
         $read = null;
         $write = [ $socket ];
         $except = null;
 
+        // Wait at most for what is left of the stall window, so that several
+        // select() calls without progress cannot add up to a multiple of the
+        // configured send timeout.
+        $remaining = $this->sendTimeout - (microtime(true) - $lastProgressAt);
+
+        if ($remaining <= 0.0) {
+            $this->checkForWriteTimeout($lastProgressAt);
+
+            return false;
+        }
+
+        [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
+
         $selectResult = socket_select(
             read: $read,
             write: $write,
             except: $except,
-            seconds: $this->sendTimeout
+            seconds: $remainingSeconds,
+            microseconds: $remainingMicroseconds
         );
 
         if ($selectResult === false) {
             $errorCode = socket_last_error();
 
             if ($errorCode === SOCKET_EINTR) {
-                $this->checkForWriteTimeout($start);
+                $this->checkForWriteTimeout($lastProgressAt);
 
                 return false;
             }
@@ -808,12 +879,28 @@ final class Socket extends NodeImplementation implements IoNode {
         }
 
         if ($selectResult === 0) {
-            $this->checkForWriteTimeout($start);
+            $this->checkForWriteTimeout($lastProgressAt);
 
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     */
+    private function throwConnectTimeout(): never {
+        throw new SocketException(
+            message: 'Socket connect timed out',
+            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
+            context: [
+                'host' => $this->config->host,
+                'port' => $this->config->port,
+                'operation' => 'connect',
+                'socket_options' => $this->config->socketOptions,
+            ]
+        );
     }
 
     /**
@@ -826,30 +913,29 @@ final class Socket extends NodeImplementation implements IoNode {
             $write = [ $socket ];
             $except = null;
 
+            // Unlike the I/O timeouts, the connect timeout is a hard deadline
+            // for the whole attempt: there is no progress to measure, and an
+            // unbounded connect would let an unreachable host wedge the client.
+            $remaining = $this->connectTimeout - (microtime(true) - $start);
+
+            if ($remaining <= 0.0) {
+                $this->throwConnectTimeout();
+            }
+
+            [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
+
             $selectResult = socket_select(
                 read: $read,
                 write: $write,
                 except: $except,
-                seconds: $this->sendTimeout
+                seconds: $remainingSeconds,
+                microseconds: $remainingMicroseconds
             );
 
             if ($selectResult === false) {
                 $errorCode = socket_last_error();
                 if ($errorCode === SOCKET_EINTR) {
-
-                    if (microtime(true) - $start > $this->sendTimeout) {
-                        throw new SocketException(
-                            message: 'Socket connect timed out',
-                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
-                            context: [
-                                'host' => $this->config->host,
-                                'port' => $this->config->port,
-                                'operation' => 'connect',
-                                'socket_options' => $this->config->socketOptions,
-                            ]
-                        );
-                    }
-
+                    // The remaining budget is re-checked at the top of the loop.
                     continue;
                 }
 
@@ -867,19 +953,8 @@ final class Socket extends NodeImplementation implements IoNode {
             }
 
             if ($selectResult === 0) {
-                if (microtime(true) - $start > $this->sendTimeout) {
-                    throw new SocketException(
-                        message: 'Socket connect timed out',
-                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_CONNECT->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'connect',
-                            'socket_options' => $this->config->socketOptions,
-                        ]
-                    );
-                }
-
+                // select() timed out; only the remaining budget decides whether
+                // that is fatal, so let the top of the loop check it.
                 continue;
             }
 

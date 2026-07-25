@@ -28,7 +28,7 @@ final class BatchTest extends AbstractIntegrationTestCase {
         }
 
         $r = $conn->batch($batch);
-        $this->assertSame(0, $r->getStream());
+        $this->assertGreaterThanOrEqual(0, $r->getStream());
 
         $rows = $conn->query(
             'SELECT COUNT(*) FROM storage WHERE filename = ?',

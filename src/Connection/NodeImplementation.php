@@ -7,6 +7,12 @@ namespace Cassandra\Connection;
 use Cassandra\Request\Request;
 
 abstract class NodeImplementation implements Node {
+    /**
+     * Timeouts are handled as fractional seconds; INF means "no timeout" and is
+     * passed on to select() as a null seconds value, which blocks indefinitely.
+     */
+    protected const NO_TIMEOUT = INF;
+
     private const BUFFER_SIZE = 2048;
 
     private string $readBuffer = '';
@@ -85,6 +91,32 @@ abstract class NodeImplementation implements Node {
      */
     #[\Override]
     abstract public function writeRequest(Request $request): void;
+
+    /**
+     * Split fractional seconds into the (seconds, microseconds) pair that
+     * socket_select() and stream_select() expect.
+     *
+     * {@see self::NO_TIMEOUT} maps to a null seconds value, which makes both
+     * functions wait indefinitely; the microseconds value is ignored in that
+     * case.
+     *
+     * @return array{?int, int}
+     */
+    protected function splitTimeout(float $timeout): array {
+        if (is_infinite($timeout)) {
+            return [null, 0];
+        }
+
+        $seconds = (int) $timeout;
+        $microseconds = (int) round(($timeout - (float) $seconds) * 1_000_000.0);
+
+        if ($microseconds >= 1_000_000) {
+            $seconds++;
+            $microseconds -= 1_000_000;
+        }
+
+        return [$seconds, $microseconds];
+    }
 
     /**
      * Reads data from the data source and updates the buffer.

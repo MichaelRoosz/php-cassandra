@@ -48,6 +48,11 @@ final class Query extends Request {
         return $this->query;
     }
 
+    #[\Override]
+    public function getRequestTimeout(): ?float {
+        return $this->options->requestTimeoutInSeconds;
+    }
+
     /**
      * @return array<mixed> $values
      */

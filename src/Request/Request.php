@@ -28,15 +28,36 @@ abstract class Request implements Frame, Stringable {
      */
     public function __construct(
         private Opcode $opcode,
-        private int $stream = 0,
+
+        /**
+         * The stream id this request is sent on, or null while it has not been
+         * assigned one yet.
+         */
+        private ?int $stream = null,
+
         private int $flags = 0,
         private ?array $payload = null,
         protected ProtocolVersion $version = ProtocolVersion::V3
     ) {
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     #[\Override]
     public function __toString(): string {
+
+        if ($this->stream === null) {
+            throw new RequestException(
+                'This request has not been assigned a stream id yet, so it cannot be encoded',
+                ExceptionCode::REQUEST_STREAM_NOT_ASSIGNED->value,
+                [
+                    'request_class' => static::class,
+                    'opcode' => $this->opcode->name,
+                ]
+            );
+        }
+
         $body = $this->getBody();
 
         if ($this->flags & Flag::CUSTOM_PAYLOAD) {
@@ -95,8 +116,24 @@ abstract class Request implements Frame, Stringable {
         return $this->version;
     }
 
+    /**
+     * How long the server may take to answer this request, if the request asks
+     * for something other than the connection's default, and null otherwise.
+     *
+     * Requests that carry options override this; the rest — STARTUP, OPTIONS,
+     * REGISTER, AUTH_RESPONSE — have nothing to say about it.
+     */
+    public function getRequestTimeout(): ?float {
+        return null;
+    }
+
+    /**
+     * The stream id this request will be sent on, or null while it has not
+     * been assigned one. Encoding the request is what requires an id, so that
+     * is where an unassigned one is refused.
+     */
     #[\Override]
-    public function getStream(): int {
+    public function getStream(): ?int {
         return $this->stream;
     }
 

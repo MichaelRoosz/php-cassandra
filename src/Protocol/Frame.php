@@ -13,7 +13,12 @@ interface Frame {
 
     public function getProtocolVersion(): ProtocolVersion;
 
-    public function getStream(): int;
+    /**
+     * The stream id this frame belongs to, or null for a request that has not
+     * been assigned one yet. A response always has one, so
+     * {@see \Cassandra\Response\Response::getStream()} narrows this to int.
+     */
+    public function getStream(): ?int;
 
     /**
      * @deprecated Use getProtocolVersion() instead.

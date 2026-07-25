@@ -369,8 +369,8 @@ $streamNode = new StreamNodeConfig(
     port: 9042,
     username: 'user',
     password: 'secret',
-    connectTimeoutInSeconds: 10,
-    timeoutInSeconds: 30,
+    connectTimeoutInSeconds: 5,
+    timeoutInSeconds: 15,
 );
 
 // Stream transport with SSL/TLS - a non-empty sslOptions array enables TLS
@@ -380,8 +380,8 @@ $streamTlsNode = new StreamNodeConfig(
     port: 9042,
     username: 'user',
     password: 'secret',
-    connectTimeoutInSeconds: 10,
-    timeoutInSeconds: 30,
+    connectTimeoutInSeconds: 5,
+    timeoutInSeconds: 15,
     sslOptions: [
         // See [PHP SSL context options](https://www.php.net/manual/en/context.ssl.php)
         'cafile' => '/etc/ssl/certs/ca.pem',
@@ -397,7 +397,8 @@ $socketNode = new SocketNodeConfig(
     username: 'user',
     password: 'secret',
     // See [PHP socket_get_option documentation](https://www.php.net/manual/en/function.socket-get-option.php)
-    socketOptions: [SO_RCVTIMEO => ['sec' => 10, 'usec' => 0]]
+    socketOptions: [SO_RCVTIMEO => ['sec' => 15, 'usec' => 0]],
+    connectTimeoutInSeconds: 5
 );
 
 $conn = new Connection([$streamNode, $streamTlsNode, $socketNode], keyspace: 'app');
@@ -1217,8 +1218,13 @@ $conn->syncRequest(new Register([
 
 // process events (simplest possible loop)
 while (true) {
-    $conn->waitForNextEvent();
-    sleep(1);
+    // Blocks until an event arrives. An idle event stream is not an error, so
+    // this keeps waiting across transport read timeouts; meanwhile an OPTIONS
+    // heartbeat is sent whenever the connection goes quiet, so a connection
+    // that died is still noticed. Pass a timeout to get null instead of
+    // blocking forever:
+    //     $event = $conn->waitForNextEvent(timeoutInSeconds: 60.0);
+    $event = $conn->waitForNextEvent();
 }
 ```
 
@@ -1340,11 +1346,11 @@ $rows = $s->getRowsResult();
 
 Advanced waiting:
 ```php
-// Block until any statement completes:
-$stmt = $conn->waitForAnyStatement([$s1, $s2, $s3]);
+// Block until any statement completes (null if the wait bound elapses first):
+$stmt = $conn->waitForAnyStatement([$s1, $s2, $s3], timeoutInSeconds: 5.0);
 
-// Block until the next event arrives:
-$event = $conn->waitForNextEvent();
+// Block until the next event arrives (null once the timeout elapses):
+$event = $conn->waitForNextEvent(timeoutInSeconds: 30.0);
 ```
 
 Compression
@@ -1383,6 +1389,7 @@ php-cassandra provides comprehensive error handling with a well-structured excep
     │   ├── \Cassandra\Exception\SocketException
     │   └── \Cassandra\Exception\StreamException
     ├── \Cassandra\Exception\RequestException (request errors)
+    ├── \Cassandra\Exception\RequestTimeoutException (server did not answer in time)
     ├── \Cassandra\Exception\ResponseException (response errors)
     ├── \Cassandra\Exception\ServerException (server-side errors)
     │   ├── \Cassandra\Exception\ServerException\AlreadyExistsException
@@ -1414,6 +1421,18 @@ php-cassandra provides comprehensive error handling with a well-structured excep
     └── \Cassandra\Exception\VIntCodecException (variable integer codec errors)
 ```
 
+#### Which timeout is which
+
+Three different exceptions report a timeout, and they mean quite different things:
+
+| Exception | Raised by | Meaning | Node health |
+|---|---|---|---|
+| `ServerException\ReadTimeoutException` / `WriteTimeoutException` | the coordinator | the server hit *its own* `read_request_timeout` / `write_request_timeout` and said so | fine — it answered |
+| `RequestTimeoutException` | the client | the server never answered within `requestTimeoutInSeconds` | not blamed; the connection is closed but the node keeps its rating |
+| `SocketException` / `StreamException` (with a `SOCKET_TIMEOUT_DURING_*` / `STREAM_TIMEOUT_DURING_*` code) | the transport | the connection made no progress within the stall timeout | suspect — counted as a node failure |
+
+A `ConnectionException` naming the heartbeat is the fourth possibility: the connection went quiet and did not answer its `OPTIONS` probe, so it is treated as dead even though a request may still be outstanding.
+
 ### Error Handling Patterns
 
 #### Basic Error Handling
@@ -1421,6 +1440,7 @@ php-cassandra provides comprehensive error handling with a well-structured excep
 use Cassandra\Exception\StatementException;
 use Cassandra\Exception\ServerException;
 use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\RequestTimeoutException;
 use Cassandra\Exception\CassandraException;
 
 try {
@@ -1434,6 +1454,12 @@ try {
 } catch (ServerException $e) {
     // Server returned an error response
     error_log("Server error: " . $e->getMessage());
+    
+} catch (RequestTimeoutException $e) {
+    // The server did not answer within the client-side request timeout.
+    // Nothing is known to be wrong with the node — either give the operation a
+    // larger budget, or retry it if it is safe to run twice.
+    error_log("Request timed out: " . $e->getMessage());
     
 } catch (ConnectionException $e) {
     // Network/connection issues
@@ -1494,6 +1520,9 @@ function executeWithRetry(callable $operation, int $maxRetries = 3): mixed
         try {
             return $operation();
             
+        // RequestTimeoutException belongs here too when the operation is safe to
+        // run twice: it closes the connection, but the next attempt reconnects
+        // on its own, and the node was not blamed for the timeout.
         } catch (UnavailableException | ReadTimeoutException | WriteTimeoutException | OverloadedException $e) {
             $attempt++;
             
@@ -1613,7 +1642,7 @@ $node = new StreamNodeConfig(
     username: 'user',                     // Username (optional)
     password: 'secret',                   // Password (optional)
     connectTimeoutInSeconds: 10,          // Connection timeout (default: 5)
-    timeoutInSeconds: 30,                 // I/O timeout (default: 30)
+    timeoutInSeconds: 15,                 // I/O timeout (default: 15); fractional values allowed, 0 disables it
     persistent: true,                     // Use persistent connections
     sslOptions: [                         // SSL/TLS options (see PHP SSL context); a non-empty array enables TLS
         'verify_peer' => true,            // Verify peer certificate
@@ -1637,12 +1666,167 @@ $node = new SocketNodeConfig(
     port: 9042,                           // Cassandra port (default: 9042)
     username: 'cassandra',                // Username (optional)
     password: 'cassandra',                // Password (optional)
+    // See [PHP socket_get_option documentation](https://www.php.net/manual/en/function.socket-get-option.php)
     socketOptions: [                      // Socket-specific options
-        SO_RCVTIMEO => ['sec' => 10, 'usec' => 0],  // Receive timeout
-        SO_SNDTIMEO => ['sec' => 10, 'usec' => 0],  // Send timeout
+        SO_RCVTIMEO => ['sec' => 15, 'usec' => 0],  // Receive timeout (default: 15)
+        SO_SNDTIMEO => ['sec' => 10, 'usec' => 0],  // Send timeout (default: 10)
         SO_KEEPALIVE => 1,                // Keep-alive
-    ]
+    ],
+    connectTimeoutInSeconds: 5            // Connection timeout (default: 5)
 );
+```
+
+Both timeout components are honoured, so sub-second timeouts work (`['sec' => 0, 'usec' => 500000]` is half a second). Setting both to `0` disables the timeout, matching the meaning of the socket option itself; `connectTimeoutInSeconds` is separate and must stay positive, so an unreachable host can never wedge the client indefinitely.
+
+### Choosing timeout values
+
+There are two independent layers, and they answer different questions.
+
+**Transport timeouts** (`SO_RCVTIMEO`/`SO_SNDTIMEO`, `timeoutInSeconds`) are **stall** timeouts: they bound how long the connection makes *no progress at all*, not how long a request takes end to end. Sending a large batch or reading a large result set over a slow link therefore does not trip them, and there is no implicit ceiling on payload size.
+
+**The request timeout** (`ConnectionOptions::$requestTimeoutInSeconds`, default 30s) is what governs a slow query. A server that is simply thinking sends nothing, which looks exactly like a stalled connection, so the transport timeout alone cannot tell the two apart — it keeps waiting, and only the request timeout decides when to give up, with a `RequestTimeoutException`. Adjust it per situation:
+
+```php
+use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Request\Options\BatchOptions;
+
+// TRUNCATE: Cassandra allows itself 60s for it (truncate_request_timeout),
+// so the client has to allow more than that or it gives up on a server that
+// was still working and would have answered.
+$conn->query('TRUNCATE big_table', options: new QueryOptions(requestTimeoutInSeconds: 90.0));
+
+// A full-table scan or an aggregate has no coordinator timeout to lean on —
+// it is bounded by how much data it walks, so pick a value from the query,
+// not from the cluster config.
+$conn->query('SELECT count(*) FROM events', options: new QueryOptions(requestTimeoutInSeconds: 300.0));
+
+// Schema changes wait for every node to agree on the new schema, which takes
+// as long as the slowest node needs.
+$conn->query('CREATE INDEX ON events (user_id)', options: new QueryOptions(requestTimeoutInSeconds: 120.0));
+
+// A large batch is one request that the coordinator fans out and waits for,
+// so give it more room than a single write.
+$batch = $conn->createBatchRequest(options: new BatchOptions(requestTimeoutInSeconds: 60.0));
+$batch->appendQuery('INSERT INTO events (id, v) VALUES (?, ?)', [$id, $v]);
+$conn->batch($batch);
+
+// Or change it for everything that follows, e.g. for a maintenance script:
+$conn->setRequestTimeout(120.0);
+```
+
+`requestTimeoutInSeconds` is available on `QueryOptions`, `ExecuteOptions`, `BatchOptions` and `PrepareOptions`. Precedence runs from the most specific to the least: an explicit argument to `syncRequest()`, then the request's own options, then `setRequestTimeout()`, then `ConnectionOptions`.
+
+The default of 30s is chosen to sit above Cassandra's own coordinator timeouts, so that the server answers with a proper error before the client gives up. Raise it for anything the server itself allows more time for, or that is bounded by data volume rather than by a server-side limit:
+
+| Operation | Suggested | Why |
+|---|---|---|
+| ordinary reads and writes | 30s (default) | above `read_request_timeout` (5s), `write_request_timeout` (2s) and `range_request_timeout` (10s) |
+| `TRUNCATE` | 90s | `truncate_request_timeout` is 60s server-side |
+| DDL / schema changes | 120s | waits for schema agreement across all nodes |
+| full scans, aggregates, large batches | 300s or more | bounded by how much data is walked, not by a server-side timeout |
+
+Raising the request timeout is safe: a connection that has actually died is still caught within about 35s by the heartbeat, rather than being left to the request timeout to notice.
+
+#### Request budgets vs. wait bounds
+
+Two different things are being bounded, and the API keeps them apart by name:
+
+| | Set by | Means | On expiry |
+|---|---|---|---|
+| **Request budget** — `requestTimeoutInSeconds` | `ConnectionOptions`, `setRequestTimeout()`, request options, `syncRequest()` | how long the *server* may take to answer a request | the request is given up on: `RequestTimeoutException` |
+| **Wait bound** — `timeoutInSeconds` | the `waitFor…()` methods | how long *this call* may block | the call returns empty-handed; nothing is given up on |
+
+Every `waitFor…()` method takes the wait bound the same way:
+
+| Value | Meaning |
+|---|---|
+| `null` | that method's default, see below |
+| `0` | do not wait: return as soon as there is nothing more to read |
+| `n` | wait at most `n` seconds |
+| `INF` | wait for as long as it takes |
+
+The default (`null`) is whatever makes sense for that wait:
+
+| Method | `null` means |
+|---|---|
+| `waitForNextEvent()` | wait for as long as it takes — an event can arrive at any time |
+| `waitForNextResponse()` | the connection's request timeout. *Not* "as long as it takes": with nothing in flight no response can ever arrive, so such a wait would never end |
+| `waitForStatements()`, `waitForAnyStatement()`, `waitForAllPendingStatements()` | let the statements' own budgets bound the wait |
+
+Note that `0` is the shortest wait, not an unlimited one — the opposite of what it means for the *transport* timeouts, where `SO_RCVTIMEO => ['sec' => 0, 'usec' => 0]` disables the timeout because that is what the socket option itself means. Even `0` still costs one read on the transport; for a look that never blocks at all, use `tryReadNextEvent()` / `tryReadNextResponse()`.
+
+Every wait is bounded by whichever comes first, and a request that runs out of budget is given up on from *any* wait — so it cannot quietly outlive its budget while you are, say, listening for events. Which wait *reports* it is a separate matter: only a call that was asked about that request raises it. `waitForNextEvent()` and `waitForNextResponse()` were asked for the next event or response, not about any request in particular, so they run their course; the caller finds out when they next touch the statement, which then throws `RequestTimeoutException`.
+
+When several requests run out at the same moment they are all finished in one pass and reported as a single failure, which carries the statements themselves:
+
+```php
+try {
+    $conn->waitForStatements($statements);
+} catch (RequestTimeoutException $e) {
+    foreach ($e->getTimedOutStatements() as $statement) {
+        // exactly the requests that ran out, ready to be sent again
+    }
+}
+```
+
+A parked stream id is only released when its late answer arrives, so a node that keeps leaving requests unanswered would tie up more and more of them. Past `maxOrphanedStreams` the connection is closed and started over, and that *is* raised — as a `ConnectionException` — whatever the caller was waiting for: their connection is gone and the requests still in flight on it went with it.
+
+Cassandra's own coordinator defaults are 5s for reads, 2s for writes, 10s for range requests and the generic request timeout, and **60s for `TRUNCATE`**. Keep the request timeout above whichever of those apply, so the server gets to answer with a proper error — which this driver surfaces as `ReadTimeoutException` / `WriteTimeoutException` — instead of the client giving up first.
+
+A `RequestTimeoutException` leaves the connection open and does **not** count the node as failed, so one expensive query neither drops your prepared statements nor pushes a healthy node out of rotation. Only the request that ran out of time is finished.
+
+Note that a deadline is only noticed once the read the client is blocked in returns, so the transport timeout is also the granularity of deadline detection: with the defaults, a request timeout against a completely silent server fires somewhere between 30s and 45s. Lower `SO_RCVTIMEO` / `timeoutInSeconds` if you need tighter deadlines.
+
+**The heartbeat** (`heartbeatIntervalInSeconds`, default 30s) is what distinguishes a dead connection from a quiet one — at the socket, a coordinator that is still thinking and a node that vanished look identical. Whenever the connection has been silent for the interval, an `OPTIONS` frame is sent; because stream ids are multiplexed, it is answered on its own stream while a slow request is still being computed. A broken connection therefore surfaces after roughly `heartbeatInterval + heartbeatTimeout` (~35s by default) as a `ConnectionException`, no matter how high the request timeout is — which is what makes generous request timeouts safe to set.
+
+Note that these three values are independent: the request timeout follows your cluster's coordinator timeouts, while the heartbeat interval should stay below the idle timeout of any NAT, firewall or load balancer between you and the node. They both default to 30s by coincidence, not because they are related.
+
+#### Timeouts and async statements
+
+The budget of an async statement runs from the moment its request was written to the node, not from the moment you get around to waiting for it — so a statement gets the same total allowance whether you wait immediately or after other work:
+
+```php
+$statement = $conn->queryAsync('SELECT * FROM big_table');
+doSomethingElseFor(10);          // eats into the same 30s budget
+$conn->waitForStatements([$statement]);   // ~20s left, not a fresh 30s
+```
+
+Each statement carries the timeout its own request asked for, so a mixed batch is not forced onto one number:
+
+```php
+$fast = $conn->queryAsync('SELECT * FROM users WHERE id = ?', [$id]);
+$slow = $conn->queryAsync('SELECT * FROM huge', options: new QueryOptions(requestTimeoutInSeconds: 120));
+
+$conn->waitForStatements([$fast, $slow]);   // each held to its own budget
+```
+
+When several statements are waited on together, the wait ends as soon as the *first* of them exhausts its own budget. The polling methods (`tryResolveStatement()`, `tryReadNextResponse()`, …) apply no timeout at all and never send a heartbeat — a non-blocking loop is yours to bound.
+
+When an async statement times out, only that statement is finished — the connection stays open and every other statement in flight on it keeps waiting:
+
+```php
+$slow = $conn->queryAsync('SELECT * FROM huge');
+$fast = $conn->queryAsync('SELECT * FROM users WHERE id = ?', [$id]);
+
+try {
+    $conn->waitForStatements([$slow]);
+} catch (RequestTimeoutException $e) {
+    // $slow is finished ($slow->isTimedOut() === true), but the connection and
+    // $fast are untouched:
+    $fast->getResult();
+}
+```
+
+What makes that safe is that the timed-out statement's stream id is *not* returned to the pool — the server may still answer on it, and reusing it would let that late answer resolve a different request. The id is parked until the late answer arrives, then released. A connection whose requests keep timing out would tie up more and more ids, so past `maxOrphanedStreams` (default 24) the connection is closed instead.
+
+Synchronous requests take their stream ids from the same pool, so a sync timeout is handled identically and also leaves the connection open — which matters because closing it would clear the prepared statement cache and force every prepared statement to be prepared again.
+
+Closing a connection invalidates every statement still in flight on it — their stream ids meant something only on that connection. Those are marked abandoned, and touching one fails at once with a `StatementException` rather than waiting out another request timeout:
+
+```php
+if ($statement->isAbandoned()) {
+    // The connection went away mid-flight — send the request again.
+}
 ```
 
 The `host` may be a hostname, an IPv4 literal, or an IPv6 literal in either bare (`::1`) or bracketed (`[::1]`) form. It is resolved with `getaddrinfo()`, so IPv4-only, IPv6-only and dual-stack hosts all work; when a name resolves to several addresses, each is tried in turn until one connects. URL schemes (`tcp://`, `tls://`) are not accepted here — use `StreamNodeConfig` for TLS.
@@ -1658,6 +1842,10 @@ $options = new ConnectionOptions(
     throwOnOverload: true,                // Throw on server overload (v4+, default: false)
     nodeSelectionStrategy: NodeSelectionStrategy::RoundRobin, // Node selection (default: Random)
     preparedResultCacheSize: 200,         // Prepared statement cache size (default: 100)
+    requestTimeoutInSeconds: 30,          // How long to wait for a server answer (default: 30, null = forever)
+    maxOrphanedStreams: 24,               // Timed-out async statements a connection may accumulate (default: 24)
+    heartbeatIntervalInSeconds: 30,       // OPTIONS heartbeat while idly waiting for events (default: 30, null = off)
+    heartbeatTimeoutInSeconds: 5,         // How long a heartbeat may go unanswered (default: 5)
 );
 ```
 
@@ -1960,10 +2148,12 @@ $socket = new SocketNodeConfig(
     port: 9042,
     username: 'user',
     password: 'secret',
+    // See [PHP socket_get_option documentation](https://www.php.net/manual/en/function.socket-get-option.php)
     socketOptions: [
-        SO_RCVTIMEO => ['sec' => 5, 'usec' => 0],
-        SO_SNDTIMEO => ['sec' => 5, 'usec' => 0],
-    ]
+        SO_RCVTIMEO => ['sec' => 15, 'usec' => 0],
+        SO_SNDTIMEO => ['sec' => 10, 'usec' => 0],
+    ],
+    connectTimeoutInSeconds: 5,
 );
 
 $conn = new Connection([$socket, $stream], options: new ConnectionOptions(enableCompression: true));
@@ -2013,10 +2203,9 @@ $conn->registerEventListener(new class () implements EventListener {
     }
 });
 
-// Non-busy loop with backoff
+// Blocks until an event arrives, so no polling or backoff is needed
 while (true) {
-    $conn->waitForNextEvent();
-    usleep(200_000); // 200ms
+    $event = $conn->waitForNextEvent();
 }
 ```
 
@@ -2157,10 +2346,12 @@ API reference (essentials)
   - `prepare(string, PrepareOptions)` / `prepareAsync(...)`
   - `execute(Result $previous, array = [], ?Consistency, ExecuteOptions)` / `executeAsync(...)` / `executeAll(...)`
   - `batch(Batch)` / `batchAsync(Batch)`
-  - `syncRequest(Request)` / `asyncRequest(Request)` / `waitForStatements(array $statements)` / `waitForAllPendingStatements()` / `waitForAnyStatement()`
-  - `registerEventListener(EventListener)` / `unregisterEventListener(EventListener)` / `waitForNextEvent()`
+  - `syncRequest(Request, ?float $requestTimeoutInSeconds)` / `asyncRequest(Request)`
+  - `waitForStatements(array $statements, ?float $timeoutInSeconds)` / `waitForAllPendingStatements(?float $timeoutInSeconds)` / `waitForAnyStatement(array $statements, ?float $timeoutInSeconds): ?Statement`
+  - `registerEventListener(EventListener)` / `unregisterEventListener(EventListener)` / `waitForNextEvent(?float $timeoutInSeconds): ?Event`
   - `registerWarningsListener(WarningsListener)` / `unregisterWarningsListener(WarningsListener)`
-  - `waitForNextResponse()`
+  - `waitForNextResponse(?float $timeoutInSeconds): ?Response` — both waits return null when the timeout elapses with nothing to report
+  - `setRequestTimeout(?float)`
   - Non-blocking helpers: `drainAvailableResponses()`, `tryResolveStatement()`, `tryResolveStatements()`, `tryReadNextResponse()`, `tryReadNextEvent()`
 
 - Results

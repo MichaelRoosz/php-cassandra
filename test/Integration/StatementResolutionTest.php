@@ -153,6 +153,8 @@ final class StatementResolutionTest extends AbstractIntegrationTestCase {
 
         $ready = $conn->waitForAnyStatement([$s1, $s2]);
 
+        // No wait bound was given, so this only returns once one is ready.
+        $this->assertNotNull($ready);
         $this->assertContains($ready, [$s1, $s2]);
         $this->assertTrue($ready->isResultReady());
     }
@@ -173,6 +175,8 @@ final class StatementResolutionTest extends AbstractIntegrationTestCase {
         // never arrive.
         $ready = $conn->waitForAnyStatement([$s1, $s2]);
 
+        // No wait bound was given, so this only returns once one is ready.
+        $this->assertNotNull($ready);
         $this->assertContains($ready, [$s1, $s2]);
         $this->assertTrue($ready->isResultReady());
     }
