@@ -248,71 +248,20 @@ final class Connection {
         // whenever this Connection object last heard from a node.
         $this->lastResponseAt = microtime(true);
 
-        $response = $this->syncRequest(new Request\Options());
-        if (!($response instanceof Response\Supported)) {
-            $nodeConfig = $node->getConfig();
+        try {
+            $this->completeHandshake($node);
+        } catch (\Throwable $e) {
+            // A handshake that fails part way through leaves a socket the node
+            // will not accept ordinary requests on, and only a NodeException
+            // closes it on its own: a request timeout deliberately keeps the
+            // connection, and a rejected or unexpected response never touches
+            // it. Without this the client would go on reporting isConnected(),
+            // hand that socket to every later request, and — because the
+            // heartbeat is gated on a completed handshake — never probe it
+            // either.
+            $this->disconnect();
 
-            throw new ConnectionException('OPTIONS handshake failed: unexpected response type', ExceptionCode::CONNECTION_OPTIONS_UNEXPECTED_RESPONSE->value, [
-                'operation' => 'connect/options',
-                'expected' => Response\Supported::class,
-                'received' => get_class($response),
-                'host' => $nodeConfig->host,
-                'port' => $nodeConfig->port,
-            ]);
-        }
-
-        $startupOptions = $this->configureStartupOptions($response, $node);
-        $response = $this->syncRequest(new Request\Startup($startupOptions));
-
-        if ($response instanceof Response\Authenticate) {
-            $nodeConfig = $node->getConfig();
-
-            if (!$nodeConfig->username || !$nodeConfig->password) {
-                throw new ConnectionException('Username and password must not be empty.', ExceptionCode::CONNECTION_AUTH_MISSING_CREDENTIALS->value, [
-                    'operation' => 'connect/authenticate',
-                    'host' => $nodeConfig->host,
-                    'port' => $nodeConfig->port,
-                    'auth_required' => true,
-                ]);
-            }
-
-            if ($this->version->value >= ProtocolVersion::V5->value) {
-                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
-            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
-                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
-            }
-
-            $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
-            if (!($authResult instanceof Response\AuthSuccess)) {
-                throw new ConnectionException('Authentication failed.', ExceptionCode::CONNECTION_AUTH_FAILED->value, [
-                    'operation' => 'connect/authenticate',
-                    'host' => $nodeConfig->host,
-                    'port' => $nodeConfig->port,
-                    'username' => $nodeConfig->username,
-                ]);
-            }
-        } elseif ($response instanceof Response\Ready) {
-            if ($this->version->value >= ProtocolVersion::V5->value) {
-                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
-            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
-                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
-            }
-        } else {
-            $nodeConfig = $node->getConfig();
-
-            throw new ConnectionException('Connection startup failed: unexpected response type', ExceptionCode::CONNECTION_STARTUP_UNEXPECTED_RESPONSE->value, [
-                'operation' => 'connect/startup',
-                'expected' => [Response\Authenticate::class, Response\Ready::class],
-                'received' => get_class($response),
-                'host' => $nodeConfig->host,
-                'port' => $nodeConfig->port,
-            ]);
-        }
-
-        $this->handshakeComplete = true;
-
-        if ($this->keyspace && $this->version->value < ProtocolVersion::V5->value) {
-            $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
+            throw $e;
         }
     }
 
@@ -382,12 +331,14 @@ final class Connection {
         $count = 0;
         $drainedResponses = false;
         while ($count < $max) {
-            $this->readResponse(waitForResponse: false,  drainedResponses: $drainedResponses);
+            $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
                 break;
             }
             $count++;
         }
+
+        $this->keepNonBlockingBookkeeping();
 
         return $count;
     }
@@ -935,8 +886,10 @@ final class Connection {
     public function tryReadNextEvent(): ?Response\Event {
         $drainedResponses = false;
         while (true) {
-            $event = $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            $event = $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
+                $this->keepNonBlockingBookkeeping();
+
                 return null;
             }
             if ($event instanceof Response\Event) {
@@ -961,8 +914,10 @@ final class Connection {
     public function tryReadNextResponse(): ?Response\Response {
         $drainedResponses = false;
         while (true) {
-            $response = $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            $response = $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
+                $this->keepNonBlockingBookkeeping();
+
                 return null;
             }
             if ($response !== null) {
@@ -990,13 +945,18 @@ final class Connection {
             return true;
         }
 
+        // Budgets are kept here as well as in the waits: polling never blocks,
+        // but a statement that is only ever polled must still run out of time
+        // rather than stay pending — and holding its stream id — for good.
+        $this->timeOutExpiredStatements();
+
         // Never resolvable, so reporting "not ready yet" would send a polling
         // caller round a loop that can never end.
         $this->assertStatementIsResolvable($statement);
 
         $drainedResponses = false;
         do {
-            $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
                 break;
             }
@@ -1005,7 +965,9 @@ final class Connection {
             }
         } while (true);
 
-        return false;
+        $this->keepNonBlockingBookkeeping();
+
+        return $statement->isResultReady();
     }
 
     /**
@@ -1026,6 +988,11 @@ final class Connection {
      * @throws \Cassandra\Exception\StatementException
      */
     public function tryResolveStatements(array $statements, int $max = PHP_INT_MAX): int {
+
+        // As in tryResolveStatement(): polling does not wait, but it does not
+        // excuse a statement from its budget either.
+        $this->timeOutExpiredStatements();
+
         $initialReady = 0;
         foreach ($statements as $s) {
             if ($s->isResultReady()) {
@@ -1054,12 +1021,14 @@ final class Connection {
                 break;
             }
 
-            $this->readResponse(waitForResponse: false, drainedResponses: $drainedResponses);
+            $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
                 break;
             }
             $processed++;
         }
+
+        $this->keepNonBlockingBookkeeping();
 
         $ready = 0;
         foreach ($statements as $s) {
@@ -1092,9 +1061,10 @@ final class Connection {
      * statement that runs out of its own budget is given up on and raises a
      * RequestTimeoutException instead.
      *
-     * A timeout of 0 still costs one read, but a non-blocking one, so it does
-     * not wait on the transport either; {@see self::tryResolveStatements()} is
-     * the equivalent that never touches a deadline at all.
+     * A timeout of 0 still costs a read while anything is outstanding, but a
+     * non-blocking one, so it does not wait on the transport either;
+     * {@see self::tryResolveStatements()} is the equivalent that never touches
+     * a deadline at all.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1151,9 +1121,10 @@ final class Connection {
      * are untouched and can still be waited on. A statement that runs out of
      * its own budget is given up on and raises a RequestTimeoutException.
      *
-     * A timeout of 0 still costs one read, but a non-blocking one, so it does
-     * not wait on the transport either; {@see self::tryResolveStatements()} is
-     * the equivalent that never touches a deadline at all.
+     * A timeout of 0 still costs a read while anything is outstanding, but a
+     * non-blocking one, so it does not wait on the transport either;
+     * {@see self::tryResolveStatements()} is the equivalent that never touches
+     * a deadline at all.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1290,11 +1261,11 @@ final class Connection {
      * budgets of the statements they were given, and this call has none to go
      * by. Pass INF for a wait that only ends when something arrives.
      *
-     * Returns null when the time is up with nothing having arrived and nothing
-     * overdue. A timeout of 0 still costs one read, but a non-blocking one, so
-     * it does not wait on the transport either;
-     * {@see self::tryReadNextResponse()} is the equivalent that never touches a
-     * deadline at all.
+     * Returns null when the time is up with nothing having arrived, whether or
+     * not anything went overdue in the meantime — see below. A timeout of 0
+     * still costs one read, but a non-blocking one, so it does not wait on the
+     * transport either; {@see self::tryReadNextResponse()} is the equivalent
+     * that never touches a deadline at all.
      *
      * Requests already in flight keep their own deadlines while this waits, and
      * one that runs out is given up on here. It is not raised here, though: the
@@ -1363,9 +1334,10 @@ final class Connection {
      * isResultReady() when passing a timeout. A statement that runs out of its
      * own budget is given up on and raises a RequestTimeoutException instead.
      *
-     * A timeout of 0 still costs one read, but a non-blocking one, so it does
-     * not wait on the transport either; {@see self::tryResolveStatements()} is
-     * the equivalent that never touches a deadline at all.
+     * A timeout of 0 still costs a read while anything is outstanding, but a
+     * non-blocking one, so it does not wait on the transport either;
+     * {@see self::tryResolveStatements()} is the equivalent that never touches
+     * a deadline at all.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1470,6 +1442,23 @@ final class Connection {
                 ]
             );
         }
+
+        // Pending, but not on this connection: a statement from another
+        // Connection, or one left over from before this one was replaced.
+        // Reading here would never resolve it — no answer for it can arrive on
+        // this socket — and, because a wait bounds itself by the deadlines of
+        // the statements it was given, an unbounded wait would spin on a
+        // deadline that nothing on this connection can ever retire.
+        if (($this->statements[$statement->getStreamId()] ?? null) !== $statement) {
+            throw new StatementException(
+                'This statement was not sent on this connection, so it can never be resolved here. Wait on the connection that sent it.',
+                ExceptionCode::STATEMENT_NOT_ON_THIS_CONNECTION->value,
+                [
+                    'stream_id' => $statement->getStreamId(),
+                    'request_class' => get_class($statement->getRequest()),
+                ]
+            );
+        }
     }
 
     /**
@@ -1521,7 +1510,7 @@ final class Connection {
 
         if (isset($this->statements[$streamId])) {
             throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
-                'operation' => 'sendAsyncRequest',
+                'operation' => 'chainAsyncRequest',
                 'stream_id' => $streamId,
             ]);
         }
@@ -1583,13 +1572,14 @@ final class Connection {
      * This runs while waiting for a response as well as while waiting for
      * events, because the protocol multiplexes stream ids: the heartbeat is
      * answered on its own stream while a slow request is still being computed,
-     * so a dead connection is caught in roughly interval + timeout no matter
-     * how generous the request timeout is. Roughly, because this is only
-     * reached between reads: a connection that has gone completely silent
-     * blocks the client in a read until the transport's stall window is over,
-     * so both the interval and the timeout are judged at that granularity —
-     * see {@see \Cassandra\Connection\SocketNodeConfig::__construct()} and
-     * {@see \Cassandra\Connection\StreamNodeConfig::__construct()}.
+     * so a dead connection is caught in interval + timeout no matter how
+     * generous the request timeout is.
+     *
+     * This is only reached between reads, so a read that could outlast the
+     * probe's schedule would delay it. None does:
+     * {@see self::readResponseUntil()} bounds every read by
+     * {@see self::nextHeartbeatActionAt()} as well as by the caller's deadline,
+     * which is what lets the transport's stall window be long, or absent.
      *
      * The probe is the driver's own request, not the caller's, so it is held to
      * the heartbeat timeout alone: it is deliberately left out of the request
@@ -1675,6 +1665,93 @@ final class Connection {
             $this->pendingHeartbeat = $heartbeat;
         } finally {
             $this->sendingHeartbeat = false;
+        }
+    }
+
+    /**
+     * Take a freshly opened connection through OPTIONS, STARTUP and, if the
+     * node asks for it, authentication.
+     *
+     * Kept apart from {@see self::connect()} so that everything it does can be
+     * unwound in one place when any of it fails.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    private function completeHandshake(Connection\Node $node): void {
+
+        $response = $this->syncRequest(new Request\Options());
+        if (!($response instanceof Response\Supported)) {
+            $nodeConfig = $node->getConfig();
+
+            throw new ConnectionException('OPTIONS handshake failed: unexpected response type', ExceptionCode::CONNECTION_OPTIONS_UNEXPECTED_RESPONSE->value, [
+                'operation' => 'connect/options',
+                'expected' => Response\Supported::class,
+                'received' => get_class($response),
+                'host' => $nodeConfig->host,
+                'port' => $nodeConfig->port,
+            ]);
+        }
+
+        $startupOptions = $this->configureStartupOptions($response, $node);
+        $response = $this->syncRequest(new Request\Startup($startupOptions));
+
+        if ($response instanceof Response\Authenticate) {
+            $nodeConfig = $node->getConfig();
+
+            if (!$nodeConfig->username || !$nodeConfig->password) {
+                throw new ConnectionException('Username and password must not be empty.', ExceptionCode::CONNECTION_AUTH_MISSING_CREDENTIALS->value, [
+                    'operation' => 'connect/authenticate',
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
+                    'auth_required' => true,
+                ]);
+            }
+
+            if ($this->version->value >= ProtocolVersion::V5->value) {
+                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
+            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
+                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
+            }
+
+            $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
+            if (!($authResult instanceof Response\AuthSuccess)) {
+                throw new ConnectionException('Authentication failed.', ExceptionCode::CONNECTION_AUTH_FAILED->value, [
+                    'operation' => 'connect/authenticate',
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
+                    'username' => $nodeConfig->username,
+                ]);
+            }
+        } elseif ($response instanceof Response\Ready) {
+            if ($this->version->value >= ProtocolVersion::V5->value) {
+                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
+            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
+                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
+            }
+        } else {
+            $nodeConfig = $node->getConfig();
+
+            throw new ConnectionException('Connection startup failed: unexpected response type', ExceptionCode::CONNECTION_STARTUP_UNEXPECTED_RESPONSE->value, [
+                'operation' => 'connect/startup',
+                'expected' => [Response\Authenticate::class, Response\Ready::class],
+                'received' => get_class($response),
+                'host' => $nodeConfig->host,
+                'port' => $nodeConfig->port,
+            ]);
+        }
+
+        $this->handshakeComplete = true;
+
+        if ($this->keyspace && $this->version->value < ProtocolVersion::V5->value) {
+            $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
         }
     }
 
@@ -2044,6 +2121,38 @@ final class Connection {
         $sentAt = microtime(true);
 
         while (true) {
+            if ($statement !== null) {
+                // Checked every pass, not just before the loop: once the
+                // statement is finished the stream id stops being ours to give
+                // up on, and parking it below would hold back an id that has
+                // already gone back into circulation — or, after the connection
+                // was replaced, one the next connection may hand to somebody
+                // else, whose answer would then be discarded as a late one.
+                $alreadyAnswered = $statement->peekResponse();
+                if ($alreadyAnswered !== null) {
+                    return $alreadyAnswered;
+                }
+
+                if ($statement->isTimedOut() || $statement->isAbandoned()) {
+                    // A dead end reached while we were reading, which today
+                    // only a disconnect can do — and every path that
+                    // disconnects raises on its own, so this is the belt to
+                    // that braces. Waiting on further passes would be waiting
+                    // for an answer that cannot come.
+                    throw new ConnectionException(
+                        'The statement being waited on was given up on while its answer was outstanding, so this connection can no longer resolve it',
+                        ExceptionCode::CONNECTION_STATEMENT_NO_LONGER_RESOLVABLE->value,
+                        [
+                            'operation' => 'getResponseForStatement',
+                            'stream_id' => $streamId,
+                            'request_class' => get_class($statement->getRequest()),
+                            'timed_out' => $statement->isTimedOut(),
+                            'abandoned' => $statement->isAbandoned(),
+                        ]
+                    );
+                }
+            }
+
             // The deadline is recomputed every pass rather than taken once: a
             // chained follow-up request (repreparation, auto-prepare) restarts
             // the statement's budget, and a deadline captured before the loop
@@ -2405,6 +2514,64 @@ final class Connection {
         unset($this->preparedResultCache[$request->getHash()]);
     }
 
+    /**
+     * What the non-blocking calls owe the connection once they have read.
+     *
+     * They never wait, so nothing that runs out of time is a failure of theirs
+     * to report — but the two things a wait does besides waiting still have to
+     * happen, or an application that only ever polls would get neither. Request
+     * budgets are kept, so that a statement nobody blocks on is still given up
+     * on and its stream id eventually released; and the connection is probed,
+     * so that one which died quietly is noticed at all. A caller learns about
+     * an expired statement from the statement itself, as it does from the waits
+     * that were not asked about it ({@see self::waitForNextResponse()}).
+     *
+     * Callers must read before calling this, for the reason
+     * {@see self::checkHeartbeat()} gives.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    private function keepNonBlockingBookkeeping(): void {
+
+        $this->timeOutExpiredStatements();
+
+        $this->checkHeartbeat();
+    }
+
+    /**
+     * When {@see self::checkHeartbeat()} next has something to do, or null when
+     * heartbeats are off or cannot run yet.
+     *
+     * Reads are bounded by this as well as by the caller's deadline, so that a
+     * wait which is otherwise unbounded — for events, say — still returns in
+     * time to send the probe or to declare an unanswered one dead. It mirrors
+     * the conditions checkHeartbeat() applies rather than second-guessing them:
+     * waking early only costs a read that finds nothing, but waking late would
+     * delay the probe by however long the read blocked.
+     */
+    private function nextHeartbeatActionAt(): ?float {
+
+        $interval = $this->options->heartbeatIntervalInSeconds;
+
+        if ($interval === null || !$this->handshakeComplete || $this->sendingHeartbeat) {
+            return null;
+        }
+
+        if ($this->pendingHeartbeat !== null) {
+            return $this->pendingHeartbeatSentAt + $this->options->heartbeatTimeoutInSeconds;
+        }
+
+        return $this->lastResponseAt + $interval;
+    }
+
     private function onEvent(Response\Event $event): void {
 
         foreach ($this->eventListeners as $listener) {
@@ -2497,15 +2664,25 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function readResponse(bool $waitForResponse, bool &$drainedResponses = false): ?Response\Response {
+    private function readResponse(bool &$drainedResponses = false): ?Response\Response {
         $node = $this->getConnectedNode();
 
         try {
-            $response = $this->responseReader->readResponse($node, $this->version, $waitForResponse);
+            $response = $this->responseReader->readResponse($node, $this->version, Connection\Node::DO_NOT_WAIT);
         } catch (NodeException $e) {
-            $this->handleNodeException($node);
+            if (!$e->isReadTimeout()) {
+                $this->handleNodeException($node);
 
-            throw $e;
+                throw $e;
+            }
+
+            // A read timeout says nothing about the connection, exactly as in
+            // readResponseUntil(). It should not reach a non-blocking read at
+            // all, but it does when the transport could not be switched out of
+            // blocking mode and enforces its receive timeout itself — and
+            // tearing the connection down over a quiet moment would turn that
+            // fallback into a broken connection.
+            $response = null;
         }
 
         if ($response === null) {
@@ -2530,13 +2707,19 @@ final class Connection {
      * nothing to report, has waited long enough. That decision belongs to
      * $deadline, an absolute microtime; null waits indefinitely.
      *
-     * The transport still bounds how long a single read blocks, so a read is
-     * only allowed to block while there is budget left: once $deadline has
-     * passed the read is made non-blocking, which keeps a deadline that is
-     * already in the past — an expired statement, or a caller waiting with a
-     * timeout of 0 — from costing another full stall window. Whatever has
+     * $deadline is handed to the read rather than merely consulted before it,
+     * so a read never outlives it: a budget of half a second is reported after
+     * half a second even where the transport would have sat in the same read
+     * for fifteen, and one that has already passed — an expired statement, or a
+     * caller waiting with a timeout of 0 — costs no wait at all. Whatever has
      * already arrived is consumed either way, so an answer sitting in the
      * buffer resolves the wait instead of being reported as overdue.
+     *
+     * The read is bounded by {@see self::nextHeartbeatActionAt()} as well,
+     * because a wait with no deadline of its own still has to come up for air
+     * often enough to probe a connection that has gone quiet. Between the two
+     * of them the transport's stall window is no longer what decides when
+     * anything happens, so it is free to be long, or absent altogether.
      *
      * Returns null when no complete response was available, with
      * $deadlineExceeded telling the caller whether the wait may continue. The
@@ -2558,10 +2741,14 @@ final class Connection {
 
         $node = $this->getConnectedNode();
 
-        $waitForResponse = $deadline === null || microtime(true) < $deadline;
+        // The read itself is bounded, not just the decision whether to start
+        // one. Beside the caller's deadline it is held to when the heartbeat
+        // next needs attention, which is the one thing that still has to happen
+        // on a connection nobody has set a deadline on.
+        $readDeadline = $this->earlierDeadline($deadline, $this->nextHeartbeatActionAt());
 
         try {
-            $response = $this->responseReader->readResponse($node, $this->version, $waitForResponse);
+            $response = $this->responseReader->readResponse($node, $this->version, $readDeadline);
         } catch (NodeException $e) {
             if (!$e->isReadTimeout()) {
                 $this->handleNodeException($node);
@@ -2688,6 +2875,18 @@ final class Connection {
         $streamId = $this->getNewStreamId($requestTimeoutInSeconds ?? $request->getRequestTimeout());
         $request->setStream($streamId);
 
+        $originalRequest = $request;
+        $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
+        if ($autoPrepareRequest !== null) {
+            $autoPrepareRequest->setStream($streamId);
+
+            $request = $autoPrepareRequest;
+        }
+
+        // Looked up for the request that is about to go out rather than for the
+        // one the caller handed in, so that an auto-prepared query is spared
+        // the PREPARE just as an explicit prepareAsync() is. The sync path gets
+        // this for free by recursing into syncRequest() for its PREPARE.
         if ($request instanceof Request\Prepare) {
             $cachedResult = $this->getCachedPrepareResult($request);
             if ($cachedResult !== null) {
@@ -2695,8 +2894,16 @@ final class Connection {
                     connection: $this,
                     streamId: $streamId,
                     request: $request,
+                    originalRequest: $originalRequest,
                     requestTimeoutInSeconds: $requestTimeoutInSeconds,
                 );
+
+                if ($autoPrepareRequest !== null) {
+                    // Nothing has been written yet: what this statement is
+                    // really waiting for is the EXECUTE that handling the
+                    // cached result chains onto it below.
+                    $statement->setStatus(StatementStatus::AUTO_PREPARING);
+                }
 
                 $response = $this->handleResponse($statement->getRequest(), $cachedResult, $statement);
                 if ($response !== null) {
@@ -2706,14 +2913,6 @@ final class Connection {
 
                 return $statement;
             }
-        }
-
-        $originalRequest = $request;
-        $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
-        if ($autoPrepareRequest !== null) {
-            $autoPrepareRequest->setStream($streamId);
-
-            $request = $autoPrepareRequest;
         }
 
         if (isset($this->statements[$streamId])) {

@@ -28,17 +28,20 @@ abstract class NodeImplementation implements Node {
     /**
      * Returns exactly $length bytes of data, or an empty string if not enough data is available.
      *
-     * If $waitForData is true this blocks until the data source yields something, but a single
-     * call still performs a single read: a short read (the peer sent only part of what we asked
-     * for) returns an empty string. Whatever arrived stays buffered, so callers that need all
-     * $length bytes must call again until they get a non-empty result.
+     * A read may block until the data source yields something, but a single call still performs
+     * a single read: a short read (the peer sent only part of what we asked for) returns an empty
+     * string. Whatever arrived stays buffered, so callers that need all $length bytes must call
+     * again until they get a non-empty result. Because $readDeadline is absolute rather than a
+     * duration, calling again cannot hand the read a fresh budget.
+     *
+     * @param ?float $readDeadline see {@see Node::read()}
      *
      * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
-    public function read(int $length, bool $waitForData): string {
+    public function read(int $length, ?float $readDeadline): string {
 
-        $availableLength = $this->updateReadBuffer($length, $waitForData);
+        $availableLength = $this->updateReadBuffer($length, $readDeadline);
         if ($availableLength < $length) {
             return '';
         }
@@ -51,14 +54,15 @@ abstract class NodeImplementation implements Node {
 
     /**
      * Returns up to $maxLength bytes of data, or an empty string if no data is available.
-     * If $waitForData is true, it will block until at least one byte is available.
-     * 
+     *
+     * @param ?float $readDeadline see {@see Node::read()}
+     *
      * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
-    public function readAvailableData(int $expectedLength, int $maxLength, bool $waitForData): string {
+    public function readAvailableData(int $expectedLength, int $maxLength, ?float $readDeadline): string {
 
-        $availableLength = $this->updateReadBuffer($expectedLength, $waitForData);
+        $availableLength = $this->updateReadBuffer($expectedLength, $readDeadline);
         if ($availableLength < 1) {
             return '';
         }
@@ -73,12 +77,13 @@ abstract class NodeImplementation implements Node {
     /**
      * Returns some bytes of data, or an empty string if no data is available.
      * $upperBoundaryLength marks an upper boundary for the amount of data that will be returned, but more or less data may be returned.
-     * If $waitForData is true, it will block until at least one byte is available.
+     *
+     * @param ?float $readDeadline see {@see Node::read()}
      *
      * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
-    abstract public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string;
+    abstract public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string;
 
     /**
      * @throws \Cassandra\Exception\NodeException
@@ -91,6 +96,37 @@ abstract class NodeImplementation implements Node {
      */
     #[\Override]
     abstract public function writeRequest(Request $request): void;
+
+    /**
+     * Whether a read with this deadline is allowed to block at all.
+     */
+    protected function mayBlock(?float $readDeadline): bool {
+
+        return $readDeadline === null || microtime(true) < $readDeadline;
+    }
+
+    /**
+     * Narrow what is left of the transport's stall window to the caller's read
+     * deadline, so that a single blocking read never outlives either.
+     *
+     * Returns null once the deadline has passed. That is deliberately not the
+     * same outcome as the stall window running out: the caller simply asked for
+     * no more time, which says nothing about the connection, so the read comes
+     * back empty-handed instead of raising. See {@see Node::read()}.
+     */
+    protected function narrowToReadDeadline(float $remaining, ?float $readDeadline): ?float {
+
+        if ($readDeadline === null) {
+            return $remaining;
+        }
+
+        $untilDeadline = $readDeadline - microtime(true);
+        if ($untilDeadline <= 0.0) {
+            return null;
+        }
+
+        return min($remaining, $untilDeadline);
+    }
 
     /**
      * Split fractional seconds into the (seconds, microseconds) pair that
@@ -124,10 +160,10 @@ abstract class NodeImplementation implements Node {
      * 
      * @throws \Cassandra\Exception\NodeException
      */
-    private function readFromNode(int $missingLength, bool $waitForData): int {
+    private function readFromNode(int $missingLength, ?float $readDeadline): int {
 
         $readMaxLength = max($missingLength, self::BUFFER_SIZE);
-        $data = $this->readAvailableDataFromSource($missingLength, $readMaxLength, $waitForData);
+        $data = $this->readAvailableDataFromSource($missingLength, $readMaxLength, $readDeadline);
 
         if ($data !== '') {
 
@@ -160,13 +196,13 @@ abstract class NodeImplementation implements Node {
      * 
      * @throws \Cassandra\Exception\NodeException
      */
-    private function updateReadBuffer(int $expectedLength, bool $waitForData): int {
+    private function updateReadBuffer(int $expectedLength, ?float $readDeadline): int {
 
         $availableLength = $this->readBufferLength - $this->readBufferOffset;
         $missingLength = $expectedLength - $availableLength;
 
         if ($missingLength > 0) {
-            $availableLength = $this->readFromNode($missingLength, $waitForData);
+            $availableLength = $this->readFromNode($missingLength, $readDeadline);
         }
 
         return $availableLength;

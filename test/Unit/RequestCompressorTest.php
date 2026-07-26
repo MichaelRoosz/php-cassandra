@@ -39,7 +39,7 @@ final class CapturingNode extends NodeImplementation {
     }
 
     #[\Override]
-    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
         return '';
     }
 

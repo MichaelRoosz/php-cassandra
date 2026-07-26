@@ -258,6 +258,18 @@ final class Statement {
         return $this->status === StatementStatus::WAITING_FOR_RESULT;
     }
 
+    /**
+     * The answer if it has already arrived, and null otherwise.
+     *
+     * Unlike {@see self::getResponse()} and {@see self::tryGetResponse()} this
+     * only looks: it never reads from the connection and never raises the
+     * server's error, so it can be used from inside the connection's own read
+     * loops without re-entering them.
+     */
+    public function peekResponse(): ?Response\Response {
+        return $this->response;
+    }
+
     public function setRequest(Request\Request $request): void {
         $this->request = $request;
     }

@@ -34,14 +34,13 @@ final class SocketNodeConfig extends NodeConfig {
      * sub-second timeouts work; `['sec' => 0, 'usec' => 0]` disables the
      * timeout, matching the meaning of the socket option itself.
      *
-     * Disabling SO_RCVTIMEO is not recommended: a deadline is only noticed once
-     * the read the client is blocked in returns, so the receive timeout is also
-     * how often request timeouts and heartbeats get to be checked. Without it a
-     * silent server leaves the client blocked in a read forever, and neither
-     * {@see \Cassandra\Connection\ConnectionOptions::$requestTimeoutInSeconds}
-     * nor the heartbeat can fire. Lower it instead if you want tighter
-     * deadlines — with the default of 15s, a request timeout of 30s fires
-     * somewhere between 30s and 45s.
+     * It bounds nothing but the transport: request timeouts, wait bounds and
+     * the heartbeat are handed to the read itself, so they fire when they are
+     * due whatever this is set to, and disabling it does not disable them.
+     * What is left to it is saying how long a connection may make no progress
+     * at all before that counts as a transport failure in its own right —
+     * during a wait that has no deadline of its own and with the heartbeat
+     * turned off, that is the only thing that would ever end the read.
      */
     public function __construct(
         string $host = 'localhost',

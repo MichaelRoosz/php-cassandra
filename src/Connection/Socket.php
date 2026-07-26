@@ -10,6 +10,12 @@ use Socket as PhpSocket;
 use Cassandra\Request\Request;
 
 final class Socket extends NodeImplementation implements IoNode {
+    /**
+     * The SO_RCVTIMEO currently applied to the socket, tracked so that the
+     * blocking-mode fallback only re-applies it when it actually changes.
+     */
+    private ?float $appliedReceiveTimeout = null;
+
     private SocketNodeConfig $config;
     private float $connectTimeout = 5.0;
     private bool $isBlockingIo = false;
@@ -124,7 +130,7 @@ final class Socket extends NodeImplementation implements IoNode {
      * @throws \Cassandra\Exception\SocketException
      */
     #[\Override]
-    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
 
         if ($this->socket === null) {
             throw new SocketException(
@@ -136,7 +142,7 @@ final class Socket extends NodeImplementation implements IoNode {
                     'operation' => 'readAvailableDataFromSource',
                     'expectedLength' => $expectedLength,
                     'upperBoundaryLength' => $upperBoundaryLength,
-                    'waitForData' => $waitForData,
+                    'read_deadline' => $readDeadline,
                 ]
             );
         }
@@ -148,12 +154,17 @@ final class Socket extends NodeImplementation implements IoNode {
         }
 
         $start = microtime(true);
+        $waitForData = $this->mayBlock($readDeadline);
 
         if (!$this->isBlockingIo) {
-            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, $waitForData);
+            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, $waitForData, $readDeadline);
             if (!$hasData) {
                 return '';
             }
+        } elseif ($waitForData && !$this->applyReceiveTimeout($readDeadline, $start)) {
+            // Blocking fallback: the deadline is enforced by the socket option
+            // rather than by select(), and it is already past.
+            return '';
         }
 
         $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
@@ -176,7 +187,10 @@ final class Socket extends NodeImplementation implements IoNode {
                     $errorCode === SOCKET_EWOULDBLOCK
                     || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
                 ) {
-                    if ($this->isBlockingIo && $waitForData) {
+                    // Only a stall window that has run out means the connection
+                    // itself went quiet for too long; the caller's deadline
+                    // expiring is not the socket's failure to report.
+                    if ($this->isBlockingIo && $waitForData && microtime(true) - $start > $this->receiveTimeout) {
                         throw new SocketException(
                             message: 'Socket read timed out',
                             code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
@@ -216,6 +230,12 @@ final class Socket extends NodeImplementation implements IoNode {
                 }
 
                 if ($errorCode === SOCKET_ETIMEDOUT) {
+                    if (microtime(true) - $start <= $this->receiveTimeout) {
+                        // The caller's deadline, applied as SO_RCVTIMEO above,
+                        // rather than the transport's stall window.
+                        return '';
+                    }
+
                     throw new SocketException(
                         message: 'Socket read timed out',
                         code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
@@ -240,7 +260,7 @@ final class Socket extends NodeImplementation implements IoNode {
                         'operation' => 'readAvailableDataFromSource',
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
-                        'waitForData' => $waitForData,
+                        'read_deadline' => $readDeadline,
                         'bytes_read' => 0,
                         'socket_options' => $this->config->socketOptions,
                         'system_error_code' => $errorCode,
@@ -424,6 +444,45 @@ final class Socket extends NodeImplementation implements IoNode {
     #[\Override]
     public function writeRequest(Request $request): void {
         $this->write($request->__toString());
+    }
+
+    /**
+     * Bound a blocking-mode read by the caller's deadline as well as by the
+     * stall window, by narrowing SO_RCVTIMEO for the duration of the read.
+     *
+     * Only reached when the socket could not be switched to non-blocking mode,
+     * where select() would do this instead. Returns false when the deadline has
+     * already passed, so the caller can skip the read altogether; the option is
+     * only touched when the value actually changes, so a steady stream of reads
+     * with the same bound costs one syscall rather than one per read.
+     */
+    private function applyReceiveTimeout(?float $readDeadline, float $start): bool {
+
+        if ($this->socket === null) {
+            return false;
+        }
+
+        $remaining = $this->narrowToReadDeadline($this->receiveTimeout, $readDeadline);
+        if ($remaining === null) {
+            return false;
+        }
+
+        if ($this->appliedReceiveTimeout === $remaining) {
+            return true;
+        }
+
+        [$seconds, $microseconds] = $this->splitTimeout($remaining);
+
+        // A null seconds value means "no timeout", which the socket option
+        // spells as zero.
+        socket_set_option($this->socket, SOL_SOCKET, SO_RCVTIMEO, [
+            'sec' => $seconds ?? 0,
+            'usec' => $seconds === null ? 0 : $microseconds,
+        ]);
+
+        $this->appliedReceiveTimeout = $remaining;
+
+        return true;
     }
 
     /**
@@ -742,7 +801,7 @@ final class Socket extends NodeImplementation implements IoNode {
     /**
      * @throws \Cassandra\Exception\SocketException
      */
-    private function selectSocketForRead(PhpSocket $socket, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
+    private function selectSocketForRead(PhpSocket $socket, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData, ?float $readDeadline): bool {
 
         do {
             $read = [ $socket ];
@@ -760,6 +819,15 @@ final class Socket extends NodeImplementation implements IoNode {
                     $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
 
                     continue;
+                }
+
+                // And at most for what the caller still has, so a request
+                // budget is honoured to the second instead of to the stall
+                // window — and so a transport with no stall window at all does
+                // not swallow the deadline entirely.
+                $remaining = $this->narrowToReadDeadline($remaining, $readDeadline);
+                if ($remaining === null) {
+                    return false;
                 }
 
                 [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);

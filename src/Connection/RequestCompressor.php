@@ -70,8 +70,8 @@ final class RequestCompressor extends NodeImplementation {
      * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]
-    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
-        return $this->node->readAvailableDataFromSource($expectedLength, $upperBoundaryLength, $waitForData);
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
+        return $this->node->readAvailableDataFromSource($expectedLength, $upperBoundaryLength, $readDeadline);
     }
 
     /**

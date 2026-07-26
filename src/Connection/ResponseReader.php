@@ -34,10 +34,10 @@ final class ResponseReader {
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\CompressionException
      */
-    public function readResponse(Node $node, ProtocolVersion $version, bool $waitForResponse): ?Response {
+    public function readResponse(Node $node, ProtocolVersion $version, ?float $readDeadline): ?Response {
 
         if ($this->currentHeader === null) {
-            $this->currentHeader = $this->readHeader($node, $version, $waitForResponse);
+            $this->currentHeader = $this->readHeader($node, $version, $readDeadline);
             if ($this->currentHeader === null) {
                 return null;
             }
@@ -51,7 +51,9 @@ final class ResponseReader {
             return $this->createResponse($header, '');
         }
 
-        $body = $node->read($header->length, $waitForResponse);
+        // The deadline is absolute, so reading the body cannot hand the wait a
+        // second full budget on top of the one the header already spent.
+        $body = $node->read($header->length, $readDeadline);
         if ($body === '') {
             return null;
         }
@@ -177,9 +179,9 @@ final class ResponseReader {
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\ConnectionException
      */
-    private function readHeader(Node $node, ProtocolVersion $version, bool $waitForResponse): ?Header {
+    private function readHeader(Node $node, ProtocolVersion $version, ?float $readDeadline): ?Header {
 
-        $headerBytes = $node->read(9, $waitForResponse);
+        $headerBytes = $node->read(9, $readDeadline);
         if ($headerBytes === '') {
             return null;
         }

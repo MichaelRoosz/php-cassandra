@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1345
+ * Next free code: 1347
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -50,6 +50,7 @@ enum ExceptionCode: int {
     case CONNECTION_SERVER_PROTOCOL_UNSUPPORTED = 1023;
     case CONNECTION_SET_KEYSPACE_UNEXPECTED_RESPONSE = 1024;
     case CONNECTION_STARTUP_UNEXPECTED_RESPONSE = 1025;
+    case CONNECTION_STATEMENT_NO_LONGER_RESOLVABLE = 1346;
     case CONNECTION_STREAM_ID_ALREADY_IN_USE = 1305;
     case CONNECTION_STREAM_IDS_EXHAUSTED = 1344;
     case CONNECTION_SYNC_NULL_RESPONSE = 1026;
@@ -161,6 +162,7 @@ enum ExceptionCode: int {
 
     // StatementException (STATEMENT_)
     case STATEMENT_ABANDONED = 1341;
+    case STATEMENT_NOT_ON_THIS_CONNECTION = 1345;
     case STATEMENT_UNEXPECTED_PREPARED_RESULT = 1000;
     case STATEMENT_UNEXPECTED_RESULT = 1001;
     case STATEMENT_UNEXPECTED_ROWS_RESULT = 1002;

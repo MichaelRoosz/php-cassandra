@@ -95,12 +95,12 @@ final class FrameCodec extends NodeImplementation {
      * @throws \Cassandra\Exception\CompressionException
      */
     #[\Override]
-    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
 
         $data = '';
         $length = 0;
         do {
-            $frameData = $this->readFrameData($waitForData);
+            $frameData = $this->readFrameData($readDeadline);
             if ($frameData === null) {
                 break;
             }
@@ -110,7 +110,9 @@ final class FrameCodec extends NodeImplementation {
                 $data .= $frameData;
             }
 
-            $waitForData = false;
+            // Only the first frame of a batch may wait: the rest are taken if
+            // they happen to be there already.
+            $readDeadline = Node::DO_NOT_WAIT;
 
         } while ($length < $upperBoundaryLength);
 
@@ -331,10 +333,10 @@ final class FrameCodec extends NodeImplementation {
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\CompressionException
      */
-    private function readFrameData(bool $waitForData): ?string {
+    private function readFrameData(?float $readDeadline): ?string {
 
         if ($this->currentFrameHeader === null) {
-            $this->currentFrameHeader = $this->readFrameHeader($waitForData);
+            $this->currentFrameHeader = $this->readFrameHeader($readDeadline);
             if ($this->currentFrameHeader === null) {
                 return null;
             }
@@ -348,7 +350,7 @@ final class FrameCodec extends NodeImplementation {
         // Note that a zero-length payload is not a special case: the frame still
         // carries its 4-byte payload CRC32 trailer (writeFrame() emits one), so
         // it has to be read and verified like any other, or the stream desyncs.
-        $payload = $this->node->read($payloadLength + 4, $waitForData);
+        $payload = $this->node->read($payloadLength + 4, $readDeadline);
         if ($payload === '') {
             return null;
         }
@@ -457,10 +459,10 @@ final class FrameCodec extends NodeImplementation {
      * 
      * @throws \Cassandra\Exception\NodeException
      */
-    private function readFrameHeader(bool $waitForData): ?array {
+    private function readFrameHeader(?float $readDeadline): ?array {
         if ($this->compression) {
             // 5-byte header + 3-byte CRC24.
-            $header = $this->node->read(8, $waitForData);
+            $header = $this->node->read(8, $readDeadline);
             if ($header === '') {
                 return null;
             }
@@ -469,7 +471,7 @@ final class FrameCodec extends NodeImplementation {
             [$payloadLength, $uncompressedLength, $headerCrc24] = $this->decodeCompressedFrameHeader($header);
         } else {
             // 3-byte header + 3-byte CRC24.
-            $header = $this->node->read(6, $waitForData);
+            $header = $this->node->read(6, $readDeadline);
             if ($header === '') {
                 return null;
             }

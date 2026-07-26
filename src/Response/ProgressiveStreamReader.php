@@ -57,7 +57,10 @@ final class ProgressiveStreamReader extends StreamReader {
         }
 
         while ($this->dataLength < $this->offset + $length) {
-            $this->data .= $received = $this->source->read($this->offset + $length - $this->dataLength, waitForData: true);
+            // No deadline of its own: this is a partially consumed frame whose
+            // body has to be finished before anything else can be read, so it
+            // waits for as long as the transport allows.
+            $this->data .= $received = $this->source->read($this->offset + $length - $this->dataLength, readDeadline: null);
             $this->dataLength += strlen($received);
         }
 

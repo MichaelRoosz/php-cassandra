@@ -57,21 +57,18 @@ final class ConnectionOptions {
          * a slow request — both look identical at the socket. Because stream
          * ids are multiplexed, the heartbeat is answered on its own stream
          * while a slow request is still being computed, so a broken connection
-         * surfaces after roughly this interval plus the heartbeat timeout,
-         * however generous the request timeout is.
+         * surfaces after this interval plus the heartbeat timeout, however
+         * generous the request timeout is.
          *
-         * Roughly, because a silent connection is only looked at between reads:
-         * the transport's stall window is how often the interval and the
-         * timeout below get to be judged, so both are rounded up to a multiple
-         * of it. Lower that window if the heartbeat has to bite sooner.
+         * Reads are bounded by when the probe is next due, so this holds even
+         * during a wait that has no deadline of its own and whatever the
+         * transport timeouts are set to — including not at all.
          */
         public readonly ?float $heartbeatIntervalInSeconds = 30,
 
         /**
          * How long to wait for the answer to a heartbeat before treating the
-         * connection as dead, in seconds. Like the interval above, it is judged
-         * at the granularity of the transport's stall window, so setting it
-         * below that window does not make detection any quicker.
+         * connection as dead, in seconds.
          */
         public readonly float $heartbeatTimeoutInSeconds = 5,
     ) {

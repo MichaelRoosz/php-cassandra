@@ -9,13 +9,20 @@
  *
  * Listens on a free port of 127.0.0.1 and prints "ready <port>" once it does.
  *
+ * PREPARE and EXECUTE are answered in every mode but "deaf", so the modes below
+ * only describe what happens to QUERYs. Every PREPARE is also reported on
+ * stdout as "prepared <n>", which is how a test can tell whether the client
+ * prepared a query it should have had cached.
+ *
  * Modes:
- *   idle           handshake, then never send anything unprompted
- *   slow-query     handshake, then answer every QUERY after [delaySeconds]
- *   defer-slow     answer QUERYs mentioning SLOW after [delaySeconds] and all
- *                  others at once, without blocking in between
- *   event          handshake, then push a STATUS_CHANGE event after [delaySeconds]
- *   deaf           handshake, then stop answering anything at all
+ *   idle            handshake, then never send anything unprompted
+ *   slow-query      handshake, then answer every QUERY after [delaySeconds]
+ *   defer-slow      answer QUERYs mentioning SLOW after [delaySeconds] and all
+ *                   others at once, without blocking in between
+ *   event           handshake, then push a STATUS_CHANGE event after [delaySeconds]
+ *   deaf            handshake, then stop answering anything at all
+ *   refuse-startup  answer OPTIONS, then never answer the STARTUP, so that the
+ *                   handshake fails part way through
  */
 
 declare(strict_types=1);
@@ -26,6 +33,8 @@ const OPCODE_OPTIONS = 0x05;
 const OPCODE_SUPPORTED = 0x06;
 const OPCODE_QUERY = 0x07;
 const OPCODE_RESULT = 0x08;
+const OPCODE_PREPARE = 0x09;
+const OPCODE_EXECUTE = 0x0A;
 const OPCODE_REGISTER = 0x0B;
 const OPCODE_EVENT = 0x0C;
 
@@ -82,6 +91,23 @@ function voidResultBody(): string {
     return pack('N', 1);
 }
 
+/**
+ * A PREPARED RESULT for a statement with a single int bind marker named "id".
+ *
+ * Enough for the client to encode an EXECUTE against it, which is all the
+ * auto-prepare paths need; the rows metadata is left out entirely.
+ */
+function preparedResultBody(): string {
+    return pack('N', 4)                                    // kind = PREPARED
+        . pack('n', 4) . 'pid1'                            // id [short bytes]
+        // prepare metadata: GLOBAL_TABLES_SPEC, one bind marker, no pk index
+        . pack('N', 1) . pack('N', 1) . pack('N', 0)
+        . cqlString('ks') . cqlString('t')
+        . cqlString('id') . pack('n', 0x0009)              // marker "id", type int
+        // rows metadata: NO_METADATA, no columns
+        . pack('N', 4) . pack('N', 0);
+}
+
 /** STATUS_CHANGE / UP for 127.0.0.1:9042. */
 function statusChangeEventBody(): string {
     return cqlString('STATUS_CHANGE')
@@ -118,6 +144,7 @@ if ($client === false) {
 
 $handshakeDone = false;
 $eventDueAt = null;
+$prepareCount = 0;
 $deadline = microtime(true) + 60;
 
 /** @var list<array{dueAt: float, stream: int}> $deferredAnswers */
@@ -160,6 +187,12 @@ while (microtime(true) < $deadline) {
         }
 
         if ($frame['opcode'] === OPCODE_STARTUP) {
+            if ($mode === 'refuse-startup') {
+                // Leaves the client waiting out its request timeout with the
+                // socket open but the handshake unfinished.
+                continue;
+            }
+
             writeFrame($client, $frame['stream'], OPCODE_READY, '');
             $handshakeDone = true;
 
@@ -184,6 +217,22 @@ while (microtime(true) < $deadline) {
 
         case OPCODE_REGISTER:
             writeFrame($client, $frame['stream'], OPCODE_READY, '');
+
+            break;
+
+        case OPCODE_PREPARE:
+            // Reported so that a test can tell how often the client prepared,
+            // which is what the prepared-result cache is meant to reduce.
+            $prepareCount++;
+            fwrite(STDOUT, 'prepared ' . $prepareCount . "\n");
+            fflush(STDOUT);
+
+            writeFrame($client, $frame['stream'], OPCODE_RESULT, preparedResultBody());
+
+            break;
+
+        case OPCODE_EXECUTE:
+            writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody());
 
             break;
 

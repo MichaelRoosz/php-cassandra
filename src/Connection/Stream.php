@@ -15,6 +15,12 @@ final class Stream extends NodeImplementation implements IoNode {
      */
     private const UNLIMITED_STREAM_TIMEOUT_SECONDS = 365 * 24 * 60 * 60;
 
+    /**
+     * The stream timeout currently applied, tracked so that the blocking-mode
+     * fallback only re-applies it when it actually changes.
+     */
+    private ?float $appliedReceiveTimeout = null;
+
     private StreamNodeConfig $config;
     private bool $isBlockingIo = false;
     private float $receiveTimeout = 10.0;
@@ -134,6 +140,7 @@ final class Stream extends NodeImplementation implements IoNode {
             $timeoutSeconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,
             $timeoutMicroseconds
         );
+        $this->appliedReceiveTimeout = $this->receiveTimeout;
 
         $this->stream = $stream;
     }
@@ -147,7 +154,7 @@ final class Stream extends NodeImplementation implements IoNode {
      * @throws \Cassandra\Exception\StreamException
      */
     #[\Override]
-    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
 
         if ($this->stream === null) {
             throw new StreamException(
@@ -159,7 +166,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'operation' => 'readAvailableDataFromSource',
                     'expectedLength' => $expectedLength,
                     'upperBoundaryLength' => $upperBoundaryLength,
-                    'waitForData' => $waitForData,
+                    'read_deadline' => $readDeadline,
                 ]
             );
         }
@@ -170,11 +177,18 @@ final class Stream extends NodeImplementation implements IoNode {
             return '';
         }
 
+        $start = microtime(true);
+        $waitForData = $this->mayBlock($readDeadline);
+
         if (!$this->isBlockingIo) {
-            $hasData = $this->selectStreamForRead($stream, microtime(true), $expectedLength, $upperBoundaryLength, $waitForData);
+            $hasData = $this->selectStreamForRead($stream, $start, $expectedLength, $upperBoundaryLength, $waitForData, $readDeadline);
             if (!$hasData) {
                 return '';
             }
+        } elseif ($waitForData && !$this->applyReceiveTimeout($stream, $readDeadline)) {
+            // Blocking fallback: the deadline is enforced by the stream's own
+            // timeout rather than by select(), and it is already past.
+            return '';
         }
 
         $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
@@ -192,13 +206,20 @@ final class Stream extends NodeImplementation implements IoNode {
                         'operation' => 'readAvailableDataFromSource',
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
-                        'waitForData' => $waitForData,
+                        'read_deadline' => $readDeadline,
                         'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
 
             if (stream_get_meta_data($stream)['timed_out']) {
+                // Only the stall window running out means the connection went
+                // quiet for too long; the caller's deadline, applied as the
+                // stream timeout above, is not the transport's failure.
+                if (microtime(true) - $start <= $this->receiveTimeout) {
+                    return '';
+                }
+
                 throw new StreamException(
                     message: 'Stream read timed out',
                     code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
@@ -208,7 +229,7 @@ final class Stream extends NodeImplementation implements IoNode {
                         'operation' => 'readAvailableDataFromSource',
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
-                        'waitForData' => $waitForData,
+                        'read_deadline' => $readDeadline,
                         'meta' => stream_get_meta_data($stream),
                     ]
                 );
@@ -223,7 +244,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'operation' => 'readAvailableDataFromSource',
                     'expectedLength' => $expectedLength,
                     'upperBoundaryLength' => $upperBoundaryLength,
-                    'waitForData' => $waitForData,
+                    'read_deadline' => $readDeadline,
                     'bytes_read' => 0,
                     'meta' => stream_get_meta_data($stream),
                 ]
@@ -241,13 +262,13 @@ final class Stream extends NodeImplementation implements IoNode {
                         'operation' => 'readAvailableDataFromSource',
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
-                        'waitForData' => $waitForData,
+                        'read_deadline' => $readDeadline,
                         'meta' => stream_get_meta_data($stream),
                     ]
                 );
             }
 
-            if (stream_get_meta_data($stream)['timed_out']) {
+            if (stream_get_meta_data($stream)['timed_out'] && microtime(true) - $start > $this->receiveTimeout) {
                 throw new StreamException(
                     message: 'Stream read timed out',
                     code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
@@ -257,7 +278,7 @@ final class Stream extends NodeImplementation implements IoNode {
                         'operation' => 'readAvailableDataFromSource',
                         'expectedLength' => $expectedLength,
                         'upperBoundaryLength' => $upperBoundaryLength,
-                        'waitForData' => $waitForData,
+                        'read_deadline' => $readDeadline,
                         'meta' => stream_get_meta_data($stream),
                     ]
                 );
@@ -371,6 +392,41 @@ final class Stream extends NodeImplementation implements IoNode {
     }
 
     /**
+     * Bound a blocking-mode read by the caller's deadline as well as by the
+     * stall window, by narrowing the stream's own timeout for its duration.
+     *
+     * Only reached when the stream could not be switched to non-blocking mode,
+     * where stream_select() would do this instead. Returns false when the
+     * deadline has already passed, so the caller can skip the read altogether;
+     * the timeout is only re-applied when the value actually changes.
+     *
+     * @param resource $stream
+     */
+    private function applyReceiveTimeout($stream, ?float $readDeadline): bool {
+
+        $remaining = $this->narrowToReadDeadline($this->receiveTimeout, $readDeadline);
+        if ($remaining === null) {
+            return false;
+        }
+
+        if ($this->appliedReceiveTimeout === $remaining) {
+            return true;
+        }
+
+        [$seconds, $microseconds] = $this->splitTimeout($remaining);
+
+        stream_set_timeout(
+            $stream,
+            $seconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,
+            $microseconds
+        );
+
+        $this->appliedReceiveTimeout = $remaining;
+
+        return true;
+    }
+
+    /**
      * @param resource $stream
      *
      * @throws \Cassandra\Exception\StreamException
@@ -422,7 +478,9 @@ final class Stream extends NodeImplementation implements IoNode {
      * 
      * @throws \Cassandra\Exception\StreamException
      */
-    private function selectStreamForRead($stream, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): bool {
+    private function selectStreamForRead($stream, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData, ?float $readDeadline): bool {
+
+        $selectFailures = 0;
 
         do {
             $read = [ $stream ];
@@ -443,6 +501,15 @@ final class Stream extends NodeImplementation implements IoNode {
                     continue;
                 }
 
+                // And at most for what the caller still has, so a request
+                // budget is honoured to the second instead of to the stall
+                // window — and so a transport with no stall window at all does
+                // not swallow the deadline entirely.
+                $remaining = $this->narrowToReadDeadline($remaining, $readDeadline);
+                if ($remaining === null) {
+                    return false;
+                }
+
                 [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
                 $selectResult = stream_select(
@@ -461,6 +528,58 @@ final class Stream extends NodeImplementation implements IoNode {
                 );
             }
 
+            if ($selectResult === false) {
+                // A signal interrupts stream_select() and it reports that the
+                // same way as a real failure, with no errno for PHP to tell
+                // them apart — so a process that takes signals must not lose
+                // its connection over one. A closed peer is the one case that
+                // is unambiguous; anything else is retried for as long as the
+                // receive timeout allows, which is what the socket transport
+                // does on EINTR. Only once the window is used up without a
+                // single successful select is it reported as a failure.
+                if (feof($stream)) {
+                    throw new StreamException(
+                        message: 'Stream connection reset by peer',
+                        code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_READ->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'readAvailableDataFromSource',
+                            'expectedLength' => $expectedLength,
+                            'upperBoundaryLength' => $upperBoundaryLength,
+                            'waitForData' => $waitForData,
+                            'meta' => stream_get_meta_data($stream),
+                        ]
+                    );
+                }
+
+                $selectFailures++;
+
+                if (!$waitForData) {
+                    return false;
+                }
+
+                if (microtime(true) - $start > $this->receiveTimeout) {
+                    throw new StreamException(
+                        message: 'Stream select failed',
+                        code: ExceptionCode::STREAM_SELECT_FAILED->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'readAvailableDataFromSource',
+                            'expectedLength' => $expectedLength,
+                            'upperBoundaryLength' => $upperBoundaryLength,
+                            'waitForData' => $waitForData,
+                            'bytes_read' => 0,
+                            'select_failures' => $selectFailures,
+                            'meta' => stream_get_meta_data($stream),
+                        ]
+                    );
+                }
+
+                continue;
+            }
+
             if ($selectResult === 0) {
                 if ($waitForData) {
                     $this->checkForReadTimeout($stream, $start, $expectedLength, $upperBoundaryLength, $waitForData);
@@ -474,40 +593,6 @@ final class Stream extends NodeImplementation implements IoNode {
             break;
 
         } while (true);
-
-        if ($selectResult === false) {
-
-            if (feof($stream)) {
-                throw new StreamException(
-                    message: 'Stream connection reset by peer',
-                    code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_READ->value,
-                    context: [
-                        'host' => $this->config->host,
-                        'port' => $this->config->port,
-                        'operation' => 'readAvailableDataFromSource',
-                        'expectedLength' => $expectedLength,
-                        'upperBoundaryLength' => $upperBoundaryLength,
-                        'waitForData' => $waitForData,
-                        'meta' => stream_get_meta_data($stream),
-                    ]
-                );
-            }
-
-            throw new StreamException(
-                message: 'Stream select failed',
-                code: ExceptionCode::STREAM_SELECT_FAILED->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'readAvailableDataFromSource',
-                    'expectedLength' => $expectedLength,
-                    'upperBoundaryLength' => $upperBoundaryLength,
-                    'waitForData' => $waitForData,
-                    'bytes_read' => 0,
-                    'meta' => stream_get_meta_data($stream),
-                ]
-            );
-        }
 
         return true;
     }
@@ -558,6 +643,14 @@ final class Stream extends NodeImplementation implements IoNode {
                 );
             }
 
+            // As on the read side: an interrupted select is indistinguishable
+            // from a failed one, so it is retried by the caller's loop for as
+            // long as the stall window allows rather than costing the
+            // connection.
+            if (microtime(true) - $lastProgressAt <= $this->sendTimeout) {
+                return false;
+            }
+
             throw new StreamException(
                 message: 'Stream select failed',
                 code: ExceptionCode::STREAM_SELECT_FAILED->value,
@@ -565,6 +658,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'write',
+                    'send_timeout_seconds' => $this->sendTimeout,
                     'meta' => stream_get_meta_data($stream),
                 ]
             );

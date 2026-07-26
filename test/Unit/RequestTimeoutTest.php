@@ -31,8 +31,52 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
     /** @var ?resource $serverProcess */
     private $serverProcess = null;
 
+    /** @var ?resource $serverStdout */
+    private $serverStdout = null;
+
     protected function tearDown(): void {
         $this->stopServer();
+    }
+
+    public function testAFailedHandshakeLeavesNoConnectionBehind(): void {
+        // The STARTUP is never answered, so connect() gives up on it — and a
+        // request timeout deliberately keeps the connection, which for a
+        // handshake means a socket the node will accept nothing else on. It has
+        // to be closed here, or the client would go on reporting isConnected(),
+        // hand that socket to every later request, and never probe it either,
+        // the heartbeat being gated on a completed handshake.
+        $connection = $this->connect('refuse-startup', requestTimeoutInSeconds: 1.0, autoConnect: false);
+
+        try {
+            $connection->connect();
+            $this->fail('expected the handshake to time out');
+        } catch (RequestTimeoutException $e) {
+        }
+
+        $this->assertFalse($connection->isConnected(), 'a half-finished handshake must not leave a usable-looking connection');
+    }
+
+    public function testAHeartbeatIsStillSentWithTheTransportTimeoutDisabled(): void {
+        // With no stall window there is nothing to return a blocking read but
+        // data, so a connection that died would never be probed unless the read
+        // is bounded by when the heartbeat is next due. It is, so the probe goes
+        // out and its silence is noticed on schedule.
+        $connection = $this->connect(
+            'deaf',
+            heartbeatIntervalInSeconds: 0.5,
+            heartbeatTimeoutInSeconds: 1.0,
+            receiveTimeoutSeconds: 0.0,
+        );
+
+        $start = microtime(true);
+
+        try {
+            $connection->waitForNextEvent(timeoutInSeconds: 20.0);
+            $this->fail('expected the unanswered heartbeat to be detected');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_HEARTBEAT_TIMEOUT->value, $e->getCode());
+            $this->assertLessThan(6.0, microtime(true) - $start, 'roughly interval + timeout, not the whole wait');
+        }
     }
 
     public function testAllRequestsThatRanOutAreFinishedTogether(): void {
@@ -63,6 +107,21 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAnAutoPreparedAsyncQueryUsesThePreparedResultCache(): void {
+        // The synchronous path gets this for free by recursing into
+        // syncRequest() for its PREPARE; the async path has to look the cache
+        // up for the request it is about to send, not for the one the caller
+        // handed in. Without that, every queryAsync() with untyped values pays
+        // for a PREPARE it already has the answer to.
+        $connection = $this->connect('idle');
+
+        $connection->queryAsync('SELECT * FROM quick WHERE id = ?', [1])->getResult();
+        $connection->queryAsync('SELECT * FROM quick WHERE id = ?', [2])->getResult();
+        $connection->queryAsync('SELECT * FROM quick WHERE id = ?', [3])->getResult();
+
+        $this->assertSame(1, $this->preparesSeenByServer(), 'the query should have been prepared once, then served from the cache');
+    }
+
     public function testAnExpiredBudgetIsReportedWithoutWaitingOutAnotherTransportTimeout(): void {
         // The budget is long gone by the time the caller starts waiting, so
         // there is nothing left to wait for: reporting it must not first block
@@ -84,8 +143,12 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
             $this->assertSame([$statement], $e->getTimedOutStatements());
+
+            // Comfortably under the 5s stall window rather than close to zero:
+            // what is being ruled out is a whole extra window, and a loaded
+            // machine must not be able to look like one.
             $this->assertLessThan(
-                2.0,
+                3.0,
                 microtime(true) - $start,
                 'an already expired budget must not cost another transport stall window'
             );
@@ -144,6 +207,105 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertTrue($bounded->isTimedOut());
         $this->assertFalse($unbounded->isTimedOut(), 'it asked for no budget, so it still has none');
         $this->assertTrue($connection->isConnected());
+    }
+
+    public function testAPolledStatementStillRunsOutOfTime(): void {
+        // Polling never waits, so nothing that runs out is a failure of the
+        // poll to report — but the budget still has to be kept, or a statement
+        // nobody ever blocks on would stay pending, and hold its stream id,
+        // for good.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 0.5);
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW');
+
+        $this->assertNull($statement->tryGetResult(), 'nothing has arrived yet');
+
+        usleep(1_000_000);
+
+        try {
+            $statement->tryGetResult();
+            $this->fail('expected the budget to be enforced for a polling caller too');
+        } catch (RequestTimeoutException $e) {
+            $this->assertTrue($statement->isTimedOut());
+            $this->assertSame([$statement->getStreamId()], array_keys($this->orphanedStreamsOf($connection)));
+            $this->assertTrue($connection->isConnected(), 'only the statement is affected');
+        }
+    }
+
+    public function testARequestTimeoutFiresOnTimeUnderAMuchLongerTransportTimeout(): void {
+        // The budget is handed to the read, not merely consulted before it
+        // starts, so a short request timeout under a long stall window is
+        // reported when it actually runs out rather than whenever the read the
+        // client happens to be sitting in comes back.
+        $connection = $this->connect(
+            'defer-slow',
+            delaySeconds: 30.0,
+            requestTimeoutInSeconds: 0.5,
+            receiveTimeoutSeconds: 15.0,
+        );
+
+        $start = microtime(true);
+
+        try {
+            $connection->query('SELECT * FROM SLOW');
+            $this->fail('expected the request timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $elapsed = microtime(true) - $start;
+
+            $this->assertGreaterThan(0.4, $elapsed, 'it must still wait its budget out');
+            $this->assertLessThan(4.0, $elapsed, 'and not a moment of the 15s stall window beyond it');
+        }
+    }
+
+    public function testARequestTimeoutFiresWithTheTransportTimeoutDisabled(): void {
+        // `['sec' => 0, 'usec' => 0]` means "no timeout", as it does for the
+        // socket option itself. The request budget is what bounds the read now,
+        // so disabling the transport timeout no longer disables deadlines with
+        // it.
+        $connection = $this->connect(
+            'defer-slow',
+            delaySeconds: 30.0,
+            requestTimeoutInSeconds: 1.0,
+            receiveTimeoutSeconds: 0.0,
+        );
+
+        $start = microtime(true);
+
+        try {
+            $connection->query('SELECT * FROM SLOW');
+            $this->fail('expected the request timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $elapsed = microtime(true) - $start;
+
+            $this->assertGreaterThan(0.9, $elapsed);
+            $this->assertLessThan(5.0, $elapsed, 'a disabled stall window must not mean an unbounded read');
+        }
+    }
+
+    public function testAStatementTheConnectionNoLongerKnowsIsRejectedRatherThanSpunOn(): void {
+        // A statement that is still pending but not registered here — one from
+        // another Connection, or left over from before this one was replaced —
+        // can never be resolved on this socket. Reporting "not ready yet" would
+        // send an unbounded wait round a loop with nothing to end it: the wait
+        // bounds itself by the deadlines of the statements it was given, and
+        // nothing arriving here can ever retire that one.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: null);
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW');
+
+        // Exactly what a replaced connection leaves behind: a statement waiting
+        // on a stream id this connection no longer associates with it.
+        (new ReflectionProperty(Connection::class, 'statements'))->setValue($connection, []);
+
+        $start = microtime(true);
+
+        try {
+            $connection->waitForStatements([$statement]);
+            $this->fail('expected the statement to be rejected');
+        } catch (StatementException $e) {
+            $this->assertSame(ExceptionCode::STATEMENT_NOT_ON_THIS_CONNECTION->value, $e->getCode());
+            $this->assertLessThan(1.0, microtime(true) - $start, 'it must fail at once rather than spin');
+        }
     }
 
     public function testAsyncDeadlineRunsFromSendTimeNotFromWhenWaitingStarts(): void {
@@ -209,6 +371,20 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertLessThan(5.0, $elapsed, 'the wait bound, not the 30s budget, ended the wait');
         $this->assertFalse($statement->isTimedOut(), 'the statement still has budget left');
         $this->assertSame([], $this->orphanedStreamsOf($connection));
+        $this->assertTrue($connection->isConnected());
+    }
+
+    public function testAWaitBoundIsHonouredWithTheTransportTimeoutDisabled(): void {
+        $connection = $this->connect('idle', requestTimeoutInSeconds: null, receiveTimeoutSeconds: 0.0);
+
+        $start = microtime(true);
+
+        $this->assertNull($connection->waitForNextResponse(timeoutInSeconds: 1.0));
+
+        $elapsed = microtime(true) - $start;
+
+        $this->assertGreaterThan(0.9, $elapsed, 'the wait bound is a bound, not a hint');
+        $this->assertLessThan(5.0, $elapsed);
         $this->assertTrue($connection->isConnected());
     }
 
@@ -390,7 +566,11 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $connection->query('SELECT * FROM system.local');
         $elapsed = microtime(true) - $start;
 
-        $this->assertGreaterThan(2.5, $elapsed, 'the server really did take longer than the transport timeout');
+        // What matters is that the query outlived the 1s transport timeout
+        // without the connection being torn down, not how close to the
+        // server's 3s delay it landed — the latter is only a wall clock the
+        // test does not control.
+        $this->assertGreaterThan(1.5, $elapsed, 'the server really did take longer than the transport timeout');
     }
 
     public function testStatementAbandonedByADroppedConnectionFailsImmediately(): void {
@@ -543,13 +723,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         float $heartbeatTimeoutInSeconds = 5.0,
         float $receiveTimeoutSeconds = self::RECEIVE_TIMEOUT_SECONDS,
         int $maxOrphanedStreams = 24,
+        bool $autoConnect = true,
     ): Connection {
         $port = $this->startServer($mode, $delaySeconds);
 
-        // A request deadline can only be noticed once the transport read it is
-        // blocked in returns, so the transport timeout is also the granularity
-        // of deadline detection. Tests that measure when a deadline fires turn
-        // it down to keep that lag out of their margins.
+        // Deadlines are handed to the read itself, so this no longer bounds
+        // when one is noticed; it is varied here to prove exactly that — a
+        // transport timeout far longer than the budget, or none at all, must
+        // make no difference to when a deadline fires.
         $transportTimeout = [
             'sec' => (int) $receiveTimeoutSeconds,
             'usec' => (int) round(($receiveTimeoutSeconds - (int) $receiveTimeoutSeconds) * 1_000_000),
@@ -574,7 +755,9 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             ),
         );
 
-        $connection->connect();
+        if ($autoConnect) {
+            $connection->connect();
+        }
 
         return $connection;
     }
@@ -587,6 +770,19 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $orphaned = (new ReflectionProperty(Connection::class, 'orphanedStreams'))->getValue($connection);
 
         return $orphaned;
+    }
+
+    /**
+     * How many PREPAREs the server has seen, from the lines it reports.
+     */
+    private function preparesSeenByServer(): int {
+        if ($this->serverStdout === null) {
+            return 0;
+        }
+
+        $reported = stream_get_contents($this->serverStdout);
+
+        return $reported === false ? 0 : substr_count($reported, 'prepared ');
     }
 
     private function recycledStreamCountOf(Connection $connection): int {
@@ -618,6 +814,11 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $this->fail('fake Cassandra server did not start listening');
         }
 
+        // Anything the server reports from here on is read without blocking,
+        // so a test that never asks about it is not held up by it.
+        stream_set_blocking($pipes[1], false);
+        $this->serverStdout = $pipes[1];
+
         return (int) $matches[1];
     }
 
@@ -629,5 +830,6 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         proc_terminate($this->serverProcess);
         proc_close($this->serverProcess);
         $this->serverProcess = null;
+        $this->serverStdout = null;
     }
 }

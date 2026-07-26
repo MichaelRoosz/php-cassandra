@@ -36,7 +36,7 @@ final class LoopbackNode extends NodeImplementation {
     }
 
     #[\Override]
-    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, bool $waitForData): string {
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
         $available = strlen($this->buffer) - $this->offset;
         if ($available < 1) {
             return '';
@@ -92,7 +92,7 @@ class FrameCodecCompressionTest extends AbstractUnitTestCase {
         $received = '';
         $expectedLength = strlen($expected);
         while (strlen($received) < $expectedLength) {
-            $chunk = $codec->readAvailableDataFromSource($expectedLength, $expectedLength, true);
+            $chunk = $codec->readAvailableDataFromSource($expectedLength, $expectedLength, readDeadline: null);
             if ($chunk === '') {
                 break;
             }
