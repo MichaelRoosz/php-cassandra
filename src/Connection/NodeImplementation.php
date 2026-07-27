@@ -53,28 +53,6 @@ abstract class NodeImplementation implements Node {
     }
 
     /**
-     * Returns up to $maxLength bytes of data, or an empty string if no data is available.
-     *
-     * @param ?float $readDeadline see {@see Node::read()}
-     *
-     * @throws \Cassandra\Exception\NodeException
-     */
-    #[\Override]
-    public function readAvailableData(int $expectedLength, int $maxLength, ?float $readDeadline): string {
-
-        $availableLength = $this->updateReadBuffer($expectedLength, $readDeadline);
-        if ($availableLength < 1) {
-            return '';
-        }
-
-        $returnLength = min($maxLength, $availableLength);
-        $data = substr($this->readBuffer, $this->readBufferOffset, $returnLength);
-        $this->readBufferOffset += $returnLength;
-
-        return $data;
-    }
-
-    /**
      * Returns some bytes of data, or an empty string if no data is available.
      * $upperBoundaryLength marks an upper boundary for the amount of data that will be returned, but more or less data may be returned.
      *

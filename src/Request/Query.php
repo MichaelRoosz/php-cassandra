@@ -11,6 +11,8 @@ use Cassandra\Consistency;
 final class Query extends Request {
     /**
      * @param array<mixed> $values
+     *
+     * @throws \Cassandra\Exception\RequestException
      */
     public function __construct(
         private string $query,

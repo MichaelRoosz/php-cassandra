@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Connection;
+use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\Node;
 use Cassandra\Connection\NodeConfig;
 use Cassandra\Connection\ResponseReader;
@@ -74,6 +75,32 @@ final class ResponseReaderResetTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testDisconnectDropsTheNegotiatedProtocolVersion(): void {
+        // The negotiated version belongs to the connection, not to this object:
+        // the next one may be a different node, picked by the selector or
+        // reached after this one failed. Kept, it would open the next handshake
+        // at a version that node never agreed to, and a node that cannot answer
+        // there is read as a protocol mismatch and fails outright — which is
+        // exactly what starting from initialProtocolVersion avoids.
+        $connection = new Connection(
+            [new SocketNodeConfig(host: '127.0.0.1')],
+            options: new ConnectionOptions(initialProtocolVersion: ProtocolVersion::V4),
+        );
+
+        $versionProperty = new ReflectionProperty(Connection::class, 'version');
+        $versionProperty->setValue($connection, ProtocolVersion::V5);
+
+        $this->assertSame(ProtocolVersion::V5, $connection->getProtocolVersion());
+
+        $connection->disconnect();
+
+        $this->assertSame(
+            ProtocolVersion::V4,
+            $connection->getProtocolVersion(),
+            'a disconnected connection reports the initial version again, as getProtocolVersion() documents'
+        );
+    }
+
     private static function header(Opcode $opcode, int $stream, int $bodyLength): string {
         return "\x84\x00" . pack('n', $stream) . chr($opcode->value) . pack('N', $bodyLength);
     }
@@ -118,10 +145,6 @@ final class FakeReadOnlyNode implements Node {
         $this->buffer = substr($this->buffer, $length);
 
         return $data;
-    }
-
-    public function readAvailableData(int $expectedLength, int $maxLength, ?float $readDeadline): string {
-        return $this->read(min($maxLength, strlen($this->buffer)), $readDeadline);
     }
 
     public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {

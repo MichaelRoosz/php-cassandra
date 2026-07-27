@@ -7,6 +7,9 @@ namespace Cassandra\Request\Options;
 use Cassandra\SerialConsistency;
 
 class QueryOptions extends RequestOptions {
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function __construct(
         public readonly bool $autoPrepare = true,
         public readonly ?int $pageSize = null,
@@ -23,8 +26,12 @@ class QueryOptions extends RequestOptions {
          */
         public readonly ?float $requestTimeoutInSeconds = null,
     ) {
+        self::assertValidRequestTimeout($requestTimeoutInSeconds);
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withKeyspace(string $keyspace): self {
         return new self(
             autoPrepare: $this->autoPrepare,
@@ -39,6 +46,9 @@ class QueryOptions extends RequestOptions {
         );
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withNamesForValues(bool $namesForValues): self {
         return new self(
             autoPrepare: $this->autoPrepare,
@@ -53,6 +63,9 @@ class QueryOptions extends RequestOptions {
         );
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withPagingState(string $pagingState): self {
         return new self(
             autoPrepare: $this->autoPrepare,

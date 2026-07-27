@@ -7,6 +7,9 @@ namespace Cassandra\Request\Options;
 use Cassandra\SerialConsistency;
 
 final class BatchOptions extends RequestOptions {
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function __construct(
         public readonly ?SerialConsistency $serialConsistency = null,
         public readonly ?int $defaultTimestamp = null,
@@ -19,8 +22,12 @@ final class BatchOptions extends RequestOptions {
          */
         public readonly ?float $requestTimeoutInSeconds = null,
     ) {
+        self::assertValidRequestTimeout($requestTimeoutInSeconds);
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withKeyspace(string $keyspace): self {
         return new self(
             serialConsistency: $this->serialConsistency,

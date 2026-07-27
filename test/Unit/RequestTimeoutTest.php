@@ -313,6 +313,44 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAStatementNotBeingWaitedOnStillRunsOutOfTimeDuringAWait(): void {
+        // Every request in flight keeps its own budget during any wait, not
+        // just the ones the wait was handed. Bounding the read by the waited
+        // set alone would let the short statement below sit past its deadline —
+        // holding its stream id — for as long as the long one takes.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: null);
+
+        $short = $connection->queryAsync('SELECT 1 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 0.5));
+        $long = $connection->queryAsync('SELECT 2 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 30.0));
+
+        $start = microtime(true);
+
+        // Only the long statement is asked about, so only its budget and this
+        // bound can end the wait; the 3s bound is what actually returns.
+        $connection->waitForStatements([$long], timeoutInSeconds: 3.0);
+
+        $this->assertTrue(
+            $short->isTimedOut(),
+            'a statement outside the waited set must still be given up on when its budget runs out'
+        );
+
+        $orphaned = $this->orphanedStreamsOf($connection);
+        $this->assertSame([$short->getStreamId()], array_keys($orphaned));
+
+        // The point of the test: it has to be noticed when its own budget ran
+        // out, not merely by the time the wait happens to end. Bounding the
+        // read by the waited set alone would park it at the 3s wait bound.
+        $this->assertLessThan(
+            1.5,
+            $orphaned[$short->getStreamId()] - $start,
+            'the short budget must bound the read, so the statement is parked when it expires'
+        );
+
+        $this->assertFalse($long->isTimedOut(), 'the waited statement still has 30s to go');
+        $this->assertGreaterThan(2.5, microtime(true) - $start, 'the caller-supplied bound is what ends the wait');
+        $this->assertTrue($connection->isConnected(), 'neither statement takes the connection down');
+    }
+
     public function testAStatementTheConnectionNoLongerKnowsIsRejectedRatherThanSpunOn(): void {
         // A statement that is still pending but not registered here — one from
         // another Connection, or left over from before this one was replaced —

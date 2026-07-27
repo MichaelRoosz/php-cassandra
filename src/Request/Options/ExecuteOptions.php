@@ -7,6 +7,9 @@ namespace Cassandra\Request\Options;
 use Cassandra\SerialConsistency;
 
 final class ExecuteOptions extends QueryOptions {
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function __construct(
         public readonly ?bool $skipMetadata = null,
         ?int $pageSize = null,
@@ -31,6 +34,9 @@ final class ExecuteOptions extends QueryOptions {
         );
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public static function fromQueryOptions(
         QueryOptions $options,
         ?bool $skipMetadata = null,
@@ -49,6 +55,9 @@ final class ExecuteOptions extends QueryOptions {
     }
 
     #[\Override]
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withKeyspace(string $keyspace): self {
         return new self(
             skipMetadata: $this->skipMetadata,
@@ -64,6 +73,9 @@ final class ExecuteOptions extends QueryOptions {
     }
 
     #[\Override]
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withNamesForValues(bool $namesForValues): self {
         return new self(
             skipMetadata: $this->skipMetadata,
@@ -79,6 +91,9 @@ final class ExecuteOptions extends QueryOptions {
     }
 
     #[\Override]
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withPagingState(string $pagingState): self {
         return new self(
             skipMetadata: $this->skipMetadata,
@@ -93,6 +108,9 @@ final class ExecuteOptions extends QueryOptions {
         );
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function withSkipMetadata(bool $skipMetadata): self {
         return new self(
             skipMetadata: $skipMetadata,

@@ -275,6 +275,9 @@ final class Connection {
         }
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function createBatchRequest(BatchType $type = BatchType::LOGGED, ?Consistency $consistency = null, BatchOptions $options = new BatchOptions()): Request\Batch {
 
         $consistency = $consistency ?? $this->consistency;
@@ -308,6 +311,16 @@ final class Connection {
         $this->pendingHeartbeat = null;
         $this->handshakeComplete = false;
 
+        // The negotiated version belongs to the connection that is going away,
+        // not to this object: the next one may well be a different node, picked
+        // by the selector or reached after this one failed. Kept, it would send
+        // the opening OPTIONS of the next handshake at a version that node
+        // never agreed to — and a node that cannot answer at that version is
+        // read as a protocol mismatch and fails the connection outright, which
+        // is precisely what starting from
+        // {@see ConnectionOptions::$initialProtocolVersion} avoids.
+        $this->version = $this->options->initialProtocolVersion;
+
         // A bounded read can come back with a header whose body has not arrived
         // yet, and the reader keeps it so the next read resumes the same frame.
         // Those remaining bytes belong to the transport being dropped here, so
@@ -335,12 +348,21 @@ final class Connection {
      * NOTE: This method will not block; it processes any currently available responses
      * and returns when the receive buffer is drained or the provided limit is reached.
      *
-     * The one thing it can block on is getting a connection at all: called
-     * before anything has been sent, it opens one and takes it through the
-     * handshake first, as every other method that touches the transport does.
-     * The same goes for {@see self::tryReadNextEvent()},
-     * {@see self::tryReadNextResponse()}, {@see self::tryResolveStatement()}
-     * and {@see self::tryResolveStatements()}.
+     * "Does not block" is about waiting for the node to answer. Two things
+     * around that still can, and they are the same for
+     * {@see self::tryReadNextEvent()}, {@see self::tryReadNextResponse()},
+     * {@see self::tryResolveStatement()} and
+     * {@see self::tryResolveStatements()}:
+     *
+     * Getting a connection at all. Called before anything has been sent, this
+     * opens one and takes it through the handshake first, as every other method
+     * that touches the transport does.
+     *
+     * Writing the heartbeat. {@see self::keepNonBlockingBookkeeping()} sends
+     * the probe these calls owe the connection, and a write blocks until the
+     * transport accepts it — bounded by the send stall window, not by anything
+     * here. Waiting for its answer is what these calls do not do; that is left
+     * to whichever call reads next.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -811,8 +833,13 @@ final class Connection {
      * Raise it around operations Cassandra allows more time for, such as
      * TRUNCATE (60s server-side by default), or pass the timeout directly to
      * {@see self::syncRequest()} for a single request.
+     *
+     * @throws \Cassandra\Exception\ConnectionException
      */
     public function setRequestTimeout(?float $requestTimeoutInSeconds): void {
+
+        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'setRequestTimeout');
+
         $this->requestTimeout = $requestTimeoutInSeconds;
     }
 
@@ -848,6 +875,8 @@ final class Connection {
      * @throws \Cassandra\Exception\ServerException
      */
     public function syncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Response\Response {
+
+        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'syncRequest');
 
         $node = $this->getConnectedNode();
 
@@ -1253,13 +1282,21 @@ final class Connection {
                 $this->assertStatementIsResolvable($s);
             }
 
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($statements));
+            // Bounded by every request in flight, not just the ones asked
+            // about: each keeps its own budget while this waits, so one going
+            // overdue is noticed here rather than only whenever its own caller
+            // next waits on it. The bound only decides when to come up for air;
+            // which statement is answered, and which of them is the caller's
+            // business, is decided below rather than here.
+            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
             $this->checkHeartbeat();
 
             if ($deadlineExceeded) {
+                // Everything overdue is given up on, but only the statements
+                // the caller handed in are reported as this call's failure.
                 $expired = $this->intersectStatements($this->timeOutExpiredStatements(), $statements);
                 if ($expired !== []) {
                     $this->reportTimedOutStatements($expired, 'waitForAnyStatement');
@@ -1310,8 +1347,15 @@ final class Connection {
      * one that runs out is given up on here. It is not raised here, though: an
      * event listener did not ask about it, so its loop is not interrupted for
      * it — the caller finds out from the statement, which then raises
-     * RequestTimeoutException. Only that request is affected; the connection
+     * RequestTimeoutException. Only that request is affected and the connection
      * stays open.
+     *
+     * The one exception is the connection itself giving out: enough requests
+     * running out without their answers ever arriving reaches
+     * {@see ConnectionOptions::$maxOrphanedStreams}, and that replaces the
+     * connection and raises a ConnectionException here — see
+     * {@see self::enforceOrphanedStreamLimit()}. An event loop is interrupted
+     * for that, because the connection it was reading from is gone.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1344,6 +1388,10 @@ final class Connection {
                 // interrupted for them; the caller finds out from the statement.
                 // This runs before the event is handed back so that an overdue
                 // request is still given up on in the pass that brought one.
+                //
+                // It can still raise: giving up on enough requests reaches the
+                // orphaned-stream limit, which replaces the connection. That is
+                // this loop's business — the connection it reads from is gone.
                 $this->timeOutExpiredStatements();
             }
 
@@ -1384,8 +1432,15 @@ final class Connection {
      * one that runs out is given up on here. It is not raised here, though: the
      * caller asked for the next response, not about any request in particular —
      * they find out from the statement, which then raises
-     * RequestTimeoutException. Only that request is affected; the connection
+     * RequestTimeoutException. Only that request is affected and the connection
      * stays open.
+     *
+     * The one exception is the connection itself giving out: enough requests
+     * running out without their answers ever arriving reaches
+     * {@see ConnectionOptions::$maxOrphanedStreams}, and that replaces the
+     * connection and raises a ConnectionException here — see
+     * {@see self::enforceOrphanedStreamLimit()}. The wait cannot simply be
+     * repeated then, because the connection it was reading from is gone.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1416,10 +1471,14 @@ final class Connection {
                 // for the next response, not about any request in particular,
                 // so that is not this call's failure to report: they find out
                 // from the statement. Nothing came, which is not a failure at
-                // all — the connection and its other requests are untouched and
-                // the wait can simply be repeated. This runs before the response
-                // is handed back so that an overdue request is still given up on
-                // in the pass that brought one.
+                // all — the connection and its other requests carry on and the
+                // wait can simply be repeated. This runs before the response is
+                // handed back so that an overdue request is still given up on in
+                // the pass that brought one.
+                //
+                // It can still raise: giving up on enough requests reaches the
+                // orphaned-stream limit, which replaces the connection. That is
+                // every caller's business, this one included.
                 $this->timeOutExpiredStatements();
             }
 
@@ -1484,13 +1543,20 @@ final class Connection {
                 break;
             }
 
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($statements));
+            // As in waitForAnyStatement(): bounded by every request in flight,
+            // so none of them overshoots its budget while this call waits on a
+            // statement with a longer one. Widening the bound this way is safe
+            // whatever $statements holds — it only decides when to come up for
+            // air, never which statement is answered or reported.
+            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
             $this->checkHeartbeat();
 
             if ($deadlineExceeded) {
+                // Everything overdue is given up on, but only the statements
+                // the caller handed in are reported as this call's failure.
                 $expired = $this->intersectStatements($this->timeOutExpiredStatements(), $statements);
                 if ($expired !== []) {
                     $this->reportTimedOutStatements($expired, 'waitForStatements');
@@ -1572,6 +1638,36 @@ final class Connection {
                 ]
             );
         }
+    }
+
+    /**
+     * Reject a request timeout no caller can have meant.
+     *
+     * Zero or less would put the request out of time before it was sent — the
+     * same judgement {@see ConnectionOptions} makes about its own default and
+     * {@see \Cassandra\Request\Options\RequestOptions} about the one a request
+     * carries. Without this the value would be normalised away by
+     * {@see self::deadlineFor()} and silently expire every request it applies
+     * to, which through {@see self::setRequestTimeout()} includes the ones
+     * already in flight. "Use the connection default" is spelled null for the
+     * per-call argument, and an unbounded wait is null on the connection.
+     *
+     * @throws \Cassandra\Exception\ConnectionException
+     */
+    private function assertValidRequestTimeout(?float $requestTimeoutInSeconds, string $operation): void {
+
+        if ($requestTimeoutInSeconds === null || $requestTimeoutInSeconds > 0.0) {
+            return;
+        }
+
+        throw new ConnectionException(
+            'Invalid request timeout: it must be greater than zero, or null to fall back to the request options and the connection default',
+            ExceptionCode::CONNECTION_INVALID_REQUEST_TIMEOUT->value,
+            [
+                'operation' => $operation,
+                'request_timeout_seconds' => $requestTimeoutInSeconds,
+            ]
+        );
     }
 
     /**
@@ -1708,10 +1804,12 @@ final class Connection {
      * so a dead connection is caught in interval + timeout no matter how
      * generous the request timeout is.
      *
-     * A read that could outlast the probe's schedule would delay it. None does:
-     * {@see self::readResponseUntil()} bounds every read by
-     * {@see self::nextHeartbeatActionAt()} as well as by the caller's deadline,
-     * which is what lets the transport's stall window be long, or absent.
+     * A read that could outlast the probe's schedule would delay it. Neither
+     * kind does. {@see self::readResponseUntil()}, which is what the waits use,
+     * bounds every read by {@see self::nextHeartbeatActionAt()} as well as by
+     * the caller's deadline — that is what lets the transport's stall window be
+     * long, or absent. {@see self::readResponse()}, which is what the
+     * non-blocking calls use, needs no such bound: it never waits at all.
      *
      * The probe is the driver's own request, not the caller's, so it is held to
      * the heartbeat timeout alone: it is deliberately left out of the request
@@ -2112,6 +2210,9 @@ final class Connection {
         );
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     private function getAutoPrepareRequestIfNeeded(Request\Request $request): ?Request\Prepare {
 
         // auto-prepare query if bind markers are used and not all values are defined with type
@@ -3138,6 +3239,8 @@ final class Connection {
      * @throws \Cassandra\Exception\ServerException
      */
     private function sendAsyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Statement {
+
+        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'asyncRequest');
 
         $node = $this->getConnectedNode();
 

@@ -38,15 +38,6 @@ interface Node {
     public function read(int $length, ?float $readDeadline): string;
 
     /**
-     * Returns up to $maxLength bytes of data, or an empty string if no data is available.
-     *
-     * @param ?float $readDeadline see {@see self::read()}
-     *
-     * @throws \Cassandra\Exception\NodeException
-     */
-    public function readAvailableData(int $expectedLength, int $maxLength, ?float $readDeadline): string;
-
-    /**
      * Returns some bytes of data, or an empty string if no data is available.
      * $upperBoundaryLength marks an upper boundary for the amount of data that will be returned, but more or less data may be returned.
      *

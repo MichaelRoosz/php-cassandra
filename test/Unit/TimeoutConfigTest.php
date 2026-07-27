@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
+use Cassandra\Connection;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\NodeConfig;
 use Cassandra\Connection\Socket;
@@ -11,7 +12,12 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\Stream;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\RequestException;
 use Cassandra\Exception\SocketException;
+use Cassandra\Request\Options\BatchOptions;
+use Cassandra\Request\Options\ExecuteOptions;
+use Cassandra\Request\Options\PrepareOptions;
+use Cassandra\Request\Options\QueryOptions;
 use ReflectionProperty;
 
 /**
@@ -24,6 +30,24 @@ use ReflectionProperty;
  * "no timeout" is spelled null instead and a non-positive value is rejected.
  */
 final class TimeoutConfigTest extends AbstractUnitTestCase {
+    /**
+     * @return array<string, array{float}>
+     */
+    public static function nonPositiveTimeoutProvider(): array {
+        return [
+            'zero' => [0.0],
+            'negative' => [-1.0],
+        ];
+    }
+
+    /**
+     * @dataProvider nonPositiveTimeoutProvider
+     */
+    public function testBatchOptionsRejectNonPositiveRequestTimeout(float $timeout): void {
+        $this->expectException(RequestException::class);
+
+        new BatchOptions(requestTimeoutInSeconds: $timeout);
+    }
     public function testConnectionNonPositiveHeartbeatIntervalIsRejected(): void {
         // Heartbeats are turned off with null; zero would mean probing on every
         // single read.
@@ -63,6 +87,66 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
             heartbeatIntervalInSeconds: null,
             heartbeatTimeoutInSeconds: 0,
         ));
+    }
+
+    /**
+     * @dataProvider nonPositiveTimeoutProvider
+     */
+    public function testExecuteOptionsRejectNonPositiveRequestTimeout(float $timeout): void {
+        $this->expectException(RequestException::class);
+
+        new ExecuteOptions(requestTimeoutInSeconds: $timeout);
+    }
+
+    /**
+     * @dataProvider nonPositiveTimeoutProvider
+     */
+    public function testPrepareOptionsRejectNonPositiveRequestTimeout(float $timeout): void {
+        $this->expectException(RequestException::class);
+
+        new PrepareOptions(requestTimeoutInSeconds: $timeout);
+    }
+
+    /**
+     * The same value ConnectionOptions rejects has to be rejected wherever else
+     * a request timeout can be given, or the strictest surface would be the one
+     * least likely to be hit: deadlineFor() normalises a non-positive timeout to
+     * zero, which silently expires every request it applies to.
+     *
+     * @dataProvider nonPositiveTimeoutProvider
+     */
+    public function testRequestOptionsRejectNonPositiveRequestTimeout(float $timeout): void {
+        $this->expectException(RequestException::class);
+
+        new QueryOptions(requestTimeoutInSeconds: $timeout);
+    }
+
+    public function testRequestTimeoutsMayStillBeOmitted(): void {
+        // Null everywhere means "fall back", which is what the rejection above
+        // must not get in the way of.
+        $this->assertNull((new QueryOptions())->requestTimeoutInSeconds);
+        $this->assertNull((new BatchOptions())->requestTimeoutInSeconds);
+        $this->assertNull((new ExecuteOptions())->requestTimeoutInSeconds);
+        $this->assertNull((new PrepareOptions())->requestTimeoutInSeconds);
+
+        $connection = new Connection([new StreamNodeConfig()]);
+        $connection->setRequestTimeout(null);
+        $connection->setRequestTimeout(0.5);
+
+        $this->assertFalse($connection->isConnected());
+    }
+
+    /**
+     * @dataProvider nonPositiveTimeoutProvider
+     */
+    public function testSetRequestTimeoutRejectsNonPositiveValues(float $timeout): void {
+        // Lowering the connection default applies to the requests already in
+        // flight, so a bad value here expires them all at once.
+        $connection = new Connection([new StreamNodeConfig()]);
+
+        $this->expectException(ConnectionException::class);
+
+        $connection->setRequestTimeout($timeout);
     }
 
     public function testSocketFractionalSecondsAreCombined(): void {
