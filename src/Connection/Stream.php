@@ -95,7 +95,11 @@ final class Stream extends NodeImplementation implements IoNode {
             $host = ($this->config->sslOptions !== [] ? 'tls://' : 'tcp://') . $host;
         }
 
-        $stream = stream_socket_client(
+        // Suppressed because the failure is reported through $errorCode and
+        // $errorMessage below, which is what those by-reference parameters are
+        // for: PHP's warning says the same thing a second time, and would reach
+        // an application's error handler ahead of the StreamException.
+        $stream = @stream_socket_client(
             address: $host . ':' . $this->config->port,
             error_code: $errorCode,
             error_message: $errorMessage,
@@ -185,10 +189,22 @@ final class Stream extends NodeImplementation implements IoNode {
             if (!$hasData) {
                 return '';
             }
-        } elseif ($waitForData && !$this->applyReceiveTimeout($stream, $readDeadline)) {
+        } else {
             // Blocking fallback: the deadline is enforced by the stream's own
-            // timeout rather than by select(), and it is already past.
-            return '';
+            // timeout rather than by select().
+            if (!$waitForData) {
+                // A blocking stream cannot be asked for "whatever is there
+                // right now": fread() would sit in the stream timeout, which is
+                // exactly what a caller passing a deadline that has already
+                // passed asked not to happen. Whatever had already arrived was
+                // served from the buffer without reaching here.
+                return '';
+            }
+
+            if (!$this->applyReceiveTimeout($stream, $readDeadline)) {
+                // The deadline passed between mayBlock() and here.
+                return '';
+            }
         }
 
         $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
@@ -325,7 +341,11 @@ final class Stream extends NodeImplementation implements IoNode {
                 }
             }
 
-            $sentBytes = fwrite($stream, $data);
+            // Suppressed because the failure is inspected and reported below,
+            // as a StreamException carrying the stream's metadata. A peer that
+            // went away is an ordinary outcome, not a diagnostic an application
+            // should have to filter out of its logs.
+            $sentBytes = @fwrite($stream, $data);
             if ($sentBytes === false) {
 
                 if (feof($stream)) {
@@ -398,7 +418,9 @@ final class Stream extends NodeImplementation implements IoNode {
      * Only reached when the stream could not be switched to non-blocking mode,
      * where stream_select() would do this instead. Returns false when the
      * deadline has already passed, so the caller can skip the read altogether;
-     * the timeout is only re-applied when the value actually changes.
+     * the timeout is only re-applied when the value actually changes, which
+     * spares the call for the unbounded reads that keep asking for the same
+     * stall window.
      *
      * @param resource $stream
      */
@@ -512,7 +534,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
                 [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
-                $selectResult = stream_select(
+                $selectResult = @stream_select(
                     read: $read,
                     write: $write,
                     except: $except,
@@ -520,7 +542,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     microseconds: $remainingMicroseconds
                 );
             } else {
-                $selectResult = stream_select(
+                $selectResult = @stream_select(
                     read: $read,
                     write: $write,
                     except: $except,
@@ -620,7 +642,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
         [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
-        $selectResult = stream_select(
+        $selectResult = @stream_select(
             read: $read,
             write: $write,
             except: $except,

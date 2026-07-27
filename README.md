@@ -1711,13 +1711,16 @@ $batch = $conn->createBatchRequest(options: new BatchOptions(requestTimeoutInSec
 $batch->appendQuery('INSERT INTO events (id, v) VALUES (?, ?)', [$id, $v]);
 $conn->batch($batch);
 
+// Or pass it straight to the call, without building an options object:
+$conn->query('TRUNCATE big_table', requestTimeoutInSeconds: 90.0);
+
 // Or change it for everything that follows, e.g. for a maintenance script:
 $conn->setRequestTimeout(120.0);
 ```
 
-`requestTimeoutInSeconds` is available on `QueryOptions`, `ExecuteOptions`, `BatchOptions` and `PrepareOptions`. Precedence runs from the most specific to the least: an explicit argument to `syncRequest()` or `asyncRequest()`, then the request's own options, then `setRequestTimeout()`, then `ConnectionOptions`.
+`requestTimeoutInSeconds` is available on `QueryOptions`, `ExecuteOptions`, `BatchOptions` and `PrepareOptions`, and as the last argument of every call that sends a request — `query()`, `queryAll()`, `queryAsync()`, `execute()`, `executeAll()`, `executeAsync()`, `batch()`, `batchAsync()`, `prepare()`, `prepareAsync()`, `syncRequest()` and `asyncRequest()`. Precedence runs from the most specific to the least: the explicit argument, then the request's own options, then `setRequestTimeout()`, then `ConnectionOptions`.
 
-The explicit argument bounds each request the call sends, not the call as a whole — when the driver has to prepare or reprepare the statement first, the `PREPARE` and the request it precedes each get the full budget:
+The explicit argument bounds each request the call sends, not the call as a whole — when the driver has to prepare or reprepare the statement first, the `PREPARE` and the request it precedes each get the full budget, and on the paged helpers (`queryAll()`, `executeAll()`) each page request does:
 
 ```php
 // The server may take up to 90s to answer, per request sent
@@ -1744,7 +1747,7 @@ Two different things are being bounded, and the API keeps them apart by name:
 
 | | Set by | Means | On expiry |
 |---|---|---|---|
-| **Request budget** — `requestTimeoutInSeconds` | `ConnectionOptions`, `setRequestTimeout()`, request options, `syncRequest()` | how long the *server* may take to answer a request | the request is given up on: `RequestTimeoutException` |
+| **Request budget** — `requestTimeoutInSeconds` | `ConnectionOptions`, `setRequestTimeout()`, request options, the `$requestTimeoutInSeconds` argument | how long the *server* may take to answer a request | the request is given up on: `RequestTimeoutException` |
 | **Wait bound** — `timeoutInSeconds` | the `waitFor…()` methods | how long *this call* may block | the call returns empty-handed; nothing is given up on |
 
 Every `waitFor…()` method takes the wait bound the same way:
@@ -1752,7 +1755,7 @@ Every `waitFor…()` method takes the wait bound the same way:
 | Value | Meaning |
 |---|---|
 | `null` | that method's default, see below |
-| `0` | do not wait: return as soon as there is nothing more to read |
+| `0` | do not wait: make one non-blocking read attempt and return |
 | `n` | wait at most `n` seconds |
 | `INF` | wait for as long as it takes |
 

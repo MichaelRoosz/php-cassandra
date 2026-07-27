@@ -180,6 +180,11 @@ final class Connection {
     }
 
     /**
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this call only; see {@see self::syncRequest()}, whose argument this is the
+     * counterpart of.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -190,8 +195,8 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function batch(Request\Batch $batchRequest): Response\Result {
-        $response = $this->syncRequest($batchRequest);
+    public function batch(Request\Batch $batchRequest, ?float $requestTimeoutInSeconds = null): Response\Result {
+        $response = $this->syncRequest($batchRequest, $requestTimeoutInSeconds);
 
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during batch', ExceptionCode::CONNECTION_UNEXPECTED_RESPONSE_BATCH_SYNC->value, [
@@ -205,6 +210,11 @@ final class Connection {
     }
 
     /**
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this statement only; see {@see self::asyncRequest()}, whose argument this
+     * is the counterpart of.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -215,8 +225,8 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function batchAsync(Request\Batch $batchRequest): Statement {
-        return $this->asyncRequest($batchRequest);
+    public function batchAsync(Request\Batch $batchRequest, ?float $requestTimeoutInSeconds = null): Statement {
+        return $this->asyncRequest($batchRequest, $requestTimeoutInSeconds);
     }
 
     public function configureValueEncoding(ValueEncodeConfig $config): void {
@@ -329,8 +339,10 @@ final class Connection {
      */
     public function drainAvailableResponses(int $max = PHP_INT_MAX): int {
         $count = 0;
+        $readAttempted = false;
         $drainedResponses = false;
         while ($count < $max) {
+            $readAttempted = true;
             $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
                 break;
@@ -338,13 +350,18 @@ final class Connection {
             $count++;
         }
 
-        $this->keepNonBlockingBookkeeping();
+        $this->keepNonBlockingBookkeeping($readAttempted);
 
         return $count;
     }
 
     /**
      * @param array<mixed> $values
+     *
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this call only; see {@see self::syncRequest()}, whose argument this is the
+     * counterpart of.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -356,7 +373,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
+    public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions(), ?float $requestTimeoutInSeconds = null): Response\Result {
 
         $consistency = $consistency ?? $this->consistency;
 
@@ -370,7 +387,7 @@ final class Connection {
 
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
-        $response = $this->syncRequest($request);
+        $response = $this->syncRequest($request, $requestTimeoutInSeconds);
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during execute', ExceptionCode::CONNECTION_EXECUTE_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'execute',
@@ -386,6 +403,11 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this call only. It bounds each page request, not the call as a whole, so
+     * fetching a paged result can take a multiple of it before giving up.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -396,11 +418,11 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function executeAll(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): array {
+    public function executeAll(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions(), ?float $requestTimeoutInSeconds = null): array {
 
         $responses = [];
 
-        $response = $this->execute($previousResult, $values, $consistency, $options)->asRowsResult();
+        $response = $this->execute($previousResult, $values, $consistency, $options, $requestTimeoutInSeconds)->asRowsResult();
 
         $responses[] = $response;
 
@@ -410,7 +432,8 @@ final class Connection {
                 previousResult: $previousResult,
                 values: $values,
                 consistency: $consistency,
-                options: $options->withPagingState($pagingState)
+                options: $options->withPagingState($pagingState),
+                requestTimeoutInSeconds: $requestTimeoutInSeconds,
             )->asRowsResult();
 
             $responses[] = $response;
@@ -424,6 +447,11 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this statement only; see {@see self::asyncRequest()}, whose argument this
+     * is the counterpart of.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -434,7 +462,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
+    public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions(), ?float $requestTimeoutInSeconds = null): Statement {
 
         $consistency = $consistency ?? $this->consistency;
 
@@ -448,7 +476,7 @@ final class Connection {
 
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
-        $statement = $this->asyncRequest($request);
+        $statement = $this->asyncRequest($request, $requestTimeoutInSeconds);
 
         return $statement;
     }
@@ -513,65 +541,10 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\RequestTimeoutException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
-    public function prepare(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
-
-        if (
-            $options->keyspace === null
-            && $this->keyspace
-            && $this->version->value >= ProtocolVersion::V5->value
-        ) {
-            $options = $options->withKeyspace($this->keyspace);
-        }
-
-        $response = $this->syncRequest(new Request\Prepare($query, $options));
-        if (!($response instanceof Response\Result\PreparedResult)) {
-            throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
-                'expected' => Response\Result::class,
-                'received' => get_class($response),
-            ]);
-        }
-
-        return $response;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\RequestTimeoutException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
-    public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions()): Statement {
-
-        if (
-            $options->keyspace === null
-            && $this->keyspace
-            && $this->version->value >= ProtocolVersion::V5->value
-        ) {
-            $options = $options->withKeyspace($this->keyspace);
-        }
-
-        $request = new Request\Prepare($query, $options);
-
-        return $this->asyncRequest($request);
-    }
-
-    /**
-     * @param array<mixed> $values
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this call only; see {@see self::syncRequest()}, whose argument this is the
+     * counterpart of.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -583,7 +556,77 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
+    public function prepare(string $query, PrepareOptions $options = new PrepareOptions(), ?float $requestTimeoutInSeconds = null): Response\Result\PreparedResult {
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version->value >= ProtocolVersion::V5->value
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
+
+        $response = $this->syncRequest(new Request\Prepare($query, $options), $requestTimeoutInSeconds);
+        if (!($response instanceof Response\Result\PreparedResult)) {
+            throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this statement only; see {@see self::asyncRequest()}, whose argument this
+     * is the counterpart of.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions(), ?float $requestTimeoutInSeconds = null): Statement {
+
+        if (
+            $options->keyspace === null
+            && $this->keyspace
+            && $this->version->value >= ProtocolVersion::V5->value
+        ) {
+            $options = $options->withKeyspace($this->keyspace);
+        }
+
+        $request = new Request\Prepare($query, $options);
+
+        return $this->asyncRequest($request, $requestTimeoutInSeconds);
+    }
+
+    /**
+     * @param array<mixed> $values
+     *
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this call only; see {@see self::syncRequest()}, whose argument this is the
+     * counterpart of.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions(), ?float $requestTimeoutInSeconds = null): Response\Result {
 
         $consistency = $consistency ?? $this->consistency;
 
@@ -597,7 +640,7 @@ final class Connection {
 
         $request = new Request\Query($query, $values, $consistency, $options);
 
-        $response = $this->syncRequest($request);
+        $response = $this->syncRequest($request, $requestTimeoutInSeconds);
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during query', ExceptionCode::CONNECTION_QUERY_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
@@ -612,6 +655,11 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this call only. It bounds each page request, not the call as a whole, so
+     * fetching a paged result can take a multiple of it before giving up.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -622,11 +670,11 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function queryAll(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): array {
+    public function queryAll(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions(), ?float $requestTimeoutInSeconds = null): array {
 
         $responses = [];
 
-        $response = $this->query($query, $values, $consistency, $options)->asRowsResult();
+        $response = $this->query($query, $values, $consistency, $options, $requestTimeoutInSeconds)->asRowsResult();
 
         $responses[] = $response;
 
@@ -638,7 +686,8 @@ final class Connection {
                 consistency: $consistency,
                 options: $options->withPagingState(
                     $pagingState
-                )
+                ),
+                requestTimeoutInSeconds: $requestTimeoutInSeconds,
             )->asRowsResult();
 
             $responses[] = $response;
@@ -652,6 +701,11 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer, overriding the request's and the connection's request timeout for
+     * this statement only; see {@see self::asyncRequest()}, whose argument this
+     * is the counterpart of.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -662,7 +716,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
     */
-    public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
+    public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions(), ?float $requestTimeoutInSeconds = null): Statement {
 
         $consistency = $consistency ?? $this->consistency;
 
@@ -676,7 +730,7 @@ final class Connection {
 
         $request = new Request\Query($query, $values, $consistency, $options);
 
-        return $this->asyncRequest($request);
+        return $this->asyncRequest($request, $requestTimeoutInSeconds);
     }
 
     public function registerEventListener(EventListener $eventListener): void {
@@ -839,12 +893,16 @@ final class Connection {
             }
         }
 
+        $responseArrived = false;
+
         try {
             $response = $this->getNextResponseForStream(
                 streamId: $streamId,
                 requestTimeoutInSeconds: $requestTimeoutInSeconds,
                 requestClass: get_class($request),
             );
+
+            $responseArrived = true;
 
             $this->recycledStreams->enqueue($streamId);
 
@@ -854,6 +912,16 @@ final class Connection {
             $this->handleNodeException($node);
 
             throw $e;
+        } finally {
+            if (!$responseArrived) {
+                // Nothing came back for this id and, unlike an async request,
+                // there is no statement carrying it: without this it would be
+                // lost for the life of the connection. A timeout has parked it
+                // already and a node failure took the whole pool with it, so
+                // this is for the rest — a malformed frame, say, which leaves
+                // it undecidable whether the answer was consumed.
+                $this->parkUnresolvedStream($streamId);
+            }
         }
 
         if ($response === null) {
@@ -888,7 +956,7 @@ final class Connection {
         while (true) {
             $event = $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
-                $this->keepNonBlockingBookkeeping();
+                $this->keepNonBlockingBookkeeping(readAttempted: true);
 
                 return null;
             }
@@ -916,7 +984,7 @@ final class Connection {
         while (true) {
             $response = $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
-                $this->keepNonBlockingBookkeeping();
+                $this->keepNonBlockingBookkeeping(readAttempted: true);
 
                 return null;
             }
@@ -965,7 +1033,7 @@ final class Connection {
             }
         } while (true);
 
-        $this->keepNonBlockingBookkeeping();
+        $this->keepNonBlockingBookkeeping(readAttempted: true);
 
         return $statement->isResultReady();
     }
@@ -1005,6 +1073,7 @@ final class Connection {
         }
 
         $processed = 0;
+        $readAttempted = false;
         $drainedResponses = false;
         while (
             $processed < $max
@@ -1021,6 +1090,7 @@ final class Connection {
                 break;
             }
 
+            $readAttempted = true;
             $this->readResponse(drainedResponses: $drainedResponses);
             if ($drainedResponses) {
                 break;
@@ -1028,7 +1098,7 @@ final class Connection {
             $processed++;
         }
 
-        $this->keepNonBlockingBookkeeping();
+        $this->keepNonBlockingBookkeeping($readAttempted);
 
         $ready = 0;
         foreach ($statements as $s) {
@@ -1053,7 +1123,7 @@ final class Connection {
      *
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  let the statements' own budgets bound it (the default)
-     *   0     do not wait: return as soon as there is nothing more to read
+     *   0     do not wait: make one non-blocking read attempt and return
      *   n     wait at most n seconds
      *   INF   wait for as long as it takes
      *
@@ -1113,7 +1183,7 @@ final class Connection {
      * @param array<Statement> $statements
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  let the statements' own budgets bound it (the default)
-     *   0     do not wait: return as soon as there is nothing more to read
+     *   0     do not wait: make one non-blocking read attempt and return
      *   n     wait at most n seconds
      *   INF   wait for as long as it takes
      *
@@ -1186,7 +1256,7 @@ final class Connection {
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  wait for as long as it takes (the default), since an event can
      *         arrive at any time
-     *   0     do not wait: return as soon as there is nothing more to read
+     *   0     do not wait: make one non-blocking read attempt and return
      *   n     wait at most n seconds
      *   INF   wait for as long as it takes
      *
@@ -1252,7 +1322,7 @@ final class Connection {
      *
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  use the connection's request timeout (the default)
-     *   0     do not wait: return as soon as there is nothing more to read
+     *   0     do not wait: make one non-blocking read attempt and return
      *   n     wait at most n seconds
      *   INF   wait for as long as it takes
      *
@@ -1326,7 +1396,7 @@ final class Connection {
      * @param array<Statement> $statements
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  let the statements' own budgets bound it (the default)
-     *   0     do not wait: return as soon as there is nothing more to read
+     *   0     do not wait: make one non-blocking read attempt and return
      *   n     wait at most n seconds
      *   INF   wait for as long as it takes
      *
@@ -1501,51 +1571,59 @@ final class Connection {
      */
     private function chainAsyncRequest(Request\Request $request, Statement $statement): void {
 
-        $node = $this->getConnectedNode();
-
-        $request->setVersion($this->version);
-
         $streamId = $statement->getStreamId();
-        $request->setStream($streamId);
-
-        if (isset($this->statements[$streamId])) {
-            throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
-                'operation' => 'chainAsyncRequest',
-                'stream_id' => $streamId,
-            ]);
-        }
 
         // The statement is not among the pending ones at this point: the
         // response that triggered the follow-up took it out of the map. Nothing
-        // else would mark it if the write fails, so it is done here — a
-        // statement left neither pending nor finished would wait on a stream id
-        // that the next connection may well hand to somebody else, and would be
-        // resolved by that request's answer.
-        $writeSucceeded = false;
-        $nodeFailed = false;
+        // else would mark it if the follow-up never goes out, so it is done
+        // here — a statement left neither pending nor finished would wait on a
+        // stream id that the next connection may well hand to somebody else,
+        // and would be resolved by that request's answer. This covers every way
+        // of failing, not just the write: reaching a node and claiming the
+        // stream id can fail too, and leave the statement just as stranded.
+        $requestWasSent = false;
 
         try {
-            $node->writeRequest($request);
-            $writeSucceeded = true;
+            $node = $this->getConnectedNode();
 
-            $this->nodeHealth->recordSuccess($node->getConfig());
-        } catch (NodeException $e) {
-            $nodeFailed = true;
+            $request->setVersion($this->version);
+            $request->setStream($streamId);
 
-            $this->handleNodeException($node);
+            if (isset($this->statements[$streamId])) {
+                throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
+                    'operation' => 'chainAsyncRequest',
+                    'stream_id' => $streamId,
+                ]);
+            }
 
-            throw $e;
-        } finally {
-            if (!$writeSucceeded) {
-                $statement->setStatus(StatementStatus::ABANDONED);
+            $writeSucceeded = false;
+            $nodeFailed = false;
 
-                if (!$nodeFailed) {
+            try {
+                $node->writeRequest($request);
+                $writeSucceeded = true;
+
+                $this->nodeHealth->recordSuccess($node->getConfig());
+            } catch (NodeException $e) {
+                $nodeFailed = true;
+
+                $this->handleNodeException($node);
+
+                throw $e;
+            } finally {
+                if (!$writeSucceeded && !$nodeFailed) {
                     // Nothing reached the node, so the connection is fine and
                     // the stream id was never in use: it goes back into
                     // circulation instead of being burned. A node failure needs
                     // no such care, because it takes the whole pool with it.
                     $this->recycledStreams->enqueue($streamId);
                 }
+            }
+
+            $requestWasSent = true;
+        } finally {
+            if (!$requestWasSent) {
+                $statement->setStatus(StatementStatus::ABANDONED);
             }
         }
 
@@ -1575,8 +1653,7 @@ final class Connection {
      * so a dead connection is caught in interval + timeout no matter how
      * generous the request timeout is.
      *
-     * This is only reached between reads, so a read that could outlast the
-     * probe's schedule would delay it. None does:
+     * A read that could outlast the probe's schedule would delay it. None does:
      * {@see self::readResponseUntil()} bounds every read by
      * {@see self::nextHeartbeatActionAt()} as well as by the caller's deadline,
      * which is what lets the transport's stall window be long, or absent.
@@ -1589,7 +1666,10 @@ final class Connection {
      * whenever the request timeout is the shorter of the two.
      *
      * Callers must read before calling this, so that an answer already sitting
-     * in the socket buffer is never mistaken for an unanswered heartbeat.
+     * in the socket buffer is never mistaken for an unanswered heartbeat. The
+     * waits all read on their way here; the non-blocking calls, which can
+     * return before they get that far, are held to it by
+     * {@see self::keepNonBlockingBookkeeping()}.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -2051,24 +2131,46 @@ final class Connection {
      * @throws \Cassandra\Exception\ServerException
      */
     private function getNewStreamId(?float $requestTimeoutInSeconds = null): int {
-        if ($this->nextStreamId <= self::MAX_STREAM_ID) {
-            return $this->nextStreamId++;
-        }
 
-        // Every id has been handed out, so one can only come back with an
-        // answer. This is an ordinary bounded wait like any other: a transport
-        // read timeout here only means the connection was quiet, so it must not
-        // tear the connection down, and the heartbeat is what proves the node
-        // is still there while we wait.
-        //
-        // The wait is part of the request that is asking for the id, so it is
-        // held to that request's own budget rather than to the connection
-        // default. With no budget at all it waits indefinitely, as every other
-        // wait in this class does — an id can still come free at any time.
-        $waitDeadline = $this->deadlineFor($requestTimeoutInSeconds);
+        $waitDeadline = null;
+        $waitStarted = false;
         $deadlineExceeded = false;
 
-        while ($this->recycledStreams->isEmpty()) {
+        while (true) {
+            // Retried every pass rather than settled once: reading below can
+            // replace the connection, which starts the id space over — the
+            // counter has every id to give again, while the recycling pool it
+            // was emptied alongside stays empty until the fresh connection has
+            // answered something. Waiting on the pool alone would sit out the
+            // whole budget and then report the id space as exhausted with all
+            // of it free.
+            if ($this->nextStreamId <= self::MAX_STREAM_ID) {
+                return $this->nextStreamId++;
+            }
+
+            if (!$this->recycledStreams->isEmpty()) {
+                return $this->recycledStreams->dequeue();
+            }
+
+            if (!$waitStarted) {
+                // Every id has been handed out, so one can only come back with
+                // an answer. This is an ordinary bounded wait like any other: a
+                // transport read timeout here only means the connection was
+                // quiet, so it must not tear the connection down, and the
+                // heartbeat is what proves the node is still there while we
+                // wait.
+                //
+                // The wait is part of the request that is asking for the id, so
+                // it is held to that request's own budget where it has one, and
+                // only otherwise to the connection default. With neither it
+                // waits indefinitely, as every other wait in this class does —
+                // an id can still come free at any time. It is anchored on the
+                // first pass that finds nothing, so that the passes which found
+                // an id straight away cost no clock reading at all.
+                $waitStarted = true;
+                $waitDeadline = $this->deadlineFor($requestTimeoutInSeconds);
+            }
+
             $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
@@ -2096,8 +2198,6 @@ final class Connection {
                 }
             }
         }
-
-        return $this->recycledStreams->dequeue();
     }
 
     /**
@@ -2133,12 +2233,39 @@ final class Connection {
                     return $alreadyAnswered;
                 }
 
-                if ($statement->isTimedOut() || $statement->isAbandoned()) {
-                    // A dead end reached while we were reading, which today
-                    // only a disconnect can do — and every path that
-                    // disconnects raises on its own, so this is the belt to
-                    // that braces. Waiting on further passes would be waiting
-                    // for an answer that cannot come.
+                // A dead end reached while we were reading, which today only a
+                // disconnect can do — and every path that disconnects raises on
+                // its own, so this is the belt to that braces. Waiting on
+                // further passes would be waiting for an answer that cannot
+                // come.
+                //
+                // A statement given up on is reported as the timeout it is,
+                // matching {@see self::assertStatementIsResolvable()} when it
+                // finds the same statement in the same state before the wait
+                // begins: which side of a read the budget ran out on is timing,
+                // not a difference the caller should have to tell apart.
+                if ($statement->isTimedOut()) {
+                    throw new RequestTimeoutException(
+                        'This request timed out and was given up on while its answer was outstanding, so it can no longer be resolved. Send it again.',
+                        ExceptionCode::REQUESTTIMEOUT_WAITING_FOR_STATEMENTS->value,
+                        [
+                            'operation' => 'getResponseForStatement',
+                            'stream_id' => $streamId,
+                            'request_class' => get_class($statement->getRequest()),
+                        ],
+                        timedOutStatements: [$statement],
+                    );
+                }
+
+                // Abandoned, on the other hand, only ever means the connection
+                // this statement was sent on went away, so that is what it is
+                // reported as. It is deliberately not the StatementException
+                // assertStatementIsResolvable() raises: the sync path shares
+                // this loop and has no statement at all, so raising that here
+                // would put StatementException on the @throws list of every
+                // method that ends up in syncRequest(), for a failure none of
+                // them can produce.
+                if ($statement->isAbandoned()) {
                     throw new ConnectionException(
                         'The statement being waited on was given up on while its answer was outstanding, so this connection can no longer resolve it',
                         ExceptionCode::CONNECTION_STATEMENT_NO_LONGER_RESOLVABLE->value,
@@ -2146,8 +2273,7 @@ final class Connection {
                             'operation' => 'getResponseForStatement',
                             'stream_id' => $streamId,
                             'request_class' => get_class($statement->getRequest()),
-                            'timed_out' => $statement->isTimedOut(),
-                            'abandoned' => $statement->isAbandoned(),
+                            'abandoned' => true,
                         ]
                     );
                 }
@@ -2526,8 +2652,14 @@ final class Connection {
      * an expired statement from the statement itself, as it does from the waits
      * that were not asked about it ({@see self::waitForNextResponse()}).
      *
-     * Callers must read before calling this, for the reason
-     * {@see self::checkHeartbeat()} gives.
+     * $readAttempted says whether the caller got as far as reading from the
+     * transport. It usually has, but a poll can return before it does — over
+     * statements that were all resolved already, or with a limit of zero — and
+     * the probe must not run then, for the reason {@see self::checkHeartbeat()}
+     * gives: an answer still sitting in the receive buffer would be taken for
+     * an unanswered probe and would cost a healthy connection. Such a call has
+     * learned nothing about the connection either, so there is nothing for the
+     * probe to decide; request budgets are kept eitherway.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -2539,11 +2671,13 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function keepNonBlockingBookkeeping(): void {
+    private function keepNonBlockingBookkeeping(bool $readAttempted): void {
 
         $this->timeOutExpiredStatements();
 
-        $this->checkHeartbeat();
+        if ($readAttempted) {
+            $this->checkHeartbeat();
+        }
     }
 
     /**
@@ -2577,6 +2711,32 @@ final class Connection {
         foreach ($this->eventListeners as $listener) {
             $listener->onEvent($event);
         }
+    }
+
+    /**
+     * Park a stream id whose fate a failure left undecided.
+     *
+     * Reached when a request ends in something that is neither a node failure —
+     * which takes the whole pool with it — nor a timeout, which parks the id
+     * itself: a frame the reader could not make sense of, above all. Whether
+     * the answer was consumed is exactly what such a failure leaves unknown, so
+     * the id is parked rather than recycled, for the reason
+     * {@see self::timeOutExpiredStatements()} gives, and released if and when
+     * an answer for it does turn up.
+     *
+     * Not enforcing the orphan limit here is deliberate: this runs while
+     * another failure is on its way out, and the connection being replaced is
+     * not what the caller should be told about. The next piece of bookkeeping
+     * enforces it.
+     */
+    private function parkUnresolvedStream(int $streamId): void {
+
+        if ($this->node === null || isset($this->orphanedStreams[$streamId])) {
+            return;
+        }
+
+        unset($this->statements[$streamId]);
+        $this->orphanedStreams[$streamId] = microtime(true);
     }
 
     /**
@@ -2759,10 +2919,12 @@ final class Connection {
             $response = null;
         }
 
-        // Checked after the read as well as before it: a blocking read only
-        // returns once the transport's stall window is over, which may be long
-        // after the deadline, and a connection busy answering other requests
-        // must not keep an overdue one from ever being noticed.
+        // Checked after the read, not before it: the read is bounded by the
+        // deadline rather than merely started on the strength of it, so it is
+        // only on the way out that the deadline can have passed. Reaching it is
+        // not exclusive with having read something either — a response for
+        // another request may well arrive in the same pass — so both are
+        // reported and it is left to the caller to act on each.
         if ($deadline !== null && microtime(true) >= $deadline) {
             $deadlineExceeded = true;
         }

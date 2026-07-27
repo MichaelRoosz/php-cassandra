@@ -15,6 +15,8 @@ use Cassandra\Exception\StatementException;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Query;
 use Cassandra\Response\Event\StatusChangeEvent;
+use Cassandra\Response\Result;
+use Cassandra\Statement;
 use ReflectionProperty;
 
 /**
@@ -356,6 +358,43 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAWaitBoundDoesNotProbeTheConnectionWhenNothingWasRead(): void {
+        // A poll that returns before it reads has learned nothing about the
+        // connection, so it must not judge the heartbeat either: the probe's
+        // answer can be sitting unread in the receive buffer, and taking that
+        // for silence would cost a healthy connection.
+        $connection = $this->connect(
+            'idle',
+            heartbeatIntervalInSeconds: 0.2,
+            heartbeatTimeoutInSeconds: 0.4,
+        );
+
+        // A resolved statement, so that the poll below has nothing to read for.
+        $statement = $connection->queryAsync('SELECT * FROM system.local');
+        $connection->waitForStatements([$statement]);
+        $this->assertTrue($statement->isResultReady());
+
+        // Long enough for the probe to fall due, and for a read to send it.
+        usleep(300_000);
+        $connection->tryReadNextResponse();
+        $this->assertNotNull($this->pendingHeartbeatOf($connection), 'the probe should be outstanding by now');
+
+        // Past the heartbeat timeout, with its answer left unread.
+        usleep(600_000);
+
+        // Neither of these reads — every statement they were given is resolved,
+        // and a limit of zero forbids it outright — so neither may declare the
+        // connection dead.
+        $this->assertSame(0, $connection->tryResolveStatements([$statement]));
+        $this->assertSame(0, $connection->drainAvailableResponses(0));
+        $this->assertTrue($connection->isConnected(), 'a poll that never read must not drop the connection');
+
+        // A poll that does read finds the answer and clears the probe.
+        $connection->drainAvailableResponses();
+        $this->assertNull($this->pendingHeartbeatOf($connection), 'the answered probe should have been retired');
+        $this->assertTrue($connection->isConnected());
+    }
+
     public function testAWaitBoundEndsTheWaitWithoutTouchingTheStatements(): void {
         // The statement has a 30s budget but the caller only wants to wait 1s:
         // the wait ends, the statement keeps waiting, and nothing is given up on.
@@ -501,6 +540,53 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $this->assertSame(ExceptionCode::CONNECTION_TOO_MANY_ORPHANED_STREAMS->value, $e->getCode());
             $this->assertFalse($connection->isConnected());
         }
+    }
+
+    public function testPerCallTimeoutArgumentBoundsTheHighLevelAsyncHelpers(): void {
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW', requestTimeoutInSeconds: 1.0);
+
+        $this->assertSame(1.0, $statement->getRequestTimeout(), 'the override must win over the connection default');
+
+        $start = microtime(true);
+
+        try {
+            $connection->waitForStatements([$statement]);
+            $this->fail('expected the per-call timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $this->assertSame([$statement], $e->getTimedOutStatements());
+            $this->assertLessThan(10.0, microtime(true) - $start, 'the statement must be held to the overridden budget');
+        }
+    }
+
+    public function testPerCallTimeoutArgumentBoundsTheHighLevelHelpers(): void {
+        // The same override syncRequest()/asyncRequest() take, without having
+        // to build an options object for it.
+        $connection = $this->connect('slow-query', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
+
+        $start = microtime(true);
+
+        try {
+            $connection->query('SELECT * FROM system.local', requestTimeoutInSeconds: 1.0);
+            $this->fail('expected the per-call timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $this->assertLessThan(10.0, microtime(true) - $start, 'the argument must win over the connection default');
+        }
+    }
+
+    public function testPerCallTimeoutArgumentOutranksTheRequestsOwnOptions(): void {
+        // Precedence runs argument, then request options, then connection: the
+        // request asks for 1s but the call overrules it with room to spare.
+        $connection = $this->connect('slow-query', delaySeconds: 1.0, requestTimeoutInSeconds: 1.0);
+
+        $result = $connection->query(
+            'SELECT * FROM system.local',
+            options: new QueryOptions(requestTimeoutInSeconds: 1.0),
+            requestTimeoutInSeconds: 30.0,
+        );
+
+        $this->assertInstanceOf(Result::class, $result);
     }
 
     public function testPerRequestTimeoutFromOptionsBoundsAnAsyncStatement(): void {
@@ -775,6 +861,15 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
     /**
      * How many PREPAREs the server has seen, from the lines it reports.
      */
+    private function pendingHeartbeatOf(Connection $connection): ?Statement {
+        $property = new ReflectionProperty(Connection::class, 'pendingHeartbeat');
+
+        /** @var ?Statement $pendingHeartbeat */
+        $pendingHeartbeat = $property->getValue($connection);
+
+        return $pendingHeartbeat;
+    }
+
     private function preparesSeenByServer(): int {
         if ($this->serverStdout === null) {
             return 0;

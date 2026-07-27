@@ -161,15 +161,33 @@ final class Socket extends NodeImplementation implements IoNode {
             if (!$hasData) {
                 return '';
             }
-        } elseif ($waitForData && !$this->applyReceiveTimeout($readDeadline, $start)) {
-            // Blocking fallback: the deadline is enforced by the socket option
-            // rather than by select(), and it is already past.
-            return '';
+        } else {
+            // Blocking fallback: the deadline is enforced by SO_RCVTIMEO
+            // rather than by select().
+            if (!$waitForData) {
+                // A blocking socket cannot be asked for "whatever is there
+                // right now": socket_read() would sit in the receive timeout,
+                // which is exactly what a caller passing a deadline that has
+                // already passed asked not to happen. Whatever had already
+                // arrived was served from the buffer without reaching here.
+                return '';
+            }
+
+            if (!$this->applyReceiveTimeout($readDeadline)) {
+                // The deadline passed between mayBlock() and here.
+                return '';
+            }
         }
 
         $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
         do {
-            $readData = socket_read($socket, $readLength, PHP_BINARY_READ);
+            // Suppressed because the errno is read and reported below: every
+            // outcome that matters becomes a SocketException carrying more
+            // context than PHP's warning does. Left unsuppressed, an ordinary
+            // connection reset would raise a warning *and* the exception, and an
+            // application whose error handler turns warnings into exceptions
+            // would get the warning in place of the driver's own report.
+            $readData = @socket_read($socket, $readLength, PHP_BINARY_READ);
             if ($readData === false) {
                 $errorCode = socket_last_error($socket);
 
@@ -329,7 +347,8 @@ final class Socket extends NodeImplementation implements IoNode {
 
             $bufferErrors = 0;
             do {
-                $sentBytes = socket_write($socket, $data);
+                // Suppressed for the reason given in readAvailableDataFromSource().
+                $sentBytes = @socket_write($socket, $data);
 
                 if ($sentBytes === 0) {
                     $this->checkForWriteTimeout($lastProgressAt);
@@ -453,10 +472,10 @@ final class Socket extends NodeImplementation implements IoNode {
      * Only reached when the socket could not be switched to non-blocking mode,
      * where select() would do this instead. Returns false when the deadline has
      * already passed, so the caller can skip the read altogether; the option is
-     * only touched when the value actually changes, so a steady stream of reads
-     * with the same bound costs one syscall rather than one per read.
+     * only touched when the value actually changes, which spares the syscall
+     * for the unbounded reads that keep asking for the same stall window.
      */
-    private function applyReceiveTimeout(?float $readDeadline, float $start): bool {
+    private function applyReceiveTimeout(?float $readDeadline): bool {
 
         if ($this->socket === null) {
             return false;
@@ -533,7 +552,22 @@ final class Socket extends NodeImplementation implements IoNode {
         ]);
 
         if ($shutdown) {
-            socket_shutdown($socket);
+            // Deliberately suppressed rather than checked. The shutdown is a
+            // courtesy — it sends the peer a FIN so a healthy connection ends
+            // cleanly — and the socket is closed either way, so its failing
+            // carries nothing worth acting on. It fails routinely: a peer that
+            // reset the connection leaves the socket unconnected, so ENOTCONN
+            // here is the normal outcome of the very path that closes a
+            // connection most often.
+            //
+            // Left unsuppressed it raises a PHP warning on every reset. That is
+            // more than noise: this runs from disconnect() while the transport
+            // failure that caused it is still propagating, and from __destruct()
+            // at shutdown, so an application whose error handler turns warnings
+            // into exceptions — as Symfony's and Laravel's do — would see that
+            // handler fire in both places, replacing the real SocketException
+            // with a misleading one and throwing from a destructor.
+            @socket_shutdown($socket);
         }
 
         socket_close($socket);
@@ -549,7 +583,8 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     private function connectToAddress(int $addressFamily, string $address): PhpSocket {
 
-        $socket = socket_create($addressFamily, SOCK_STREAM, SOL_TCP);
+        // Suppressed for the reason given in readAvailableDataFromSource().
+        $socket = @socket_create($addressFamily, SOCK_STREAM, SOL_TCP);
         if ($socket === false) {
             $errorCode = socket_last_error();
 
@@ -577,7 +612,11 @@ final class Socket extends NodeImplementation implements IoNode {
 
         $start = microtime(true);
         do {
-            $result = socket_connect($socket, $address, $this->config->port);
+            // Suppressed for the reason given in readAvailableDataFromSource(),
+            // and with one of its own: connect() works through every address the
+            // host resolves to, so a node reachable over IPv4 but not IPv6 would
+            // raise a warning on the way to a connection that succeeds.
+            $result = @socket_connect($socket, $address, $this->config->port);
             if ($result === false) {
 
                 $errorCode = socket_last_error($socket);
@@ -832,7 +871,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
                 [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
-                $selectResult = socket_select(
+                $selectResult = @socket_select(
                     read: $read,
                     write: $write,
                     except: $except,
@@ -840,7 +879,7 @@ final class Socket extends NodeImplementation implements IoNode {
                     microseconds: $remainingMicroseconds
                 );
             } else {
-                $selectResult = socket_select(
+                $selectResult = @socket_select(
                     read: $read,
                     write: $write,
                     except: $except,
@@ -916,7 +955,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
         [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
-        $selectResult = socket_select(
+        $selectResult = @socket_select(
             read: $read,
             write: $write,
             except: $except,
