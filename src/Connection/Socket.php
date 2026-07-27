@@ -156,6 +156,14 @@ final class Socket extends NodeImplementation implements IoNode {
         $start = microtime(true);
         $waitForData = $this->mayBlock($readDeadline);
 
+        // Whether the read below is the one that can pass judgement on the
+        // connection, i.e. whether it was given the whole stall window rather
+        // than a shorter deadline of the caller's. Recorded when the timeout is
+        // armed instead of re-derived from the clock afterwards: where nothing
+        // narrows it, the two are the same duration, and comparing the elapsed
+        // time against the stall window can only tell them apart by luck.
+        $stallWindowArmed = false;
+
         if (!$this->isBlockingIo) {
             $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, $waitForData, $readDeadline);
             if (!$hasData) {
@@ -178,10 +186,13 @@ final class Socket extends NodeImplementation implements IoNode {
         } else {
             // Blocking fallback: the deadline is enforced by SO_RCVTIMEO
             // rather than by select().
-            if (!$this->applyReceiveTimeout($readDeadline)) {
+            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
+            if ($appliedTimeout === null) {
                 // The deadline passed between mayBlock() and here.
                 return '';
             }
+
+            $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
         }
 
         $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
@@ -210,10 +221,11 @@ final class Socket extends NodeImplementation implements IoNode {
                     $errorCode === SOCKET_EWOULDBLOCK
                     || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
                 ) {
+                    // A blocking socket reports an expired SO_RCVTIMEO this way.
                     // Only a stall window that has run out means the connection
                     // itself went quiet for too long; the caller's deadline
                     // expiring is not the socket's failure to report.
-                    if ($this->isBlockingIo && $waitForData && microtime(true) - $start > $this->receiveTimeout) {
+                    if ($stallWindowArmed) {
                         throw new SocketException(
                             message: 'Socket read timed out',
                             code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
@@ -253,7 +265,7 @@ final class Socket extends NodeImplementation implements IoNode {
                 }
 
                 if ($errorCode === SOCKET_ETIMEDOUT) {
-                    if (microtime(true) - $start <= $this->receiveTimeout) {
+                    if (!$stallWindowArmed) {
                         // The caller's deadline, applied as SO_RCVTIMEO above,
                         // rather than the transport's stall window.
                         return '';
@@ -475,24 +487,26 @@ final class Socket extends NodeImplementation implements IoNode {
      * stall window, by narrowing SO_RCVTIMEO for the duration of the read.
      *
      * Only reached when the socket could not be switched to non-blocking mode,
-     * where select() would do this instead. Returns false when the deadline has
-     * already passed, so the caller can skip the read altogether; the option is
-     * only touched when the value actually changes, which spares the syscall
-     * for the unbounded reads that keep asking for the same stall window.
+     * where select() would do this instead. Returns the timeout the read will
+     * run under, or null when the deadline has already passed, so the caller
+     * can skip the read altogether and can tell which of the two bounds it got.
+     * The option is only touched when the value actually changes, which spares
+     * the syscall for the unbounded reads that keep asking for the same stall
+     * window.
      */
-    private function applyReceiveTimeout(?float $readDeadline): bool {
+    private function applyReceiveTimeout(?float $readDeadline): ?float {
 
         if ($this->socket === null) {
-            return false;
+            return null;
         }
 
         $remaining = $this->narrowToReadDeadline($this->receiveTimeout, $readDeadline);
         if ($remaining === null) {
-            return false;
+            return null;
         }
 
         if ($this->appliedReceiveTimeout === $remaining) {
-            return true;
+            return $remaining;
         }
 
         [$seconds, $microseconds] = $this->splitTimeout($remaining);
@@ -506,7 +520,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
         $this->appliedReceiveTimeout = $remaining;
 
-        return true;
+        return $remaining;
     }
 
     /**
@@ -612,6 +626,13 @@ final class Socket extends NodeImplementation implements IoNode {
         foreach ($this->config->socketOptions as $optname => $optval) {
             socket_set_option($socket, SOL_SOCKET, (int) $optname, $optval);
         }
+
+        // Whatever SO_RCVTIMEO the previous socket was left with says nothing
+        // about this one, which starts from the configured options above. Kept,
+        // it would let applyReceiveTimeout() skip the one call that narrows the
+        // timeout, and a blocking read would then run under the wider window
+        // instead of the caller's deadline.
+        $this->appliedReceiveTimeout = null;
 
         $this->isBlockingIo = socket_set_nonblock($socket) === false;
 

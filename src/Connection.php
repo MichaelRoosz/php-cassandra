@@ -308,6 +308,14 @@ final class Connection {
         $this->pendingHeartbeat = null;
         $this->handshakeComplete = false;
 
+        // A bounded read can come back with a header whose body has not arrived
+        // yet, and the reader keeps it so the next read resumes the same frame.
+        // Those remaining bytes belong to the transport being dropped here, so
+        // the half-read frame has to go with it: kept, it would be finished off
+        // with the first bytes the next connection sends, leaving every response
+        // after it parsed at the wrong offset.
+        $this->responseReader->reset();
+
         /** @var SplQueue<int> $recycledStreams */
         $recycledStreams = new SplQueue();
         $this->recycledStreams = $recycledStreams;
@@ -326,6 +334,13 @@ final class Connection {
      *
      * NOTE: This method will not block; it processes any currently available responses
      * and returns when the receive buffer is drained or the provided limit is reached.
+     *
+     * The one thing it can block on is getting a connection at all: called
+     * before anything has been sent, it opens one and takes it through the
+     * handshake first, as every other method that touches the transport does.
+     * The same goes for {@see self::tryReadNextEvent()},
+     * {@see self::tryReadNextResponse()}, {@see self::tryResolveStatement()}
+     * and {@see self::tryResolveStatements()}.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -946,6 +961,9 @@ final class Connection {
     /**
      * Non-blocking: attempt to read and return the next event, or null if none is available.
      *
+     * Opens the connection first if there is none yet; see
+     * {@see self::drainAvailableResponses()}.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -974,6 +992,9 @@ final class Connection {
     /**
      * Non-blocking: attempt to read and return the next response, or null if none is available.
      *
+     * Opens the connection first if there is none yet; see
+     * {@see self::drainAvailableResponses()}.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -1001,6 +1022,9 @@ final class Connection {
 
     /**
      * Non-blocking: try to resolve a specific statement; returns true if it is ready.
+     *
+     * Opens the connection first if there is none yet; see
+     * {@see self::drainAvailableResponses()}.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1046,6 +1070,9 @@ final class Connection {
     /**
      * Non-blocking: try to resolve from a set of statements, up to $max responses processed.
      * Returns the number of newly resolved statements from the provided set.
+     *
+     * Opens the connection first if there is none yet; see
+     * {@see self::drainAvailableResponses()}.
      *
      * @param array<Statement> $statements
      *
@@ -1258,6 +1285,15 @@ final class Connection {
      * heartbeat interval, so a connection that died quietly is still noticed —
      * which is the job a read timeout cannot do here.
      *
+     * That rests on the heartbeat, and only on it. Turn it off
+     * ({@see ConnectionOptions::$heartbeatIntervalInSeconds} set to null) and
+     * an unbounded wait here has nothing bounding its reads at all, at which
+     * point the transport's stall window is the only judgement left and this
+     * fails the connection with a NodeException once it elapses, as every other
+     * unbounded wait does — see {@see self::readResponseUntil()}. Waiting for
+     * events with heartbeats disabled therefore means passing a
+     * $timeoutInSeconds and calling again, rather than waiting indefinitely.
+     *
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  wait for as long as it takes (the default), since an event can
      *         arrive at any time
@@ -1334,7 +1370,9 @@ final class Connection {
      * Null means the connection's request timeout here, rather than "no bound"
      * as it does in the waits that take statements: those are bounded by the
      * budgets of the statements they were given, and this call has none to go
-     * by. Pass INF for a wait that only ends when something arrives.
+     * by. Where the connection's request timeout is itself null there is
+     * nothing to fall back on and the wait is unbounded, exactly as INF is.
+     * Pass INF for a wait that only ends when something arrives.
      *
      * Returns null when the time is up with nothing having arrived, whether or
      * not anything went overdue in the meantime — see below. A timeout of 0
@@ -1747,6 +1785,19 @@ final class Connection {
             return;
         }
 
+        // Skipped rather than waited for when every stream id is in use.
+        // Claiming one would read, and reading here can block for a whole
+        // request timeout — which the non-blocking calls that reach this
+        // through {@see self::keepNonBlockingBookkeeping()} promised not to do.
+        // Nothing is lost by it: an id space with all 32768 in flight is not a
+        // connection anyone needs a probe to have an opinion about, and if
+        // those requests really are going unanswered they run out of time,
+        // orphan their ids and take the connection with them at
+        // {@see ConnectionOptions::$maxOrphanedStreams}.
+        if (!$this->hasImmediateStreamId()) {
+            return;
+        }
+
         $this->sendingHeartbeat = true;
 
         try {
@@ -2154,13 +2205,15 @@ final class Connection {
         $deadlineExceeded = false;
 
         while (true) {
-            // Retried every pass rather than settled once: reading below can
-            // replace the connection, which starts the id space over — the
-            // counter has every id to give again, while the recycling pool it
-            // was emptied alongside stays empty until the fresh connection has
-            // answered something. Waiting on the pool alone would sit out the
-            // whole budget and then report the id space as exhausted with all
-            // of it free.
+            // Both are retried every pass rather than settled once. The pool is
+            // the one that fills up while we wait, but the counter is checked
+            // beside it because the id space starts over whenever the
+            // connection is replaced — and then the counter has every id to
+            // give again while the pool it was emptied alongside is still
+            // empty. Nothing below returns after replacing the connection
+            // today, so this is defensive; getting it wrong the other way would
+            // mean sitting out the whole budget and reporting the id space as
+            // exhausted with all of it free.
             if ($this->nextStreamId <= self::MAX_STREAM_ID) {
                 return $this->nextStreamId++;
             }
@@ -2639,6 +2692,18 @@ final class Connection {
     }
 
     /**
+     * Whether a stream id can be had without waiting for one to come free.
+     *
+     * The heartbeat asks before sending: {@see self::getNewStreamId()} reads
+     * while it waits, and reading is exactly what the probe must not do to get
+     * itself sent.
+     */
+    private function hasImmediateStreamId(): bool {
+
+        return $this->nextStreamId <= self::MAX_STREAM_ID || !$this->recycledStreams->isEmpty();
+    }
+
+    /**
      * The statements of $expired that the caller was actually waiting on.
      *
      * @param array<Statement> $expired
@@ -2720,6 +2785,15 @@ final class Connection {
 
         if ($this->pendingHeartbeat !== null) {
             return $this->pendingHeartbeatSentAt + $this->options->heartbeatTimeoutInSeconds;
+        }
+
+        // checkHeartbeat() will not send a probe it would have to wait for a
+        // stream id to send, so there is nothing here to come up for air for.
+        // Reporting one anyway would put every read's bound in the past — the
+        // probe is due, after all — and turn each wait into a spin over reads
+        // that return at once and a probe that is never sent.
+        if (!$this->hasImmediateStreamId()) {
+            return null;
         }
 
         return $this->lastResponseAt + $interval;
@@ -2856,11 +2930,12 @@ final class Connection {
             }
 
             // A read timeout says nothing about the connection, exactly as in
-            // readResponseUntil(). It should not reach a non-blocking read at
-            // all, but it does when the transport could not be switched out of
-            // blocking mode and enforces its receive timeout itself — and
-            // tearing the connection down over a quiet moment would turn that
-            // fallback into a broken connection.
+            // readResponseUntil(). A read that was told not to wait should not
+            // be able to produce one — both transports settle readiness with a
+            // zero-timeout select() and never arm their stall window for it —
+            // so this is the braces to that belt: tearing the connection down
+            // over a quiet moment would be the worst possible reading of a
+            // timeout that no wait was even attempted for.
             $response = null;
         }
 

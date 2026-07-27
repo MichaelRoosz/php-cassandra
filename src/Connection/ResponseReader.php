@@ -94,6 +94,24 @@ final class ResponseReader {
     }
 
     /**
+     * Forget a partially consumed response.
+     *
+     * A header whose body has not arrived yet is deliberately kept across calls,
+     * so that a bounded read can pick up where it left off. That is only
+     * meaningful on the connection the header was read from: the bytes it is
+     * still waiting for sit in that transport's receive buffer and go away with
+     * it. Carried over to the next connection it would take the first bytes of
+     * a fresh stream for the body of a frame nobody is going to send, and every
+     * response after that would be read at the wrong offset.
+     *
+     * Called whenever the connection is dropped, see
+     * {@see \Cassandra\Connection::disconnect()}.
+     */
+    public function reset(): void {
+        $this->currentHeader = null;
+    }
+
+    /**
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\ResponseException
      */

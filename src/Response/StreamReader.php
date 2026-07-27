@@ -24,7 +24,7 @@ use TypeError;
 use ValueError;
 use Cassandra\VIntCodec;
 
-class StreamReader {
+final class StreamReader {
     final protected const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
 
     protected string $data;

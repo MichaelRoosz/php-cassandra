@@ -184,6 +184,14 @@ final class Stream extends NodeImplementation implements IoNode {
         $start = microtime(true);
         $waitForData = $this->mayBlock($readDeadline);
 
+        // Whether the read below is the one that can pass judgement on the
+        // connection, i.e. whether it was given the whole stall window rather
+        // than a shorter deadline of the caller's. Recorded when the timeout is
+        // armed instead of re-derived from the clock afterwards: where nothing
+        // narrows it, the two are the same duration, and comparing the elapsed
+        // time against the stall window can only tell them apart by luck.
+        $stallWindowArmed = false;
+
         if (!$this->isBlockingIo) {
             $hasData = $this->selectStreamForRead($stream, $start, $expectedLength, $upperBoundaryLength, $waitForData, $readDeadline);
             if (!$hasData) {
@@ -206,10 +214,13 @@ final class Stream extends NodeImplementation implements IoNode {
         } else {
             // Blocking fallback: the deadline is enforced by the stream's own
             // timeout rather than by select().
-            if (!$this->applyReceiveTimeout($stream, $readDeadline)) {
+            $appliedTimeout = $this->applyReceiveTimeout($stream, $readDeadline);
+            if ($appliedTimeout === null) {
                 // The deadline passed between mayBlock() and here.
                 return '';
             }
+
+            $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
         }
 
         $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
@@ -237,7 +248,7 @@ final class Stream extends NodeImplementation implements IoNode {
                 // Only the stall window running out means the connection went
                 // quiet for too long; the caller's deadline, applied as the
                 // stream timeout above, is not the transport's failure.
-                if (microtime(true) - $start <= $this->receiveTimeout) {
+                if (!$stallWindowArmed) {
                     return '';
                 }
 
@@ -289,7 +300,7 @@ final class Stream extends NodeImplementation implements IoNode {
                 );
             }
 
-            if (stream_get_meta_data($stream)['timed_out'] && microtime(true) - $start > $this->receiveTimeout) {
+            if ($stallWindowArmed && stream_get_meta_data($stream)['timed_out']) {
                 throw new StreamException(
                     message: 'Stream read timed out',
                     code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
@@ -421,23 +432,24 @@ final class Stream extends NodeImplementation implements IoNode {
      * stall window, by narrowing the stream's own timeout for its duration.
      *
      * Only reached when the stream could not be switched to non-blocking mode,
-     * where stream_select() would do this instead. Returns false when the
-     * deadline has already passed, so the caller can skip the read altogether;
-     * the timeout is only re-applied when the value actually changes, which
-     * spares the call for the unbounded reads that keep asking for the same
-     * stall window.
+     * where stream_select() would do this instead. Returns the timeout the read
+     * will run under, or null when the deadline has already passed, so the
+     * caller can skip the read altogether and can tell which of the two bounds
+     * it got. The timeout is only re-applied when the value actually changes,
+     * which spares the call for the unbounded reads that keep asking for the
+     * same stall window.
      *
      * @param resource $stream
      */
-    private function applyReceiveTimeout($stream, ?float $readDeadline): bool {
+    private function applyReceiveTimeout($stream, ?float $readDeadline): ?float {
 
         $remaining = $this->narrowToReadDeadline($this->receiveTimeout, $readDeadline);
         if ($remaining === null) {
-            return false;
+            return null;
         }
 
         if ($this->appliedReceiveTimeout === $remaining) {
-            return true;
+            return $remaining;
         }
 
         [$seconds, $microseconds] = $this->splitTimeout($remaining);
@@ -450,7 +462,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
         $this->appliedReceiveTimeout = $remaining;
 
-        return true;
+        return $remaining;
     }
 
     /**
