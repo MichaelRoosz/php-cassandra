@@ -11,6 +11,7 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\Stream;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Exception\NodeException;
+use ReflectionProperty;
 
 /**
  * Both transports honour the read deadline they are handed, independently of
@@ -79,6 +80,23 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
         $this->assertLessThan(0.2, $elapsed, 'a deadline already past buys no wait');
     }
 
+    public function testSocketServesAPastDeadlineReadInBlockingFallbackMode(): void {
+        // When the socket cannot be switched to non-blocking mode, a read with a
+        // deadline already past cannot simply be skipped: that is what the
+        // polling calls make, so skipping it would leave them reporting an idle
+        // connection whatever the server sent. Readiness is settled with a
+        // zero-timeout select() instead, and the data is served without waiting.
+        $node = $this->connectSocket(['sec' => 15, 'usec' => 0]);
+        $this->forceBlockingIo($node);
+
+        $this->sendFromServer('123456789');
+
+        [$data, $elapsed] = $this->timedRead($node, Node::DO_NOT_WAIT);
+
+        $this->assertSame('123456789', $data, 'a blocking socket must still yield what has already arrived');
+        $this->assertLessThan(1.0, $elapsed, 'and must not have waited for it');
+    }
+
     public function testSocketStallWindowStillRaisesWithoutADeadline(): void {
         // The deadline did not replace the stall window: with no deadline to go
         // by, a connection that stays silent for its whole window is still a
@@ -117,6 +135,20 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
 
         $this->assertSame('', $data);
         $this->assertLessThan(0.2, $elapsed);
+    }
+
+    public function testStreamServesAPastDeadlineReadInBlockingFallbackMode(): void {
+        // The stream counterpart of
+        // testSocketServesAPastDeadlineReadInBlockingFallbackMode().
+        $node = $this->connectStream(15.0);
+        $this->forceBlockingIo($node);
+
+        $this->sendFromServer('123456789');
+
+        [$data, $elapsed] = $this->timedRead($node, Node::DO_NOT_WAIT);
+
+        $this->assertSame('123456789', $data, 'a blocking stream must still yield what has already arrived');
+        $this->assertLessThan(1.0, $elapsed, 'and must not have waited for it');
     }
 
     public function testStreamStallWindowStillRaisesWithoutADeadline(): void {
@@ -182,6 +214,15 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
         return $node;
     }
 
+    /**
+     * Pretend the transport could not be switched out of blocking mode, which
+     * is the fallback both of them carry and which no local socket takes on its
+     * own.
+     */
+    private function forceBlockingIo(IoNode $node): void {
+        (new ReflectionProperty($node::class, 'isBlockingIo'))->setValue($node, true);
+    }
+
     private function listen(): int {
         $server = stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
         if ($server === false) {
@@ -196,6 +237,21 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
         }
 
         return (int) substr($localName, (int) strrpos($localName, ':') + 1);
+    }
+
+    /**
+     * Push data down the accepted connection and give it a moment to arrive, so
+     * that a read which refuses to wait still has something to find.
+     */
+    private function sendFromServer(string $data): void {
+        if (!is_resource($this->acceptedClient)) {
+            $this->fail('the server never accepted the connection');
+        }
+
+        fwrite($this->acceptedClient, $data);
+        fflush($this->acceptedClient);
+
+        usleep(200_000);
     }
 
     /**

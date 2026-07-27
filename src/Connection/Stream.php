@@ -189,18 +189,23 @@ final class Stream extends NodeImplementation implements IoNode {
             if (!$hasData) {
                 return '';
             }
+        } elseif (!$waitForData) {
+            // Blocking fallback, asked for "whatever is there right now":
+            // fread() alone cannot answer that, since it would sit in the stream
+            // timeout, which is exactly what a caller passing a deadline that
+            // has already passed asked not to happen. Readiness is settled with
+            // a zero-timeout stream_select() instead — that works on a blocking
+            // stream just as well — and only then is the stream read, which now
+            // returns what has arrived without waiting for more. Without this
+            // the polling calls could never take anything off a blocking
+            // stream, and would report an idle connection forever.
+            $hasData = $this->selectStreamForRead($stream, $start, $expectedLength, $upperBoundaryLength, false, $readDeadline);
+            if (!$hasData) {
+                return '';
+            }
         } else {
             // Blocking fallback: the deadline is enforced by the stream's own
             // timeout rather than by select().
-            if (!$waitForData) {
-                // A blocking stream cannot be asked for "whatever is there
-                // right now": fread() would sit in the stream timeout, which is
-                // exactly what a caller passing a deadline that has already
-                // passed asked not to happen. Whatever had already arrived was
-                // served from the buffer without reaching here.
-                return '';
-            }
-
             if (!$this->applyReceiveTimeout($stream, $readDeadline)) {
                 // The deadline passed between mayBlock() and here.
                 return '';

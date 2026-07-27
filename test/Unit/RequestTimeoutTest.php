@@ -9,6 +9,7 @@ use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\NodeException;
 use Cassandra\Exception\RequestException;
 use Cassandra\Exception\RequestTimeoutException;
 use Cassandra\Exception\StatementException;
@@ -17,6 +18,7 @@ use Cassandra\Request\Query;
 use Cassandra\Response\Event\StatusChangeEvent;
 use Cassandra\Response\Result;
 use Cassandra\Statement;
+use ReflectionMethod;
 use ReflectionProperty;
 
 /**
@@ -56,6 +58,33 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
 
         $this->assertFalse($connection->isConnected(), 'a half-finished handshake must not leave a usable-looking connection');
+    }
+
+    public function testAFollowUpRequestIsNotSentOnAReplacementConnection(): void {
+        // A repreparation or auto-prepare re-sends on the stream id its
+        // statement already holds. That id was handed out by the connection the
+        // statement was sent on, and a new connection starts its id space over,
+        // so opening one here would register the statement at an id the new
+        // connection is free to give to somebody else — and the statement was
+        // abandoned along with its connection anyway, so it could never be
+        // resolved. It has to be given up on instead.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0);
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW');
+        $connection->disconnect();
+
+        $this->assertTrue($statement->isAbandoned());
+
+        $method = new ReflectionMethod(Connection::class, 'chainAsyncRequest');
+
+        try {
+            $method->invoke($connection, new Query('SELECT * FROM SLOW'), $statement);
+            $this->fail('expected the follow-up request to be given up on');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_CHAINED_REQUEST_CONNECTION_GONE->value, $e->getCode());
+            $this->assertFalse($connection->isConnected(), 'no replacement connection may be opened for it');
+            $this->assertTrue($statement->isAbandoned());
+        }
     }
 
     public function testAHeartbeatIsStillSentWithTheTransportTimeoutDisabled(): void {
@@ -447,6 +476,51 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertLessThan(2.0, $elapsed, 'a bound of 0 must not wait on the transport');
         $this->assertFalse($statement->isResultReady());
         $this->assertFalse($statement->isTimedOut(), 'the statement still has its full budget');
+    }
+
+    public function testAWaitWithNothingElseBoundingItFallsBackToTheStallWindow(): void {
+        // A transport read timeout is swallowed while something else still
+        // bounds the wait — the caller's deadline or the next heartbeat will
+        // end it, and a slow coordinator looks exactly like a quiet one. Here
+        // neither exists: no wait bound, no request budget, no heartbeat. The
+        // stall window is then the only judgement available and it is the
+        // transport's own, so it must fail the connection rather than leave the
+        // client blocked forever.
+        $connection = $this->connect(
+            'deaf',
+            requestTimeoutInSeconds: null,
+            heartbeatIntervalInSeconds: null,
+            receiveTimeoutSeconds: 1.0,
+        );
+
+        $start = microtime(true);
+
+        try {
+            $connection->waitForNextEvent();
+            $this->fail('an unbounded wait on a silent connection must not be unbounded in fact');
+        } catch (NodeException $e) {
+            $this->assertSame(ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value, $e->getCode());
+            $this->assertLessThan(10.0, microtime(true) - $start, 'the stall window, not forever');
+            $this->assertFalse($connection->isConnected(), 'a connection that made no progress at all has failed');
+        }
+    }
+
+    public function testAWaitWithNothingElseBoundingItStillRidesOutASlowAnswer(): void {
+        // The counterpart: the same connection with a request in flight is
+        // bounded by that request's budget, so a stall window elapsing while the
+        // server is merely slow must be swallowed rather than fail anything.
+        // The answer takes several times the 1s stall window.
+        $connection = $this->connect(
+            'slow-query',
+            delaySeconds: 3.0,
+            requestTimeoutInSeconds: 30.0,
+            receiveTimeoutSeconds: 1.0,
+        );
+
+        $result = $connection->query('SELECT * FROM system.local');
+
+        $this->assertInstanceOf(Result::class, $result);
+        $this->assertTrue($connection->isConnected());
     }
 
     public function testDeadConnectionIsDetectedByTheHeartbeatLongBeforeTheRequestTimeout(): void {

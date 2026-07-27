@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
+use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\ReleaseConstants;
 
 final class ConnectionOptions {
+    /**
+     * @throws \Cassandra\Exception\ConnectionException
+     */
     public function __construct(
         public readonly bool $enableCompression = false,
         public readonly bool $throwOnOverload = false,
@@ -72,6 +77,42 @@ final class ConnectionOptions {
          */
         public readonly float $heartbeatTimeoutInSeconds = 5,
     ) {
+        // Rejected rather than clamped, because every non-positive value here
+        // means something the caller cannot have wanted: a request that is out
+        // of time before it is sent, a probe on every single read, or a
+        // heartbeat that is overdue the moment it goes out and so declares a
+        // healthy node dead. "No timeout" is spelled null for the two that
+        // allow it, and the heartbeat timeout only matters when the interval
+        // has already turned heartbeats on.
+        if ($requestTimeoutInSeconds !== null && $requestTimeoutInSeconds <= 0.0) {
+            throw new ConnectionException(
+                'Invalid request timeout: it must be greater than zero, or null to wait indefinitely',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'request_timeout_seconds' => $requestTimeoutInSeconds,
+                ]
+            );
+        }
+
+        if ($heartbeatIntervalInSeconds !== null && $heartbeatIntervalInSeconds <= 0.0) {
+            throw new ConnectionException(
+                'Invalid heartbeat interval: it must be greater than zero, or null to disable heartbeats',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'heartbeat_interval_seconds' => $heartbeatIntervalInSeconds,
+                ]
+            );
+        }
+
+        if ($heartbeatIntervalInSeconds !== null && $heartbeatTimeoutInSeconds <= 0.0) {
+            throw new ConnectionException(
+                'Invalid heartbeat timeout: it must be greater than zero',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'heartbeat_timeout_seconds' => $heartbeatTimeoutInSeconds,
+                ]
+            );
+        }
     }
 
     /**

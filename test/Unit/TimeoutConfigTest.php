@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
+use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\NodeConfig;
 use Cassandra\Connection\Socket;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\Stream;
 use Cassandra\Connection\StreamNodeConfig;
+use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\SocketException;
 use ReflectionProperty;
 
@@ -17,8 +19,52 @@ use ReflectionProperty;
  * configuration: SO_SNDTIMEO/SO_RCVTIMEO for the socket transport and
  * timeoutInSeconds for the stream transport. Both are handled as fractional
  * seconds, and a zero timeout means "no timeout".
+ *
+ * The client-side budgets in ConnectionOptions are checked here too, where
+ * "no timeout" is spelled null instead and a non-positive value is rejected.
  */
 final class TimeoutConfigTest extends AbstractUnitTestCase {
+    public function testConnectionNonPositiveHeartbeatIntervalIsRejected(): void {
+        // Heartbeats are turned off with null; zero would mean probing on every
+        // single read.
+        $this->expectException(ConnectionException::class);
+
+        new ConnectionOptions(heartbeatIntervalInSeconds: 0);
+    }
+
+    public function testConnectionNonPositiveHeartbeatTimeoutIsRejected(): void {
+        // A probe that is overdue the moment it goes out would declare every
+        // healthy node dead.
+        $this->expectException(ConnectionException::class);
+
+        new ConnectionOptions(heartbeatTimeoutInSeconds: 0);
+    }
+
+    public function testConnectionNonPositiveRequestTimeoutIsRejected(): void {
+        // A request that is out of time before it is sent cannot be what the
+        // caller meant; waiting indefinitely is spelled null.
+        $this->expectException(ConnectionException::class);
+
+        new ConnectionOptions(requestTimeoutInSeconds: 0);
+    }
+
+    public function testConnectionTimeoutsMayBeDisabledWithNull(): void {
+        $options = new ConnectionOptions(
+            requestTimeoutInSeconds: null,
+            heartbeatIntervalInSeconds: null,
+        );
+
+        $this->assertNull($options->requestTimeoutInSeconds);
+        $this->assertNull($options->heartbeatIntervalInSeconds);
+
+        // With heartbeats off the heartbeat timeout governs nothing, so it is
+        // not held to the same rule.
+        $this->assertInstanceOf(ConnectionOptions::class, new ConnectionOptions(
+            heartbeatIntervalInSeconds: null,
+            heartbeatTimeoutInSeconds: 0,
+        ));
+    }
+
     public function testSocketFractionalSecondsAreCombined(): void {
         [$sendTimeout, $receiveTimeout] = $this->getTimeouts(new SocketNodeConfig(socketOptions: [
             SO_SNDTIMEO => ['sec' => 2, 'usec' => 500000],

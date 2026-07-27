@@ -161,18 +161,23 @@ final class Socket extends NodeImplementation implements IoNode {
             if (!$hasData) {
                 return '';
             }
+        } elseif (!$waitForData) {
+            // Blocking fallback, asked for "whatever is there right now":
+            // socket_read() alone cannot answer that, since it would sit in the
+            // receive timeout, which is exactly what a caller passing a deadline
+            // that has already passed asked not to happen. Readiness is settled
+            // with a zero-timeout select() instead — that works on a blocking
+            // socket just as well — and only then is the socket read, which now
+            // returns what has arrived without waiting for more. Without this
+            // the polling calls could never take anything off a blocking
+            // socket, and would report an idle connection forever.
+            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, false, $readDeadline);
+            if (!$hasData) {
+                return '';
+            }
         } else {
             // Blocking fallback: the deadline is enforced by SO_RCVTIMEO
             // rather than by select().
-            if (!$waitForData) {
-                // A blocking socket cannot be asked for "whatever is there
-                // right now": socket_read() would sit in the receive timeout,
-                // which is exactly what a caller passing a deadline that has
-                // already passed asked not to happen. Whatever had already
-                // arrived was served from the buffer without reaching here.
-                return '';
-            }
-
             if (!$this->applyReceiveTimeout($readDeadline)) {
                 // The deadline passed between mayBlock() and here.
                 return '';

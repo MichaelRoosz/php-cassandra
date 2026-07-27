@@ -786,9 +786,12 @@ final class Connection {
      * includes the ones already in flight, whose budgets are measured against
      * this value as it stands when they are looked at rather than as it stood
      * when they were sent: lowering it can therefore expire outstanding
-     * requests at once. Requests sent with a timeout of their own — from their
-     * options, or from the argument {@see self::syncRequest()} and
-     * {@see self::asyncRequest()} take — are unaffected.
+     * requests at once — and since giving up on a request parks its stream id,
+     * doing so to enough of them at once can reach
+     * {@see ConnectionOptions::$maxOrphanedStreams} and replace the connection.
+     * Requests sent with a timeout of their own — from their options, or from
+     * the argument {@see self::syncRequest()} and {@see self::asyncRequest()}
+     * take — are unaffected.
      *
      * Raise it around operations Cassandra allows more time for, such as
      * TRUNCATE (60s server-side by default), or pass the timeout directly to
@@ -815,7 +818,9 @@ final class Connection {
      * It bounds each request this call sends, not the call as a whole: when the
      * driver has to prepare or reprepare the statement first, the PREPARE and
      * the request it precedes each get the full budget, so the call can take a
-     * multiple of it before giving up.
+     * multiple of it before giving up. The wait for a free stream id, on a
+     * connection that has handed out every one of them, is held to it
+     * separately as well.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1559,15 +1564,8 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\RequestTimeoutException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
      */
     private function chainAsyncRequest(Request\Request $request, Statement $statement): void {
 
@@ -1584,7 +1582,26 @@ final class Connection {
         $requestWasSent = false;
 
         try {
-            $node = $this->getConnectedNode();
+            // Deliberately not getConnectedNode(): that would open a fresh
+            // connection, and this request cannot go on one. The stream id it
+            // carries was handed out by the connection that is gone, whose id
+            // space a new connection starts over — sending on it would register
+            // a statement at an id the new connection is free to hand to
+            // somebody else, and the statement was marked as abandoned along
+            // with its connection anyway, so it could never be resolved.
+            if ($this->node === null) {
+                throw new ConnectionException(
+                    'The connection this statement was sent on was closed before its follow-up request could be sent, so the request was given up on. Send it again.',
+                    ExceptionCode::CONNECTION_CHAINED_REQUEST_CONNECTION_GONE->value,
+                    [
+                        'operation' => 'chainAsyncRequest',
+                        'stream_id' => $streamId,
+                        'request_class' => get_class($request),
+                    ]
+                );
+            }
+
+            $node = $this->node;
 
             $request->setVersion($this->version);
             $request->setStream($streamId);
@@ -2091,7 +2108,7 @@ final class Connection {
         return $this->preparedResultCache[$request->getHash()] ?? null;
     }
 
-    /** 
+    /**
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -2235,7 +2252,7 @@ final class Connection {
 
                 // A dead end reached while we were reading, which today only a
                 // disconnect can do — and every path that disconnects raises on
-                // its own, so this is the belt to that braces. Waiting on
+                // its own, so this is the braces to that belt. Waiting on
                 // further passes would be waiting for an answer that cannot
                 // come.
                 //
@@ -2257,9 +2274,11 @@ final class Connection {
                     );
                 }
 
-                // Abandoned, on the other hand, only ever means the connection
-                // this statement was sent on went away, so that is what it is
-                // reported as. It is deliberately not the StatementException
+                // Abandoned, on the other hand, means the statement was given up
+                // on without ever running out of time — the connection it was
+                // sent on went away, or a follow-up request of its own never
+                // reached the node — so it is reported as a connection failure
+                // rather than a timeout. It is deliberately not the StatementException
                 // assertStatementIsResolvable() raises: the sync path shares
                 // this loop and has no statement at all, so raising that here
                 // would put StatementException on the @throws list of every
@@ -2659,7 +2678,7 @@ final class Connection {
      * gives: an answer still sitting in the receive buffer would be taken for
      * an unanswered probe and would cost a healthy connection. Such a call has
      * learned nothing about the connection either, so there is nothing for the
-     * probe to decide; request budgets are kept eitherway.
+     * probe to decide; request budgets are kept either way.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -2879,7 +2898,10 @@ final class Connection {
      * because a wait with no deadline of its own still has to come up for air
      * often enough to probe a connection that has gone quiet. Between the two
      * of them the transport's stall window is no longer what decides when
-     * anything happens, so it is free to be long, or absent altogether.
+     * anything happens, so it is free to be long, or absent altogether — and
+     * where neither of them bounds the read, the stall window is what is left
+     * to end it, so its elapsing is reported as the transport failure it is
+     * rather than swallowed like the timeouts that a bounded read produces.
      *
      * Returns null when no complete response was available, with
      * $deadlineExceeded telling the caller whether the wait may continue. The
@@ -2911,6 +2933,21 @@ final class Connection {
             $response = $this->responseReader->readResponse($node, $this->version, $readDeadline);
         } catch (NodeException $e) {
             if (!$e->isReadTimeout()) {
+                $this->handleNodeException($node);
+
+                throw $e;
+            }
+
+            // A read timeout only says the connection was silent for its stall
+            // window, which decides nothing while something else still bounds
+            // this wait: the caller's deadline or the next heartbeat will end
+            // it, and a coordinator that is still thinking looks exactly like
+            // this. With neither — $readDeadline is what the two of them
+            // produced — the stall window is the only judgement available, and
+            // it is the transport's own: a connection that has made no progress
+            // for its whole window, with nothing left to notice it, is treated
+            // as failed rather than waited on forever.
+            if ($readDeadline === null) {
                 $this->handleNodeException($node);
 
                 throw $e;
