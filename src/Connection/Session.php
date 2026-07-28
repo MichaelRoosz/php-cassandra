@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
+use Cassandra\Connection;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
@@ -15,6 +16,7 @@ use Cassandra\Response\Result;
 use Cassandra\Statement;
 use Cassandra\StatementStatus;
 use Cassandra\Value\ValueEncodeConfig;
+use Throwable;
 
 /**
  * Everything {@see \Cassandra\Connection} does once a request has been built:
@@ -36,7 +38,7 @@ final class Session {
      * {@see Statement} is given it, so that waiting on one goes back through
      * the object the caller actually holds.
      */
-    private \Cassandra\Connection $connection;
+    private Connection $connection;
 
     /**
      * The request timeouts of this connection, and the deadlines its waits are
@@ -107,15 +109,10 @@ final class Session {
     private ProtocolVersion $version;
 
     /**
-     * @param \Cassandra\Connection $connection the connection this session
-     * belongs to, handed to every {@see Statement} it creates so that a caller
-     * waiting on one goes back through the object they actually hold rather
-     * than through machinery they were never given.
-     *
      * @param array<NodeConfig> $nodes
      */
     public function __construct(
-        \Cassandra\Connection $connection,
+        Connection $connection,
         array $nodes,
         string $keyspace,
         ConnectionOptions $options,
@@ -134,11 +131,6 @@ final class Session {
         $this->deadlines = new Deadline($options->requestTimeoutInSeconds);
         $this->statements = new StatementRegistry($this->streamIds, $this->deadlines);
         $this->preparedResultCache = new PreparedResultCache($options->preparedResultCacheSize);
-
-        // The two of them need each other: sending a request ends in an answer
-        // being dispatched, and dispatching one can end in another request
-        // being sent. The cycle is closed through this session rather than
-        // between them, so that neither has to be built half-formed.
         $this->dispatcher = new ResponseDispatcher($this, $this->listeners, $this->preparedResultCache);
         $this->executor = new RequestExecutor(
             $this,
@@ -193,27 +185,14 @@ final class Session {
 
         try {
             $this->completeHandshake($node);
-        } catch (\Throwable $e) {
-            // A handshake that fails part way through leaves a socket the node
-            // will not accept ordinary requests on, and only a NodeException
-            // closes it on its own: a request timeout deliberately keeps the
-            // connection, and a rejected or unexpected response never touches
-            // it. Without this the client would go on reporting isConnected(),
-            // hand that socket to every later request, and — because the
-            // heartbeat is gated on a completed handshake — never probe it
-            // either.
+        } catch (Throwable $e) {
             $this->disconnect();
 
             throw $e;
         }
     }
 
-    /**
-     * The connection this session belongs to, which is what a
-     * {@see Statement} is given so that waiting on one goes back through the
-     * object the caller actually holds.
-     */
-    public function connection(): \Cassandra\Connection {
+    public function connection(): Connection {
 
         return $this->connection;
     }
@@ -225,27 +204,8 @@ final class Session {
         $this->statements->abandonAll();
         $this->heartbeat->forgetProbe();
         $this->handshakeComplete = false;
-
-        // Stream ids belong to the connection being dropped: the one replacing
-        // it hands the same ids out from scratch.
         $this->streamIds->reset();
-
-        // The negotiated version belongs to the connection that is going away,
-        // not to this object: the next one may well be a different node, picked
-        // by the selector or reached after this one failed. Kept, it would send
-        // the opening OPTIONS of the next handshake at a version that node
-        // never agreed to — and a node that cannot answer at that version is
-        // read as a protocol mismatch and fails the connection outright, which
-        // is precisely what starting from
-        // {@see ConnectionOptions::$initialProtocolVersion} avoids.
         $this->version = $this->options->initialProtocolVersion;
-
-        // A bounded read can come back with a header whose body has not arrived
-        // yet, and the reader keeps it so the next read resumes the same frame.
-        // Those remaining bytes belong to the transport being dropped here, so
-        // the half-read frame has to go with it: kept, it would be finished off
-        // with the first bytes the next connection sends, leaving every response
-        // after it parsed at the wrong offset.
         $this->responseReader->reset();
 
         if ($this->node === null) {
@@ -338,12 +298,6 @@ final class Session {
         $deadlineExceeded = false;
 
         while (true) {
-            // Asked every pass rather than settled once: the pool is what fills
-            // up while we wait, and it starts over whenever the connection is
-            // replaced. Nothing below returns after replacing the connection
-            // today, so the latter is defensive; getting it wrong the other way
-            // would mean sitting out the whole budget and reporting the id
-            // space as exhausted with all of it free.
             $streamId = $this->streamIds->claim();
             if ($streamId !== null) {
                 return $streamId;
@@ -735,12 +689,6 @@ final class Session {
                 return null;
             }
             if ($event instanceof Response\Event) {
-                // Before the event is handed back, not instead of it: a poll
-                // that keeps finding events would otherwise never sweep the
-                // request budgets it owes, and the statements that ran out
-                // would hold their stream ids for as long as the events keep
-                // coming. This is what the waits do with the same tension, see
-                // {@see self::waitForNextEvent()}.
                 $this->keepNonBlockingBookkeeping(readAttempted: true);
 
                 return $event;
@@ -771,9 +719,6 @@ final class Session {
                 return null;
             }
             if ($response !== null) {
-                // As in tryReadNextEvent(): the bookkeeping is owed by every
-                // poll that read, not only by the ones that came back
-                // empty-handed.
                 $this->keepNonBlockingBookkeeping(readAttempted: true);
 
                 return $response;
@@ -800,13 +745,8 @@ final class Session {
             return true;
         }
 
-        // Budgets are kept here as well as in the waits: polling never blocks,
-        // but a statement that is only ever polled must still run out of time
-        // rather than stay pending — and holding its stream id — for good.
         $this->timeOutExpiredStatements();
 
-        // Never resolvable, so reporting "not ready yet" would send a polling
-        // caller round a loop that can never end.
         $this->statements->assertResolvable($statement);
 
         $drainedResponses = false;
@@ -816,10 +756,6 @@ final class Session {
                 break;
             }
             if ($statement->isResultReady()) {
-                // As in tryReadNextEvent(): a poll that resolved what it came
-                // for still owes the connection its bookkeeping, or a caller
-                // whose statements always resolve on the first read would keep
-                // none of the other budgets.
                 $this->keepNonBlockingBookkeeping(readAttempted: true);
 
                 return true;
@@ -848,8 +784,6 @@ final class Session {
      */
     public function tryResolveStatements(array $statements, int $max = PHP_INT_MAX): int {
 
-        // As in tryResolveStatement(): polling does not wait, but it does not
-        // excuse a statement from its budget either.
         $this->timeOutExpiredStatements();
 
         $initialReady = 0;
