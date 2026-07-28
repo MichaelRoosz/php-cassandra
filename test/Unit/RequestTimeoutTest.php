@@ -19,6 +19,7 @@ use Cassandra\Response\Event\StatusChangeEvent;
 use Cassandra\Response\Result;
 use Cassandra\Statement;
 use ReflectionMethod;
+use Cassandra\Connection\StreamIdPool;
 use ReflectionProperty;
 
 /**
@@ -965,7 +966,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
      */
     private function orphanedStreamsOf(Connection $connection): array {
         /** @var array<int, float> $orphaned */
-        $orphaned = (new ReflectionProperty(Connection::class, 'orphanedStreams'))->getValue($connection);
+        $orphaned = (new ReflectionProperty(StreamIdPool::class, 'orphanedStreams'))->getValue($this->streamIdPoolOf($connection));
 
         return $orphaned;
     }
@@ -994,7 +995,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
     private function recycledStreamCountOf(Connection $connection): int {
         /** @var \SplQueue<int> $recycled */
-        $recycled = (new ReflectionProperty(Connection::class, 'recycledStreams'))->getValue($connection);
+        $recycled = (new ReflectionProperty(StreamIdPool::class, 'recycledStreams'))->getValue($this->streamIdPoolOf($connection));
 
         return count($recycled);
     }
@@ -1038,5 +1039,12 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         proc_close($this->serverProcess);
         $this->serverProcess = null;
         $this->serverStdout = null;
+    }
+
+    private function streamIdPoolOf(Connection $connection): StreamIdPool {
+        /** @var StreamIdPool $pool */
+        $pool = (new ReflectionProperty(Connection::class, 'streamIds'))->getValue($connection);
+
+        return $pool;
     }
 }

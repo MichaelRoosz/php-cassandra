@@ -8,6 +8,7 @@ use Cassandra\Connection;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use ReflectionMethod;
+use Cassandra\Connection\StreamIdPool;
 use ReflectionProperty;
 use SplQueue;
 
@@ -87,8 +88,10 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
         /** @var SplQueue<int> $empty */
         $empty = new SplQueue();
 
-        (new ReflectionProperty(Connection::class, 'nextStreamId'))->setValue($connection, 32768);
-        (new ReflectionProperty(Connection::class, 'recycledStreams'))->setValue($connection, $empty);
+        $pool = $this->streamIdPoolOf($connection);
+
+        (new ReflectionProperty(StreamIdPool::class, 'nextStreamId'))->setValue($pool, StreamIdPool::MAX_STREAM_ID + 1);
+        (new ReflectionProperty(StreamIdPool::class, 'recycledStreams'))->setValue($pool, $empty);
     }
 
     private function nextHeartbeatActionAt(Connection $connection): ?float {
@@ -96,5 +99,12 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
         $at = (new ReflectionMethod(Connection::class, 'nextHeartbeatActionAt'))->invoke($connection);
 
         return $at;
+    }
+
+    private function streamIdPoolOf(Connection $connection): StreamIdPool {
+        /** @var StreamIdPool $pool */
+        $pool = (new ReflectionProperty(Connection::class, 'streamIds'))->getValue($connection);
+
+        return $pool;
     }
 }

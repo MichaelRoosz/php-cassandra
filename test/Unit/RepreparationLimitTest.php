@@ -11,6 +11,7 @@ use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StatementException;
 use Cassandra\Statement;
+use Cassandra\Connection\StreamIdPool;
 use ReflectionProperty;
 
 /**
@@ -159,7 +160,7 @@ final class RepreparationLimitTest extends AbstractUnitTestCase {
      */
     private function orphanedStreams(Connection $connection): array {
         /** @var array<int, float> $orphaned */
-        $orphaned = (new ReflectionProperty(Connection::class, 'orphanedStreams'))->getValue($connection);
+        $orphaned = (new ReflectionProperty(StreamIdPool::class, 'orphanedStreams'))->getValue($this->streamIdPoolOf($connection));
 
         return $orphaned;
     }
@@ -169,7 +170,7 @@ final class RepreparationLimitTest extends AbstractUnitTestCase {
      */
     private function recycledStreams(Connection $connection): array {
         /** @var \SplQueue<int> $recycled */
-        $recycled = (new ReflectionProperty(Connection::class, 'recycledStreams'))->getValue($connection);
+        $recycled = (new ReflectionProperty(StreamIdPool::class, 'recycledStreams'))->getValue($this->streamIdPoolOf($connection));
 
         return array_values(iterator_to_array($recycled));
     }
@@ -206,5 +207,12 @@ final class RepreparationLimitTest extends AbstractUnitTestCase {
         proc_terminate($this->serverProcess);
         proc_close($this->serverProcess);
         $this->serverProcess = null;
+    }
+
+    private function streamIdPoolOf(Connection $connection): StreamIdPool {
+        /** @var StreamIdPool $pool */
+        $pool = (new ReflectionProperty(Connection::class, 'streamIds'))->getValue($connection);
+
+        return $pool;
     }
 }

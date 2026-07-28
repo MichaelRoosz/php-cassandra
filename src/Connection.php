@@ -4,29 +4,28 @@ declare(strict_types=1);
 
 namespace Cassandra;
 
-use Cassandra\Connection\FrameCodec;
-use Cassandra\Protocol\Opcode;
 use Cassandra\Connection\ConnectionOptions;
-use Cassandra\Protocol\ProtocolVersion;
-use Cassandra\Connection\RequestCompressor;
+use Cassandra\Connection\Deadline;
+use Cassandra\Connection\Handshake;
+use Cassandra\Connection\ListenerRegistry;
+use Cassandra\Connection\PreparedResultCache;
 use Cassandra\Connection\ResponseReader;
+use Cassandra\Connection\StreamIdPool;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Exception\RequestTimeoutException;
 use Cassandra\Exception\StatementException;
-use Cassandra\Protocol\Header;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Response\Result;
-use Cassandra\Response\StreamReader;
 use Cassandra\Value\NotSet;
 use Cassandra\Value\ValueBase;
 use Cassandra\Value\ValueEncodeConfig;
-use SplQueue;
 
 final class Connection {
     /**
@@ -44,19 +43,15 @@ final class Connection {
      */
     private const MAX_REPREPARATIONS = 3;
 
-    /**
-     * Highest stream id a client may use. The protocol carries it as a signed
-     * [short] and reserves the negative half for server-initiated streams
-     * (events use -1), leaving 0..32767 for requests.
-     */
-    private const MAX_STREAM_ID = 32767;
-
     private Consistency $consistency = Consistency::ONE;
 
     /**
-     * @var array<EventListener> $eventListeners
+     * The request timeouts of this connection, and the deadlines its waits are
+     * bounded by.
      */
-    private array $eventListeners = [];
+    private Deadline $deadlines;
+
+    private Handshake $handshake;
 
     /**
      * Whether the connection got past STARTUP, i.e. whether the node accepts
@@ -73,10 +68,9 @@ final class Connection {
     private float $lastResponseAt = 0.0;
 
     /**
-     * Next stream id to hand out; the pool runs up to {@see self::MAX_STREAM_ID}
-     * and then reuses ids released by answered requests.
+     * The application's event and warnings callbacks.
      */
-    private int $nextStreamId = 0;
+    private ListenerRegistry $listeners;
 
     private ?Connection\Node $node = null;
 
@@ -92,15 +86,6 @@ final class Connection {
     private ConnectionOptions $options;
 
     /**
-     * @var array<int, float> $orphanedStreams stream ids of statements the
-     * client gave up on, mapped to when that happened. They are deliberately
-     * kept out of the recycling pool: the server may still answer on them, and
-     * handing one to another request would resolve that request with the wrong
-     * response. Each is released once its late answer finally arrives.
-     */
-    private array $orphanedStreams = [];
-
-    /**
      * @var ?Statement $pendingHeartbeat the OPTIONS request sent to prove an
      * idle connection is still alive, while its answer is outstanding
      */
@@ -109,19 +94,9 @@ final class Connection {
     private float $pendingHeartbeatSentAt = 0.0;
 
     /**
-     * @var array<string, \Cassandra\Response\Result\CachedPreparedResult> $preparedResultCache
+     * The prepared statements this connection already knows the id of.
      */
-    private array $preparedResultCache = [];
-
-    private int $preparedResultCacheSize;
-    private int $preparedResultCacheSizeToTrim;
-
-    /**
-     * @var SplQueue<int> $recycledStreams
-     */
-    private SplQueue $recycledStreams;
-
-    private ?float $requestTimeout;
+    private PreparedResultCache $preparedResultCache;
 
     private ResponseReader $responseReader;
 
@@ -133,7 +108,7 @@ final class Connection {
      * Defensive as things stand: sending a probe would only re-enter here by
      * reading, and neither step of it that can read is ever reached. Claiming a
      * stream id is skipped because checkHeartbeat() sends no probe unless
-     * {@see self::hasImmediateStreamId()} says an id can be had without waiting,
+     * {@see StreamIdPool::hasImmediate()} says an id can be had without waiting,
      * and opening a connection is skipped because checkHeartbeat() sends none
      * before the handshake is through, which no connection this object has
      * dropped is. Kept because both of those are properties of other methods
@@ -147,14 +122,14 @@ final class Connection {
      */
     private array $statements = [];
 
+    /**
+     * The stream ids of the current connection.
+     */
+    private StreamIdPool $streamIds;
+
     private ?ValueEncodeConfig $valueEncodeConfig = null;
 
     private ProtocolVersion $version;
-
-    /**
-     * @var array<WarningsListener> $warningsListeners
-     */
-    private array $warningsListeners = [];
 
     /**
      * @param array<\Cassandra\Connection\NodeConfig> $nodes
@@ -172,14 +147,11 @@ final class Connection {
         $this->nodeSelector = $options->nodeSelectionStrategy->createSelector();
         $this->nodeHealth = new Connection\NodeHealth();
         $this->responseReader = new ResponseReader();
-
-        /** @var SplQueue<int> $recycledStreams */
-        $recycledStreams = new SplQueue();
-        $this->recycledStreams = $recycledStreams;
-
-        $this->requestTimeout = $options->requestTimeoutInSeconds;
-        $this->preparedResultCacheSize = max(0, $options->preparedResultCacheSize);
-        $this->preparedResultCacheSizeToTrim = (int) ceil((float) $this->preparedResultCacheSize * 0.25);
+        $this->handshake = new Handshake($options);
+        $this->listeners = new ListenerRegistry();
+        $this->streamIds = new StreamIdPool();
+        $this->deadlines = new Deadline($options->requestTimeoutInSeconds);
+        $this->preparedResultCache = new PreparedResultCache($options->preparedResultCacheSize);
     }
 
     /**
@@ -273,7 +245,7 @@ final class Connection {
             return;
         }
 
-        $this->preparedResultCache = [];
+        $this->preparedResultCache->clear();
         $this->handshakeComplete = false;
 
         $node = $this->node = $this->selectNodeAndOpenConnection();
@@ -319,7 +291,7 @@ final class Connection {
 
     public function disconnect(): void {
 
-        $this->preparedResultCache = [];
+        $this->preparedResultCache->clear();
 
         // Stream ids are only meaningful on the connection that handed them
         // out, so anything still waiting can never be answered now. Marking
@@ -330,10 +302,12 @@ final class Connection {
         }
 
         $this->statements = [];
-        $this->nextStreamId = 0;
-        $this->orphanedStreams = [];
         $this->pendingHeartbeat = null;
         $this->handshakeComplete = false;
+
+        // Stream ids belong to the connection being dropped: the one replacing
+        // it hands the same ids out from scratch.
+        $this->streamIds->reset();
 
         // The negotiated version belongs to the connection that is going away,
         // not to this object: the next one may well be a different node, picked
@@ -352,10 +326,6 @@ final class Connection {
         // with the first bytes the next connection sends, leaving every response
         // after it parsed at the wrong offset.
         $this->responseReader->reset();
-
-        /** @var SplQueue<int> $recycledStreams */
-        $recycledStreams = new SplQueue();
-        $this->recycledStreams = $recycledStreams;
 
         if ($this->node === null) {
             return;
@@ -804,11 +774,11 @@ final class Connection {
     }
 
     public function registerEventListener(EventListener $eventListener): void {
-        $this->eventListeners[] = $eventListener;
+        $this->listeners->registerEventListener($eventListener);
     }
 
     public function registerWarningsListener(WarningsListener $warningsListener): void {
-        $this->warningsListeners[] = $warningsListener;
+        $this->listeners->registerWarningsListener($warningsListener);
     }
 
     public function setConsistency(Consistency $consistency): void {
@@ -871,9 +841,7 @@ final class Connection {
      */
     public function setRequestTimeout(?float $requestTimeoutInSeconds): void {
 
-        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'setRequestTimeout');
-
-        $this->requestTimeout = $requestTimeoutInSeconds;
+        $this->deadlines->setRequestTimeout($requestTimeoutInSeconds);
     }
 
     public function supportsKeyspaceRequestOption(): bool {
@@ -1118,11 +1086,11 @@ final class Connection {
     }
 
     public function unregisterEventListener(EventListener $eventListener): void {
-        $this->eventListeners = array_filter($this->eventListeners, fn (EventListener $listener) => $listener !== $eventListener);
+        $this->listeners->unregisterEventListener($eventListener);
     }
 
     public function unregisterWarningsListener(WarningsListener $warningsListener): void {
-        $this->warningsListeners = array_filter($this->warningsListeners, fn (WarningsListener $listener) => $listener !== $warningsListener);
+        $this->listeners->unregisterWarningsListener($warningsListener);
     }
 
     /**
@@ -1161,7 +1129,7 @@ final class Connection {
         while ($this->pendingStatements()) {
             // Recomputed per pass: each statement carries its own budget from
             // when it was sent, and resolved ones drop out of the reckoning.
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1234,7 +1202,7 @@ final class Connection {
             // next waits on it. The bound only decides when to come up for air;
             // which statement is answered, and which of them is the caller's
             // business, is decided below rather than here.
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1322,7 +1290,7 @@ final class Connection {
             // Requests sent on this connection keep their deadlines while it is
             // being pumped for events, so one going overdue is noticed here too
             // rather than only whenever the caller next waits on it.
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
 
             $event = $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1400,13 +1368,13 @@ final class Connection {
      */
     public function waitForNextResponse(?float $timeoutInSeconds = null): ?Response\Response {
 
-        $waitDeadline = $this->deadlineFor($timeoutInSeconds);
+        $waitDeadline = $this->deadlines->at($timeoutInSeconds);
         $deadlineExceeded = false;
 
         while (true) {
             // Bounded by whichever comes first: how long the caller is willing
             // to wait, or the budget of the request that expires soonest.
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
 
             $response = $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1494,7 +1462,7 @@ final class Connection {
             // statement with a longer one. Widening the bound this way is safe
             // whatever $statements holds — it only decides when to come up for
             // air, never which statement is answered or reported.
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1614,63 +1582,6 @@ final class Connection {
     }
 
     /**
-     * Reject a request timeout no caller can have meant.
-     *
-     * Zero or less would put the request out of time before it was sent — the
-     * same judgement {@see ConnectionOptions} makes about its own default and
-     * {@see \Cassandra\Request\Options\RequestOptions} about the one a request
-     * carries. Without this the value would be normalised away by
-     * {@see self::deadlineFor()} and silently expire every request it applies
-     * to, which through {@see self::setRequestTimeout()} includes the ones
-     * already in flight. "Use the connection default" is spelled null for the
-     * per-call argument, and an unbounded wait is null on the connection.
-     *
-     * @throws \Cassandra\Exception\ConnectionException
-     */
-    private function assertValidRequestTimeout(?float $requestTimeoutInSeconds, string $operation): void {
-
-        if ($requestTimeoutInSeconds === null || $requestTimeoutInSeconds > 0.0) {
-            return;
-        }
-
-        throw new ConnectionException(
-            'Invalid request timeout: it must be greater than zero, or null to fall back to the request options and the connection default',
-            ExceptionCode::CONNECTION_INVALID_REQUEST_TIMEOUT->value,
-            [
-                'operation' => $operation,
-                'request_timeout_seconds' => $requestTimeoutInSeconds,
-            ]
-        );
-    }
-
-    /**
-     * @throws \Cassandra\Exception\ResponseException
-     */
-    private function cachePrepareResult(Request\Prepare $request, Response\Result\PreparedResult $result): void {
-
-        if ($this->preparedResultCacheSize < 1) {
-            return;
-        }
-
-        $cachedResult = new Response\Result\CachedPreparedResult(
-            new Header(version: $this->version, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
-            new StreamReader(''),
-            $result->getPreparedData(),
-        );
-
-        $cachedResult->setRequest($request);
-
-        if (count($this->preparedResultCache) >= $this->preparedResultCacheSize) {
-            $this->preparedResultCache = array_slice(
-                $this->preparedResultCache,
-                $this->preparedResultCacheSizeToTrim
-            );
-        }
-
-        $this->preparedResultCache[$request->getHash()] = $cachedResult;
-    }
-
-    /**
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
      */
@@ -1747,7 +1658,7 @@ final class Connection {
                     // the stream id was never in use: it goes back into
                     // circulation instead of being burned. A node failure needs
                     // no such care, because it takes the whole pool with it.
-                    $this->recycledStreams->enqueue($streamId);
+                    $this->streamIds->release($streamId);
                 }
             }
 
@@ -1793,7 +1704,7 @@ final class Connection {
      *
      * The probe is the driver's own request, not the caller's, so it is held to
      * the heartbeat timeout alone: it is deliberately left out of the request
-     * timeout bookkeeping ({@see self::deadlineForStatements()},
+     * timeout bookkeeping ({@see self::pendingStatementsDeadline()},
      * {@see self::timeOutExpiredStatements()}), which would otherwise report it
      * to a caller who never sent it, and would park a stream id every interval
      * whenever the request timeout is the shorter of the two.
@@ -1872,7 +1783,7 @@ final class Connection {
         // those requests really are going unanswered they run out of time,
         // orphan their ids and take the connection with them at
         // {@see ConnectionOptions::$maxOrphanedStreams}.
-        if (!$this->hasImmediateStreamId()) {
+        if (!$this->streamIds->hasImmediate()) {
             return;
         }
 
@@ -1926,7 +1837,10 @@ final class Connection {
             ]);
         }
 
-        $startupOptions = $this->configureStartupOptions($response, $node);
+        $negotiated = $this->handshake->negotiate($response, $node, $this->version);
+        $this->version = $negotiated['version'];
+        $startupOptions = $negotiated['startupOptions'];
+
         $response = $this->syncRequest(new Request\Startup($startupOptions));
 
         if ($response instanceof Response\Authenticate) {
@@ -1941,11 +1855,9 @@ final class Connection {
                 ]);
             }
 
-            if ($this->version->value >= ProtocolVersion::V5->value) {
-                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
-            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
-                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
-            }
+            // From here every frame is framed and compressed as the node has
+            // just agreed, the AUTH_RESPONSE below included.
+            $node = $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
 
             $authResult = $this->syncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
             if (!($authResult instanceof Response\AuthSuccess)) {
@@ -1957,11 +1869,7 @@ final class Connection {
                 ]);
             }
         } elseif ($response instanceof Response\Ready) {
-            if ($this->version->value >= ProtocolVersion::V5->value) {
-                $node = $this->node = new FrameCodec($node, $startupOptions['COMPRESSION'] ?? '');
-            } elseif (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION'] !== '') {
-                $node = $this->node = new RequestCompressor($node, $startupOptions['COMPRESSION']);
-            }
+            $node = $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
         } else {
             $nodeConfig = $node->getConfig();
 
@@ -1982,192 +1890,6 @@ final class Connection {
     }
 
     /**
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\ResponseException
-     *
-     * @return array<string,string>
-     */
-    private function configureStartupOptions(Response\Supported $supportedResponse, Connection\Node $node): array {
-        $serverOptions = $supportedResponse->getData();
-
-        // configure protocol version
-        if (!isset($serverOptions['PROTOCOL_VERSIONS'])) {
-            $versionsSupportedByServer = [$this->version];
-        } else {
-            $versionsSupportedByServer = [];
-
-            foreach ($serverOptions['PROTOCOL_VERSIONS'] as $versionString) {
-                $version = ProtocolVersion::fromOptionFormat($versionString);
-                if ($version !== null) {
-                    $versionsSupportedByServer[] = $version;
-                }
-            }
-        }
-
-        $protocolVersion = ProtocolVersion::getHighestSupportedVersion($versionsSupportedByServer, $this->options->allowedProtocolVersions);
-        if ($protocolVersion === null) {
-
-            $versionsSupportedByServerInOptionFormat = array_map(
-                fn (ProtocolVersion $v) => $v->inOptionFormat(),
-                $versionsSupportedByServer
-            );
-
-            $allowedProtocolVersionsInOptionFormat = array_map(
-                fn (ProtocolVersion $v) => $v->inOptionFormat(),
-                $this->options->allowedProtocolVersions
-            );
-
-            throw new ConnectionException('Server does not support a compatible protocol version.', ExceptionCode::CONNECTION_SERVER_PROTOCOL_UNSUPPORTED->value, [
-                'protocol_versions_supported_by_server' => $versionsSupportedByServerInOptionFormat,
-                'protocol_versions_supported_by_client' => ProtocolVersion::CASES_IN_OPTION_FORMAT,
-                'protocol_versions_allowed_by_connection_options' => $allowedProtocolVersionsInOptionFormat,
-            ]);
-        }
-
-        $this->version = $protocolVersion;
-
-        // configure startup options
-        $startupOptions = $this->options->asStartupOptions();
-
-        if (isset($startupOptions['COMPRESSION']) && $startupOptions['COMPRESSION']
-            && isset($serverOptions['COMPRESSION']) && $serverOptions['COMPRESSION']
-        ) {
-            $compressionAlgo = strtolower($startupOptions['COMPRESSION']);
-
-            if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
-                $nodeConfig = $node->getConfig();
-
-                throw new ConnectionException('Compression "' . $compressionAlgo . '" not supported by server.', ExceptionCode::CONNECTION_COMPRESSION_NOT_SUPPORTED->value, [
-                    'host' => $nodeConfig->host,
-                    'port' => $nodeConfig->port,
-                    'compression' => $compressionAlgo,
-                    'server_supported' => $serverOptions['COMPRESSION'],
-                ]);
-            }
-
-            $startupOptions['COMPRESSION'] = $compressionAlgo;
-        } else {
-            unset($startupOptions['COMPRESSION']);
-        }
-
-        if ($this->version->value >= ProtocolVersion::V4->value) {
-            if ($this->options->throwOnOverload) {
-                $startupOptions['THROW_ON_OVERLOAD'] = '1';
-            } else {
-                $startupOptions['THROW_ON_OVERLOAD'] = '0';
-            }
-        } else {
-            unset($startupOptions['THROW_ON_OVERLOAD']);
-        }
-
-        if ($this->version->value < ProtocolVersion::V5->value) {
-            unset($startupOptions['DRIVER_NAME']);
-            unset($startupOptions['DRIVER_VERSION']);
-        }
-
-        return $startupOptions;
-    }
-
-    /**
-     * Absolute microtime at which a wait must give up, or null to wait forever.
-     *
-     * The budget runs from $sentAt — when the request was handed to the node —
-     * rather than from now, so that an async statement gets the same total
-     * allowance no matter how long the caller took to start waiting for it.
-     * Waits that are not tied to a request (the sync path, which writes
-     * immediately before waiting) count from now.
-     */
-    private function deadlineFor(?float $timeoutInSeconds, ?float $sentAt = null): ?float {
-        $timeout = $timeoutInSeconds ?? $this->requestTimeout;
-
-        if ($timeout === null) {
-            return null;
-        }
-
-        return ($sentAt ?? microtime(true)) + max(0.0, $timeout);
-    }
-
-    /**
-     * Earliest deadline among the statements still waiting for an answer, so a
-     * wait over several statements ends as soon as the first of them has used
-     * up its budget. Null when none of them is bounded — nothing is pending, or
-     * every pending statement waits indefinitely.
-     *
-     * Each statement is held to the timeout its own request asked for. One that
-     * waits indefinitely is passed over rather than making the whole result
-     * unbounded: it has no deadline of its own to contribute, but it must not
-     * cost the statements beside it theirs, or a single unbounded request would
-     * keep every other one from ever being noticed as overdue. A timeout of INF
-     * needs no such care — it yields a deadline of INF, which loses to every
-     * finite one here and bounds nothing on its own.
-     *
-     * The driver's own heartbeat is skipped as well: it is not one of the
-     * caller's requests and is held to
-     * {@see ConnectionOptions::$heartbeatTimeoutInSeconds} by
-     * {@see self::checkHeartbeat()} instead of to a request budget.
-     *
-     * @param array<Statement> $statements
-     */
-    private function deadlineForStatements(array $statements): ?float {
-
-        $earliest = null;
-
-        foreach ($statements as $statement) {
-            if ($statement->isResultReady() || $statement === $this->pendingHeartbeat) {
-                continue;
-            }
-
-            $deadline = $this->deadlineFor(
-                $statement->getRequestTimeout(),
-                $statement->getSentAt(),
-            );
-            if ($deadline === null) {
-                continue;
-            }
-
-            if ($earliest === null || $deadline < $earliest) {
-                $earliest = $deadline;
-            }
-        }
-
-        return $earliest;
-    }
-
-    /**
-     * A timeout as it goes into an exception's context.
-     *
-     * INF is a legitimate value — {@see self::assertValidRequestTimeout()}
-     * takes it and {@see self::deadlineFor()} turns it into a wait that never
-     * ends — but it has no JSON representation, so an exception carrying it
-     * cannot be serialised by whatever the application logs with. It is spelled
-     * out instead.
-     */
-    private function describeTimeout(?float $timeoutInSeconds): null|float|string {
-
-        if ($timeoutInSeconds === null || is_finite($timeoutInSeconds)) {
-            return $timeoutInSeconds;
-        }
-
-        return $timeoutInSeconds > 0.0 ? 'INF' : '-INF';
-    }
-
-    /**
-     * The earlier of two deadlines, either of which may be null for "no bound".
-     */
-    private function earlierDeadline(?float $a, ?float $b): ?float {
-
-        if ($a === null) {
-            return $b;
-        }
-
-        if ($b === null) {
-            return $a;
-        }
-
-        return min($a, $b);
-    }
-
-    /**
      * Replace the connection once it is holding back too many stream ids.
      *
      * A parked id is only released when its late answer arrives, so a node that
@@ -2185,7 +1907,7 @@ final class Connection {
      */
     private function enforceOrphanedStreamLimit(): void {
 
-        $orphanedCount = count($this->orphanedStreams);
+        $orphanedCount = $this->streamIds->orphanedCount();
 
         if ($orphanedCount <= max(0, $this->options->maxOrphanedStreams)) {
             return;
@@ -2262,11 +1984,6 @@ final class Connection {
         return null;
     }
 
-    private function getCachedPrepareResult(Request\Prepare $request): ?Response\Result\CachedPreparedResult {
-
-        return $this->preparedResultCache[$request->getHash()] ?? null;
-    }
-
     /**
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -2313,21 +2030,15 @@ final class Connection {
         $deadlineExceeded = false;
 
         while (true) {
-            // Both are retried every pass rather than settled once. The pool is
-            // the one that fills up while we wait, but the counter is checked
-            // beside it because the id space starts over whenever the
-            // connection is replaced — and then the counter has every id to
-            // give again while the pool it was emptied alongside is still
-            // empty. Nothing below returns after replacing the connection
-            // today, so this is defensive; getting it wrong the other way would
-            // mean sitting out the whole budget and reporting the id space as
-            // exhausted with all of it free.
-            if ($this->nextStreamId <= self::MAX_STREAM_ID) {
-                return $this->nextStreamId++;
-            }
-
-            if (!$this->recycledStreams->isEmpty()) {
-                return $this->recycledStreams->dequeue();
+            // Asked every pass rather than settled once: the pool is what fills
+            // up while we wait, and it starts over whenever the connection is
+            // replaced. Nothing below returns after replacing the connection
+            // today, so the latter is defensive; getting it wrong the other way
+            // would mean sitting out the whole budget and reporting the id
+            // space as exhausted with all of it free.
+            $streamId = $this->streamIds->claim();
+            if ($streamId !== null) {
+                return $streamId;
             }
 
             if (!$waitStarted) {
@@ -2346,10 +2057,10 @@ final class Connection {
                 // first pass that finds nothing, so that the passes which found
                 // an id straight away cost no clock reading at all.
                 $waitStarted = true;
-                $waitDeadline = $this->deadlineFor($requestTimeoutInSeconds);
+                $waitDeadline = $this->deadlines->at($requestTimeoutInSeconds);
             }
 
-            $deadline = $this->earlierDeadline($waitDeadline, $this->deadlineForStatements($this->statements));
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -2367,10 +2078,10 @@ final class Connection {
                         ExceptionCode::CONNECTION_STREAM_IDS_EXHAUSTED->value,
                         [
                             'operation' => 'getNewStreamId',
-                            'max_stream_id' => self::MAX_STREAM_ID,
+                            'max_stream_id' => StreamIdPool::MAX_STREAM_ID,
                             'statements_in_flight' => count($this->statements),
-                            'orphaned_streams' => count($this->orphanedStreams),
-                            'request_timeout_seconds' => $this->describeTimeout($requestTimeoutInSeconds ?? $this->requestTimeout),
+                            'orphaned_streams' => $this->streamIds->orphanedCount(),
+                            'request_timeout_seconds' => $this->deadlines->describe($requestTimeoutInSeconds ?? $this->deadlines->getRequestTimeout()),
                         ]
                     );
                 }
@@ -2463,12 +2174,12 @@ final class Connection {
             // chained follow-up request (repreparation, auto-prepare) restarts
             // the statement's budget, and a deadline captured before the loop
             // would hold that new request to the budget of the one it replaced.
-            $ownDeadline = $this->deadlineFor($requestTimeoutInSeconds, $statement?->getSentAt() ?? $sentAt);
+            $ownDeadline = $this->deadlines->at($requestTimeoutInSeconds, $statement?->getSentAt() ?? $sentAt);
 
             // The other requests in flight keep their own budgets while this
             // one waits, so one of them going overdue is noticed here too
             // rather than only whenever its caller next waits on it.
-            $deadline = $this->earlierDeadline($ownDeadline, $this->deadlineForStatements($this->statements));
+            $deadline = $this->deadlines->earlier($ownDeadline, $this->pendingStatementsDeadline());
 
             $response = $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -2663,9 +2374,7 @@ final class Connection {
     private function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Response {
 
         if ($response->hasWarnings()) {
-            foreach ($this->warningsListeners as $listener) {
-                $listener->onWarnings($response->getWarnings(), $request, $response);
-            }
+            $this->listeners->notifyWarnings($response->getWarnings(), $request, $response);
         }
 
         return match (true) {
@@ -2721,7 +2430,7 @@ final class Connection {
 
             $newPrepareRequest = new Request\Prepare($prevRequest->getQuery(), $prevRequest->getOptions());
 
-            $this->invalidateCachedPrepareResult($newPrepareRequest);
+            $this->preparedResultCache->invalidate($newPrepareRequest);
 
             if ($statement !== null) {
                 $this->assertRepreparationAllowed($statement->getRepreparationCount(), $newPrepareRequest);
@@ -2789,7 +2498,7 @@ final class Connection {
             ($result instanceof Response\Result\PreparedResult)
             && !($result instanceof Response\Result\CachedPreparedResult)
         ) {
-            $this->cachePrepareResult($request, $result);
+            $this->preparedResultCache->store($request, $result, $this->version);
         }
 
         if ($statement !== null) {
@@ -2828,18 +2537,6 @@ final class Connection {
     }
 
     /**
-     * Whether a stream id can be had without waiting for one to come free.
-     *
-     * The heartbeat asks before sending: {@see self::getNewStreamId()} reads
-     * while it waits, and reading is exactly what the probe must not do to get
-     * itself sent.
-     */
-    private function hasImmediateStreamId(): bool {
-
-        return $this->nextStreamId <= self::MAX_STREAM_ID || !$this->recycledStreams->isEmpty();
-    }
-
-    /**
      * The statements of $expired that the caller was actually waiting on.
      *
      * @param array<Statement> $expired
@@ -2853,11 +2550,6 @@ final class Connection {
             $expired,
             static fn (Statement $statement): bool => in_array($statement, $waitedOn, true),
         ));
-    }
-
-    private function invalidateCachedPrepareResult(Request\Prepare $request): void {
-
-        unset($this->preparedResultCache[$request->getHash()]);
     }
 
     /**
@@ -2940,18 +2632,11 @@ final class Connection {
         // so a connection configured without one ({@see SocketNodeConfig} with
         // SO_RCVTIMEO zeroed, {@see StreamNodeConfig} with a non-positive
         // timeout) has, in that one corner, nothing bounding it at all.
-        if ($dueAt <= microtime(true) && !$this->hasImmediateStreamId()) {
+        if ($dueAt <= microtime(true) && !$this->streamIds->hasImmediate()) {
             return null;
         }
 
         return $dueAt;
-    }
-
-    private function onEvent(Response\Event $event): void {
-
-        foreach ($this->eventListeners as $listener) {
-            $listener->onEvent($event);
-        }
     }
 
     /**
@@ -2972,12 +2657,12 @@ final class Connection {
      */
     private function parkUnresolvedStream(int $streamId): void {
 
-        if ($this->node === null || isset($this->orphanedStreams[$streamId])) {
+        if ($this->node === null || $this->streamIds->isOrphaned($streamId)) {
             return;
         }
 
         unset($this->statements[$streamId]);
-        $this->orphanedStreams[$streamId] = microtime(true);
+        $this->streamIds->park($streamId);
     }
 
     /**
@@ -3000,6 +2685,21 @@ final class Connection {
     }
 
     /**
+     * When the first of the requests in flight will have used up its budget, so
+     * that a wait comes up for air in time to give up on it. Null when none of
+     * them is bounded.
+     *
+     * The driver's own heartbeat is left out: nobody asked for it, and
+     * {@see self::checkHeartbeat()} holds it to
+     * {@see ConnectionOptions::$heartbeatTimeoutInSeconds} rather than to a
+     * request budget.
+     */
+    private function pendingStatementsDeadline(): ?float {
+
+        return $this->deadlines->earliestForStatements($this->statements, $this->pendingHeartbeat);
+    }
+
+    /**
      * Dispatch a freshly read response: resolve the statement it belongs to,
      * notify event listeners and record that the node is answering.
      *
@@ -3016,12 +2716,11 @@ final class Connection {
     private function processResponse(Response\Response $response, Connection\Node $node): ?Response\Response {
 
         $orphanedStreamId = $response->getStream();
-        if (isset($this->orphanedStreams[$orphanedStreamId])) {
+        if ($this->streamIds->isOrphaned($orphanedStreamId)) {
             // The late answer to a statement that was already given up on. It
             // has nowhere to go, but its arrival proves the stream id is free
             // again, so it goes back into circulation here.
-            unset($this->orphanedStreams[$orphanedStreamId]);
-            $this->recycledStreams->enqueue($orphanedStreamId);
+            $this->streamIds->releaseParked($orphanedStreamId);
 
             $this->lastResponseAt = microtime(true);
             $this->nodeHealth->recordSuccess($node->getConfig());
@@ -3057,12 +2756,12 @@ final class Connection {
 
             if ($response !== null) {
                 $statement->setResponse($response);
-                $this->recycledStreams->enqueue($streamId);
+                $this->streamIds->release($streamId);
             }
         }
 
         if ($response instanceof Response\Event) {
-            $this->onEvent($response);
+            $this->listeners->notifyEvent($response);
         }
 
         $this->lastResponseAt = microtime(true);
@@ -3167,7 +2866,7 @@ final class Connection {
         // one. Beside the caller's deadline it is held to when the heartbeat
         // next needs attention, which is the one thing that still has to happen
         // on a connection nobody has set a deadline on.
-        $readDeadline = $this->earlierDeadline($deadline, $this->nextHeartbeatActionAt());
+        $readDeadline = $this->deadlines->earlier($deadline, $this->nextHeartbeatActionAt());
 
         try {
             $response = $this->responseReader->readResponse($node, $this->version, $readDeadline);
@@ -3244,7 +2943,7 @@ final class Connection {
         // and the one replacing it hands the same ids out from scratch, so
         // putting this one back would mean handing it out twice.
         if ($this->node !== null) {
-            $this->recycledStreams->enqueue($streamId);
+            $this->streamIds->release($streamId);
         }
     }
 
@@ -3273,7 +2972,7 @@ final class Connection {
                 'operation' => $operation,
                 'stream_ids' => $streamIds,
                 'timed_out_statements' => count($expired),
-                'orphaned_streams' => count($this->orphanedStreams),
+                'orphaned_streams' => $this->streamIds->orphanedCount(),
             ],
             timedOutStatements: $expired,
         );
@@ -3339,7 +3038,7 @@ final class Connection {
      */
     private function sendAsyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Statement {
 
-        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'asyncRequest');
+        $this->deadlines->assertValidRequestTimeout($requestTimeoutInSeconds, 'asyncRequest');
 
         $node = $this->getConnectedNode();
 
@@ -3376,7 +3075,7 @@ final class Connection {
             // path gets this for free by recursing into sendSyncRequest() for
             // its PREPARE.
             if ($request instanceof Request\Prepare) {
-                $cachedResult = $this->getCachedPrepareResult($request);
+                $cachedResult = $this->preparedResultCache->get($request);
                 if ($cachedResult !== null) {
                     $statement = new Statement(
                         connection: $this,
@@ -3413,7 +3112,7 @@ final class Connection {
 
                     if ($response !== null) {
                         $statement->setResponse($response);
-                        $this->recycledStreams->enqueue($streamId);
+                        $this->streamIds->release($streamId);
                     }
 
                     return $statement;
@@ -3452,7 +3151,7 @@ final class Connection {
                     // Nothing reached the node — an unencodable request, say —
                     // so the stream id was never in use and goes straight back
                     // into circulation.
-                    $this->recycledStreams->enqueue($streamId);
+                    $this->streamIds->release($streamId);
                     $streamIdAccountedFor = true;
                 }
             }
@@ -3481,7 +3180,7 @@ final class Connection {
                 // without the request ever reaching the node: no statement
                 // holds this id and nothing will ever answer on it, so it goes
                 // back into circulation rather than being burned.
-                $this->recycledStreams->enqueue($streamId);
+                $this->streamIds->release($streamId);
             }
         }
     }
@@ -3516,7 +3215,7 @@ final class Connection {
      */
     private function sendSyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): Response\Response {
 
-        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'syncRequest');
+        $this->deadlines->assertValidRequestTimeout($requestTimeoutInSeconds, 'syncRequest');
 
         $node = $this->getConnectedNode();
 
@@ -3527,7 +3226,7 @@ final class Connection {
         $request->setVersion($this->version);
 
         if ($request instanceof Request\Prepare) {
-            $cachedResult = $this->getCachedPrepareResult($request);
+            $cachedResult = $this->preparedResultCache->get($request);
             if ($cachedResult !== null) {
                 return $cachedResult;
             }
@@ -3583,7 +3282,7 @@ final class Connection {
                 // per failure for the lifetime of the connection. A node
                 // failure needs no such care, because it takes the whole pool
                 // with it.
-                $this->recycledStreams->enqueue($streamId);
+                $this->streamIds->release($streamId);
             }
         }
 
@@ -3598,7 +3297,7 @@ final class Connection {
 
             $responseArrived = true;
 
-            $this->recycledStreams->enqueue($streamId);
+            $this->streamIds->release($streamId);
 
             $response = $this->handleResponse($request, $response, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
             $this->nodeHealth->recordSuccess($node->getConfig());
@@ -3664,14 +3363,14 @@ final class Connection {
                 continue;
             }
 
-            $deadline = $this->deadlineFor($statement->getRequestTimeout(), $statement->getSentAt());
+            $deadline = $this->deadlines->at($statement->getRequestTimeout(), $statement->getSentAt());
             if ($deadline === null || $now < $deadline) {
                 continue;
             }
 
             $statement->setStatus(StatementStatus::TIMED_OUT);
             unset($this->statements[$streamId]);
-            $this->orphanedStreams[$streamId] = $now;
+            $this->streamIds->park($streamId);
 
             $expired[] = $statement;
         }
@@ -3697,7 +3396,7 @@ final class Connection {
     private function timeOutStream(int $streamId, string $operation, ?float $requestTimeoutInSeconds, ?string $requestClass = null, ?Statement $statement = null): never {
 
         unset($this->statements[$streamId]);
-        $this->orphanedStreams[$streamId] = microtime(true);
+        $this->streamIds->park($streamId);
 
         if ($statement !== null) {
             $statement->setStatus(StatementStatus::TIMED_OUT);
@@ -3712,8 +3411,8 @@ final class Connection {
                 'operation' => $operation,
                 'stream_id' => $streamId,
                 'request_class' => $requestClass ?? ($statement === null ? null : get_class($statement->getRequest())),
-                'request_timeout_seconds' => $this->describeTimeout($requestTimeoutInSeconds ?? $this->requestTimeout),
-                'orphaned_streams' => count($this->orphanedStreams),
+                'request_timeout_seconds' => $this->deadlines->describe($requestTimeoutInSeconds ?? $this->deadlines->getRequestTimeout()),
+                'orphaned_streams' => $this->streamIds->orphanedCount(),
             ],
             timedOutStatements: $statement === null ? [] : [$statement],
         );
