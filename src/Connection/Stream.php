@@ -385,7 +385,7 @@ final class Stream extends NodeImplementation implements IoNode {
                             'host' => $this->config->host,
                             'port' => $this->config->port,
                             'operation' => 'write',
-                            'send_timeout_seconds' => $this->sendTimeout,
+                            'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
                             'meta' => stream_get_meta_data($stream),
                         ]
                     );
@@ -483,7 +483,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'expectedLength' => $expectedLength,
                     'upperBoundaryLength' => $upperBoundaryLength,
                     'waitForData' => $waitForData,
-                    'receive_timeout_seconds' => $this->receiveTimeout,
+                    'receive_timeout_seconds' => $this->describeTimeout($this->receiveTimeout),
                     'meta' => stream_get_meta_data($stream),
                 ]
             );
@@ -505,7 +505,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'write',
-                    'send_timeout_seconds' => $this->sendTimeout,
+                    'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
                     'meta' => stream_get_meta_data($stream),
                 ]
             );
@@ -697,7 +697,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'write',
-                    'send_timeout_seconds' => $this->sendTimeout,
+                    'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
                     'meta' => stream_get_meta_data($stream),
                 ]
             );

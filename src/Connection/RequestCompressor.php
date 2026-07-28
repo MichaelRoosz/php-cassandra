@@ -67,6 +67,31 @@ final class RequestCompressor extends NodeImplementation {
     }
 
     /**
+     * Reads are handed to the wrapped node whole, rather than being reassembled
+     * out of {@see NodeImplementation}'s buffer here.
+     *
+     * This decorator only rewrites what goes out, so there is nothing for it to
+     * buffer — and buffering here anyway would strand whatever the wrapped node
+     * had already read into its own buffer. It is installed part way through the
+     * handshake ({@see \Cassandra\Connection::completeHandshake()}), by which
+     * point that buffer may hold anything the node sent past the frame the
+     * handshake was reading, and those bytes would then never be seen again,
+     * leaving every response after them parsed at the wrong offset.
+     * {@see FrameCodec} keeps a buffer of its own because it re-frames what it
+     * reads, but it too takes its input through the wrapped node's read().
+     *
+     * @throws \Cassandra\Exception\NodeException
+     */
+    #[\Override]
+    public function read(int $length, ?float $readDeadline): string {
+        return $this->node->read($length, $readDeadline);
+    }
+
+    /**
+     * Never used by {@see self::read()}, which delegates whole; kept because the
+     * interface requires it and a caller reaching past read() should still get
+     * the wrapped node's data rather than nothing.
+     *
      * @throws \Cassandra\Exception\NodeException
      */
     #[\Override]

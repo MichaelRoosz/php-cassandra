@@ -76,6 +76,22 @@ abstract class NodeImplementation implements Node {
     abstract public function writeRequest(Request $request): void;
 
     /**
+     * A timeout as it goes into an exception's context.
+     *
+     * {@see self::NO_TIMEOUT} is INF, which has no JSON representation, so an
+     * exception carrying it could not be serialised by whatever the application
+     * logs with. It is spelled out instead.
+     */
+    protected function describeTimeout(float $timeout): float|string {
+
+        if (is_finite($timeout)) {
+            return $timeout;
+        }
+
+        return $timeout > 0.0 ? 'INF' : '-INF';
+    }
+
+    /**
      * Whether a read with this deadline is allowed to block at all.
      */
     protected function mayBlock(?float $readDeadline): bool {

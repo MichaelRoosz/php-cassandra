@@ -54,10 +54,10 @@ final class ExecuteOptions extends QueryOptions {
         );
     }
 
-    #[\Override]
     /**
      * @throws \Cassandra\Exception\RequestException
      */
+    #[\Override]
     public function withKeyspace(string $keyspace): self {
         return new self(
             skipMetadata: $this->skipMetadata,
@@ -72,10 +72,10 @@ final class ExecuteOptions extends QueryOptions {
         );
     }
 
-    #[\Override]
     /**
      * @throws \Cassandra\Exception\RequestException
      */
+    #[\Override]
     public function withNamesForValues(bool $namesForValues): self {
         return new self(
             skipMetadata: $this->skipMetadata,
@@ -90,10 +90,10 @@ final class ExecuteOptions extends QueryOptions {
         );
     }
 
-    #[\Override]
     /**
      * @throws \Cassandra\Exception\RequestException
      */
+    #[\Override]
     public function withPagingState(string $pagingState): self {
         return new self(
             skipMetadata: $this->skipMetadata,

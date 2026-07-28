@@ -14,7 +14,26 @@ final class Statement {
 
     private Request\Request $request;
 
+    /**
+     * How many times the node has answered this statement's EXECUTE with
+     * UNPREPARED and the driver has reprepared it in response. Counted so that
+     * a node which never keeps the prepared statement cannot keep the pair
+     * going for good — every round chains a fresh request and restarts the
+     * budget, so nothing else would ever end it.
+     */
+    private int $repreparationCount = 0;
+
     private ?float $requestTimeout;
+
+    /**
+     * The EXECUTE a node answered with UNPREPARED, kept for as long as the
+     * repreparation is in flight so that the follow-up EXECUTE can be built
+     * from it. The original request is not enough: an auto-prepared query
+     * keeps the QUERY the caller made as its original request, and the EXECUTE
+     * derived from it - the one that actually carries the prepared statement's
+     * values and options - would be lost otherwise.
+     */
+    private ?Request\Execute $requestBeingReprepared = null;
 
     private ?Response\Response $response = null;
 
@@ -71,8 +90,24 @@ final class Statement {
         return $response;
     }
 
+    /**
+     * How many times this statement has been reprepared after an UNPREPARED
+     * error, see {@see self::$repreparationCount}.
+     */
+    public function getRepreparationCount(): int {
+        return $this->repreparationCount;
+    }
+
     public function getRequest(): Request\Request {
         return $this->request;
+    }
+
+    /**
+     * The EXECUTE currently being reprepared, see
+     * {@see self::$requestBeingReprepared}.
+     */
+    public function getRequestBeingReprepared(): ?Request\Execute {
+        return $this->requestBeingReprepared;
     }
 
     /**
@@ -270,8 +305,24 @@ final class Statement {
         return $this->response;
     }
 
+    /**
+     * Note that this statement is being reprepared once more, see
+     * {@see self::$repreparationCount}.
+     */
+    public function recordRepreparation(): void {
+        $this->repreparationCount++;
+    }
+
     public function setRequest(Request\Request $request): void {
         $this->request = $request;
+    }
+
+    /**
+     * Note the EXECUTE whose repreparation is about to be sent, see
+     * {@see self::$requestBeingReprepared}.
+     */
+    public function setRequestBeingReprepared(?Request\Execute $request): void {
+        $this->requestBeingReprepared = $request;
     }
 
     public function setResponse(?Response\Response $response): void {

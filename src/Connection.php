@@ -36,6 +36,21 @@ final class Connection {
      */
     private const MAX_STREAM_ID = 32767;
 
+    /**
+     * How many times one request may be reprepared before the driver gives up.
+     *
+     * An UNPREPARED error is answered by preparing the statement again and
+     * re-executing it, and the node may answer that with UNPREPARED as well —
+     * a node that never keeps the prepared statement (an unlucky schema change,
+     * a cache too small for the workload) will do so every time. Nothing else
+     * ends that: the sync path recurses a level deeper each round, and the async
+     * path chains a fresh request onto the statement, which restarts its budget
+     * so it can never run out of time either. One retry covers the case this
+     * exists for — the node forgot the statement once — and a couple more cover
+     * a coordinator that changes under us; past that it is a loop, not a retry.
+     */
+    private const MAX_REPREPARATIONS = 3;
+
     private Consistency $consistency = Consistency::ONE;
 
     /**
@@ -106,15 +121,30 @@ final class Connection {
      */
     private SplQueue $recycledStreams;
 
+    /**
+     * How many repreparations the sync path is currently nested inside, the
+     * counterpart of {@see Statement::getRepreparationCount()} for requests
+     * that have no statement to carry the count. The sync path recurses back
+     * into {@see self::syncRequest()} for each round and unwinds in order, so
+     * the depth is exactly the number of rounds this call has behind it.
+     */
+    private int $repreparationDepth = 0;
+
     private ?float $requestTimeout;
 
     private ResponseReader $responseReader;
 
     /**
-     * Whether a heartbeat is currently being sent. Sending one can wait for a
-     * stream id to come free, which reads responses, which checks the heartbeat
-     * again — this keeps that from starting a second probe before the first one
-     * has been recorded as pending.
+     * Whether a heartbeat is currently being sent, so that nothing reached from
+     * inside {@see self::checkHeartbeat()} can start a second probe before the
+     * first one has been recorded as pending.
+     *
+     * Defensive as things stand: sending a probe would only re-enter here by
+     * reading, and the one step of it that can read — claiming a stream id — is
+     * never reached, because checkHeartbeat() skips the probe altogether unless
+     * {@see self::hasImmediateStreamId()} says an id can be had without waiting.
+     * Kept because that is a property of two methods agreeing rather than of
+     * this one, and the cost of it being wrong is a probe sent every read.
      */
     private bool $sendingHeartbeat = false;
 
@@ -860,8 +890,10 @@ final class Connection {
      * It bounds each request this call sends, not the call as a whole: when the
      * driver has to prepare or reprepare the statement first, the PREPARE and
      * the request it precedes each get the full budget, so the call can take a
-     * multiple of it before giving up. The wait for a free stream id, on a
-     * connection that has handed out every one of them, is held to it
+     * multiple of it before giving up — a multiple bounded in turn by
+     * {@see self::MAX_REPREPARATIONS}, since a node can answer the re-executed
+     * statement with UNPREPARED all over again. The wait for a free stream id,
+     * on a connection that has handed out every one of them, is held to it
      * separately as well.
      *
      * @throws \Cassandra\Exception\CompressionException
@@ -924,6 +956,11 @@ final class Connection {
         try {
             $node->writeRequest($request);
             $writeSucceeded = true;
+
+            // As on the async paths: the node took the request, which is enough
+            // to clear a failure recorded against it. Whether it answers is a
+            // separate question, and recorded separately below.
+            $this->nodeHealth->recordSuccess($node->getConfig());
         } catch (NodeException $e) {
             $nodeFailed = true;
 
@@ -1013,6 +1050,14 @@ final class Connection {
                 return null;
             }
             if ($event instanceof Response\Event) {
+                // Before the event is handed back, not instead of it: a poll
+                // that keeps finding events would otherwise never sweep the
+                // request budgets it owes, and the statements that ran out
+                // would hold their stream ids for as long as the events keep
+                // coming. This is what the waits do with the same tension, see
+                // {@see self::waitForNextEvent()}.
+                $this->keepNonBlockingBookkeeping(readAttempted: true);
+
                 return $event;
             }
         }
@@ -1044,6 +1089,11 @@ final class Connection {
                 return null;
             }
             if ($response !== null) {
+                // As in tryReadNextEvent(): the bookkeeping is owed by every
+                // poll that read, not only by the ones that came back
+                // empty-handed.
+                $this->keepNonBlockingBookkeeping(readAttempted: true);
+
                 return $response;
             }
         }
@@ -1087,6 +1137,12 @@ final class Connection {
                 break;
             }
             if ($statement->isResultReady()) {
+                // As in tryReadNextEvent(): a poll that resolved what it came
+                // for still owes the connection its bookkeeping, or a caller
+                // whose statements always resolve on the first read would keep
+                // none of the other budgets.
+                $this->keepNonBlockingBookkeeping(readAttempted: true);
+
                 return true;
             }
         } while (true);
@@ -1590,6 +1646,32 @@ final class Connection {
         $this->setKeyspace($keyspace);
 
         return $this;
+    }
+
+    /**
+     * Stop repreparing a request the node keeps forgetting.
+     *
+     * See {@see self::MAX_REPREPARATIONS} for why something has to: neither the
+     * request timeout nor anything else bounds the exchange on its own.
+     *
+     * @throws \Cassandra\Exception\ConnectionException
+     */
+    private function assertRepreparationAllowed(int $repreparationsSoFar, Request\Prepare $prepareRequest): void {
+
+        if ($repreparationsSoFar < self::MAX_REPREPARATIONS) {
+            return;
+        }
+
+        throw new ConnectionException(
+            'The node answered this prepared statement with UNPREPARED again after it was reprepared, ' . self::MAX_REPREPARATIONS . ' times over, so the driver stopped repreparing it',
+            ExceptionCode::CONNECTION_REPREPARATION_LIMIT_REACHED->value,
+            [
+                'operation' => 'unprepared_error_handling',
+                'repreparations' => $repreparationsSoFar,
+                'max_repreparations' => self::MAX_REPREPARATIONS,
+                'query' => $prepareRequest->getQuery(),
+            ]
+        );
     }
 
     /**
@@ -2152,6 +2234,24 @@ final class Connection {
     }
 
     /**
+     * A timeout as it goes into an exception's context.
+     *
+     * INF is a legitimate value — {@see self::assertValidRequestTimeout()}
+     * takes it and {@see self::deadlineFor()} turns it into a wait that never
+     * ends — but it has no JSON representation, so an exception carrying it
+     * cannot be serialised by whatever the application logs with. It is spelled
+     * out instead.
+     */
+    private function describeTimeout(?float $timeoutInSeconds): null|float|string {
+
+        if ($timeoutInSeconds === null || is_finite($timeoutInSeconds)) {
+            return $timeoutInSeconds;
+        }
+
+        return $timeoutInSeconds > 0.0 ? 'INF' : '-INF';
+    }
+
+    /**
      * The earlier of two deadlines, either of which may be null for "no bound".
      */
     private function earlierDeadline(?float $a, ?float $b): ?float {
@@ -2243,7 +2343,14 @@ final class Connection {
 
                 if ($hasUnresolvedValues) {
 
-                    $prepareOptions = new PrepareOptions(keyspace: $queryOptions->keyspace);
+                    // The PREPARE inherits the timeout the query asked for, so
+                    // that it is bounded like the request it stands in for even
+                    // where the caller passed no argument of their own for the
+                    // effective timeout to have been resolved from.
+                    $prepareOptions = new PrepareOptions(
+                        keyspace: $queryOptions->keyspace,
+                        requestTimeoutInSeconds: $queryOptions->requestTimeoutInSeconds,
+                    );
                     $prepareRequest = new Request\Prepare($request->getQuery(), $prepareOptions);
                     $prepareRequest->setVersion($this->version);
 
@@ -2356,14 +2463,14 @@ final class Connection {
 
                 if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
                     throw new ConnectionException(
-                        'Every stream id is in use and none was released in time; the connection has more requests in flight than the protocol allows',
+                        'Every stream id the protocol allows is already in use and none was released in time, so this request could not be sent',
                         ExceptionCode::CONNECTION_STREAM_IDS_EXHAUSTED->value,
                         [
                             'operation' => 'getNewStreamId',
                             'max_stream_id' => self::MAX_STREAM_ID,
                             'statements_in_flight' => count($this->statements),
                             'orphaned_streams' => count($this->orphanedStreams),
-                            'request_timeout_seconds' => $requestTimeoutInSeconds ?? $this->requestTimeout,
+                            'request_timeout_seconds' => $this->describeTimeout($requestTimeoutInSeconds ?? $this->requestTimeout),
                         ]
                     );
                 }
@@ -2596,7 +2703,11 @@ final class Connection {
         }
 
         if ($statement !== null) {
-            $originalRequest = $statement->getOriginalRequest();
+            // The EXECUTE that was refused, which for an auto-prepared query is
+            // not the statement's original request, see
+            // {@see Statement::$requestBeingReprepared}.
+            $originalRequest = $statement->getRequestBeingReprepared() ?? $statement->getOriginalRequest();
+            $statement->setRequestBeingReprepared(null);
         }
 
         if (!($originalRequest instanceof Request\Execute)) {
@@ -2705,23 +2816,38 @@ final class Connection {
             $this->invalidateCachedPrepareResult($newPrepareRequest);
 
             if ($statement !== null) {
+                $this->assertRepreparationAllowed($statement->getRepreparationCount(), $newPrepareRequest);
+                $statement->recordRepreparation();
+
                 $statement->setStatus(StatementStatus::REPREPARING);
+                $statement->setRequestBeingReprepared($request);
 
                 $this->chainAsyncRequest($newPrepareRequest, $statement);
 
                 return null;
             }
 
-            $prepareResponse = $this->syncRequest($newPrepareRequest, $requestTimeoutInSeconds);
-            if (!($prepareResponse instanceof Response\Result)) {
-                throw new ConnectionException('Unexpected response type during repreparation', ExceptionCode::CONNECTION_REPREPARATION_UNEXPECTED_RESPONSE->value, [
-                    'operation' => 'unprepared_error_handling',
-                    'expected' => Response\Result::class,
-                    'received' => get_class($prepareResponse),
-                ]);
-            }
+            $this->assertRepreparationAllowed($this->repreparationDepth, $newPrepareRequest);
 
-            $response = $this->handleReprepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+            // Bracketed rather than counted up front: the recursion below is
+            // what the depth measures, and it has to come back down again
+            // however this call ends.
+            $this->repreparationDepth++;
+
+            try {
+                $prepareResponse = $this->syncRequest($newPrepareRequest, $requestTimeoutInSeconds);
+                if (!($prepareResponse instanceof Response\Result)) {
+                    throw new ConnectionException('Unexpected response type during repreparation', ExceptionCode::CONNECTION_REPREPARATION_UNEXPECTED_RESPONSE->value, [
+                        'operation' => 'unprepared_error_handling',
+                        'expected' => Response\Result::class,
+                        'received' => get_class($prepareResponse),
+                    ]);
+                }
+
+                $response = $this->handleReprepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+            } finally {
+                $this->repreparationDepth--;
+            }
         }
 
         return $response;
@@ -2888,16 +3014,28 @@ final class Connection {
             return $this->pendingHeartbeatSentAt + $this->options->heartbeatTimeoutInSeconds;
         }
 
+        $dueAt = $this->lastResponseAt + $interval;
+
         // checkHeartbeat() will not send a probe it would have to wait for a
-        // stream id to send, so there is nothing here to come up for air for.
-        // Reporting one anyway would put every read's bound in the past — the
-        // probe is due, after all — and turn each wait into a spin over reads
-        // that return at once and a probe that is never sent.
-        if (!$this->hasImmediateStreamId()) {
+        // stream id to send. Once the probe is due and no id can be had, there
+        // is nothing left here to come up for air for: reporting a bound anyway
+        // would put every read's bound in the past — the probe is due, after
+        // all — and turn each wait into a spin over reads that return at once
+        // and a probe that is never sent.
+        //
+        // A probe that is not due yet is a different matter, and is still worth
+        // reporting: the bound is in the future, so it costs no spin, and an id
+        // may well have come free by the time a read comes back for it. Only
+        // where the id space is still exhausted then does the wait go unbounded,
+        // and that leaves the transport's stall window as the only judgement —
+        // so a connection configured without one ({@see SocketNodeConfig} with
+        // SO_RCVTIMEO zeroed, {@see StreamNodeConfig} with a non-positive
+        // timeout) has, in that one corner, nothing bounding it at all.
+        if ($dueAt <= microtime(true) && !$this->hasImmediateStreamId()) {
             return null;
         }
 
-        return $this->lastResponseAt + $interval;
+        return $dueAt;
     }
 
     private function onEvent(Response\Event $event): void {
@@ -3424,7 +3562,7 @@ final class Connection {
                 'operation' => $operation,
                 'stream_id' => $streamId,
                 'request_class' => $requestClass ?? ($statement === null ? null : get_class($statement->getRequest())),
-                'request_timeout_seconds' => $requestTimeoutInSeconds ?? $this->requestTimeout,
+                'request_timeout_seconds' => $this->describeTimeout($requestTimeoutInSeconds ?? $this->requestTimeout),
                 'orphaned_streams' => count($this->orphanedStreams),
             ],
             timedOutStatements: $statement === null ? [] : [$statement],
