@@ -454,6 +454,15 @@ final class Stream extends NodeImplementation implements IoNode {
 
         [$seconds, $microseconds] = $this->splitTimeout($remaining);
 
+        // What is left of the deadline rounded away to nothing, so there is no
+        // point arming a timeout for it: the read is skipped as if the deadline
+        // had passed. This also keeps the stream away from a {0, 0} timeout,
+        // which the socket transport reads as "no timeout" — see
+        // {@see Socket::applyReceiveTimeout()}.
+        if ($seconds === 0 && $microseconds === 0) {
+            return null;
+        }
+
         stream_set_timeout(
             $stream,
             $seconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,

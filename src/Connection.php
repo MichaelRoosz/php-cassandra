@@ -121,15 +121,6 @@ final class Connection {
      */
     private SplQueue $recycledStreams;
 
-    /**
-     * How many repreparations the sync path is currently nested inside, the
-     * counterpart of {@see Statement::getRepreparationCount()} for requests
-     * that have no statement to carry the count. The sync path recurses back
-     * into {@see self::syncRequest()} for each round and unwinds in order, so
-     * the depth is exactly the number of rounds this call has behind it.
-     */
-    private int $repreparationDepth = 0;
-
     private ?float $requestTimeout;
 
     private ResponseReader $responseReader;
@@ -140,11 +131,14 @@ final class Connection {
      * first one has been recorded as pending.
      *
      * Defensive as things stand: sending a probe would only re-enter here by
-     * reading, and the one step of it that can read — claiming a stream id — is
-     * never reached, because checkHeartbeat() skips the probe altogether unless
-     * {@see self::hasImmediateStreamId()} says an id can be had without waiting.
-     * Kept because that is a property of two methods agreeing rather than of
-     * this one, and the cost of it being wrong is a probe sent every read.
+     * reading, and neither step of it that can read is ever reached. Claiming a
+     * stream id is skipped because checkHeartbeat() sends no probe unless
+     * {@see self::hasImmediateStreamId()} says an id can be had without waiting,
+     * and opening a connection is skipped because checkHeartbeat() sends none
+     * before the handshake is through, which no connection this object has
+     * dropped is. Kept because both of those are properties of other methods
+     * agreeing with this one rather than of this one alone, and the cost of
+     * being wrong about them is a probe sent on every read.
      */
     private bool $sendingHeartbeat = false;
 
@@ -564,6 +558,15 @@ final class Connection {
     /**
      * Wait for this statement's answer and return it.
      *
+     * The wait is bounded by the statement's own request timeout, or by the
+     * connection's where it has none. Where neither is set the wait is
+     * unbounded, and then — exactly as in {@see self::waitForNextEvent()} — the
+     * heartbeat is the only thing that can tell a dead connection from a slow
+     * one. With heartbeats disabled as well
+     * ({@see ConnectionOptions::$heartbeatIntervalInSeconds} set to null), the
+     * transport's stall window is the last judgement left and this fails the
+     * connection with a NodeException once it elapses.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -908,120 +911,7 @@ final class Connection {
      */
     public function syncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Response\Response {
 
-        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'syncRequest');
-
-        $node = $this->getConnectedNode();
-
-        // An explicit argument wins over what the request's options asked for,
-        // which in turn wins over the connection default.
-        $requestTimeoutInSeconds ??= $request->getRequestTimeout();
-
-        $request->setVersion($this->version);
-
-        if ($request instanceof Request\Prepare) {
-            $cachedResult = $this->getCachedPrepareResult($request);
-            if ($cachedResult !== null) {
-                return $cachedResult;
-            }
-        }
-
-        $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
-        if ($autoPrepareRequest !== null) {
-
-            $prepareResponse = $this->syncRequest($autoPrepareRequest, $requestTimeoutInSeconds);
-            if (!($prepareResponse instanceof Response\Result\PreparedResult)) {
-                throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
-                    'expected' => Response\Result::class,
-                    'received' => get_class($prepareResponse),
-                ]);
-            }
-
-            $response = $this->handleAutoPrepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
-            if ($response === null) {
-                throw new ConnectionException('Unexpected null response during autoPrepare', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESPONSE->value, [
-                    'expected' => Response\Result::class,
-                    'received' => 'null',
-                ]);
-            }
-
-            return $response;
-        }
-
-        $streamId = $this->getNewStreamId($requestTimeoutInSeconds);
-        $request->setStream($streamId);
-
-        $writeSucceeded = false;
-        $nodeFailed = false;
-
-        try {
-            $node->writeRequest($request);
-            $writeSucceeded = true;
-
-            // As on the async paths: the node took the request, which is enough
-            // to clear a failure recorded against it. Whether it answers is a
-            // separate question, and recorded separately below.
-            $this->nodeHealth->recordSuccess($node->getConfig());
-        } catch (NodeException $e) {
-            $nodeFailed = true;
-
-            $this->handleNodeException($node);
-
-            throw $e;
-        } finally {
-            if (!$writeSucceeded && !$nodeFailed) {
-                // Nothing reached the node — an unencodable request, say — so
-                // the stream id was never in use and goes straight back into
-                // circulation; leaving it behind would burn one id of the pool
-                // per failure for the lifetime of the connection. A node
-                // failure needs no such care, because it takes the whole pool
-                // with it.
-                $this->recycledStreams->enqueue($streamId);
-            }
-        }
-
-        $responseArrived = false;
-
-        try {
-            $response = $this->getNextResponseForStream(
-                streamId: $streamId,
-                requestTimeoutInSeconds: $requestTimeoutInSeconds,
-                requestClass: get_class($request),
-            );
-
-            $responseArrived = true;
-
-            $this->recycledStreams->enqueue($streamId);
-
-            $response = $this->handleResponse($request, $response, requestTimeoutInSeconds: $requestTimeoutInSeconds);
-            $this->nodeHealth->recordSuccess($node->getConfig());
-        } catch (NodeException $e) {
-            $this->handleNodeException($node);
-
-            throw $e;
-        } finally {
-            if (!$responseArrived) {
-                // Nothing came back for this id and, unlike an async request,
-                // there is no statement carrying it: without this it would be
-                // lost for the life of the connection. A timeout has parked it
-                // already and a node failure took the whole pool with it, so
-                // this is for the rest — a malformed frame, say, which leaves
-                // it undecidable whether the answer was consumed.
-                $this->parkUnresolvedStream($streamId);
-            }
-        }
-
-        if ($response === null) {
-            throw new ConnectionException('Received unexpected null response from server.', ExceptionCode::CONNECTION_SYNC_NULL_RESPONSE->value, [
-                'operation' => 'syncRequest',
-                'request_class' => get_class($request),
-            ]);
-        }
-
-        if ($response instanceof Response\Error) {
-            throw $response->getException();
-        }
-
-        return $response;
+        return $this->sendSyncRequest($request, $requestTimeoutInSeconds);
     }
 
     /**
@@ -1694,12 +1584,12 @@ final class Connection {
 
         if ($statement->isAbandoned()) {
             throw new StatementException(
-                'This statement was given up on before the answer arrived — the connection it was sent on was closed, or a follow-up request of its own never reached the node — so it can no longer be resolved. Send the request again.',
+                'This statement was given up on before it could be answered — the connection it was sent on was closed, a follow-up request of its own never reached the node, or its answer could not be handled — so it can no longer be resolved. Send the request again.',
                 ExceptionCode::STATEMENT_ABANDONED->value,
                 [
                     'stream_id' => $statement->getStreamId(),
                     'request_class' => get_class($statement->getRequest()),
-                    'reason' => 'connection_closed_or_request_not_sent',
+                    'reason' => 'connection_closed_request_not_sent_or_response_not_handled',
                 ]
             );
         }
@@ -1707,9 +1597,10 @@ final class Connection {
         // Pending, but not on this connection: a statement from another
         // Connection, or one left over from before this one was replaced.
         // Reading here would never resolve it — no answer for it can arrive on
-        // this socket — and, because a wait bounds itself by the deadlines of
-        // the statements it was given, an unbounded wait would spin on a
-        // deadline that nothing on this connection can ever retire.
+        // this socket — and it contributes no deadline of its own either, since
+        // a wait bounds itself by the requests this connection has in flight.
+        // Reporting "not ready yet" would therefore leave a caller waiting on
+        // it for as long as they were willing to, every time, for nothing.
         if (($this->statements[$statement->getStreamId()] ?? null) !== $statement) {
             throw new StatementException(
                 'This statement was not sent on this connection, so it can never be resolved here. Wait on the connection that sent it.',
@@ -1832,6 +1723,13 @@ final class Connection {
             $writeSucceeded = false;
             $nodeFailed = false;
 
+            // Read before the write rather than after it, for the reason
+            // {@see self::checkHeartbeat()} gives about its own probe: a write
+            // that waits on a slow transport is not time the node spent failing
+            // to answer, and charging it to the follow-up's budget would let the
+            // request be overdue before the node has seen it.
+            $sentAt = microtime(true);
+
             try {
                 $node->writeRequest($request);
                 $writeSucceeded = true;
@@ -1867,7 +1765,7 @@ final class Connection {
 
         // A follow-up request (repreparation, auto-prepare) is a new wait, so
         // it gets its own budget rather than inheriting the original one.
-        $statement->setSentAt(microtime(true));
+        $statement->setSentAt($sentAt);
     }
 
     /**
@@ -2199,7 +2097,9 @@ final class Connection {
      * waits indefinitely is passed over rather than making the whole result
      * unbounded: it has no deadline of its own to contribute, but it must not
      * cost the statements beside it theirs, or a single unbounded request would
-     * keep every other one from ever being noticed as overdue.
+     * keep every other one from ever being noticed as overdue. A timeout of INF
+     * needs no such care — it yields a deadline of INF, which loses to every
+     * finite one here and bounds nothing on its own.
      *
      * The driver's own heartbeat is skipped as well: it is not one of the
      * caller's requests and is held to
@@ -2619,6 +2519,8 @@ final class Connection {
     }
 
     /**
+     * @param int $repreparationDepth see {@see self::sendSyncRequest()}
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -2629,7 +2531,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function handleAutoPrepareResult(Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null): ?Response\Result {
+    private function handleAutoPrepareResult(Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected result type while handling auto-prepared statement', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESULT_TYPE->value, [
@@ -2664,7 +2566,7 @@ final class Connection {
             return null;
         }
 
-        $response = $this->syncRequest($newExecuteRequest, $requestTimeoutInSeconds);
+        $response = $this->sendSyncRequest($newExecuteRequest, $requestTimeoutInSeconds, $repreparationDepth);
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during re-execute after auto-preparation', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
                 'operation' => 'auto_prepare_execute',
@@ -2682,6 +2584,8 @@ final class Connection {
     }
 
     /**
+     * @param int $repreparationDepth see {@see self::sendSyncRequest()}
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -2692,7 +2596,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function handleReprepareResult(Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null): ?Response\Result {
+    private function handleReprepareResult(Response\Result $result, ?Request\Request $originalRequest = null, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Result {
 
         if (!($result instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected result type while handling reprepared statement', ExceptionCode::CONNECTION_REPREPARE_UNEXPECTED_RESULT_TYPE->value, [
@@ -2731,7 +2635,7 @@ final class Connection {
             return null;
         }
 
-        $response = $this->syncRequest($newExecuteRequest, $requestTimeoutInSeconds);
+        $response = $this->sendSyncRequest($newExecuteRequest, $requestTimeoutInSeconds, $repreparationDepth);
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during re-execute after repreparation', ExceptionCode::CONNECTION_REPREPARE_UNEXPECTED_RESPONSE_REEXECUTE->value, [
                 'operation' => 'reprepare_execute',
@@ -2744,6 +2648,8 @@ final class Connection {
     }
 
     /**
+     * @param int $repreparationDepth see {@see self::sendSyncRequest()}
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -2754,7 +2660,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null): ?Response\Response {
+    private function handleResponse(Request\Request $request, Response\Response $response, ?Statement $statement = null, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Response {
 
         if ($response->hasWarnings()) {
             foreach ($this->warningsListeners as $listener) {
@@ -2763,13 +2669,15 @@ final class Connection {
         }
 
         return match (true) {
-            $response instanceof Response\Error => $this->handleResponseError($request, $response, $statement, $requestTimeoutInSeconds),
-            $response instanceof Response\Result => $this->handleResponseResult($request, $response, $statement, $requestTimeoutInSeconds),
+            $response instanceof Response\Error => $this->handleResponseError($request, $response, $statement, $requestTimeoutInSeconds, $repreparationDepth),
+            $response instanceof Response\Result => $this->handleResponseResult($request, $response, $statement, $requestTimeoutInSeconds, $repreparationDepth),
             default => $response,
         };
     }
 
     /**
+     * @param int $repreparationDepth see {@see self::sendSyncRequest()}
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -2780,7 +2688,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ServerException
      * @throws \Cassandra\Exception\RequestTimeoutException
      */
-    private function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement, ?float $requestTimeoutInSeconds = null): ?Response\Response {
+    private function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Response {
 
         // re-prepare query if it is unprepared
         if (
@@ -2827,27 +2735,24 @@ final class Connection {
                 return null;
             }
 
-            $this->assertRepreparationAllowed($this->repreparationDepth, $newPrepareRequest);
+            $this->assertRepreparationAllowed($repreparationDepth, $newPrepareRequest);
 
-            // Bracketed rather than counted up front: the recursion below is
-            // what the depth measures, and it has to come back down again
-            // however this call ends.
-            $this->repreparationDepth++;
+            // Counted one deeper for everything the repreparation sends: the
+            // PREPARE below and the EXECUTE that follows it both belong to this
+            // round, and it is the next UNPREPARED among them that has to find
+            // the higher count.
+            $repreparationDepth++;
 
-            try {
-                $prepareResponse = $this->syncRequest($newPrepareRequest, $requestTimeoutInSeconds);
-                if (!($prepareResponse instanceof Response\Result)) {
-                    throw new ConnectionException('Unexpected response type during repreparation', ExceptionCode::CONNECTION_REPREPARATION_UNEXPECTED_RESPONSE->value, [
-                        'operation' => 'unprepared_error_handling',
-                        'expected' => Response\Result::class,
-                        'received' => get_class($prepareResponse),
-                    ]);
-                }
-
-                $response = $this->handleReprepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
-            } finally {
-                $this->repreparationDepth--;
+            $prepareResponse = $this->sendSyncRequest($newPrepareRequest, $requestTimeoutInSeconds, $repreparationDepth);
+            if (!($prepareResponse instanceof Response\Result)) {
+                throw new ConnectionException('Unexpected response type during repreparation', ExceptionCode::CONNECTION_REPREPARATION_UNEXPECTED_RESPONSE->value, [
+                    'operation' => 'unprepared_error_handling',
+                    'expected' => Response\Result::class,
+                    'received' => get_class($prepareResponse),
+                ]);
             }
+
+            $response = $this->handleReprepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
         }
 
         return $response;
@@ -2864,6 +2769,8 @@ final class Connection {
     }
 
     /**
+     * @param int $repreparationDepth see {@see self::sendSyncRequest()}
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -2874,7 +2781,7 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement, ?float $requestTimeoutInSeconds = null): ?Response\Result {
+    private function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Result {
 
         $result->setRequest($request);
 
@@ -2888,10 +2795,10 @@ final class Connection {
         if ($statement !== null) {
             if ($statement->isRepreparing()) {
                 $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
-                $result = $this->handleReprepareResult($result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+                $result = $this->handleReprepareResult($result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
             } elseif ($statement->isAutoPreparing()) {
                 $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
-                $result = $this->handleAutoPrepareResult($result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+                $result = $this->handleAutoPrepareResult($result, statement: $statement, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
             }
         }
 
@@ -2899,6 +2806,8 @@ final class Connection {
     }
 
     /**
+     * @param int $repreparationDepth see {@see self::sendSyncRequest()}
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -2909,10 +2818,10 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function handleResponseResult(Request\Request $request, Response\Result $result, ?Statement $statement, ?float $requestTimeoutInSeconds = null): ?Response\Result {
+    private function handleResponseResult(Request\Request $request, Response\Result $result, ?Statement $statement, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Result {
 
         return match (true) {
-            $request instanceof Request\Prepare => $this->handleResponsePrepareResult($request, $result, $statement, $requestTimeoutInSeconds),
+            $request instanceof Request\Prepare => $this->handleResponsePrepareResult($request, $result, $statement, $requestTimeoutInSeconds, $repreparationDepth),
             $request instanceof Request\Execute => $this->handleResponseExecuteResult($request, $result),
             default => $result,
         };
@@ -3128,7 +3037,24 @@ final class Connection {
         if (isset($this->statements[$streamId])) {
             $statement = $this->statements[$streamId];
             unset($this->statements[$streamId]);
-            $response = $this->handleResponse($statement->getRequest(), $response, $statement);
+
+            // Taken out of the pending map before its answer is handled, so
+            // handling that ends in a failure rather than a result — the
+            // repreparation limit above all, see {@see self::MAX_REPREPARATIONS} —
+            // must not leave it neither pending nor finished. It is given up on
+            // instead, or a caller would be left waiting on a statement this
+            // connection has forgotten, holding a stream id nothing releases.
+            $handled = false;
+
+            try {
+                $response = $this->handleResponse($statement->getRequest(), $response, $statement);
+                $handled = true;
+            } finally {
+                if (!$handled) {
+                    $this->releaseStatementAfterFailedResponseHandling($statement, $streamId);
+                }
+            }
+
             if ($response !== null) {
                 $statement->setResponse($response);
                 $this->recycledStreams->enqueue($streamId);
@@ -3288,6 +3214,41 @@ final class Connection {
     }
 
     /**
+     * Give up on a statement whose answer could not be handled.
+     *
+     * Handling an answer is not only reading it: it can prepare and re-send the
+     * statement, cache a prepared result, or run the application's warnings
+     * listeners, and any of that can fail — most plainly when the node keeps
+     * answering UNPREPARED and {@see self::MAX_REPREPARATIONS} is reached.
+     * Whatever failed is raised to whoever happened to be reading, but the
+     * statement is this connection's to finish: left as it was it would be
+     * neither pending nor answered, so its owner would wait on it for good and
+     * be told, misleadingly, that it belongs to another connection.
+     *
+     * The id it was sent on is released rather than parked: the answer that led
+     * here has already been read off the wire, so the node is done with it and
+     * nothing can arrive on it by surprise. Two cases are left alone —
+     * {@see self::chainAsyncRequest()} put a follow-up request on the id, which
+     * is therefore in use again, or it gave up on the statement itself and has
+     * already put the id wherever it belongs.
+     */
+    private function releaseStatementAfterFailedResponseHandling(Statement $statement, int $streamId): void {
+
+        if (($this->statements[$streamId] ?? null) === $statement || $statement->isAbandoned()) {
+            return;
+        }
+
+        $statement->setStatus(StatementStatus::ABANDONED);
+
+        // A connection that is already gone took its whole id space with it,
+        // and the one replacing it hands the same ids out from scratch, so
+        // putting this one back would mean handing it out twice.
+        if ($this->node !== null) {
+            $this->recycledStreams->enqueue($streamId);
+        }
+    }
+
+    /**
      * Report statements the caller was waiting on that have been given up on.
      *
      * Only the connection's bookkeeping has happened by now
@@ -3384,58 +3345,218 @@ final class Connection {
 
         $request->setVersion($this->version);
 
-        // Same precedence the Statement applies below: an explicit argument
-        // wins over what the request's options asked for, and only then does
-        // the connection default apply.
-        $streamId = $this->getNewStreamId($requestTimeoutInSeconds ?? $request->getRequestTimeout());
-        $request->setStream($streamId);
-
         $originalRequest = $request;
+
+        // Resolved before a stream id is claimed, as the sync path does: this
+        // can fail on the caller's request, and an id claimed beforehand would
+        // be burned for the lifetime of the connection by a failure that never
+        // reached the node.
         $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
         if ($autoPrepareRequest !== null) {
-            $autoPrepareRequest->setStream($streamId);
-
             $request = $autoPrepareRequest;
         }
 
-        // Looked up for the request that is about to go out rather than for the
-        // one the caller handed in, so that an auto-prepared query is spared
-        // the PREPARE just as an explicit prepareAsync() is. The sync path gets
-        // this for free by recursing into syncRequest() for its PREPARE.
+        // Same precedence the Statement applies below: an explicit argument
+        // wins over what the request's options asked for, and only then does
+        // the connection default apply.
+        $streamId = $this->getNewStreamId($requestTimeoutInSeconds ?? $originalRequest->getRequestTimeout());
+        $originalRequest->setStream($streamId);
+        $request->setStream($streamId);
+
+        // Whether the id is either in use or already back in circulation.
+        // Everything between claiming it and registering the statement that
+        // carries it can fail, and an id left behind by one of those failures
+        // is lost for the lifetime of the connection.
+        $streamIdAccountedFor = false;
+
+        try {
+            // Looked up for the request that is about to go out rather than for
+            // the one the caller handed in, so that an auto-prepared query is
+            // spared the PREPARE just as an explicit prepareAsync() is. The sync
+            // path gets this for free by recursing into sendSyncRequest() for
+            // its PREPARE.
+            if ($request instanceof Request\Prepare) {
+                $cachedResult = $this->getCachedPrepareResult($request);
+                if ($cachedResult !== null) {
+                    $statement = new Statement(
+                        connection: $this,
+                        streamId: $streamId,
+                        request: $request,
+                        originalRequest: $originalRequest,
+                        requestTimeoutInSeconds: $requestTimeoutInSeconds,
+                    );
+
+                    if ($autoPrepareRequest !== null) {
+                        // Nothing has been written yet: what this statement is
+                        // really waiting for is the EXECUTE that handling the
+                        // cached result chains onto it below.
+                        $statement->setStatus(StatementStatus::AUTO_PREPARING);
+                    }
+
+                    // From here the statement owns the id: handling the cached
+                    // result either resolves it, which puts the id back below,
+                    // or chains a follow-up request that takes the id over —
+                    // and where the handling fails,
+                    // releaseStatementAfterFailedResponseHandling() puts it back.
+                    $streamIdAccountedFor = true;
+
+                    $handled = false;
+
+                    try {
+                        $response = $this->handleResponse($statement->getRequest(), $cachedResult, $statement);
+                        $handled = true;
+                    } finally {
+                        if (!$handled) {
+                            $this->releaseStatementAfterFailedResponseHandling($statement, $streamId);
+                        }
+                    }
+
+                    if ($response !== null) {
+                        $statement->setResponse($response);
+                        $this->recycledStreams->enqueue($streamId);
+                    }
+
+                    return $statement;
+                }
+            }
+
+            if (isset($this->statements[$streamId])) {
+                throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
+                    'operation' => 'sendAsyncRequest',
+                    'stream_id' => $streamId,
+                ]);
+            }
+
+            $writeSucceeded = false;
+            $nodeFailed = false;
+
+            try {
+                $node->writeRequest($request);
+                $writeSucceeded = true;
+
+                $this->nodeHealth->recordSuccess($node->getConfig());
+            } catch (NodeException $e) {
+                $nodeFailed = true;
+
+                // A node failure takes the whole pool with it, so this id needs
+                // no care of its own — and putting it back would mean putting
+                // it into the pool of the connection that replaces this one,
+                // which hands the same ids out from scratch.
+                $streamIdAccountedFor = true;
+
+                $this->handleNodeException($node);
+
+                throw $e;
+            } finally {
+                if (!$writeSucceeded && !$nodeFailed) {
+                    // Nothing reached the node — an unencodable request, say —
+                    // so the stream id was never in use and goes straight back
+                    // into circulation.
+                    $this->recycledStreams->enqueue($streamId);
+                    $streamIdAccountedFor = true;
+                }
+            }
+
+            $statement = new Statement(
+                connection: $this,
+                streamId: $streamId,
+                request: $request,
+                originalRequest: $originalRequest,
+                requestTimeoutInSeconds: $requestTimeoutInSeconds,
+            );
+
+            $this->statements[$streamId] = $statement;
+            $streamIdAccountedFor = true;
+
+            if ($autoPrepareRequest !== null) {
+                $statement->setStatus(StatementStatus::AUTO_PREPARING);
+            } else {
+                $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
+            }
+
+            return $statement;
+        } finally {
+            if (!$streamIdAccountedFor) {
+                // Claimed, and then something on the way to sending failed
+                // without the request ever reaching the node: no statement
+                // holds this id and nothing will ever answer on it, so it goes
+                // back into circulation rather than being burned.
+                $this->recycledStreams->enqueue($streamId);
+            }
+        }
+    }
+
+    /**
+     * The body of {@see self::syncRequest()}, carrying the repreparation depth
+     * of the chain this call belongs to.
+     *
+     * @param ?float $requestTimeoutInSeconds see {@see self::syncRequest()}
+     * @param int $repreparationDepth how many repreparations this call is
+     * already nested inside, the counterpart of
+     * {@see Statement::getRepreparationCount()} for requests that have no
+     * statement to carry the count. The sync path recurses back into this
+     * method for each round and unwinds in order, so the depth is exactly the
+     * number of rounds this call has behind it.
+     *
+     * Handed down the call chain rather than kept on the connection, so that a
+     * request started from inside one of these calls — an event or warnings
+     * listener issuing a query of its own while a repreparation is being
+     * handled — begins its own chain at zero instead of inheriting this one's
+     * depth and running out of repreparations early.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    private function sendSyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): Response\Response {
+
+        $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'syncRequest');
+
+        $node = $this->getConnectedNode();
+
+        // An explicit argument wins over what the request's options asked for,
+        // which in turn wins over the connection default.
+        $requestTimeoutInSeconds ??= $request->getRequestTimeout();
+
+        $request->setVersion($this->version);
+
         if ($request instanceof Request\Prepare) {
             $cachedResult = $this->getCachedPrepareResult($request);
             if ($cachedResult !== null) {
-                $statement = new Statement(
-                    connection: $this,
-                    streamId: $streamId,
-                    request: $request,
-                    originalRequest: $originalRequest,
-                    requestTimeoutInSeconds: $requestTimeoutInSeconds,
-                );
-
-                if ($autoPrepareRequest !== null) {
-                    // Nothing has been written yet: what this statement is
-                    // really waiting for is the EXECUTE that handling the
-                    // cached result chains onto it below.
-                    $statement->setStatus(StatementStatus::AUTO_PREPARING);
-                }
-
-                $response = $this->handleResponse($statement->getRequest(), $cachedResult, $statement);
-                if ($response !== null) {
-                    $statement->setResponse($response);
-                    $this->recycledStreams->enqueue($streamId);
-                }
-
-                return $statement;
+                return $cachedResult;
             }
         }
 
-        if (isset($this->statements[$streamId])) {
-            throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
-                'operation' => 'sendAsyncRequest',
-                'stream_id' => $streamId,
-            ]);
+        $autoPrepareRequest = $this->getAutoPrepareRequestIfNeeded($request);
+        if ($autoPrepareRequest !== null) {
+
+            $prepareResponse = $this->sendSyncRequest($autoPrepareRequest, $requestTimeoutInSeconds, $repreparationDepth);
+            if (!($prepareResponse instanceof Response\Result\PreparedResult)) {
+                throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
+                    'expected' => Response\Result::class,
+                    'received' => get_class($prepareResponse),
+                ]);
+            }
+
+            $response = $this->handleAutoPrepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
+            if ($response === null) {
+                throw new ConnectionException('Unexpected null response during autoPrepare', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESPONSE->value, [
+                    'expected' => Response\Result::class,
+                    'received' => 'null',
+                ]);
+            }
+
+            return $response;
         }
+
+        $streamId = $this->getNewStreamId($requestTimeoutInSeconds);
+        $request->setStream($streamId);
 
         $writeSucceeded = false;
         $nodeFailed = false;
@@ -3444,6 +3565,9 @@ final class Connection {
             $node->writeRequest($request);
             $writeSucceeded = true;
 
+            // As on the async paths: the node took the request, which is enough
+            // to clear a failure recorded against it. Whether it answers is a
+            // separate question, and recorded separately below.
             $this->nodeHealth->recordSuccess($node->getConfig());
         } catch (NodeException $e) {
             $nodeFailed = true;
@@ -3463,23 +3587,49 @@ final class Connection {
             }
         }
 
-        $statement = new Statement(
-            connection: $this,
-            streamId: $streamId,
-            request: $request,
-            originalRequest: $originalRequest,
-            requestTimeoutInSeconds: $requestTimeoutInSeconds,
-        );
+        $responseArrived = false;
 
-        $this->statements[$streamId] = $statement;
+        try {
+            $response = $this->getNextResponseForStream(
+                streamId: $streamId,
+                requestTimeoutInSeconds: $requestTimeoutInSeconds,
+                requestClass: get_class($request),
+            );
 
-        if ($autoPrepareRequest !== null) {
-            $statement->setStatus(StatementStatus::AUTO_PREPARING);
-        } else {
-            $statement->setStatus(StatementStatus::WAITING_FOR_RESULT);
+            $responseArrived = true;
+
+            $this->recycledStreams->enqueue($streamId);
+
+            $response = $this->handleResponse($request, $response, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
+            $this->nodeHealth->recordSuccess($node->getConfig());
+        } catch (NodeException $e) {
+            $this->handleNodeException($node);
+
+            throw $e;
+        } finally {
+            if (!$responseArrived) {
+                // Nothing came back for this id and, unlike an async request,
+                // there is no statement carrying it: without this it would be
+                // lost for the life of the connection. A timeout has parked it
+                // already and a node failure took the whole pool with it, so
+                // this is for the rest — a malformed frame, say, which leaves
+                // it undecidable whether the answer was consumed.
+                $this->parkUnresolvedStream($streamId);
+            }
         }
 
-        return $statement;
+        if ($response === null) {
+            throw new ConnectionException('Received unexpected null response from server.', ExceptionCode::CONNECTION_SYNC_NULL_RESPONSE->value, [
+                'operation' => 'syncRequest',
+                'request_class' => get_class($request),
+            ]);
+        }
+
+        if ($response instanceof Response\Error) {
+            throw $response->getException();
+        }
+
+        return $response;
     }
 
     /**

@@ -1353,6 +1353,27 @@ $stmt = $conn->waitForAnyStatement([$s1, $s2, $s3], timeoutInSeconds: 5.0);
 $event = $conn->waitForNextEvent(timeoutInSeconds: 30.0);
 ```
 
+##### What `$timeoutInSeconds` means on the waits
+
+Every wait takes the same four values — `0` makes one non-blocking read attempt
+and returns, `n` waits at most that many seconds, `INF` waits until something
+arrives. Only the default, `null`, differs between them, because each has a
+different thing to fall back on:
+
+| Wait | `null` means |
+| --- | --- |
+| `waitForStatements()`, `waitForAnyStatement()`, `waitForAllPendingStatements()` | let the statements' own request timeouts bound it |
+| `waitForNextResponse()` | use the connection's `requestTimeoutInSeconds` — there is no statement to go by |
+| `waitForNextEvent()` | wait for as long as it takes; an event can arrive at any time |
+
+Whichever it is, every request in flight keeps its own budget while a wait runs,
+so one going overdue is noticed there rather than only when its own caller next
+asks about it. A wait that ends up unbounded — no bound of the caller's and no
+bounded request in flight — leans entirely on the heartbeat to tell a dead
+connection from a quiet one; with `heartbeatIntervalInSeconds` set to `null` as
+well, the transport's stall window is all that is left and its elapsing fails
+the connection.
+
 Compression
 -----------
 

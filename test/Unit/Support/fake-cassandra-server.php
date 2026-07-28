@@ -9,10 +9,11 @@
  *
  * Listens on a free port of 127.0.0.1 and prints "ready <port>" once it does.
  *
- * PREPARE and EXECUTE are answered in every mode but "deaf", so the modes below
- * only describe what happens to QUERYs. Every PREPARE is also reported on
- * stdout as "prepared <n>", which is how a test can tell whether the client
- * prepared a query it should have had cached.
+ * PREPARE and EXECUTE are answered in every mode but "deaf" and
+ * "always-unprepared", so the modes below only describe what happens to QUERYs
+ * unless they say otherwise. Every PREPARE is also reported on stdout as
+ * "prepared <n>", which is how a test can tell whether the client prepared a
+ * query it should have had cached.
  *
  * Modes:
  *   idle            handshake, then never send anything unprompted
@@ -23,10 +24,14 @@
  *   deaf            handshake, then stop answering anything at all
  *   refuse-startup  answer OPTIONS, then never answer the STARTUP, so that the
  *                   handshake fails part way through
+ *   always-unprepared
+ *                   prepare happily, but answer every EXECUTE with UNPREPARED,
+ *                   as a node that never keeps the prepared statement would
  */
 
 declare(strict_types=1);
 
+const OPCODE_ERROR = 0x00;
 const OPCODE_STARTUP = 0x01;
 const OPCODE_READY = 0x02;
 const OPCODE_OPTIONS = 0x05;
@@ -106,6 +111,20 @@ function preparedResultBody(): string {
         . cqlString('id') . pack('n', 0x0009)              // marker "id", type int
         // rows metadata: NO_METADATA, no columns
         . pack('N', 4) . pack('N', 0);
+}
+
+/**
+ * An UNPREPARED ERROR for the statement id the PREPARED result above hands out.
+ *
+ * A node that has forgotten a prepared statement answers its EXECUTE with this,
+ * and the client is expected to prepare it again and re-execute. A node that
+ * answers every re-execution the same way is what the client's repreparation
+ * limit exists for.
+ */
+function unpreparedErrorBody(): string {
+    return pack('N', 0x2500)                               // error code = UNPREPARED
+        . cqlString('unprepared')                          // message [string]
+        . pack('n', 4) . 'pid1';                           // unknown id [short bytes]
 }
 
 /** STATUS_CHANGE / UP for 127.0.0.1:9042. */
@@ -232,6 +251,15 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_EXECUTE:
+            if ($mode === 'always-unprepared') {
+                // Never keeps the prepared statement, so every re-execution is
+                // refused the same way and only the client's own limit can end
+                // the exchange.
+                writeFrame($client, $frame['stream'], OPCODE_ERROR, unpreparedErrorBody());
+
+                break;
+            }
+
             writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody());
 
             break;

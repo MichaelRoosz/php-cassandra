@@ -511,6 +511,15 @@ final class Socket extends NodeImplementation implements IoNode {
 
         [$seconds, $microseconds] = $this->splitTimeout($remaining);
 
+        // What is left of the deadline rounded away to nothing. SO_RCVTIMEO
+        // spells {0, 0} as "no timeout", so applying it would turn the caller's
+        // deadline into a read that blocks until the peer says something — the
+        // exact opposite of what was asked for. There is no time left to wait
+        // anyway, so the read is skipped as if the deadline had passed.
+        if ($seconds === 0 && $microseconds === 0) {
+            return null;
+        }
+
         // A null seconds value means "no timeout", which the socket option
         // spells as zero.
         socket_set_option($this->socket, SOL_SOCKET, SO_RCVTIMEO, [
