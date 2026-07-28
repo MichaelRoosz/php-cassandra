@@ -19,6 +19,8 @@ use Cassandra\Response\Event\StatusChangeEvent;
 use Cassandra\Response\Result;
 use Cassandra\Statement;
 use ReflectionMethod;
+use Cassandra\Connection\Session;
+use Cassandra\Connection\StatementRegistry;
 use Cassandra\Connection\StreamIdPool;
 use ReflectionProperty;
 
@@ -76,10 +78,10 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $this->assertTrue($statement->isAbandoned());
 
-        $method = new ReflectionMethod(Connection::class, 'chainAsyncRequest');
+        $method = new ReflectionMethod(Session::class, 'chainAsyncRequest');
 
         try {
-            $method->invoke($connection, new Query('SELECT * FROM SLOW'), $statement);
+            $method->invoke(self::sessionOf($connection), new Query('SELECT * FROM SLOW'), $statement);
             $this->fail('expected the follow-up request to be given up on');
         } catch (ConnectionException $e) {
             $this->assertSame(ExceptionCode::CONNECTION_CHAINED_REQUEST_CONNECTION_GONE->value, $e->getCode());
@@ -365,7 +367,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         // Exactly what a replaced connection leaves behind: a statement waiting
         // on a stream id this connection no longer associates with it.
-        (new ReflectionProperty(Connection::class, 'statements'))->setValue($connection, []);
+        (new ReflectionProperty(StatementRegistry::class, 'statements'))->setValue(self::statementsOf($connection), []);
 
         $start = microtime(true);
 
@@ -975,12 +977,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
      * How many PREPAREs the server has seen, from the lines it reports.
      */
     private function pendingHeartbeatOf(Connection $connection): ?Statement {
-        $property = new ReflectionProperty(Connection::class, 'pendingHeartbeat');
-
-        /** @var ?Statement $pendingHeartbeat */
-        $pendingHeartbeat = $property->getValue($connection);
-
-        return $pendingHeartbeat;
+        return self::heartbeatOf($connection)->probe();
     }
 
     private function preparesSeenByServer(): int {
@@ -1043,7 +1040,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
     private function streamIdPoolOf(Connection $connection): StreamIdPool {
         /** @var StreamIdPool $pool */
-        $pool = (new ReflectionProperty(Connection::class, 'streamIds'))->getValue($connection);
+        $pool = (new ReflectionProperty(Session::class, 'streamIds'))->getValue(self::sessionOf($connection));
 
         return $pool;
     }

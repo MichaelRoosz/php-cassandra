@@ -11,6 +11,7 @@ use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StatementException;
 use Cassandra\Statement;
+use Cassandra\Connection\Session;
 use Cassandra\Connection\StreamIdPool;
 use ReflectionProperty;
 
@@ -211,7 +212,7 @@ final class RepreparationLimitTest extends AbstractUnitTestCase {
 
     private function streamIdPoolOf(Connection $connection): StreamIdPool {
         /** @var StreamIdPool $pool */
-        $pool = (new ReflectionProperty(Connection::class, 'streamIds'))->getValue($connection);
+        $pool = (new ReflectionProperty(Session::class, 'streamIds'))->getValue(self::sessionOf($connection));
 
         return $pool;
     }

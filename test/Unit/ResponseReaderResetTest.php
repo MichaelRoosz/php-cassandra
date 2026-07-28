@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Connection;
+use Cassandra\Connection\Session;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\Node;
 use Cassandra\Connection\NodeConfig;
@@ -53,8 +54,8 @@ final class ResponseReaderResetTest extends AbstractUnitTestCase {
     public function testDisconnectDropsAHalfReadFrame(): void {
         $connection = new Connection([new SocketNodeConfig(host: '127.0.0.1')]);
 
-        $readerProperty = new ReflectionProperty(Connection::class, 'responseReader');
-        $reader = $readerProperty->getValue($connection);
+        $readerProperty = new ReflectionProperty(Session::class, 'responseReader');
+        $reader = $readerProperty->getValue(self::sessionOf($connection));
         $this->assertInstanceOf(ResponseReader::class, $reader);
 
         $headerProperty = new ReflectionProperty(ResponseReader::class, 'currentHeader');
@@ -87,8 +88,8 @@ final class ResponseReaderResetTest extends AbstractUnitTestCase {
             options: new ConnectionOptions(initialProtocolVersion: ProtocolVersion::V4),
         );
 
-        $versionProperty = new ReflectionProperty(Connection::class, 'version');
-        $versionProperty->setValue($connection, ProtocolVersion::V5);
+        $versionProperty = new ReflectionProperty(Session::class, 'version');
+        $versionProperty->setValue(self::sessionOf($connection), ProtocolVersion::V5);
 
         $this->assertSame(ProtocolVersion::V5, $connection->getProtocolVersion());
 

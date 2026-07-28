@@ -8,6 +8,8 @@ use Cassandra\Connection;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use ReflectionMethod;
+use Cassandra\Connection\HeartbeatMonitor;
+use Cassandra\Connection\Session;
 use Cassandra\Connection\StreamIdPool;
 use ReflectionProperty;
 use SplQueue;
@@ -46,11 +48,11 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
 
         $this->exhaustStreamIds($connection);
 
-        $checkHeartbeat = new ReflectionMethod(Connection::class, 'checkHeartbeat');
-        $checkHeartbeat->invoke($connection);
+        $checkHeartbeat = new ReflectionMethod(Session::class, 'checkHeartbeat');
+        $checkHeartbeat->invoke(self::sessionOf($connection));
 
         $this->assertNull(
-            (new ReflectionProperty(Connection::class, 'pendingHeartbeat'))->getValue($connection),
+            self::heartbeatOf($connection)->probe(),
             'no probe was sent, so none is outstanding'
         );
         $this->assertFalse($connection->isConnected(), 'and nothing was opened to send one on');
@@ -78,8 +80,8 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
             options: new ConnectionOptions(heartbeatIntervalInSeconds: 30.0),
         );
 
-        (new ReflectionProperty(Connection::class, 'handshakeComplete'))->setValue($connection, true);
-        (new ReflectionProperty(Connection::class, 'lastResponseAt'))->setValue($connection, microtime(true) - 600.0);
+        (new ReflectionProperty(Session::class, 'handshakeComplete'))->setValue(self::sessionOf($connection), true);
+        (new ReflectionProperty(HeartbeatMonitor::class, 'lastResponseAt'))->setValue(self::heartbeatOf($connection), microtime(true) - 600.0);
 
         return $connection;
     }
@@ -95,15 +97,18 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
     }
 
     private function nextHeartbeatActionAt(Connection $connection): ?float {
-        /** @var ?float $at */
-        $at = (new ReflectionMethod(Connection::class, 'nextHeartbeatActionAt'))->invoke($connection);
+        /** @var bool $handshakeComplete */
+        $handshakeComplete = (new ReflectionProperty(Session::class, 'handshakeComplete'))->getValue(self::sessionOf($connection));
 
-        return $at;
+        return self::heartbeatOf($connection)->nextActionAt(
+            $handshakeComplete,
+            $this->streamIdPoolOf($connection)->hasImmediate(),
+        );
     }
 
     private function streamIdPoolOf(Connection $connection): StreamIdPool {
         /** @var StreamIdPool $pool */
-        $pool = (new ReflectionProperty(Connection::class, 'streamIds'))->getValue($connection);
+        $pool = (new ReflectionProperty(Session::class, 'streamIds'))->getValue(self::sessionOf($connection));
 
         return $pool;
     }
