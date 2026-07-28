@@ -12,8 +12,6 @@ final class Statement {
 
     private Request\Request $originalRequest;
 
-    private Request\Request $request;
-
     /**
      * How many times the node has answered this statement's EXECUTE with
      * UNPREPARED and the driver has reprepared it in response. Counted so that
@@ -23,7 +21,7 @@ final class Statement {
      */
     private int $repreparationCount = 0;
 
-    private ?float $requestTimeout;
+    private Request\Request $request;
 
     /**
      * The EXECUTE a node answered with UNPREPARED, kept for as long as the
@@ -34,6 +32,8 @@ final class Statement {
      * values and options - would be lost otherwise.
      */
     private ?Request\Execute $requestBeingReprepared = null;
+
+    private ?float $requestTimeout;
 
     private ?Response\Response $response = null;
 

@@ -30,13 +30,6 @@ use SplQueue;
 
 final class Connection {
     /**
-     * Highest stream id a client may use. The protocol carries it as a signed
-     * [short] and reserves the negative half for server-initiated streams
-     * (events use -1), leaving 0..32767 for requests.
-     */
-    private const MAX_STREAM_ID = 32767;
-
-    /**
      * How many times one request may be reprepared before the driver gives up.
      *
      * An UNPREPARED error is answered by preparing the statement again and
@@ -50,6 +43,13 @@ final class Connection {
      * a coordinator that changes under us; past that it is a loop, not a retry.
      */
     private const MAX_REPREPARATIONS = 3;
+
+    /**
+     * Highest stream id a client may use. The protocol carries it as a signed
+     * [short] and reserves the negative half for server-initiated streams
+     * (events use -1), leaving 0..32767 for requests.
+     */
+    private const MAX_STREAM_ID = 32767;
 
     private Consistency $consistency = Consistency::ONE;
 
