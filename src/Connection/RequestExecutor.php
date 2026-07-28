@@ -112,17 +112,20 @@ final class RequestExecutor {
 
             $writeSucceeded = false;
             $nodeFailed = false;
-
-            // Read before the write rather than after it, for the reason
-            // {@see Session::checkHeartbeat()} gives about its own probe: a write
-            // that waits on a slow transport is not time the node spent failing
-            // to answer, and charging it to the follow-up's budget would let the
-            // request be overdue before the node has seen it.
-            $sentAt = microtime(true);
+            $sentAt = 0.0;
 
             try {
                 $node->writeRequest($request);
                 $writeSucceeded = true;
+
+                // Read after the write rather than before it, for the reason
+                // {@see HeartbeatMonitor::recordProbe()} gives about its own
+                // probe, and as the {@see Statement} constructor does for a
+                // request sent by {@see self::sendAsyncRequest()}: a write that
+                // waits on a slow transport is not time the node spent failing
+                // to answer, and charging it to the follow-up's budget would let
+                // the request be overdue before the node has seen it.
+                $sentAt = microtime(true);
 
                 $this->session->recordNodeSuccess($node->getConfig());
             } catch (NodeException $e) {
@@ -229,7 +232,8 @@ final class RequestExecutor {
                     // result either resolves it, which puts the id back below,
                     // or chains a follow-up request that takes the id over —
                     // and where the handling fails,
-                    // releaseStatementAfterFailedResponseHandling() puts it back.
+                    // {@see StatementRegistry::releaseAfterFailedResponseHandling()}
+                    // puts it back.
                     $streamIdAccountedFor = true;
 
                     $handled = false;

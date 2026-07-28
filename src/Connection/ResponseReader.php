@@ -105,7 +105,7 @@ final class ResponseReader {
      * response after that would be read at the wrong offset.
      *
      * Called whenever the connection is dropped, see
-     * {@see \Cassandra\Connection::disconnect()}.
+     * {@see Session::disconnect()}.
      */
     public function reset(): void {
         $this->currentHeader = null;

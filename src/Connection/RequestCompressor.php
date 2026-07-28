@@ -73,7 +73,7 @@ final class RequestCompressor extends NodeImplementation {
      * This decorator only rewrites what goes out, so there is nothing for it to
      * buffer — and buffering here anyway would strand whatever the wrapped node
      * had already read into its own buffer. It is installed part way through the
-     * handshake ({@see \Cassandra\Connection::completeHandshake()}), by which
+     * handshake ({@see Session::completeHandshake()}), by which
      * point that buffer may hold anything the node sent past the frame the
      * handshake was reading, and those bytes would then never be seen again,
      * leaving every response after them parsed at the wrong offset.

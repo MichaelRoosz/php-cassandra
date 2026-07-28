@@ -62,12 +62,22 @@ final class Deadline {
      * allowance no matter how long the caller took to start waiting for it.
      * Waits that are not tied to a request (the sync path, which writes
      * immediately before waiting) count from now.
+     *
+     * INF is normalised to null rather than carried through as a deadline no
+     * clock reaches, so that the two ways of spelling an unbounded wait are one
+     * and the same downstream. Carried through it would be a bound everywhere
+     * that only tests for null — {@see Session::readResponseUntil()} above all,
+     * where a wait with nothing bounding it is what makes the transport's stall
+     * window the last judgement available, so an INF wait would swallow that
+     * timeout and never notice a connection that died with heartbeats off.
+     * -INF is a different matter and is left to be clamped below: it asks for a
+     * wait that is already over.
      */
     public function at(?float $timeoutInSeconds, ?float $sentAt = null): ?float {
 
         $timeout = $timeoutInSeconds ?? $this->requestTimeout;
 
-        if ($timeout === null) {
+        if ($timeout === null || $timeout === INF) {
             return null;
         }
 
@@ -119,14 +129,13 @@ final class Deadline {
      * unbounded: it has no deadline of its own to contribute, but it must not
      * cost the statements beside it theirs, or a single unbounded request would
      * keep every other one from ever being noticed as overdue. A timeout of INF
-     * needs no such care — it yields a deadline of INF, which loses to every
-     * finite one here and bounds nothing on its own.
+     * is passed over by the same test, {@see self::at()} having already
+     * normalised it to the unbounded wait it asks for.
      *
      * $ignored is the driver's own heartbeat: it is not one of the caller's
      * requests and is held to
      * {@see ConnectionOptions::$heartbeatTimeoutInSeconds} by
-     * {@see \Cassandra\Connection::checkHeartbeat()} instead of to a request
-     * budget.
+     * {@see Session::checkHeartbeat()} instead of to a request budget.
      *
      * @param array<Statement> $statements
      */
@@ -162,6 +171,25 @@ final class Deadline {
     public function getRequestTimeout(): ?float {
 
         return $this->requestTimeout;
+    }
+
+    /**
+     * The counterpart of {@see self::at()} for the waits whose null already
+     * means "no bound" rather than "fall back to the connection default" — the
+     * ones that take statements or wait for an event, which are bounded by the
+     * budgets of the statements they were given rather than by a timeout of
+     * their own.
+     *
+     * INF is normalised to null here as well, so that the two ways of spelling
+     * an unbounded wait behave alike for the reason {@see self::at()} gives.
+     */
+    public function in(?float $timeoutInSeconds): ?float {
+
+        if ($timeoutInSeconds === null || $timeoutInSeconds === INF) {
+            return null;
+        }
+
+        return microtime(true) + max(0.0, $timeoutInSeconds);
     }
 
     /**

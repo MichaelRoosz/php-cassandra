@@ -8,7 +8,6 @@ use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Exception\RequestTimeoutException;
-use Cassandra\Exception\StatementException;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request;
 use Cassandra\Response;
@@ -918,7 +917,7 @@ final class Session {
      */
     public function waitForAllPendingStatements(?float $timeoutInSeconds = null): void {
 
-        $waitDeadline = $timeoutInSeconds === null ? null : microtime(true) + max(0.0, $timeoutInSeconds);
+        $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
         while ($this->statements->pending($this->heartbeat->probe())) {
@@ -965,7 +964,7 @@ final class Session {
      */
     public function waitForAnyStatement(array $statements, ?float $timeoutInSeconds = null): ?Statement {
 
-        $waitDeadline = $timeoutInSeconds === null ? null : microtime(true) + max(0.0, $timeoutInSeconds);
+        $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
         while (true) {
@@ -1023,7 +1022,7 @@ final class Session {
      */
     public function waitForNextEvent(?float $timeoutInSeconds = null): ?Response\Event {
 
-        $waitDeadline = $timeoutInSeconds === null ? null : microtime(true) + max(0.0, $timeoutInSeconds);
+        $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
         while (true) {
@@ -1131,7 +1130,7 @@ final class Session {
      */
     public function waitForStatements(array $statements, ?float $timeoutInSeconds = null): void {
 
-        $waitDeadline = $timeoutInSeconds === null ? null : microtime(true) + max(0.0, $timeoutInSeconds);
+        $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
         while (true) {
@@ -1498,8 +1497,9 @@ final class Session {
 
             // Taken out of the pending map before its answer is handled, so
             // handling that ends in a failure rather than a result — the
-            // repreparation limit above all, see {@see self::MAX_REPREPARATIONS} —
-            // must not leave it neither pending nor finished. It is given up on
+            // repreparation limit above all, see
+            // {@see ResponseDispatcher::MAX_REPREPARATIONS} — must not leave it
+            // neither pending nor finished. It is given up on
             // instead, or a caller would be left waiting on a statement this
             // connection has forgotten, holding a stream id nothing releases.
             $handled = false;

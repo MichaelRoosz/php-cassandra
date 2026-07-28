@@ -176,11 +176,11 @@ final class Connection {
      * opens one and takes it through the handshake first, as every other method
      * that touches the transport does.
      *
-     * Writing the heartbeat. {@see \Cassandra\Connection\Session::keepNonBlockingBookkeeping()} sends
-     * the probe these calls owe the connection, and a write blocks until the
-     * transport accepts it — bounded by the send stall window, not by anything
-     * here. Waiting for its answer is what these calls do not do; that is left
-     * to whichever call reads next.
+     * Writing the heartbeat. Having read, these calls owe the connection the
+     * probe a wait would have sent, and a write blocks until the transport
+     * accepts it — bounded by the send stall window, not by anything here.
+     * Waiting for its answer is what these calls do not do; that is left to
+     * whichever call reads next.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -795,7 +795,14 @@ final class Connection {
      *
      * Returns null when the time is up with none of them ready; the statements
      * are untouched and can still be waited on. A statement that runs out of
-     * its own budget is given up on and raises a RequestTimeoutException.
+     * its own budget is given up on and raises a RequestTimeoutException, which
+     * takes precedence over handing one back: where one of them is answered in
+     * the same pass that another runs out, the exception is what the caller
+     * sees. Nothing is lost by it — the answer stays on its statement and the
+     * exception names the ones that ran out, so calling again returns the ready
+     * one, as long as those are dropped from $statements first. They are not
+     * resolvable any more, and a statement that can never resolve is reported
+     * rather than waited on.
      *
      * A timeout of 0 still costs a read while anything is outstanding, but a
      * non-blocking one, so it does not wait on the transport either;
@@ -832,9 +839,9 @@ final class Connection {
      * an unbounded wait here has nothing bounding its reads at all, at which
      * point the transport's stall window is the only judgement left and this
      * fails the connection with a NodeException once it elapses, as every other
-     * unbounded wait does — see {@see \Cassandra\Connection\Session::readResponseUntil()}. Waiting for
-     * events with heartbeats disabled therefore means passing a
-     * $timeoutInSeconds and calling again, rather than waiting indefinitely.
+     * unbounded wait does. Waiting for events with heartbeats disabled
+     * therefore means passing a finite $timeoutInSeconds and calling again,
+     * rather than waiting indefinitely.
      *
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  wait for as long as it takes (the default), since an event can
@@ -858,9 +865,8 @@ final class Connection {
      * The one exception is the connection itself giving out: enough requests
      * running out without their answers ever arriving reaches
      * {@see ConnectionOptions::$maxOrphanedStreams}, and that replaces the
-     * connection and raises a ConnectionException here — see
-     * {@see \Cassandra\Connection\Session::enforceOrphanedStreamLimit()}. An event loop is interrupted
-     * for that, because the connection it was reading from is gone.
+     * connection and raises a ConnectionException here. An event loop is
+     * interrupted for that, because the connection it was reading from is gone.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -890,8 +896,12 @@ final class Connection {
      * as it does in the waits that take statements: those are bounded by the
      * budgets of the statements they were given, and this call has none to go
      * by. Where the connection's request timeout is itself null there is
-     * nothing to fall back on and the wait is unbounded, exactly as INF is.
-     * Pass INF for a wait that only ends when something arrives.
+     * nothing to fall back on and the wait is unbounded, exactly as INF is —
+     * the two are the same wait, INF being the way to ask for it without
+     * changing what the connection default means for everything else. Neither
+     * ends of its own accord: what ends an unbounded wait is a response
+     * arriving, or the connection being found dead, as
+     * {@see self::waitForNextEvent()} describes.
      *
      * Returns null when the time is up with nothing having arrived, whether or
      * not anything went overdue in the meantime — see below. A timeout of 0
@@ -909,9 +919,8 @@ final class Connection {
      * The one exception is the connection itself giving out: enough requests
      * running out without their answers ever arriving reaches
      * {@see ConnectionOptions::$maxOrphanedStreams}, and that replaces the
-     * connection and raises a ConnectionException here — see
-     * {@see \Cassandra\Connection\Session::enforceOrphanedStreamLimit()}. The wait cannot simply be
-     * repeated then, because the connection it was reading from is gone.
+     * connection and raises a ConnectionException here. The wait cannot simply
+     * be repeated then, because the connection it was reading from is gone.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
