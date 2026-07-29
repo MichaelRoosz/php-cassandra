@@ -62,14 +62,6 @@ final class StatementRegistry {
     }
 
     /**
-     * @return array<int, Statement>
-     */
-    public function all(): array {
-
-        return $this->statements;
-    }
-
-    /**
      * @throws \Cassandra\Exception\RequestTimeoutException
      * @throws \Cassandra\Exception\StatementException
      */
@@ -116,21 +108,6 @@ final class StatementRegistry {
                 ]
             );
         }
-    }
-
-    public function count(): int {
-
-        return count($this->statements);
-    }
-
-    /**
-     * Earliest deadline among the statements still waiting for an answer, so a
-     * wait over several of them ends as soon as the first has used up its
-     * budget. Null when none of them is bounded.
-     */
-    public function earliestDeadline(?Statement $ignored): ?float {
-
-        return $this->deadlines->earliestForStatements($this->statements, $ignored);
     }
 
     /**
@@ -186,6 +163,47 @@ final class StatementRegistry {
         return $this->statements[$streamId] ?? null;
     }
 
+    /**
+     * @return array<int, Statement>
+     */
+    public function getAll(): array {
+
+        return $this->statements;
+    }
+
+    public function getCount(): int {
+
+        return count($this->statements);
+    }
+
+    /**
+     * Earliest deadline among the statements still waiting for an answer, so a
+     * wait over several of them ends as soon as the first has used up its
+     * budget. Null when none of them is bounded.
+     */
+    public function getEarliestDeadline(?Statement $ignored): ?float {
+
+        return $this->deadlines->earliestForStatements($this->statements, $ignored);
+    }
+
+    /**
+     * The requests the caller has in flight, i.e. everything waiting for an
+     * answer except the driver's own heartbeat.
+     *
+     * @return array<int, Statement>
+     */
+    public function getPending(?Statement $ignored): array {
+
+        if ($ignored === null) {
+            return $this->statements;
+        }
+
+        return array_filter(
+            $this->statements,
+            static fn (Statement $statement): bool => $statement !== $ignored,
+        );
+    }
+
     public function has(int $streamId): bool {
 
         return isset($this->statements[$streamId]);
@@ -205,24 +223,6 @@ final class StatementRegistry {
             $expired,
             static fn (Statement $statement): bool => in_array($statement, $waitedOn, true),
         ));
-    }
-
-    /**
-     * The requests the caller has in flight, i.e. everything waiting for an
-     * answer except the driver's own heartbeat.
-     *
-     * @return array<int, Statement>
-     */
-    public function pending(?Statement $ignored): array {
-
-        if ($ignored === null) {
-            return $this->statements;
-        }
-
-        return array_filter(
-            $this->statements,
-            static fn (Statement $statement): bool => $statement !== $ignored,
-        );
     }
 
     public function register(int $streamId, Statement $statement): void {
@@ -288,7 +288,7 @@ final class StatementRegistry {
                 'operation' => $operation,
                 'stream_ids' => $streamIds,
                 'timed_out_statements' => count($expired),
-                'orphaned_streams' => $this->streamIds->orphanedCount(),
+                'orphaned_streams' => $this->streamIds->getOrphanedCount(),
             ],
             timedOutStatements: $expired,
         );

@@ -198,7 +198,7 @@ final class RequestExecutor {
         // Read straight after the claim, while it is still the run of the id
         // space that claim came from: nothing between here and the disposals
         // below reads, so nothing can start the pool over in between.
-        $streamGeneration = $this->streamIds->generation();
+        $streamGeneration = $this->streamIds->getGeneration();
 
         $originalRequest->setStream($streamId);
         $request->setStream($streamId);
@@ -223,7 +223,7 @@ final class RequestExecutor {
                 $cachedResult = $this->preparedResultCache->get($request);
                 if ($cachedResult !== null) {
                     $statement = new Statement(
-                        connection: $this->session->connection(),
+                        connection: $this->session->getConnection(),
                         streamId: $streamId,
                         streamGeneration: $streamGeneration,
                         request: $request,
@@ -285,7 +285,7 @@ final class RequestExecutor {
             }
 
             $statement = new Statement(
-                connection: $this->session->connection(),
+                connection: $this->session->getConnection(),
                 streamId: $streamId,
                 streamGeneration: $streamGeneration,
                 request: $request,
@@ -396,7 +396,7 @@ final class RequestExecutor {
         }
 
         $streamId = $this->session->getNewStreamId($requestTimeoutInSeconds);
-        $streamGeneration = $this->streamIds->generation();
+        $streamGeneration = $this->streamIds->getGeneration();
         $request->setStream($streamId);
 
         $writeSucceeded = false;

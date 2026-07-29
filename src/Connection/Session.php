@@ -192,11 +192,6 @@ final class Session {
         }
     }
 
-    public function connection(): Connection {
-
-        return $this->connection;
-    }
-
     public function disconnect(): void {
 
         $this->resetSessionState();
@@ -271,8 +266,20 @@ final class Session {
         return $node;
     }
 
+    public function getConnection(): Connection {
+
+        return $this->connection;
+    }
+
     public function getKeyspace(): string {
         return $this->keyspace;
+    }
+
+    /**
+     * The application's event and warnings callbacks.
+     */
+    public function getListeners(): ListenerRegistry {
+        return $this->listeners;
     }
 
     /**
@@ -317,7 +324,7 @@ final class Session {
                 $waitDeadline = $this->deadlines->at($requestTimeoutInSeconds);
             }
 
-            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->getPendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -336,8 +343,8 @@ final class Session {
                         [
                             'operation' => 'getNewStreamId',
                             'max_stream_id' => StreamIdPool::MAX_STREAM_ID,
-                            'statements_in_flight' => $this->statements->count(),
-                            'orphaned_streams' => $this->streamIds->orphanedCount(),
+                            'statements_in_flight' => $this->statements->getCount(),
+                            'orphaned_streams' => $this->streamIds->getOrphanedCount(),
                             'request_timeout_seconds' => $this->deadlines->describe($requestTimeoutInSeconds ?? $this->deadlines->getRequestTimeout()),
                         ]
                     );
@@ -436,7 +443,7 @@ final class Session {
             // The other requests in flight keep their own budgets while this
             // one waits, so one of them going overdue is noticed here too
             // rather than only whenever its caller next waits on it.
-            $deadline = $this->deadlines->earlier($ownDeadline, $this->pendingStatementsDeadline());
+            $deadline = $this->deadlines->earlier($ownDeadline, $this->getPendingStatementsDeadline());
 
             $response = $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -543,13 +550,6 @@ final class Session {
 
     public function isConnected(): bool {
         return $this->node !== null;
-    }
-
-    /**
-     * The application's event and warnings callbacks.
-     */
-    public function listeners(): ListenerRegistry {
-        return $this->listeners;
     }
 
     /**
@@ -850,10 +850,10 @@ final class Session {
         $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
-        while ($this->statements->pending($this->heartbeat->probe())) {
+        while ($this->statements->getPending($this->heartbeat->getProbe())) {
             // Recomputed per pass: each statement carries its own budget from
             // when it was sent, and resolved ones drop out of the reckoning.
-            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->getPendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -912,7 +912,7 @@ final class Session {
             // next waits on it. The bound only decides when to come up for air;
             // which statement is answered, and which of them is the caller's
             // business, is decided below rather than here.
-            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->getPendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -959,7 +959,7 @@ final class Session {
             // Requests sent on this connection keep their deadlines while it is
             // being pumped for events, so one going overdue is noticed here too
             // rather than only whenever the caller next waits on it.
-            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->getPendingStatementsDeadline());
 
             $event = $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1010,7 +1010,7 @@ final class Session {
         while (true) {
             // Bounded by whichever comes first: how long the caller is willing
             // to wait, or the budget of the request that expires soonest.
-            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->getPendingStatementsDeadline());
 
             $response = $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1084,7 +1084,7 @@ final class Session {
             // statement with a longer one. Widening the bound this way is safe
             // whatever $statements holds — it only decides when to come up for
             // air, never which statement is answered or reported.
-            $deadline = $this->deadlines->earlier($waitDeadline, $this->pendingStatementsDeadline());
+            $deadline = $this->deadlines->earlier($waitDeadline, $this->getPendingStatementsDeadline());
 
             $this->readResponseUntil($deadline, $deadlineExceeded);
 
@@ -1121,7 +1121,7 @@ final class Session {
      *
      * A read that could outlast the probe's schedule would delay it. Neither
      * kind does. {@see self::readResponseUntil()}, which is what the waits use,
-     * bounds every read by {@see HeartbeatMonitor::nextActionAt()} as well as by
+     * bounds every read by {@see HeartbeatMonitor::getNextActionAt()} as well as by
      * the caller's deadline — that is what lets the transport's stall window be
      * long, or absent. {@see self::readResponse()}, which is what the
      * non-blocking calls use, needs no such bound: it never waits at all.
@@ -1150,7 +1150,7 @@ final class Session {
 
         $now = microtime(true);
 
-        $probe = $this->heartbeat->probe();
+        $probe = $this->heartbeat->getProbe();
         if ($probe !== null) {
 
             if ($probe->isResultReady()) {
@@ -1159,14 +1159,14 @@ final class Session {
                 return;
             }
 
-            if (!$this->heartbeat->probeIsOverdue($now)) {
+            if (!$this->heartbeat->isProbeOverdue($now)) {
                 return;
             }
 
             $node = $this->node;
             $context = [
                 'operation' => 'heartbeat',
-                'heartbeat_timeout_seconds' => $this->heartbeat->timeoutInSeconds(),
+                'heartbeat_timeout_seconds' => $this->heartbeat->getTimeoutInSeconds(),
                 'host' => $node?->getConfig()->host,
                 'port' => $node?->getConfig()->port,
             ];
@@ -1312,7 +1312,7 @@ final class Session {
      */
     private function enforceOrphanedStreamLimit(): void {
 
-        $orphanedCount = $this->streamIds->orphanedCount();
+        $orphanedCount = $this->streamIds->getOrphanedCount();
 
         if ($orphanedCount <= max(0, $this->options->maxOrphanedStreams)) {
             return;
@@ -1323,7 +1323,7 @@ final class Session {
             'operation' => 'enforceOrphanedStreamLimit',
             'orphaned_streams' => $orphanedCount,
             'max_orphaned_streams' => $this->options->maxOrphanedStreams,
-            'abandoned_statements' => $this->statements->count(),
+            'abandoned_statements' => $this->statements->getCount(),
             'host' => $node?->getConfig()->host,
             'port' => $node?->getConfig()->port,
         ];
@@ -1335,6 +1335,16 @@ final class Session {
             ExceptionCode::CONNECTION_TOO_MANY_ORPHANED_STREAMS->value,
             $context
         );
+    }
+
+    /**
+     * When the first of the requests in flight will have used up its budget, so
+     * that a wait comes up for air in time to give up on it. Null when none of
+     * them is bounded.
+     */
+    private function getPendingStatementsDeadline(): ?float {
+
+        return $this->statements->getEarliestDeadline($this->heartbeat->getProbe());
     }
 
     /**
@@ -1385,16 +1395,6 @@ final class Session {
         if ($readAttempted) {
             $this->checkHeartbeat();
         }
-    }
-
-    /**
-     * When the first of the requests in flight will have used up its budget, so
-     * that a wait comes up for air in time to give up on it. Null when none of
-     * them is bounded.
-     */
-    private function pendingStatementsDeadline(): ?float {
-
-        return $this->statements->earliestDeadline($this->heartbeat->probe());
     }
 
     /**
@@ -1532,7 +1532,7 @@ final class Session {
      * already arrived is consumed either way, so an answer sitting in the
      * buffer resolves the wait instead of being reported as overdue.
      *
-     * The read is bounded by {@see HeartbeatMonitor::nextActionAt()} as well,
+     * The read is bounded by {@see HeartbeatMonitor::getNextActionAt()} as well,
      * because a wait with no deadline of its own still has to come up for air
      * often enough to probe a connection that has gone quiet. Between the two
      * of them the transport's stall window is no longer what decides when
@@ -1565,7 +1565,7 @@ final class Session {
         // one. Beside the caller's deadline it is held to when the heartbeat
         // next needs attention, which is the one thing that still has to happen
         // on a connection nobody has set a deadline on.
-        $readDeadline = $this->deadlines->earlier($deadline, $this->heartbeat->nextActionAt($this->handshakeComplete, $this->streamIds->hasImmediate()));
+        $readDeadline = $this->deadlines->earlier($deadline, $this->heartbeat->getNextActionAt($this->handshakeComplete, $this->streamIds->hasImmediate()));
 
         try {
             $response = $this->responseReader->readResponse($node, $this->version, $readDeadline);
@@ -1632,7 +1632,7 @@ final class Session {
      */
     private function timeOutExpiredStatements(): array {
 
-        $expired = $this->statements->expire($this->heartbeat->probe());
+        $expired = $this->statements->expire($this->heartbeat->getProbe());
 
         $this->enforceOrphanedStreamLimit();
 
@@ -1671,7 +1671,7 @@ final class Session {
                 'stream_id' => $streamId,
                 'request_class' => $requestClass ?? ($statement === null ? null : get_class($statement->getRequest())),
                 'request_timeout_seconds' => $this->deadlines->describe($requestTimeoutInSeconds ?? $this->deadlines->getRequestTimeout()),
-                'orphaned_streams' => $this->streamIds->orphanedCount(),
+                'orphaned_streams' => $this->streamIds->getOrphanedCount(),
             ],
             timedOutStatements: $statement === null ? [] : [$statement],
         );

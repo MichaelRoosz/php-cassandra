@@ -24,6 +24,8 @@ use SplQueue;
  * pool was started over, and giving one back so late that the same number has
  * since been handed to somebody else are all passed over here, rather than left
  * to every caller to rule out on its own.
+ * 
+ * @internal this is not part of the public API and may change at any time
  */
 final class StreamIdPool {
     /**
@@ -117,9 +119,14 @@ final class StreamIdPool {
      * Which run of the id space {@see self::claim()} is currently handing out,
      * to be kept by whoever claims and named again when they give the id back.
      */
-    public function generation(): int {
+    public function getGeneration(): int {
 
         return $this->generation;
+    }
+
+    public function getOrphanedCount(): int {
+
+        return count($this->orphanedStreams);
     }
 
     /**
@@ -136,11 +143,6 @@ final class StreamIdPool {
     public function isOrphaned(int $streamId): bool {
 
         return isset($this->orphanedStreams[$streamId]);
-    }
-
-    public function orphanedCount(): int {
-
-        return count($this->orphanedStreams);
     }
 
     /**

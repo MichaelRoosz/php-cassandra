@@ -52,7 +52,7 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
         $checkHeartbeat->invoke(self::sessionOf($connection));
 
         $this->assertNull(
-            self::heartbeatOf($connection)->probe(),
+            self::heartbeatOf($connection)->getProbe(),
             'no probe was sent, so none is outstanding'
         );
         $this->assertFalse($connection->isConnected(), 'and nothing was opened to send one on');
@@ -100,7 +100,7 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
         /** @var bool $handshakeComplete */
         $handshakeComplete = (new ReflectionProperty(Session::class, 'handshakeComplete'))->getValue(self::sessionOf($connection));
 
-        return self::heartbeatOf($connection)->nextActionAt(
+        return self::heartbeatOf($connection)->getNextActionAt(
             $handshakeComplete,
             $this->streamIdPoolOf($connection)->hasImmediate(),
         );

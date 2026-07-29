@@ -569,11 +569,11 @@ final class Connection {
     }
 
     public function registerEventListener(EventListener $eventListener): void {
-        $this->session->listeners()->registerEventListener($eventListener);
+        $this->session->getListeners()->registerEventListener($eventListener);
     }
 
     public function registerWarningsListener(WarningsListener $warningsListener): void {
-        $this->session->listeners()->registerWarningsListener($warningsListener);
+        $this->session->getListeners()->registerWarningsListener($warningsListener);
     }
 
     public function setConsistency(Consistency $consistency): void {
@@ -746,11 +746,11 @@ final class Connection {
     }
 
     public function unregisterEventListener(EventListener $eventListener): void {
-        $this->session->listeners()->unregisterEventListener($eventListener);
+        $this->session->getListeners()->unregisterEventListener($eventListener);
     }
 
     public function unregisterWarningsListener(WarningsListener $warningsListener): void {
-        $this->session->listeners()->unregisterWarningsListener($warningsListener);
+        $this->session->getListeners()->unregisterWarningsListener($warningsListener);
     }
 
     /**

@@ -977,7 +977,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
      * How many PREPAREs the server has seen, from the lines it reports.
      */
     private function pendingHeartbeatOf(Connection $connection): ?Statement {
-        return self::heartbeatOf($connection)->probe();
+        return self::heartbeatOf($connection)->getProbe();
     }
 
     private function preparesSeenByServer(): int {

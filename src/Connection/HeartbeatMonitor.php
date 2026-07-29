@@ -94,31 +94,6 @@ final class HeartbeatMonitor {
     }
 
     /**
-     * Whether there is nothing for the heartbeat to do at all: it is switched
-     * off, the connection cannot carry ordinary requests yet, or a probe is
-     * being sent right now.
-     *
-     * The handshake itself waits for responses, but until it is through the
-     * node accepts nothing besides the handshake requests.
-     */
-    public function isDormant(bool $handshakeComplete): bool {
-
-        return $this->options->heartbeatIntervalInSeconds === null
-            || !$handshakeComplete
-            || $this->sending;
-    }
-
-    /**
-     * Whether the connection has now been silent for longer than the interval.
-     */
-    public function isProbeDue(float $now): bool {
-
-        $interval = $this->options->heartbeatIntervalInSeconds;
-
-        return $interval !== null && $now - $this->lastResponseAt >= $interval;
-    }
-
-    /**
      * When {@see Session::checkHeartbeat()} next has something to do, or null
      * when heartbeats are off or cannot run yet.
      *
@@ -145,7 +120,7 @@ final class HeartbeatMonitor {
      * SO_RCVTIMEO zeroed, {@see StreamNodeConfig} with a non-positive timeout)
      * has, in that one corner, nothing bounding it at all.
      */
-    public function nextActionAt(bool $handshakeComplete, bool $streamIdAvailable): ?float {
+    public function getNextActionAt(bool $handshakeComplete, bool $streamIdAvailable): ?float {
 
         $interval = $this->options->heartbeatIntervalInSeconds;
 
@@ -169,16 +144,46 @@ final class HeartbeatMonitor {
     /**
      * The probe whose answer is outstanding, if there is one.
      */
-    public function probe(): ?Statement {
+    public function getProbe(): ?Statement {
 
         return $this->probe;
+    }
+
+    public function getTimeoutInSeconds(): float {
+
+        return $this->options->heartbeatTimeoutInSeconds;
+    }
+
+    /**
+     * Whether there is nothing for the heartbeat to do at all: it is switched
+     * off, the connection cannot carry ordinary requests yet, or a probe is
+     * being sent right now.
+     *
+     * The handshake itself waits for responses, but until it is through the
+     * node accepts nothing besides the handshake requests.
+     */
+    public function isDormant(bool $handshakeComplete): bool {
+
+        return $this->options->heartbeatIntervalInSeconds === null
+            || !$handshakeComplete
+            || $this->sending;
+    }
+
+    /**
+     * Whether the connection has now been silent for longer than the interval.
+     */
+    public function isProbeDue(float $now): bool {
+
+        $interval = $this->options->heartbeatIntervalInSeconds;
+
+        return $interval !== null && $now - $this->lastResponseAt >= $interval;
     }
 
     /**
      * Whether the outstanding probe has now gone unanswered for longer than the
      * heartbeat timeout, i.e. whether the connection is to be treated as dead.
      */
-    public function probeIsOverdue(float $now): bool {
+    public function isProbeOverdue(float $now): bool {
 
         return $now - $this->probeSentAt > $this->options->heartbeatTimeoutInSeconds;
     }
@@ -204,10 +209,5 @@ final class HeartbeatMonitor {
     public function recordResponse(): void {
 
         $this->lastResponseAt = microtime(true);
-    }
-
-    public function timeoutInSeconds(): float {
-
-        return $this->options->heartbeatTimeoutInSeconds;
     }
 }

@@ -29,7 +29,7 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
 
         $stale = $pool->claim();
         self::assertNotNull($stale);
-        $staleGeneration = $pool->generation();
+        $staleGeneration = $pool->getGeneration();
 
         // The connection was replaced. What follows is the code unwinding out
         // of the failure that replaced it, still holding an id of the pool that
@@ -46,13 +46,13 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
 
         $stale = $pool->claim();
         self::assertNotNull($stale);
-        $staleGeneration = $pool->generation();
+        $staleGeneration = $pool->getGeneration();
 
         $pool->reset();
 
         $pool->park($stale, $staleGeneration);
 
-        self::assertSame(0, $pool->orphanedCount());
+        self::assertSame(0, $pool->getOrphanedCount());
         self::assertFalse($pool->isOrphaned($stale));
     }
 
@@ -62,22 +62,22 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
         $streamId = $pool->claim();
         self::assertNotNull($streamId);
 
-        $pool->park($streamId, $pool->generation());
+        $pool->park($streamId, $pool->getGeneration());
 
         self::assertTrue($pool->isOrphaned($streamId));
-        self::assertSame(1, $pool->orphanedCount());
+        self::assertSame(1, $pool->getOrphanedCount());
 
         $this->exhaustCounter($pool);
 
         // Releasing a parked id must not rescue it: what it is waiting for is
         // the node's late answer, which is the only thing that proves the node
         // is done with it.
-        $pool->release($streamId, $pool->generation());
+        $pool->release($streamId, $pool->getGeneration());
         self::assertNull($pool->claim());
 
         $pool->releaseParked($streamId);
         self::assertSame($streamId, $pool->claim());
-        self::assertSame(0, $pool->orphanedCount());
+        self::assertSame(0, $pool->getOrphanedCount());
     }
 
     public function testAReleasedIdIsHandedOutAgainExactlyOnce(): void {
@@ -89,7 +89,7 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
 
         $this->exhaustCounter($pool);
 
-        $pool->release($streamId, $pool->generation());
+        $pool->release($streamId, $pool->getGeneration());
 
         self::assertSame($streamId, $pool->claim());
         self::assertNull($pool->claim());
@@ -110,7 +110,7 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
 
         $stale = $pool->claim();
         self::assertNotNull($stale);
-        $staleGeneration = $pool->generation();
+        $staleGeneration = $pool->getGeneration();
 
         $pool->reset();
 
@@ -127,13 +127,13 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
     public function testGenerationChangesWheneverTheIdSpaceStartsOver(): void {
         $pool = new StreamIdPool();
 
-        $first = $pool->generation();
+        $first = $pool->getGeneration();
 
         $pool->reset();
-        $second = $pool->generation();
+        $second = $pool->getGeneration();
 
         $pool->reset();
-        $third = $pool->generation();
+        $third = $pool->getGeneration();
 
         self::assertNotSame($first, $second);
         self::assertNotSame($second, $third);
@@ -148,7 +148,7 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
 
         $this->exhaustCounter($pool);
 
-        $generation = $pool->generation();
+        $generation = $pool->getGeneration();
         $pool->release($streamId, $generation);
         $pool->release($streamId, $generation);
         $pool->release($streamId, $generation);
@@ -172,16 +172,16 @@ final class StreamIdPoolTest extends AbstractUnitTestCase {
         $this->exhaustCounter($pool);
         self::assertFalse($pool->hasImmediate());
 
-        $pool->release($streamId, $pool->generation());
+        $pool->release($streamId, $pool->getGeneration());
         self::assertTrue($pool->hasImmediate());
     }
 
     public function testParkingIsIgnoredForAnIdThatWasNeverHandedOut(): void {
         $pool = new StreamIdPool();
 
-        $pool->park(1234, $pool->generation());
+        $pool->park(1234, $pool->getGeneration());
 
-        self::assertSame(0, $pool->orphanedCount());
+        self::assertSame(0, $pool->getOrphanedCount());
         self::assertFalse($pool->isOrphaned(1234));
     }
 
