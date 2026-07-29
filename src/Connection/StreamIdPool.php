@@ -24,7 +24,7 @@ use SplQueue;
  * pool was started over, and giving one back so late that the same number has
  * since been handed to somebody else are all passed over here, rather than left
  * to every caller to rule out on its own.
- * 
+ *
  * @internal this is not part of the public API and may change at any time
  */
 final class StreamIdPool {
@@ -208,7 +208,12 @@ final class StreamIdPool {
      */
     public function reset(): void {
 
-        $this->generation++;
+        if ($this->generation === PHP_INT_MAX) {
+            $this->generation = 0;
+        } else {
+            $this->generation++;
+        }
+
         $this->nextStreamId = 0;
         $this->orphanedStreams = [];
         $this->outstanding = [];

@@ -182,10 +182,15 @@ final class HeartbeatMonitor {
     /**
      * Whether the outstanding probe has now gone unanswered for longer than the
      * heartbeat timeout, i.e. whether the connection is to be treated as dead.
+     *
+     * Inclusive, as {@see self::isProbeDue()} is, so that the instant
+     * {@see self::getNextActionAt()} wakes a read for is one this already has
+     * an answer for. Strictly greater would send the wait back into a read
+     * whose bound has already passed, to come straight back and ask again.
      */
     public function isProbeOverdue(float $now): bool {
 
-        return $now - $this->probeSentAt > $this->options->heartbeatTimeoutInSeconds;
+        return $now - $this->probeSentAt >= $this->options->heartbeatTimeoutInSeconds;
     }
 
     /**

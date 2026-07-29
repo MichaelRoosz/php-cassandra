@@ -174,9 +174,14 @@ final class Connection {
      *
      * Getting a connection at all. Called before anything has been sent, this
      * opens one and takes it through the handshake first, as every other method
-     * that touches the transport does. The one exception is a $max of zero
-     * here, which reads nothing and so never gets as far as needing a
-     * connection.
+     * that touches the transport does. Only the calls that get as far as
+     * reading do: a $max of zero here, and
+     * {@see self::tryResolveStatements()} over statements that are all resolved
+     * already, read nothing and so never need a connection.
+     * {@see self::tryResolveStatement()} and {@see self::tryResolveStatements()}
+     * never open one at all, come to that — a statement is only resolvable here
+     * if this connection is the one that sent it, so where there is no
+     * connection there is nothing they could be asked about.
      *
      * Writing the heartbeat. Having read, these calls owe the connection the
      * probe a wait would have sent, and a write blocks until the transport
@@ -703,7 +708,10 @@ final class Connection {
     /**
      * Non-blocking: try to resolve a specific statement; returns true if it is ready.
      *
-     * Opens the connection first if there is none yet; see
+     * Unlike the reads, this never opens a connection: a statement can only be
+     * resolved on the connection that sent it, so one raises a
+     * StatementException here rather than being waited on. What the
+     * non-blocking calls do have in common is described at
      * {@see self::drainAvailableResponses()}.
      *
      * @throws \Cassandra\Exception\CompressionException
@@ -725,8 +733,9 @@ final class Connection {
      * Non-blocking: try to resolve from a set of statements, up to $max responses processed.
      * Returns the number of newly resolved statements from the provided set.
      *
-     * Opens the connection first if there is none yet; see
-     * {@see self::drainAvailableResponses()}.
+     * As with {@see self::tryResolveStatement()}, this never opens a
+     * connection, and it reads nothing at all where every statement handed in
+     * has been answered already; see {@see self::drainAvailableResponses()}.
      *
      * @param array<Statement> $statements
      *

@@ -190,10 +190,16 @@ final class RequestExecutor {
             $request = $autoPrepareRequest;
         }
 
-        // Same precedence the Statement applies below: an explicit argument
-        // wins over what the request's options asked for, and only then does
-        // the connection default apply.
-        $streamId = $this->session->getNewStreamId($requestTimeoutInSeconds ?? $originalRequest->getRequestTimeout());
+        // Resolved once, here, rather than separately for the wait below and
+        // for the statement: an explicit argument wins over what the request's
+        // options asked for, and only then does the connection default apply
+        // (null all the way through, which is what {@see Deadline} reads as
+        // "use the connection's"). The auto-prepared PREPARE is consulted last
+        // because it stands in for the query and inherits its timeout, so it
+        // only has anything to say where the caller's own request had nothing.
+        $requestTimeoutInSeconds ??= $originalRequest->getRequestTimeout() ?? $request->getRequestTimeout();
+
+        $streamId = $this->session->getNewStreamId($requestTimeoutInSeconds);
 
         // Read straight after the claim, while it is still the run of the id
         // space that claim came from: nothing between here and the disposals

@@ -657,6 +657,44 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testHoldingBackTooManyStreamIdsStartsTheIdSpaceOver(): void {
+        // The debris is the connection's, so it goes away with it. Left behind,
+        // it would be counted against the connection that replaces this one and
+        // every later piece of bookkeeping — a poll that reads nothing included
+        // — would go on raising the failure that already happened.
+        $connection = $this->connect(
+            'defer-slow',
+            delaySeconds: 30.0,
+            requestTimeoutInSeconds: 1.0,
+            maxOrphanedStreams: 1,
+        );
+
+        $statements = [
+            $connection->queryAsync('SELECT 1 FROM SLOW'),
+            $connection->queryAsync('SELECT 2 FROM SLOW'),
+        ];
+
+        try {
+            $connection->waitForStatements($statements);
+            $this->fail('expected the connection to be replaced');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_TOO_MANY_ORPHANED_STREAMS->value, $e->getCode());
+        }
+
+        $this->assertSame([], $this->orphanedStreamsOf($connection), 'the orphaned ids belonged to the connection that is gone');
+
+        // Raised once, for the caller whose connection it was; not again for
+        // everyone who touches the client afterwards.
+        $connection->tryResolveStatements([]);
+
+        // And the statements themselves report what actually became of them:
+        // they ran out of time, which is what parked their ids in the first
+        // place — the connection being replaced came after.
+        foreach ($statements as $statement) {
+            $this->assertTrue($statement->isTimedOut());
+        }
+    }
+
     public function testPerCallTimeoutArgumentBoundsTheHighLevelAsyncHelpers(): void {
         $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
 

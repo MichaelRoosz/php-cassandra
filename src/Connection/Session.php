@@ -177,7 +177,6 @@ final class Session {
         }
 
         $this->resetSessionState();
-        $this->streamIds->reset();
 
         $node = $this->node = $this->nodeConnector->open();
 
@@ -1413,12 +1412,13 @@ final class Session {
      */
     private function processResponse(Response\Response $response, Node $node): ?Response\Response {
 
-        $orphanedStreamId = $response->getStream();
-        if ($this->streamIds->isOrphaned($orphanedStreamId)) {
+        $streamId = $response->getStream();
+
+        if ($this->streamIds->isOrphaned($streamId)) {
             // The late answer to a statement that was already given up on. It
             // has nowhere to go, but its arrival proves the stream id is free
             // again, so it goes back into circulation here.
-            $this->streamIds->releaseParked($orphanedStreamId);
+            $this->streamIds->releaseParked($streamId);
 
             $this->heartbeat->recordResponse();
             $this->nodeConnector->recordSuccess($node->getConfig());
@@ -1430,7 +1430,6 @@ final class Session {
             $response->configureValueEncoding($this->valueEncodeConfig);
         }
 
-        $streamId = $response->getStream();
         $statement = $this->statements->get($streamId);
         if ($statement !== null) {
             $this->statements->forget($streamId);
@@ -1617,6 +1616,7 @@ final class Session {
         $this->handshakeComplete = false;
         $this->version = $this->options->initialProtocolVersion;
         $this->responseReader->reset();
+        $this->streamIds->reset();
     }
 
     /**
