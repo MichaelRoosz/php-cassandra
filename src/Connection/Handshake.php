@@ -16,9 +16,9 @@ use Cassandra\Response\Supported;
  * accepted them.
  *
  * The exchange itself — OPTIONS, STARTUP and, where the node asks for it,
- * authentication — is driven by {@see \Cassandra\Connection::connect()}, which
- * is the only thing that can send a request on the connection being set up.
- * What is here is the part that decides rather than the part that waits.
+ * authentication — is driven by {@see Session::completeHandshake()}, which is
+ * the only thing that can send a request on the connection being set up. What
+ * is here is the part that decides rather than the part that waits.
  */
 final class Handshake {
     private ConnectionOptions $options;

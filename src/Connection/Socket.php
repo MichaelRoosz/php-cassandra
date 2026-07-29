@@ -123,7 +123,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
     #[\Override]
     public function getConfig(): SocketNodeConfig {
-        return clone $this->config;
+        return $this->config;
     }
 
     /**

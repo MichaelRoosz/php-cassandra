@@ -79,6 +79,10 @@ final class RequestExecutor {
         // stream id can fail too, and leave the statement just as stranded.
         $requestWasSent = false;
 
+        // Whether the write path has already put the id back, so that the
+        // safety net below does not enqueue it a second time.
+        $streamIdReleased = false;
+
         try {
             // Deliberately not getConnectedNode(): that would open a fresh
             // connection, and this request cannot go on one. The stream id it
@@ -141,6 +145,7 @@ final class RequestExecutor {
                     // circulation instead of being burned. A node failure needs
                     // no such care, because it takes the whole pool with it.
                     $this->streamIds->release($streamId);
+                    $streamIdReleased = true;
                 }
             }
 
@@ -148,6 +153,10 @@ final class RequestExecutor {
         } finally {
             if (!$requestWasSent) {
                 $statement->setStatus(StatementStatus::ABANDONED);
+
+                if (!$streamIdReleased && $this->session->getNode() !== null) {
+                    $this->streamIds->release($streamId);
+                }
             }
         }
 

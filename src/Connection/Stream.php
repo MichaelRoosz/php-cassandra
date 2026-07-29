@@ -151,7 +151,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
     #[\Override]
     public function getConfig(): StreamNodeConfig {
-        return clone $this->config;
+        return $this->config;
     }
 
     /**

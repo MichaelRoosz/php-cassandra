@@ -178,6 +178,7 @@ final class Session {
 
         $this->preparedResultCache->clear();
         $this->handshakeComplete = false;
+        $this->streamIds->reset();
 
         $node = $this->node = $this->nodeConnector->open();
 
@@ -200,7 +201,6 @@ final class Session {
     public function disconnect(): void {
 
         $this->preparedResultCache->clear();
-
         $this->statements->abandonAll();
         $this->heartbeat->forgetProbe();
         $this->handshakeComplete = false;
@@ -823,7 +823,7 @@ final class Session {
             $processed++;
         }
 
-        $this->keepNonBlockingBookkeeping($readAttempted);
+        $this->keepNonBlockingBookkeeping($readAttempted, statementsAlreadyExpired: !$readAttempted);
 
         $ready = 0;
         foreach ($statements as $s) {
@@ -1360,7 +1360,15 @@ final class Session {
      * gives: an answer still sitting in the receive buffer would be taken for
      * an unanswered probe and would cost a healthy connection. Such a call has
      * learned nothing about the connection either, so there is nothing for the
-     * probe to decide; request budgets are kept either way.
+     * probe to decide.
+     *
+     * $statementsAlreadyExpired is for the callers that keep the budgets on
+     * their way in — the ones that have to, so that
+     * {@see StatementRegistry::assertResolvable()} sees a statement which ran
+     * out as the timeout it is. Where such a call then returns without reading,
+     * nothing has happened in between for a second pass over the pending
+     * statements to find: no wall clock was spent on the transport, and the
+     * connection was not touched.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1372,9 +1380,11 @@ final class Session {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    private function keepNonBlockingBookkeeping(bool $readAttempted): void {
+    private function keepNonBlockingBookkeeping(bool $readAttempted, bool $statementsAlreadyExpired = false): void {
 
-        $this->timeOutExpiredStatements();
+        if (!$statementsAlreadyExpired) {
+            $this->timeOutExpiredStatements();
+        }
 
         if ($readAttempted) {
             $this->checkHeartbeat();

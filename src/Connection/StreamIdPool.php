@@ -14,7 +14,7 @@ use SplQueue;
  * belongs to the connection and starts over with it, see {@see self::reset()}.
  *
  * Nothing here waits. An id that cannot be had immediately can only come back
- * with an answer, and reading for one is {@see \Cassandra\Connection}'s
+ * with an answer, and reading for one is {@see Session::getNewStreamId()}'s
  * business, not this pool's.
  */
 final class StreamIdPool {

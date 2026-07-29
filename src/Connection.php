@@ -174,7 +174,9 @@ final class Connection {
      *
      * Getting a connection at all. Called before anything has been sent, this
      * opens one and takes it through the handshake first, as every other method
-     * that touches the transport does.
+     * that touches the transport does. The one exception is a $max of zero
+     * here, which reads nothing and so never gets as far as needing a
+     * connection.
      *
      * Writing the heartbeat. Having read, these calls owe the connection the
      * probe a wait would have sent, and a write blocks until the transport
