@@ -20,6 +20,15 @@ use Cassandra\Statement;
 final class Deadline {
     private ?float $requestTimeout;
 
+    /**
+     * Bumped whenever the connection default changes, so that anything which
+     * remembers a deadline derived from it can tell that it has to be worked out
+     * again — {@see StatementRegistry::getEarliestDeadline()} above all, since
+     * every statement without a timeout of its own is measured against this one
+     * as it stands now rather than as it stood when the request was sent.
+     */
+    private int $revision = 0;
+
     public function __construct(?float $requestTimeoutInSeconds) {
         $this->requestTimeout = $requestTimeoutInSeconds;
     }
@@ -174,6 +183,14 @@ final class Deadline {
     }
 
     /**
+     * Which run of the connection default we are on, see {@see self::$revision}.
+     */
+    public function getRevision(): int {
+
+        return $this->revision;
+    }
+
+    /**
      * The counterpart of {@see self::at()} for the waits whose null already
      * means "no bound" rather than "fall back to the connection default" — the
      * ones that take statements or wait for an event, which are bounded by the
@@ -199,6 +216,11 @@ final class Deadline {
 
         $this->assertValidRequestTimeout($requestTimeoutInSeconds, 'setRequestTimeout');
 
+        if ($this->requestTimeout === $requestTimeoutInSeconds) {
+            return;
+        }
+
         $this->requestTimeout = $requestTimeoutInSeconds;
+        $this->revision++;
     }
 }

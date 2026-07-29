@@ -33,6 +33,35 @@ final class StatementRegistry {
     private Deadline $deadlines;
 
     /**
+     * The last result of {@see self::getEarliestDeadline()}, together with what
+     * it was computed from.
+     *
+     * Every pass of every wait asks for this, and answering means walking all
+     * the statements in flight — which on a connection with thousands of async
+     * requests outstanding makes draining them quadratic. It is therefore
+     * remembered until something it depends on changes, which is what
+     * {@see self::$revision} tracks; the deadlines' own revision is part of the
+     * key because the connection default they fall back to can be changed under
+     * them, see {@see Deadline::getRevision()}.
+     *
+     * @var ?array{revision: int, deadlineRevision: int, ignored: ?Statement, deadline: ?float}
+     */
+    private ?array $earliestDeadlineCache = null;
+
+    /**
+     * Bumped whenever anything the earliest deadline is computed from changes:
+     * which statements are in flight, and when each of them was sent.
+     *
+     * Deliberately not a matter of the statements telling us: a statement knows
+     * nothing about the registry it is in, and a budget that silently went stale
+     * would be a request that never times out. Every mutation goes through this
+     * class, bar the one where a follow-up request restarts a statement's clock,
+     * which {@see self::register()} covers because the follow-up is registered
+     * afterwards, see {@see RequestExecutor::chainAsyncRequest()}.
+     */
+    private int $revision = 0;
+
+    /**
      * @var array<int, Statement> $statements keyed by the stream id each was sent on
      */
     private array $statements = [];
@@ -59,6 +88,7 @@ final class StatementRegistry {
         }
 
         $this->statements = [];
+        $this->revision++;
     }
 
     /**
@@ -145,6 +175,7 @@ final class StatementRegistry {
 
             $statement->setStatus(StatementStatus::TIMED_OUT);
             unset($this->statements[$streamId]);
+            $this->revision++;
             $this->streamIds->park($streamId, $statement->getStreamGeneration());
 
             $expired[] = $statement;
@@ -155,20 +186,17 @@ final class StatementRegistry {
 
     public function forget(int $streamId): void {
 
+        if (!isset($this->statements[$streamId])) {
+            return;
+        }
+
         unset($this->statements[$streamId]);
+        $this->revision++;
     }
 
     public function get(int $streamId): ?Statement {
 
         return $this->statements[$streamId] ?? null;
-    }
-
-    /**
-     * @return array<int, Statement>
-     */
-    public function getAll(): array {
-
-        return $this->statements;
     }
 
     public function getCount(): int {
@@ -180,28 +208,38 @@ final class StatementRegistry {
      * Earliest deadline among the statements still waiting for an answer, so a
      * wait over several of them ends as soon as the first has used up its
      * budget. Null when none of them is bounded.
+     *
+     * Remembered between calls rather than recomputed on every pass of every
+     * wait, see {@see self::$earliestDeadlineCache}. The answer is an absolute
+     * deadline computed from each statement's own send time, so it does not go
+     * stale merely because time has passed — only a change to which statements
+     * are in flight, to when one of them was sent, or to the connection default
+     * they fall back to can move it, and each of those bumps a revision.
      */
     public function getEarliestDeadline(?Statement $ignored): ?float {
 
-        return $this->deadlines->earliestForStatements($this->statements, $ignored);
-    }
+        $cache = $this->earliestDeadlineCache;
+        $deadlineRevision = $this->deadlines->getRevision();
 
-    /**
-     * The requests the caller has in flight, i.e. everything waiting for an
-     * answer except the driver's own heartbeat.
-     *
-     * @return array<int, Statement>
-     */
-    public function getPending(?Statement $ignored): array {
-
-        if ($ignored === null) {
-            return $this->statements;
+        if (
+            $cache !== null
+            && $cache['revision'] === $this->revision
+            && $cache['deadlineRevision'] === $deadlineRevision
+            && $cache['ignored'] === $ignored
+        ) {
+            return $cache['deadline'];
         }
 
-        return array_filter(
-            $this->statements,
-            static fn (Statement $statement): bool => $statement !== $ignored,
-        );
+        $deadline = $this->deadlines->earliestForStatements($this->statements, $ignored);
+
+        $this->earliestDeadlineCache = [
+            'revision' => $this->revision,
+            'deadlineRevision' => $deadlineRevision,
+            'ignored' => $ignored,
+            'deadline' => $deadline,
+        ];
+
+        return $deadline;
     }
 
     public function has(int $streamId): bool {
@@ -210,7 +248,32 @@ final class StatementRegistry {
     }
 
     /**
+     * Whether anything besides the driver's own heartbeat is waiting for an
+     * answer.
+     *
+     * Asked as a loop condition, so once per pass of a wait, which is why it is
+     * this rather than a filtered copy of the pending map: the answer is only
+     * ever whether to keep waiting, and the first statement that is not the
+     * probe settles it.
+     */
+    public function hasPending(?Statement $ignored): bool {
+
+        foreach ($this->statements as $statement) {
+            if ($statement !== $ignored) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * The statements of $expired that the caller was actually waiting on.
+     *
+     * Matched through an identity map rather than with in_array(), which would
+     * make this a product of the two sets — and $waitedOn is whatever the caller
+     * passed to waitForStatements(), which can be everything they have in
+     * flight.
      *
      * @param array<Statement> $expired
      * @param array<Statement> $waitedOn
@@ -219,15 +282,25 @@ final class StatementRegistry {
      */
     public function intersect(array $expired, array $waitedOn): array {
 
+        if ($expired === [] || $waitedOn === []) {
+            return [];
+        }
+
+        $waitedOnIds = [];
+        foreach ($waitedOn as $statement) {
+            $waitedOnIds[spl_object_id($statement)] = true;
+        }
+
         return array_values(array_filter(
             $expired,
-            static fn (Statement $statement): bool => in_array($statement, $waitedOn, true),
+            static fn (Statement $statement): bool => isset($waitedOnIds[spl_object_id($statement)]),
         ));
     }
 
     public function register(int $streamId, Statement $statement): void {
 
         $this->statements[$streamId] = $statement;
+        $this->revision++;
     }
 
     /**

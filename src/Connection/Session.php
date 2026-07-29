@@ -472,7 +472,12 @@ final class Session {
                     // bookkeeping is authoritative for a statement, and the
                     // fallback below must not second-guess it; carry on against
                     // the deadline the next pass computes.
-                    $statementStillPending = $this->statements->has($streamId);
+                    //
+                    // Asked of the statement rather than of the stream id: what
+                    // matters is that this statement is still ours to wait for,
+                    // not that something is registered at the number it was sent
+                    // on.
+                    $statementStillPending = $this->statements->get($streamId) === $statement;
                 }
 
                 if (
@@ -637,21 +642,21 @@ final class Session {
 
         $this->keyspace = $keyspace;
 
-        if (!$this->isConnected()) {
+        if (!$this->isConnected() || $this->keyspace === '') {
+            // Nothing to switch to yet: the handshake sends the USE for a
+            // connection that has still to be opened, and an empty keyspace is
+            // not a keyspace to switch to but the absence of one.
             return;
         }
 
-        if ($this->version->value < ProtocolVersion::V5->value) {
-            $response = $this->sendSyncRequest(new Request\Query("USE {$this->keyspace};"));
-            if (!($response instanceof Response\Result)) {
-                throw new ConnectionException('Unexpected response type during setKeyspace', ExceptionCode::CONNECTION_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
-                    'expected' => Response\Result::class,
-                    'received' => get_class($response),
-                    'operation' => 'setKeyspace',
-                    'keyspace' => $this->keyspace,
-                ]);
-            }
+        if ($this->version->value >= ProtocolVersion::V5->value) {
+            // From v5 the keyspace travels with each request instead, so
+            // recording it is the whole of the work; USE is deprecated from v5
+            // and answers with a warning.
+            return;
         }
+
+        $this->useKeyspace('setKeyspace');
     }
 
     /**
@@ -849,7 +854,7 @@ final class Session {
         $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
-        while ($this->statements->getPending($this->heartbeat->getProbe())) {
+        while ($this->statements->hasPending($this->heartbeat->getProbe())) {
             // Recomputed per pass: each statement carries its own budget from
             // when it was sent, and resolved ones drop out of the reckoning.
             $deadline = $this->deadlines->earlier($waitDeadline, $this->getPendingStatementsDeadline());
@@ -1288,8 +1293,12 @@ final class Session {
 
         $this->handshakeComplete = true;
 
-        if ($this->keyspace && $this->version->value < ProtocolVersion::V5->value) {
-            $this->sendSyncRequest(new Request\Query("USE {$this->keyspace};"));
+        // Only up to v4: from v5 the keyspace travels with each request, which
+        // {@see \Cassandra\Connection} fills in for the requests it builds, and
+        // USE is deprecated from v5 — sending it anyway would answer with a
+        // warning on every connect.
+        if ($this->keyspace !== '' && $this->version->value < ProtocolVersion::V5->value) {
+            $this->useKeyspace('connect/keyspace');
         }
     }
 
@@ -1640,7 +1649,7 @@ final class Session {
     }
 
     /**
-     * Give up on whatever was waiting on a stream id, keeping the connection.
+     * Give up on whatever was waiting on a stream id.
      *
      * See {@see StatementRegistry::expire()} for why parking the id rather
      * than recycling it is what makes this safe.
@@ -1648,6 +1657,11 @@ final class Session {
      * A statement is marked as timed out here as well, so that one this call
      * gives up on can never be left reporting neither a result nor a timeout —
      * which would leave a caller retrying a statement that can never resolve.
+     *
+     * Only this request is given up on, and the connection normally carries on.
+     * The exception is the id parked here being one too many: that reaches
+     * {@see self::enforceOrphanedStreamLimit()}, which replaces the connection
+     * and raises a ConnectionException in place of the timeout below.
      *
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\RequestTimeoutException
@@ -1675,5 +1689,39 @@ final class Session {
             ],
             timedOutStatements: $statement === null ? [] : [$statement],
         );
+    }
+
+    /**
+     * Switch the node's session over to this connection's keyspace, for the
+     * protocol versions that have no other way of saying it.
+     *
+     * Up to v4 this is the only way: the keyspace is a property of the node's
+     * session rather than of a request. From v5 it travels with each request
+     * instead, and USE is deprecated — a node answers one with a warning — so
+     * the callers gate on the version rather than this doing it for them, there
+     * being nothing for it to do on v5 at all.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    private function useKeyspace(string $operation): void {
+
+        $response = $this->sendSyncRequest(new Request\Query("USE {$this->keyspace};"));
+
+        if (!($response instanceof Response\Result)) {
+            throw new ConnectionException('Unexpected response type during setKeyspace', ExceptionCode::CONNECTION_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+                'operation' => $operation,
+                'keyspace' => $this->keyspace,
+            ]);
+        }
     }
 }

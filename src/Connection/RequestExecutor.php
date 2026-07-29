@@ -150,14 +150,19 @@ final class RequestExecutor {
             }
         }
 
-        $this->statements->register($streamId, $statement);
-
         $statement->setRequest($request);
         $statement->setResponse(null);
 
         // A follow-up request (repreparation, auto-prepare) is a new wait, so
         // it gets its own budget rather than inheriting the original one.
         $statement->setSentAt($sentAt);
+
+        // Registered last, once the statement says what it is now waiting for
+        // and until when. The registry works out the earliest deadline among
+        // everything in flight and remembers it until its contents change, so a
+        // statement put back into it before its new budget was set would be
+        // reckoned with under the old one; see {@see StatementRegistry::$revision}.
+        $this->statements->register($streamId, $statement);
     }
 
     /**

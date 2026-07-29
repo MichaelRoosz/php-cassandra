@@ -411,9 +411,11 @@ Connection options are provided via `ConnectionOptions`:
 - `nodeSelectionStrategy` = `Random` (default) or `RoundRobin`
 - `preparedResultCacheSize` = cache size for prepared metadata (default 100)
 
-Keyspace selection:
-- v5: can also be sent per-request via Query/Execute options (see below)
-- v3/v4: call `$conn->setKeyspace('ks')` or run `USE ks`
+Keyspace selection — the keyspace given to the constructor, or set later with `$conn->setKeyspace('ks')`, applies to every request `Connection` builds for you, but how it gets there depends on the negotiated protocol version:
+- v3/v4: a `USE` is sent, so the keyspace is a property of the node's session and holds for every request on the connection. A keyspace that does not exist fails the call that set it.
+- v5: the keyspace travels with each request (`USE` is deprecated from v5), so `Connection` fills it into the options of the requests it builds. Override it per request with the `keyspace` option on Query/Execute/Prepare/Batch options (see below). A keyspace that does not exist fails the next request rather than `setKeyspace()`.
+- Because which of the two applies is only known once the handshake has settled the version, building a request opens the connection if `connect()` has not been called yet.
+- A request you build yourself and pass to `syncRequest()`/`asyncRequest()` is sent as it stands. On v5 that means it runs against no keyspace unless you set the `keyspace` option on it or qualify the table name.
 
 Consistency levels
 ------------------
