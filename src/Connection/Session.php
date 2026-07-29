@@ -176,8 +176,7 @@ final class Session {
             return;
         }
 
-        $this->preparedResultCache->clear();
-        $this->handshakeComplete = false;
+        $this->resetSessionState();
         $this->streamIds->reset();
 
         $node = $this->node = $this->nodeConnector->open();
@@ -200,13 +199,9 @@ final class Session {
 
     public function disconnect(): void {
 
-        $this->preparedResultCache->clear();
+        $this->resetSessionState();
         $this->statements->abandonAll();
         $this->heartbeat->forgetProbe();
-        $this->handshakeComplete = false;
-        $this->streamIds->reset();
-        $this->version = $this->options->initialProtocolVersion;
-        $this->responseReader->reset();
 
         if ($this->node === null) {
             return;
@@ -1614,6 +1609,14 @@ final class Session {
         }
 
         return $this->processResponse($response, $node);
+    }
+
+    private function resetSessionState(): void {
+
+        $this->preparedResultCache->clear();
+        $this->handshakeComplete = false;
+        $this->version = $this->options->initialProtocolVersion;
+        $this->responseReader->reset();
     }
 
     /**
