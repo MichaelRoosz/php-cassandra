@@ -69,6 +69,8 @@ final class RequestExecutor {
 
         $streamId = $statement->getStreamId();
 
+        $streamGeneration = $statement->getStreamGeneration();
+
         // The statement is not among the pending ones at this point: the
         // response that triggered the follow-up took it out of the map. Nothing
         // else would mark it if the follow-up never goes out, so it is done
@@ -78,10 +80,6 @@ final class RequestExecutor {
         // of failing, not just the write: reaching a node and claiming the
         // stream id can fail too, and leave the statement just as stranded.
         $requestWasSent = false;
-
-        // Whether the write path has already put the id back, so that the
-        // safety net below does not enqueue it a second time.
-        $streamIdReleased = false;
 
         try {
             // Deliberately not getConnectedNode(): that would open a fresh
@@ -114,13 +112,10 @@ final class RequestExecutor {
                 ]);
             }
 
-            $writeSucceeded = false;
-            $nodeFailed = false;
             $sentAt = 0.0;
 
             try {
                 $node->writeRequest($request);
-                $writeSucceeded = true;
 
                 // Read after the write rather than before it, for the reason
                 // {@see HeartbeatMonitor::recordProbe()} gives about its own
@@ -133,20 +128,9 @@ final class RequestExecutor {
 
                 $this->session->recordNodeSuccess($node->getConfig());
             } catch (NodeException $e) {
-                $nodeFailed = true;
-
                 $this->session->handleNodeException($node);
 
                 throw $e;
-            } finally {
-                if (!$writeSucceeded && !$nodeFailed) {
-                    // Nothing reached the node, so the connection is fine and
-                    // the stream id was never in use: it goes back into
-                    // circulation instead of being burned. A node failure needs
-                    // no such care, because it takes the whole pool with it.
-                    $this->streamIds->release($streamId);
-                    $streamIdReleased = true;
-                }
             }
 
             $requestWasSent = true;
@@ -154,9 +138,15 @@ final class RequestExecutor {
             if (!$requestWasSent) {
                 $statement->setStatus(StatementStatus::ABANDONED);
 
-                if (!$streamIdReleased && $this->session->getNode() !== null) {
-                    $this->streamIds->release($streamId);
-                }
+                // Nothing reached the node and no statement holds this id any
+                // more, so it goes back into circulation instead of being
+                // burned for the lifetime of the connection. One release covers
+                // every way of failing above, the guards included: a node
+                // failure among them took the whole pool with it, and
+                // {@see StreamIdPool::release()} passes over an id whose pool
+                // has been started over rather than leaving that to be told
+                // apart here.
+                $this->streamIds->release($streamId, $streamGeneration);
             }
         }
 
@@ -204,6 +194,12 @@ final class RequestExecutor {
         // wins over what the request's options asked for, and only then does
         // the connection default apply.
         $streamId = $this->session->getNewStreamId($requestTimeoutInSeconds ?? $originalRequest->getRequestTimeout());
+
+        // Read straight after the claim, while it is still the run of the id
+        // space that claim came from: nothing between here and the disposals
+        // below reads, so nothing can start the pool over in between.
+        $streamGeneration = $this->streamIds->generation();
+
         $originalRequest->setStream($streamId);
         $request->setStream($streamId);
 
@@ -212,6 +208,10 @@ final class RequestExecutor {
         // carries it can fail, and an id left behind by one of those failures
         // is lost for the lifetime of the connection.
         $streamIdAccountedFor = false;
+
+        // Whether the request is on the wire, which decides how the id is
+        // disposed of below: one the node has seen may still be answered on.
+        $requestReachedNode = false;
 
         try {
             // Looked up for the request that is about to go out rather than for
@@ -225,6 +225,7 @@ final class RequestExecutor {
                     $statement = new Statement(
                         connection: $this->session->connection(),
                         streamId: $streamId,
+                        streamGeneration: $streamGeneration,
                         request: $request,
                         originalRequest: $originalRequest,
                         requestTimeoutInSeconds: $requestTimeoutInSeconds,
@@ -252,13 +253,13 @@ final class RequestExecutor {
                         $handled = true;
                     } finally {
                         if (!$handled) {
-                            $this->statements->releaseAfterFailedResponseHandling($statement, $streamId, $this->session->getNode() !== null);
+                            $this->statements->releaseAfterFailedResponseHandling($statement, $streamId);
                         }
                     }
 
                     if ($response !== null) {
                         $statement->setResponse($response);
-                        $this->streamIds->release($streamId);
+                        $this->streamIds->release($streamId, $streamGeneration);
                     }
 
                     return $statement;
@@ -272,39 +273,21 @@ final class RequestExecutor {
                 ]);
             }
 
-            $writeSucceeded = false;
-            $nodeFailed = false;
-
             try {
                 $node->writeRequest($request);
-                $writeSucceeded = true;
+                $requestReachedNode = true;
 
                 $this->session->recordNodeSuccess($node->getConfig());
             } catch (NodeException $e) {
-                $nodeFailed = true;
-
-                // A node failure takes the whole pool with it, so this id needs
-                // no care of its own — and putting it back would mean putting
-                // it into the pool of the connection that replaces this one,
-                // which hands the same ids out from scratch.
-                $streamIdAccountedFor = true;
-
                 $this->session->handleNodeException($node);
 
                 throw $e;
-            } finally {
-                if (!$writeSucceeded && !$nodeFailed) {
-                    // Nothing reached the node — an unencodable request, say —
-                    // so the stream id was never in use and goes straight back
-                    // into circulation.
-                    $this->streamIds->release($streamId);
-                    $streamIdAccountedFor = true;
-                }
             }
 
             $statement = new Statement(
                 connection: $this->session->connection(),
                 streamId: $streamId,
+                streamGeneration: $streamGeneration,
                 request: $request,
                 originalRequest: $originalRequest,
                 requestTimeoutInSeconds: $requestTimeoutInSeconds,
@@ -322,11 +305,23 @@ final class RequestExecutor {
             return $statement;
         } finally {
             if (!$streamIdAccountedFor) {
-                // Claimed, and then something on the way to sending failed
-                // without the request ever reaching the node: no statement
-                // holds this id and nothing will ever answer on it, so it goes
-                // back into circulation rather than being burned.
-                $this->streamIds->release($streamId);
+                if ($requestReachedNode) {
+                    // Written, but no statement ended up holding the id, so an
+                    // answer may still turn up on it: recycling it would let
+                    // that answer resolve somebody else's request. Held back
+                    // instead, and released once the answer proves the node is
+                    // done with it, as {@see StatementRegistry::expire()} does.
+                    $this->streamIds->park($streamId, $streamGeneration);
+                } else {
+                    // Claimed, and then something on the way to sending failed
+                    // without the request ever reaching the node — an
+                    // unencodable request, say, or a node failure, which took
+                    // the whole pool with it and leaves
+                    // {@see StreamIdPool::release()} to pass this over. Nothing
+                    // will ever answer on the id, so it goes back into
+                    // circulation rather than being burned.
+                    $this->streamIds->release($streamId, $streamGeneration);
+                }
             }
         }
     }
@@ -401,10 +396,10 @@ final class RequestExecutor {
         }
 
         $streamId = $this->session->getNewStreamId($requestTimeoutInSeconds);
+        $streamGeneration = $this->streamIds->generation();
         $request->setStream($streamId);
 
         $writeSucceeded = false;
-        $nodeFailed = false;
 
         try {
             $node->writeRequest($request);
@@ -415,20 +410,18 @@ final class RequestExecutor {
             // separate question, and recorded separately below.
             $this->session->recordNodeSuccess($node->getConfig());
         } catch (NodeException $e) {
-            $nodeFailed = true;
-
             $this->session->handleNodeException($node);
 
             throw $e;
         } finally {
-            if (!$writeSucceeded && !$nodeFailed) {
-                // Nothing reached the node — an unencodable request, say — so
-                // the stream id was never in use and goes straight back into
-                // circulation; leaving it behind would burn one id of the pool
-                // per failure for the lifetime of the connection. A node
-                // failure needs no such care, because it takes the whole pool
-                // with it.
-                $this->streamIds->release($streamId);
+            if (!$writeSucceeded) {
+                // Nothing reached the node — an unencodable request, say, or a
+                // node failure — so the stream id was never in use and goes
+                // straight back into circulation; leaving it behind would burn
+                // one id of the pool per failure for the lifetime of the
+                // connection. A node failure took the whole pool with it, which
+                // {@see StreamIdPool::release()} passes over of its own accord.
+                $this->streamIds->release($streamId, $streamGeneration);
             }
         }
 
@@ -437,13 +430,14 @@ final class RequestExecutor {
         try {
             $response = $this->session->getNextResponseForStream(
                 streamId: $streamId,
+                streamGeneration: $streamGeneration,
                 requestTimeoutInSeconds: $requestTimeoutInSeconds,
                 requestClass: get_class($request),
             );
 
             $responseArrived = true;
 
-            $this->streamIds->release($streamId);
+            $this->streamIds->release($streamId, $streamGeneration);
 
             $response = $this->dispatcher->handleResponse($request, $response, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
             $this->session->recordNodeSuccess($node->getConfig());
@@ -459,7 +453,7 @@ final class RequestExecutor {
                 // already and a node failure took the whole pool with it, so
                 // this is for the rest — a malformed frame, say, which leaves
                 // it undecidable whether the answer was consumed.
-                $this->session->parkUnresolvedStream($streamId);
+                $this->session->parkUnresolvedStream($streamId, $streamGeneration);
             }
         }
 

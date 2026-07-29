@@ -168,7 +168,7 @@ final class StatementRegistry {
 
             $statement->setStatus(StatementStatus::TIMED_OUT);
             unset($this->statements[$streamId]);
-            $this->streamIds->park($streamId);
+            $this->streamIds->park($streamId, $statement->getStreamGeneration());
 
             $expired[] = $statement;
         }
@@ -249,12 +249,11 @@ final class StatementRegistry {
      * id, which is therefore in use again, or it gave up on the statement itself
      * and has already put the id wherever it belongs.
      *
-     * @param bool $connectionIsOpen false once the connection is gone, which
-     * took its whole id space with it: the one replacing it hands the same ids
-     * out from scratch, so putting this one back would mean handing it out
-     * twice.
+     * Where the connection is gone by now it took its whole id space with it,
+     * and {@see StreamIdPool::release()} passes the id over rather than handing
+     * it to the connection that replaces this one.
      */
-    public function releaseAfterFailedResponseHandling(Statement $statement, int $streamId, bool $connectionIsOpen): void {
+    public function releaseAfterFailedResponseHandling(Statement $statement, int $streamId): void {
 
         if (($this->statements[$streamId] ?? null) === $statement || $statement->isAbandoned()) {
             return;
@@ -262,9 +261,7 @@ final class StatementRegistry {
 
         $statement->setStatus(StatementStatus::ABANDONED);
 
-        if ($connectionIsOpen) {
-            $this->streamIds->release($streamId);
-        }
+        $this->streamIds->release($streamId, $statement->getStreamGeneration());
     }
 
     /**

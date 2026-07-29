@@ -362,7 +362,7 @@ final class Session {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function getNextResponseForStream(int $streamId, ?float $requestTimeoutInSeconds = null, ?Statement $statement = null, ?string $requestClass = null): Response\Response {
+    public function getNextResponseForStream(int $streamId, int $streamGeneration, ?float $requestTimeoutInSeconds = null, ?Statement $statement = null, ?string $requestClass = null): Response\Response {
 
         $deadlineExceeded = false;
 
@@ -481,6 +481,7 @@ final class Session {
                 ) {
                     $this->timeOutStream(
                         $streamId,
+                        $streamGeneration,
                         $statement === null ? 'syncRequest' : 'getResponseForStatement',
                         $requestTimeoutInSeconds,
                         $requestClass,
@@ -528,6 +529,7 @@ final class Session {
 
         $response = $this->getNextResponseForStream(
             streamId: $statement->getStreamId(),
+            streamGeneration: $statement->getStreamGeneration(),
             requestTimeoutInSeconds: $statement->getRequestTimeout(),
             statement: $statement,
         );
@@ -571,14 +573,13 @@ final class Session {
      * not what the caller should be told about. The next piece of bookkeeping
      * enforces it.
      */
-    public function parkUnresolvedStream(int $streamId): void {
-
-        if ($this->node === null || $this->streamIds->isOrphaned($streamId)) {
-            return;
-        }
+    public function parkUnresolvedStream(int $streamId, int $streamGeneration): void {
 
         $this->statements->forget($streamId);
-        $this->streamIds->park($streamId);
+
+        // An id that is already parked, or that belongs to a connection which
+        // has since been replaced, is passed over by the pool itself.
+        $this->streamIds->park($streamId, $streamGeneration);
     }
 
     /**
@@ -1453,13 +1454,13 @@ final class Session {
                 $handled = true;
             } finally {
                 if (!$handled) {
-                    $this->statements->releaseAfterFailedResponseHandling($statement, $streamId, $this->node !== null);
+                    $this->statements->releaseAfterFailedResponseHandling($statement, $streamId);
                 }
             }
 
             if ($response !== null) {
                 $statement->setResponse($response);
-                $this->streamIds->release($streamId);
+                $this->streamIds->release($streamId, $statement->getStreamGeneration());
             }
         }
 
@@ -1648,10 +1649,10 @@ final class Session {
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\RequestTimeoutException
      */
-    private function timeOutStream(int $streamId, string $operation, ?float $requestTimeoutInSeconds, ?string $requestClass = null, ?Statement $statement = null): never {
+    private function timeOutStream(int $streamId, int $streamGeneration, string $operation, ?float $requestTimeoutInSeconds, ?string $requestClass = null, ?Statement $statement = null): never {
 
         $this->statements->forget($streamId);
-        $this->streamIds->park($streamId);
+        $this->streamIds->park($streamId, $streamGeneration);
 
         if ($statement !== null) {
             $statement->setStatus(StatementStatus::TIMED_OUT);

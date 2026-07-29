@@ -16,6 +16,14 @@ use SplQueue;
  * Nothing here waits. An id that cannot be had immediately can only come back
  * with an answer, and reading for one is {@see Session::getNewStreamId()}'s
  * business, not this pool's.
+ *
+ * An id is only ever given back if this pool has it outstanding and the caller
+ * names the generation it was claimed under, see {@see self::$outstanding} and
+ * {@see self::$generation}. Together those make the callers' bookkeeping safe to
+ * get wrong: giving the same id back twice, giving back one claimed before the
+ * pool was started over, and giving one back so late that the same number has
+ * since been handed to somebody else are all passed over here, rather than left
+ * to every caller to rule out on its own.
  */
 final class StreamIdPool {
     /**
@@ -24,6 +32,20 @@ final class StreamIdPool {
      * (events use -1), leaving 0..32767 for requests.
      */
     public const MAX_STREAM_ID = 32767;
+
+    /**
+     * Which run of the id space we are on, bumped every time it is started
+     * over. An id is only meaningful together with this: the numbers repeat on
+     * every connection, so the generation is what tells an id claimed on the
+     * connection that is gone from the same number handed out by the one that
+     * replaced it.
+     *
+     * Callers keep the generation they claimed under and name it when they give
+     * the id back, which is what lets a disposal arriving late — from code
+     * unwinding out of the failure that replaced the connection — be recognised
+     * as belonging to a pool that no longer exists.
+     */
+    private int $generation = 0;
 
     /**
      * Next stream id to hand out; the pool runs up to {@see self::MAX_STREAM_ID}
@@ -39,6 +61,22 @@ final class StreamIdPool {
      * response. Each is released once its late answer finally arrives.
      */
     private array $orphanedStreams = [];
+
+    /**
+     * @var array<int, true> $outstanding the ids handed out and not yet given
+     * back, which is what makes this pool the owner of them. Held so that
+     * {@see self::release()} and {@see self::park()} can tell an id that is
+     * theirs to dispose of from one that is not: a caller unwinding from a
+     * failure may well try to give back an id it already gave back, and that
+     * would put into circulation an id something else is already using. It also
+     * means the recycling queue cannot come to hold the same id twice, since
+     * nothing reaches it without being taken out of here first.
+     *
+     * This is emptied by {@see self::reset()}, so it settles the question
+     * within one run of the id space; {@see self::$generation} settles it
+     * across them.
+     */
+    private array $outstanding = [];
 
     /**
      * @var SplQueue<int> $recycledStreams
@@ -63,14 +101,25 @@ final class StreamIdPool {
     public function claim(): ?int {
 
         if ($this->nextStreamId <= self::MAX_STREAM_ID) {
-            return $this->nextStreamId++;
+            $streamId = $this->nextStreamId++;
+        } elseif (!$this->recycledStreams->isEmpty()) {
+            $streamId = $this->recycledStreams->dequeue();
+        } else {
+            return null;
         }
 
-        if (!$this->recycledStreams->isEmpty()) {
-            return $this->recycledStreams->dequeue();
-        }
+        $this->outstanding[$streamId] = true;
 
-        return null;
+        return $streamId;
+    }
+
+    /**
+     * Which run of the id space {@see self::claim()} is currently handing out,
+     * to be kept by whoever claims and named again when they give the id back.
+     */
+    public function generation(): int {
+
+        return $this->generation;
     }
 
     /**
@@ -97,16 +146,36 @@ final class StreamIdPool {
     /**
      * Hold an id back instead of recycling it, because it is unknown whether
      * the node is still going to answer on it.
+     *
+     * Ignored for an id this pool does not have outstanding, or one claimed
+     * under an earlier generation; see {@see self::$outstanding} and
+     * {@see self::$generation}.
      */
-    public function park(int $streamId): void {
+    public function park(int $streamId, int $generation): void {
+
+        if (!$this->isOurs($streamId, $generation)) {
+            return;
+        }
+
+        unset($this->outstanding[$streamId]);
 
         $this->orphanedStreams[$streamId] = microtime(true);
     }
 
     /**
      * Put an id back into circulation.
+     *
+     * Ignored for an id this pool does not have outstanding, or one claimed
+     * under an earlier generation; see {@see self::$outstanding} and
+     * {@see self::$generation}.
      */
-    public function release(int $streamId): void {
+    public function release(int $streamId, int $generation): void {
+
+        if (!$this->isOurs($streamId, $generation)) {
+            return;
+        }
+
+        unset($this->outstanding[$streamId]);
 
         $this->recycledStreams->enqueue($streamId);
     }
@@ -114,23 +183,52 @@ final class StreamIdPool {
     /**
      * Release a parked id whose late answer has finally arrived, which is what
      * proves the node is done with it.
+     *
+     * A parked id is not an outstanding one — {@see self::park()} moved it — so
+     * being parked here is what stands in for that check.
      */
     public function releaseParked(int $streamId): void {
 
+        if (!isset($this->orphanedStreams[$streamId])) {
+            return;
+        }
+
         unset($this->orphanedStreams[$streamId]);
+
         $this->recycledStreams->enqueue($streamId);
     }
 
     /**
      * Start the id space over, for a connection that is going away.
+     *
+     * Nothing handed out by the old connection is outstanding any more, which
+     * is what makes a stray release from the unwinding that follows harmless.
      */
     public function reset(): void {
 
+        $this->generation++;
         $this->nextStreamId = 0;
         $this->orphanedStreams = [];
+        $this->outstanding = [];
 
         /** @var SplQueue<int> $recycledStreams */
         $recycledStreams = new SplQueue();
         $this->recycledStreams = $recycledStreams;
+    }
+
+    /**
+     * Whether this pool handed the id out and has not had it back, so that
+     * giving it back now is this pool's business.
+     *
+     * The generation is checked first because it is the one of the two that
+     * survives the pool being started over: an id claimed on the connection
+     * that is gone may well match a number the new one has since handed to
+     * somebody else, and would then look outstanding when it is somebody
+     * else's.
+     */
+    private function isOurs(int $streamId, int $generation): bool {
+
+        return $generation === $this->generation
+            && isset($this->outstanding[$streamId]);
     }
 }

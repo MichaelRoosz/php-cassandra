@@ -41,16 +41,23 @@ final class Statement {
 
     private StatementStatus $status;
 
+    private int $streamGeneration;
+
     private int $streamId;
 
     /**
+     * @param int $streamGeneration which run of the connection's id space
+     * $streamId was claimed under, kept so that giving the id back names the
+     * pool it came from; see {@see \Cassandra\Connection\StreamIdPool}.
+     *
      * @param ?float $requestTimeoutInSeconds an explicit override from the
      * caller, which wins over what the request's own options asked for. Null
      * falls back to those, and then to the connection default.
      */
-    public function __construct(Connection $connection, int $streamId, Request\Request $request, ?Request\Request $originalRequest = null, ?float $requestTimeoutInSeconds = null) {
+    public function __construct(Connection $connection, int $streamId, int $streamGeneration, Request\Request $request, ?Request\Request $originalRequest = null, ?float $requestTimeoutInSeconds = null) {
         $this->connection = $connection;
         $this->streamId = $streamId;
+        $this->streamGeneration = $streamGeneration;
         $this->request = $request;
         $this->originalRequest = $originalRequest ?? $request;
         $this->status = StatementStatus::CREATED;
@@ -251,6 +258,14 @@ final class Statement {
         }
 
         return $response;
+    }
+
+    /**
+     * Which run of the connection's id space {@see self::getStreamId()} was
+     * claimed under, see {@see \Cassandra\Connection\StreamIdPool::$generation}.
+     */
+    public function getStreamGeneration(): int {
+        return $this->streamGeneration;
     }
 
     public function getStreamId(): int {
