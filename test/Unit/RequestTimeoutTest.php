@@ -519,6 +519,74 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertFalse($statement->isTimedOut(), 'the statement still has its full budget');
     }
 
+    public function testAWaitForAnyStatementHandsBackAStatementAnsweredAsTheBoundExpired(): void {
+        // The answer is sitting unread in the receive buffer and the wait bound
+        // has already passed, so the read that finds it and the bound that ends
+        // the wait fall in the same pass. The statement is ready either way —
+        // returning null then would have the caller conclude that nothing
+        // arrived.
+        $connection = $this->connect('slow-query', delaySeconds: 0.3, requestTimeoutInSeconds: 30.0);
+
+        $statement = $connection->queryAsync('SELECT * FROM system.local');
+
+        usleep(800_000);
+
+        $ready = $connection->waitForAnyStatement([$statement], timeoutInSeconds: 0.0);
+
+        $this->assertTrue($statement->isResultReady(), 'the read inside the wait resolved the statement');
+        $this->assertSame($statement, $ready, 'the statement answered in the final pass must be handed back');
+        $this->assertTrue($connection->isConnected());
+    }
+
+    public function testAWaitForAnyStatementOverNoStatementsReturnsAtOnce(): void {
+        // Nothing was asked about, so nothing can become ready. Without a wait
+        // bound of its own there would be nothing to end the wait either, and it
+        // would read for good on a connection that is perfectly healthy.
+        $connection = $this->connect('idle', requestTimeoutInSeconds: 30.0, heartbeatIntervalInSeconds: 0.2);
+
+        $start = microtime(true);
+        $ready = $connection->waitForAnyStatement([], timeoutInSeconds: null);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertNull($ready);
+        $this->assertLessThan(1.0, $elapsed, 'an empty set must not be waited on');
+        $this->assertTrue($connection->isConnected());
+    }
+
+    public function testAWaitForStatementsReportsOneThatCanNeverResolveWhateverItsPlace(): void {
+        // The unresolvable statement sits behind one that is merely slow. The
+        // wait has to look past the first unresolved statement to find it, or
+        // the caller is left waiting out the bound for an answer that cannot
+        // come.
+        $connection = $this->connect('defer-slow', delaySeconds: 20.0, requestTimeoutInSeconds: 30.0);
+
+        $slow = $connection->queryAsync('SELECT * FROM SLOW');
+
+        $foreign = $connection->queryAsync('SELECT * FROM SLOW');
+
+        // Only this one is taken off the connection's books, which is what a
+        // statement sent on another connection looks like from here. The slow
+        // one stays pending, so it is the statement the wait would otherwise
+        // stop at.
+        $pending = new ReflectionProperty(StatementRegistry::class, 'statements');
+        /** @var array<int, Statement> $inFlight */
+        $inFlight = $pending->getValue(self::statementsOf($connection));
+        unset($inFlight[$foreign->getStreamId()]);
+        $pending->setValue(self::statementsOf($connection), $inFlight);
+
+        $this->assertFalse($slow->isResultReady(), 'the slow statement must still be pending');
+
+        $start = microtime(true);
+
+        try {
+            $connection->waitForStatements([$slow, $foreign], timeoutInSeconds: 5.0);
+            $this->fail('expected the unresolvable statement to be reported');
+        } catch (StatementException $e) {
+            $this->assertSame(ExceptionCode::STATEMENT_NOT_ON_THIS_CONNECTION->value, $e->getCode());
+            $this->assertLessThan(3.0, microtime(true) - $start, 'it must not be waited on first');
+        }
+    }
+
     public function testAWaitWithNothingElseBoundingItFallsBackToTheStallWindow(): void {
         // A transport read timeout is swallowed while something else still
         // bounds the wait — the caller's deadline or the next heartbeat will

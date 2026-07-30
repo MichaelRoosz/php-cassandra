@@ -128,7 +128,7 @@ final class HeartbeatMonitor {
             return null;
         }
 
-        if ($this->probe !== null) {
+        if ($this->probe !== null && !$this->probe->isResultReady()) {
             return $this->probeSentAt + $this->options->heartbeatTimeoutInSeconds;
         }
 

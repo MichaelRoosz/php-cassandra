@@ -24,12 +24,18 @@ use Cassandra\Value\ValueEncodeConfig;
  * public API is the things they hand it and get back — {@see ConnectionOptions}
  * and {@see \Cassandra\Connection\NodeConfig} on the way in,
  * {@see \Cassandra\Statement} and the {@see \Cassandra\Response\Response} tree
- * on the way out. It builds requests out of what a caller passes
- * — filling in the connection's keyspace and consistency where a call leaves
- * them out — and hands everything that touches the node to its
+ * on the way out. It builds requests out of what a caller passes — filling in
+ * this connection's consistency where a call leaves it out — and hands
+ * everything that touches the node to its
  * {@see \Cassandra\Connection\Session}, which opens the connection, sends the
  * request, matches the answer to it and keeps its budget.
  *
+ * The keyspace is not filled in here but on the way to the wire, by
+ * {@see \Cassandra\Connection\RequestExecutor}, because whether a request can
+ * carry one at all depends on the negotiated protocol version and that is only
+ * settled once the connection is up. Which is why it reaches a request built by
+ * hand and handed to {@see self::syncRequest()} just as it reaches the ones
+ * built here; see {@see self::setKeyspace()}.
  */
 final class Connection {
     private Consistency $consistency = Consistency::ONE;
@@ -364,7 +370,11 @@ final class Connection {
      * one. With heartbeats disabled as well
      * ({@see ConnectionOptions::$heartbeatIntervalInSeconds} set to null), the
      * transport's stall window is the last judgement left and this fails the
-     * connection with a NodeException once it elapses.
+     * connection with a NodeException once it elapses — unless some other
+     * request in flight is bounded, since each read is held to the earliest
+     * budget on the connection rather than only to this statement's, and a read
+     * that something still bounds treats the stall window as the quiet moment it
+     * is instead of as a failure.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -644,9 +654,11 @@ final class Connection {
     /**
      * Whether requests on this connection can carry a keyspace of their own.
      *
-     * Reports the negotiated protocol version, so before connecting it reports
-     * the initial one instead — a guess, as {@see self::getProtocolVersion()}
-     * says. Call {@see self::connect()} first for the settled answer.
+     * Reports the negotiated protocol version, which before connecting is only
+     * the initial one from the connection options — what this connection will
+     * open with, not what it will settle on, since the node may not offer it.
+     * Call {@see self::connect()} first for the settled answer; see
+     * {@see self::getProtocolVersion()}.
      */
     public function supportsKeyspaceRequestOption(): bool {
         return $this->session->getProtocolVersion()->value >= ProtocolVersion::V5->value;
@@ -681,9 +693,14 @@ final class Connection {
      * the request it precedes each get the full budget, so the call can take a
      * multiple of it before giving up — a multiple bounded in turn by the
      * driver's repreparation limit, since a node can answer the re-executed
-     * statement with UNPREPARED all over again. The wait for a free stream id,
-     * on a connection that has handed out every one of them, is held to it
-     * separately as well.
+     * statement with UNPREPARED all over again.
+     *
+     * The wait for a free stream id, on a connection that has handed out every
+     * one of them, is held to it separately as well, and running out of it
+     * raises RequestTimeoutException like any other budget that expires — the
+     * request never reached the node, and the connection is left alone: every
+     * other request on it is still being waited for, which is why there was no
+     * id to be had.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -840,15 +857,21 @@ final class Connection {
      *   INF   wait for as long as it takes
      *
      * Returns null when the time is up with none of them ready; the statements
-     * are untouched and can still be waited on. A statement that runs out of
-     * its own budget is given up on and raises a RequestTimeoutException, which
-     * takes precedence over handing one back: where one of them is answered in
-     * the same pass that another runs out, the exception is what the caller
-     * sees. Nothing is lost by it — the answer stays on its statement and the
-     * exception names the ones that ran out, so calling again returns the ready
-     * one, as long as those are dropped from $statements first. They are not
-     * resolvable any more, and a statement that can never resolve is reported
-     * rather than waited on.
+     * are untouched and can still be waited on. One that is answered in the very
+     * pass the time runs out is handed back rather than lost, so a null return
+     * really does mean that none of them arrived.
+     *
+     * Passing no statements at all returns null at once: there is nothing that
+     * could become ready, so there is nothing to wait for.
+     *
+     * A statement that runs out of its own budget is given up on and raises a
+     * RequestTimeoutException, which takes precedence over handing one back:
+     * where one of them is answered in the same pass that another runs out, the
+     * exception is what the caller sees. Nothing is lost by it — the answer
+     * stays on its statement and the exception names the ones that ran out, so
+     * calling again returns the ready one, as long as those are dropped from
+     * $statements first. They are not resolvable any more, and a statement that
+     * can never resolve is reported rather than waited on.
      *
      * A timeout of 0 still costs a read while anything is outstanding, but a
      * non-blocking one, so it does not wait on the transport either;

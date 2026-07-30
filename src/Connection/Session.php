@@ -337,9 +337,9 @@ final class Session {
                 $this->timeOutExpiredStatements();
 
                 if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
-                    throw new ConnectionException(
+                    throw new RequestTimeoutException(
                         'Every stream id the protocol allows is already in use and none was released in time, so this request could not be sent',
-                        ExceptionCode::CONNECTION_STREAM_IDS_EXHAUSTED->value,
+                        ExceptionCode::REQUESTTIMEOUT_STREAM_IDS_EXHAUSTED->value,
                         [
                             'operation' => 'getNewStreamId',
                             'max_stream_id' => StreamIdPool::MAX_STREAM_ID,
@@ -966,6 +966,10 @@ final class Session {
      */
     public function waitForAnyStatement(array $statements, ?float $timeoutInSeconds = null): ?Statement {
 
+        if ($statements === []) {
+            return null;
+        }
+
         $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
@@ -999,9 +1003,14 @@ final class Session {
                 }
 
                 // Only the caller's wait bound is left, or a statement that is
-                // none of their business ran out; either way there is nothing
-                // ready to hand back.
+                // none of their business ran out.
                 if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                    foreach ($statements as $s) {
+                        if ($s->isResultReady()) {
+                            return $s;
+                        }
+                    }
+
                     return null;
                 }
             }
@@ -1142,8 +1151,6 @@ final class Session {
                     $this->statements->assertResolvable($s);
 
                     $hasUnresolvedStatements = true;
-
-                    break;
                 }
             }
 
@@ -1515,14 +1522,14 @@ final class Session {
 
         $streamId = $response->getStream();
 
+        $this->heartbeat->recordResponse();
+        $this->nodeConnector->recordSuccess($node->getConfig());
+
         if ($this->streamIds->isOrphaned($streamId)) {
             // The late answer to a statement that was already given up on. It
             // has nowhere to go, but its arrival proves the stream id is free
             // again, so it goes back into circulation here.
             $this->streamIds->releaseParked($streamId);
-
-            $this->heartbeat->recordResponse();
-            $this->nodeConnector->recordSuccess($node->getConfig());
 
             return null;
         }
@@ -1562,9 +1569,6 @@ final class Session {
         if ($response instanceof Response\Event) {
             $this->listeners->notifyEvent($response);
         }
-
-        $this->heartbeat->recordResponse();
-        $this->nodeConnector->recordSuccess($node->getConfig());
 
         return $response;
     }

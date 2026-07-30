@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 final class NodeHealth {
+    /**
+     * How long a node stays in its cooldown, by the number of failures recorded
+     * against it. Keyed from one because {@see self::recordFailure()} counts the
+     * failure it is recording, so a node is never looked up here with a count of
+     * zero; anything past the last entry keeps the longest delay, see
+     * {@see self::computeBackoffSeconds()}.
+     */
     private const FAILURE_COUNT_TO_DELAY = [
-        0 => 0.5,
         1 => 0.5,
         2 => 1,
         3 => 2,

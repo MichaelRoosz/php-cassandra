@@ -14,6 +14,16 @@ final class ConnectionOptions {
      * @throws \Cassandra\Exception\ConnectionException
      */
     public function __construct(
+        /**
+         * Whether to ask the node for a compressed connection.
+         *
+         * A request rather than a requirement: a node whose SUPPORTED names no
+         * compression at all is talked to uncompressed rather than refused, so a
+         * connection that came up is not proof that it is compressed. Only a
+         * node that lists algorithms without the one this driver speaks (lz4) is
+         * a configuration to correct, and that fails the handshake; see
+         * {@see Handshake::negotiate()}.
+         */
         public readonly bool $enableCompression = false,
         public readonly bool $throwOnOverload = false,
         public readonly NodeSelectionStrategy $nodeSelectionStrategy = NodeSelectionStrategy::Random,
