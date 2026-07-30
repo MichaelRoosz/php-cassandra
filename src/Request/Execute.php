@@ -102,6 +102,21 @@ final class Execute extends Request {
     }
 
     /**
+     * See {@see Request::applyDefaultKeyspace()}.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    #[\Override]
+    public function applyDefaultKeyspace(string $keyspace): void {
+
+        if ($this->options->keyspace !== null) {
+            return;
+        }
+
+        $this->options = $this->options->withKeyspace($keyspace);
+    }
+
+    /**
      * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]

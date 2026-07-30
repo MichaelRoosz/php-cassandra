@@ -7,6 +7,7 @@ namespace Cassandra\Connection;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request;
 use Cassandra\Response;
 use Cassandra\Statement;
@@ -64,6 +65,7 @@ final class RequestExecutor {
     /**
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
      */
     public function chainAsyncRequest(Request\Request $request, Statement $statement): void {
 
@@ -103,6 +105,7 @@ final class RequestExecutor {
             }
 
             $request->setVersion($this->session->getProtocolVersion());
+            $this->applyDefaultKeyspace($request);
             $request->setStream($streamId);
 
             if ($this->statements->has($streamId)) {
@@ -183,6 +186,11 @@ final class RequestExecutor {
         $node = $this->session->getConnectedNode();
 
         $request->setVersion($this->session->getProtocolVersion());
+
+        // Before the auto-prepare below is worked out, so that the PREPARE it
+        // derives from this request's options inherits the keyspace along with
+        // everything else.
+        $this->applyDefaultKeyspace($request);
 
         $originalRequest = $request;
 
@@ -377,6 +385,13 @@ final class RequestExecutor {
 
         $request->setVersion($this->session->getProtocolVersion());
 
+        // Before the cache is consulted below, because the prepared-result cache
+        // is keyed on the keyspace as well as on the query — two connections on
+        // different keyspaces preparing the same CQL are two different prepared
+        // statements, and looking one up before the keyspace is filled in would
+        // ask under the wrong key.
+        $this->applyDefaultKeyspace($request);
+
         if ($request instanceof Request\Prepare) {
             $cachedResult = $this->preparedResultCache->get($request);
             if ($cachedResult !== null) {
@@ -480,5 +495,38 @@ final class RequestExecutor {
         }
 
         return $response;
+    }
+
+    /**
+     * Put the connection's keyspace into a request that names none of its own.
+     *
+     * Done here rather than where the request was built, because whether it is
+     * needed at all depends on the negotiated protocol version and that is only
+     * settled once the connection is up — which, one line above every call to
+     * this, it now is.
+     *
+     * Only from v5: before that a keyspace is a property of the node's session,
+     * put there by the USE that {@see Session::connect()} sends, and the request
+     * option does not exist at all — attaching one would make the request
+     * unencodable.
+     *
+     * The request is modified in place, as {@see Request\Request::setStream()}
+     * and setVersion() already are: a request handed to the executor is the
+     * connection's to finish addressing.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    private function applyDefaultKeyspace(Request\Request $request): void {
+
+        if ($this->session->getProtocolVersion()->value < ProtocolVersion::V5->value) {
+            return;
+        }
+
+        $keyspace = $this->session->getKeyspace();
+        if ($keyspace === '') {
+            return;
+        }
+
+        $request->applyDefaultKeyspace($keyspace);
     }
 }

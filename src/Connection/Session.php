@@ -148,6 +148,7 @@ final class Session {
      *
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
      */
     public function chainAsyncRequest(Request\Request $request, Statement $statement): void {
 

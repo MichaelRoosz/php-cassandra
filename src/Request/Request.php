@@ -85,6 +85,27 @@ abstract class Request implements Frame, Stringable {
         ) . $body;
     }
 
+    /**
+     * Fill in the keyspace the connection is on, for a request that names none
+     * of its own.
+     *
+     * From protocol v5 the keyspace travels with each request rather than being
+     * a property of the node's session, so a request that carries none runs
+     * against whatever the coordinator defaults to. The connection applies its
+     * own here on the way to the wire, at the point where the negotiated version
+     * is known; see {@see \Cassandra\Connection\RequestExecutor}.
+     *
+     * A no-op for the requests that have no keyspace to speak of — STARTUP,
+     * OPTIONS, REGISTER, AUTH_RESPONSE — and for one that already names it,
+     * which is the caller's to be right about.
+     *
+     * @throws \Cassandra\Exception\RequestException the overrides rebuild their
+     * options to put the keyspace in, and building options can refuse what it is
+     * given
+     */
+    public function applyDefaultKeyspace(string $keyspace): void {
+    }
+
     public function enableTracing(): void {
         $this->flags |= Flag::TRACING;
     }

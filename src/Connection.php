@@ -26,9 +26,6 @@ use Cassandra\Value\ValueEncodeConfig;
  * {@see \Cassandra\Connection\Session}, which opens the connection, sends the
  * request, matches the answer to it and keeps its budget.
  *
- * Filling in the keyspace is what makes most of these methods open the
- * connection before they have built anything, see
- * {@see self::keyspaceOptionForRequest()}.
  */
 final class Connection {
     private Consistency $consistency = Consistency::ONE;
@@ -54,8 +51,8 @@ final class Connection {
     }
 
     /**
-     * Send a request built by the caller, as it stands; see
-     * {@see self::syncRequest()} for what that means for the keyspace.
+     * Send a request the caller built; see {@see self::syncRequest()} for what
+     * the connection fills in on the way out.
      *
      * @param ?float $requestTimeoutInSeconds how long the server may take to
      * answer, overriding the request's and the connection's request timeout for
@@ -146,29 +143,9 @@ final class Connection {
         $this->session->connect();
     }
 
-    /**
-     * Opens the connection if there is none yet, because whether the batch
-     * carries the connection's keyspace depends on the negotiated protocol
-     * version; see {@see self::keyspaceOptionForRequest()}.
-     *
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\RequestTimeoutException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
     public function createBatchRequest(BatchType $type = BatchType::LOGGED, ?Consistency $consistency = null, BatchOptions $options = new BatchOptions()): Request\Batch {
 
         $consistency = $consistency ?? $this->consistency;
-
-        $keyspace = $this->keyspaceOptionForRequest($options->keyspace);
-        if ($keyspace !== null) {
-            $options = $options->withKeyspace($keyspace);
-        }
 
         return new Request\Batch($type, $consistency, $options);
     }
@@ -246,11 +223,6 @@ final class Connection {
     public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions(), ?float $requestTimeoutInSeconds = null): Response\Result {
 
         $consistency = $consistency ?? $this->consistency;
-
-        $keyspace = $this->keyspaceOptionForRequest($options->keyspace);
-        if ($keyspace !== null) {
-            $options = $options->withKeyspace($keyspace);
-        }
 
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
@@ -333,16 +305,24 @@ final class Connection {
 
         $consistency = $consistency ?? $this->consistency;
 
-        $keyspace = $this->keyspaceOptionForRequest($options->keyspace);
-        if ($keyspace !== null) {
-            $options = $options->withKeyspace($keyspace);
-        }
-
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
         $statement = $this->asyncRequest($request, $requestTimeoutInSeconds);
 
         return $statement;
+    }
+
+    /**
+     * The keyspace this connection's requests run against, or an empty string
+     * when it was given none.
+     *
+     * What was passed to the constructor or to {@see self::setKeyspace()}, which
+     * is what {@see self::query()} and the rest fill into the requests they
+     * build. Readable so that a request built by hand and sent with
+     * {@see self::syncRequest()} can be given the same one.
+     */
+    public function getKeyspace(): string {
+        return $this->session->getKeyspace();
     }
 
     /**
@@ -424,11 +404,6 @@ final class Connection {
      */
     public function prepare(string $query, PrepareOptions $options = new PrepareOptions(), ?float $requestTimeoutInSeconds = null): Response\Result\PreparedResult {
 
-        $keyspace = $this->keyspaceOptionForRequest($options->keyspace);
-        if ($keyspace !== null) {
-            $options = $options->withKeyspace($keyspace);
-        }
-
         $response = $this->syncRequest(new Request\Prepare($query, $options), $requestTimeoutInSeconds);
         if (!($response instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
@@ -458,11 +433,6 @@ final class Connection {
      */
     public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions(), ?float $requestTimeoutInSeconds = null): Statement {
 
-        $keyspace = $this->keyspaceOptionForRequest($options->keyspace);
-        if ($keyspace !== null) {
-            $options = $options->withKeyspace($keyspace);
-        }
-
         $request = new Request\Prepare($query, $options);
 
         return $this->asyncRequest($request, $requestTimeoutInSeconds);
@@ -489,11 +459,6 @@ final class Connection {
     public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions(), ?float $requestTimeoutInSeconds = null): Response\Result {
 
         $consistency = $consistency ?? $this->consistency;
-
-        $keyspace = $this->keyspaceOptionForRequest($options->keyspace);
-        if ($keyspace !== null) {
-            $options = $options->withKeyspace($keyspace);
-        }
 
         $request = new Request\Query($query, $values, $consistency, $options);
 
@@ -577,11 +542,6 @@ final class Connection {
 
         $consistency = $consistency ?? $this->consistency;
 
-        $keyspace = $this->keyspaceOptionForRequest($options->keyspace);
-        if ($keyspace !== null) {
-            $options = $options->withKeyspace($keyspace);
-        }
-
         $request = new Request\Query($query, $values, $consistency, $options);
 
         return $this->asyncRequest($request, $requestTimeoutInSeconds);
@@ -609,11 +569,10 @@ final class Connection {
      * — USE is deprecated there — so this call only records it, and a bad one
      * is refused by the next request instead.
      *
-     * Either way it applies only to the requests this class builds. One built
-     * by hand and handed to {@see self::syncRequest()} or
-     * {@see self::asyncRequest()} carries whatever its own options say, which on
-     * v5 means it runs against no keyspace unless it was given one; see
-     * {@see \Cassandra\Request\Options\QueryOptions::$keyspace}.
+     * Either way it applies to every request sent on this connection, including
+     * one built by hand and handed to {@see self::syncRequest()} or
+     * {@see self::asyncRequest()} — except where that request names a keyspace
+     * of its own, which wins.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -657,56 +616,34 @@ final class Connection {
     }
 
     /**
-     * Opens the connection if there is none yet: what a node supports is
-     * settled by the handshake, and answering from the initial protocol version
-     * would be a guess that is wrong whenever the negotiation does not land on
-     * it.
+     * Whether requests on this connection can carry a keyspace of their own.
      *
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\RequestTimeoutException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
+     * Reports the negotiated protocol version, so before connecting it reports
+     * the initial one instead — a guess, as {@see self::getProtocolVersion()}
+     * says. Call {@see self::connect()} first for the settled answer.
      */
     public function supportsKeyspaceRequestOption(): bool {
-        $this->session->connect();
-
         return $this->session->getProtocolVersion()->value >= ProtocolVersion::V5->value;
     }
 
     /**
-     * Opens the connection if there is none yet; see
-     * {@see self::supportsKeyspaceRequestOption()}.
-     *
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\RequestTimeoutException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
+     * Whether requests on this connection can carry a `now_in_seconds` of their
+     * own; see {@see self::supportsKeyspaceRequestOption()} for what it reports
+     * before connecting.
      */
     public function supportsNowInSecondsRequestOption(): bool {
-        $this->session->connect();
-
         return $this->session->getProtocolVersion()->value >= ProtocolVersion::V5->value;
     }
 
     /**
-     * Send a request built by the caller, as it stands.
+     * Send a request the caller built.
      *
-     * Nothing is filled in here, the connection's keyspace included: from v5 a
-     * request carries its own, so one that was given none runs against whatever
-     * keyspace the node's session is on — which on v5 is none, USE being
-     * deprecated there. Pass it in the request's options
-     * ({@see \Cassandra\Request\Options\QueryOptions::$keyspace}), qualify the
-     * table name, or use the methods that build the request for you.
+     * The request is sent as it stands, bar the addressing the connection owns:
+     * its stream id, its protocol version, and — where the request names none of
+     * its own — the connection's keyspace, which from v5 travels with each
+     * request rather than being a property of the node's session. A keyspace the
+     * request does carry is left alone, so a single request can be pointed
+     * somewhere else without going through {@see self::setKeyspace()}.
      *
      * @param ?float $requestTimeoutInSeconds how long to wait for the server's
      * answer, overriding the request's and the connection's request timeout for this call only.
@@ -1076,54 +1013,4 @@ final class Connection {
         return $this;
     }
 
-    /**
-     * The keyspace to put into a request's options, or null to leave them as
-     * they are.
-     *
-     * From v5 the keyspace can travel with each request, which is how a
-     * connection that was given one applies it without a `USE` per statement.
-     * Before v5 the option does not exist, and encoding a request that carries
-     * one anyway is refused outright.
-     *
-     * Which of the two it is can only be answered once the handshake has
-     * settled the version, so the connection is opened here rather than the
-     * question being put to {@see self::getProtocolVersion()}, which before
-     * connecting answers with the *initial* version — a guess that is wrong in
-     * both directions. Guessed low against a v5 node, the keyspace is left off
-     * the first request and, since v5 needs no `USE` at handshake time, that
-     * request would reach the coordinator with no keyspace at all. Guessed high
-     * against a v4 node, an option is attached that
-     * {@see \Cassandra\Request\Request} then refuses to encode.
-     *
-     * A keyspace the caller asked for explicitly is left alone: it is theirs to
-     * be right about, and the connection's own is only ever a default.
-     *
-     * @throws \Cassandra\Exception\CompressionException
-     * @throws \Cassandra\Exception\ConnectionException
-     * @throws \Cassandra\Exception\NodeException
-     * @throws \Cassandra\Exception\RequestException
-     * @throws \Cassandra\Exception\RequestTimeoutException
-     * @throws \Cassandra\Exception\ResponseException
-     * @throws \Cassandra\Exception\ValueException
-     * @throws \Cassandra\Exception\ValueFactoryException
-     * @throws \Cassandra\Exception\ServerException
-     */
-    private function keyspaceOptionForRequest(?string $keyspaceFromOptions): ?string {
-
-        if ($keyspaceFromOptions !== null) {
-            return null;
-        }
-
-        if ($this->session->getKeyspace() === '') {
-            return null;
-        }
-
-        $this->session->connect();
-
-        if ($this->session->getProtocolVersion()->value < ProtocolVersion::V5->value) {
-            return null;
-        }
-
-        return $this->session->getKeyspace();
-    }
 }
