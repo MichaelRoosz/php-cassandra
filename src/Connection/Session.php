@@ -653,9 +653,17 @@ final class Session {
             // {@see \Cassandra\Connection::getKeyspace()} named none — every
             // unqualified request would keep running against a keyspace this
             // connection no longer admits to being on, which is the same lie the
-            // rollback below exists to prevent. Reconnecting is what clears it,
-            // and from v5 the keyspace travels per request, so there it is
-            // simply the absence of one and is recorded like any other value.
+            // rollback below exists to prevent.
+            //
+            // Gated on being connected, which is what makes disconnecting the
+            // way out: with no node session there is nothing to contradict, so
+            // an empty keyspace is recorded like any other value and
+            // {@see self::completeHandshake()} then sends no USE at all.
+            // Disconnecting does not clear it by itself — $this->keyspace
+            // outlives the socket, which is why reconnecting sends the USE
+            // again — so moving a v4 connection off its keyspace takes both.
+            // From v5 the keyspace travels per request, so there it is simply
+            // the absence of one and is recorded like any other value.
             throw new ConnectionException(
                 'A connection on protocol v4 or below cannot be moved off its keyspace, only onto another one: up to v4 the keyspace belongs to the node\'s session and there is no CQL to un-set it. Name the keyspace to switch to, or open a new connection without one.',
                 ExceptionCode::CONNECTION_KEYSPACE_CANNOT_BE_CLEARED->value,
@@ -1508,6 +1516,12 @@ final class Session {
      * Dispatch a freshly read response: resolve the statement it belongs to,
      * notify event listeners and record that the node is answering.
      *
+     * Returns the response for the caller who was reading, or null where there
+     * is nobody it could belong to: a late answer to a statement already given
+     * up on, an answer whose handling chained a follow-up request instead of
+     * finishing the statement, and the driver's own heartbeat, which is not one
+     * of the caller's requests and so has no answer of theirs to hand back.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -1539,6 +1553,9 @@ final class Session {
         }
 
         $statement = $this->statements->get($streamId);
+
+        $isHeartbeatProbe = $statement !== null && $statement === $this->heartbeat->getProbe();
+
         if ($statement !== null) {
             $this->statements->forget($streamId);
 
@@ -1568,6 +1585,10 @@ final class Session {
 
         if ($response instanceof Response\Event) {
             $this->listeners->notifyEvent($response);
+        }
+
+        if ($isHeartbeatProbe) {
+            return null;
         }
 
         return $response;

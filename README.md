@@ -1819,6 +1819,8 @@ That makes the two settings genuinely independent, and disabling the receive tim
 
 **The heartbeat** (`heartbeatIntervalInSeconds`, default 30s) is what distinguishes a dead connection from a quiet one — at the socket, a coordinator that is still thinking and a node that vanished look identical. Whenever the connection has been silent for the interval, an `OPTIONS` frame is sent; because stream ids are multiplexed, it is answered on its own stream while a slow request is still being computed. A broken connection therefore surfaces after `heartbeatInterval + heartbeatTimeout` (~35s by default) as a `ConnectionException`, no matter how high the request timeout is — which is what makes generous request timeouts safe to set. Reads are bounded by when the probe is next due, so that holds during a wait with no deadline of its own and whatever the transport timeouts are set to.
 
+The probe is the driver's own request and stays out of your way entirely: it is held to `heartbeatTimeoutInSeconds` rather than to your request timeout, it does not keep `waitForAllPendingStatements()` waiting, and its answer is resolved out of sight rather than handed back by `waitForNextResponse()` / `tryReadNextResponse()` — so a loop pumping the connection for responses never sees a `Supported` frame it did not ask for.
+
 Note that these three values are independent: the request timeout follows your cluster's coordinator timeouts, while the heartbeat interval should stay below the idle timeout of any NAT, firewall or load balancer between you and the node. They both default to 30s by coincidence, not because they are related.
 
 #### Timeouts and async statements

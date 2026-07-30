@@ -113,6 +113,44 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAHeartbeatReplyIsNotHandedBackAsACallersResponse(): void {
+        // The probe is the driver's own request, sent on a schedule the caller
+        // knows nothing about. Handing its SUPPORTED back would answer a wait
+        // for the next response with something nobody asked for, once every
+        // heartbeat interval, and an application pumping the connection this way
+        // would have to learn to recognise and skip it. The rest of the
+        // machinery already passes the probe over; so does this.
+        $connection = $this->connect(
+            'idle',
+            heartbeatIntervalInSeconds: 0.2,
+            heartbeatTimeoutInSeconds: 5.0,
+        );
+
+        $requestsSentBeforeWait = $this->claimedStreamIdCountOf($connection);
+
+        $this->assertNull(
+            $connection->waitForNextResponse(timeoutInSeconds: 1.0),
+            'the only traffic was the driver\'s own heartbeat, so none of it was the caller\'s to receive'
+        );
+
+        // Which proves nothing unless a probe really did go out in the meantime:
+        // an idle connection that was never probed would return null here as
+        // well. Every claim takes a fresh id until the space runs out, so the
+        // counter is how many requests this connection has sent.
+        $this->assertGreaterThan(
+            $requestsSentBeforeWait,
+            $this->claimedStreamIdCountOf($connection),
+            'the wait was several heartbeat intervals long, so at least one probe should have been sent'
+        );
+
+        // And the probes were answered and accounted for rather than merely
+        // hidden: the connection is still up, its ids came back, and the next
+        // response read off it is the caller's own.
+        $this->assertTrue($connection->isConnected());
+        $this->assertSame([], $this->orphanedStreamsOf($connection), 'an answered probe holds nothing back');
+        $this->assertInstanceOf(Result::class, $connection->query('SELECT * FROM quick'));
+    }
+
     public function testAllRequestsThatRanOutAreFinishedTogether(): void {
         // Three statements sent together run out together. They must all be
         // given up on in one go and reported as one failure, rather than one
@@ -1031,6 +1069,19 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertSame([], $this->orphanedStreamsOf($connection), 'nothing was in flight, so nothing should be orphaned');
 
         $connection->query('SELECT * FROM quick');
+    }
+
+    /**
+     * How many requests this connection has sent, counted through the stream id
+     * pool: ids are handed out from a rising counter and only recycled once it
+     * has run through the whole space, so before that the counter is exactly the
+     * number of claims — the driver's own heartbeats among them.
+     */
+    private function claimedStreamIdCountOf(Connection $connection): int {
+        /** @var int $nextStreamId */
+        $nextStreamId = (new ReflectionProperty(StreamIdPool::class, 'nextStreamId'))->getValue($this->streamIdPoolOf($connection));
+
+        return $nextStreamId;
     }
 
     private function connect(

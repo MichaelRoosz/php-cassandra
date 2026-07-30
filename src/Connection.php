@@ -170,22 +170,28 @@ final class Connection {
      * NOTE: This method will not block; it processes any currently available responses
      * and returns when the receive buffer is drained or the provided limit is reached.
      *
+     * The count is of frames taken off the wire and dealt with, not of requests
+     * of the caller's that were answered — it also covers a late answer to a
+     * request already given up on, and the driver's own heartbeat.
+     * {@see self::tryResolveStatements()} is what counts a caller's own
+     * statements.
+     *
      * "Does not block" is about waiting for the node to answer. Two things
      * around that still can, and they are the same for
      * {@see self::tryReadNextEvent()}, {@see self::tryReadNextResponse()},
      * {@see self::tryResolveStatement()} and
      * {@see self::tryResolveStatements()}:
      *
-     * Getting a connection at all. Called before anything has been sent, this
-     * opens one and takes it through the handshake first, as every other method
-     * that touches the transport does. Only the calls that get as far as
-     * reading do: a $max of zero here, and
-     * {@see self::tryResolveStatements()} over statements that are all resolved
-     * already, read nothing and so never need a connection.
-     * {@see self::tryResolveStatement()} and {@see self::tryResolveStatements()}
-     * never open one at all, come to that — a statement is only resolvable here
-     * if this connection is the one that sent it, so where there is no
-     * connection there is nothing they could be asked about.
+     * Getting a connection at all. Only the two reads open one: called before
+     * anything has been sent, this method and
+     * {@see self::tryReadNextEvent()}/{@see self::tryReadNextResponse()} open a
+     * connection and take it through the handshake first, as every other method
+     * that touches the transport does — and even they do not where they never
+     * get as far as reading, which a $max of zero here does not. The two calls
+     * that take statements never open one at all: a statement is only
+     * resolvable here if this connection is the one that sent it, so where
+     * there is no connection there is nothing they could be asked about, and
+     * they raise a StatementException instead of opening one to read on.
      *
      * Writing the heartbeat. Having read, these calls owe the connection the
      * probe a wait would have sent, and a write blocks until the transport
@@ -593,7 +599,15 @@ final class Connection {
      * CQL that un-sets a node session's keyspace, so on a connected v4
      * connection this raises rather than recording a keyspace the requests would
      * not actually run against; before connecting, and from v5, it is recorded
-     * like any other value. Reconnecting is what clears it on v4.
+     * like any other value.
+     *
+     * {@see self::disconnect()} is therefore what makes a v4 connection
+     * clearable: with no connection there is no node session to contradict, so
+     * an empty keyspace is recorded like any other value and the next connect
+     * opens on none. Disconnecting does not clear it by itself — what this
+     * connection is on outlives the socket, which is why reconnecting sends the
+     * USE again — so moving a v4 connection off its keyspace is disconnect,
+     * then setKeyspace(''), and not either of them alone.
      *
      * Switching keyspace also empties the prepared-statement cache up to v4,
      * where a prepared statement cannot be told apart by the keyspace it was
