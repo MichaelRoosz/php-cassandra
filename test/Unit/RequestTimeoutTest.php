@@ -954,10 +954,19 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // Synchronous requests take a pooled stream id too, so giving up on one
         // costs that id rather than the whole connection (and with it the
         // prepared statement cache, which disconnecting would clear).
-        $connection = $this->connect('defer-slow', delaySeconds: 2.0, requestTimeoutInSeconds: 0.5);
+        //
+        // Unlike its neighbours this test has to outlive the server's delay, so
+        // the delay cannot simply be set past anything the machine might do.
+        // The budgets are therefore split rather than shortened: the connection
+        // default is generous, so the quick queries below cannot go overdue on
+        // a loaded machine, and only the slow query is given a short one of its
+        // own — leaving an order of magnitude between it and the delay, which
+        // is the margin that decides whether the timeout fires at all.
+        $delaySeconds = 3.0;
+        $connection = $this->connect('defer-slow', delaySeconds: $delaySeconds, requestTimeoutInSeconds: 30.0);
 
         try {
-            $connection->query('SELECT * FROM SLOW');
+            $connection->query('SELECT * FROM SLOW', requestTimeoutInSeconds: 0.25);
             $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
         }
@@ -969,10 +978,12 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $connection->query('SELECT * FROM quick');
 
         // Once the late answer turns up, the parked id returns to the pool.
-        usleep(2_500_000);
-        $connection->query('SELECT * FROM quick');
+        // Read for it until it does rather than sleeping the delay out and
+        // reading once: what is being pinned is that the late answer releases
+        // the id, not how promptly the server got round to sending it.
+        $this->drainUntilStreamIdsAreReclaimed($connection, withinSeconds: $delaySeconds + 10.0);
 
-        $this->assertSame([], $this->orphanedStreamsOf($connection));
+        $this->assertSame([], $this->orphanedStreamsOf($connection), 'the late answer should have released the stream id');
     }
 
     public function testTimingOutOneAsyncStatementLeavesTheConnectionAndItsOtherStatementsIntact(): void {
@@ -1067,6 +1078,34 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
 
         return $connection;
+    }
+
+    /**
+     * Read until every parked stream id has been handed back, or until
+     * $withinSeconds is up.
+     *
+     * A parked id is only released when the late answer it is waiting for
+     * arrives, so something has to read for that answer — but how long the
+     * server takes to send it is the server's business, and sleeping a fixed
+     * stretch and then reading once makes the test a bet on that. Polling ends
+     * as soon as the id is back, and only gives up once waiting any longer
+     * would mean the answer is not coming at all, which is the failure the
+     * caller then asserts.
+     *
+     * @throws \Cassandra\Exception\CassandraException
+     */
+    private function drainUntilStreamIdsAreReclaimed(Connection $connection, float $withinSeconds): void {
+        $deadline = microtime(true) + $withinSeconds;
+
+        do {
+            $connection->drainAvailableResponses();
+
+            if ($this->orphanedStreamsOf($connection) === []) {
+                return;
+            }
+
+            usleep(20_000);
+        } while (microtime(true) < $deadline);
     }
 
     /**

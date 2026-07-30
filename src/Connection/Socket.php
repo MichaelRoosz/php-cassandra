@@ -211,6 +211,22 @@ final class Socket extends NodeImplementation implements IoNode {
                     if ($waitForData) {
                         $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
 
+                        if ($this->isBlockingIo) {
+                            // The read below runs under SO_RCVTIMEO, which the
+                            // signal has just used up part of — and the option
+                            // arms a duration, not a deadline, so going straight
+                            // back in would hand the read the caller's whole
+                            // budget a second time. Re-narrowed against the
+                            // deadline instead, so that a stream of signals
+                            // cannot add up to a multiple of it.
+                            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
+                            if ($appliedTimeout === null) {
+                                return '';
+                            }
+
+                            $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
+                        }
+
                         continue;
                     }
 
@@ -626,6 +642,8 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     private function connectToAddress(int $addressFamily, string $address): PhpSocket {
 
+        socket_clear_error();
+
         // Suppressed for the reason given in readAvailableDataFromSource().
         $socket = @socket_create($addressFamily, SOCK_STREAM, SOL_TCP);
         if ($socket === false) {
@@ -897,6 +915,8 @@ final class Socket extends NodeImplementation implements IoNode {
             $write = null;
             $except = null;
 
+            socket_clear_error();
+
             if ($waitForData) {
                 // Wait at most for the remaining receive timeout, so a peer that
                 // stays connected but silent cannot block reads forever.
@@ -1005,6 +1025,8 @@ final class Socket extends NodeImplementation implements IoNode {
 
         [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
 
+        socket_clear_error();
+
         $selectResult = @socket_select(
             read: $read,
             write: $write,
@@ -1080,6 +1102,8 @@ final class Socket extends NodeImplementation implements IoNode {
             }
 
             [$remainingSeconds, $remainingMicroseconds] = $this->splitTimeout($remaining);
+
+            socket_clear_error();
 
             $selectResult = socket_select(
                 read: $read,

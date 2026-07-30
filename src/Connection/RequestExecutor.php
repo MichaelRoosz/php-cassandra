@@ -527,11 +527,13 @@ final class RequestExecutor {
      * option does not exist at all — attaching one would make the request
      * unencodable.
      *
-     * Which is why below v5 this takes one off rather than simply doing nothing:
-     * a request object sent once on a v5 connection still carries the keyspace
-     * that send gave it, and encoding it here would fail outright. Only a
-     * keyspace this driver put there is taken back; see
-     * {@see Request\Request::clearDefaultKeyspace()}.
+     * Which is why this takes one off rather than simply doing nothing wherever
+     * there is no default to apply: a request object sent once on a v5
+     * connection still carries the keyspace that send gave it. Below v5
+     * encoding it would fail outright, and on a v5 connection that has been
+     * moved off its keyspace it would quietly run the statement somewhere the
+     * connection no longer admits to being. Only a keyspace this driver put
+     * there is taken back; see {@see Request\Request::clearDefaultKeyspace()}.
      *
      * The request is modified in place, as {@see Request\Request::setStream()}
      * and setVersion() already are: a request handed to the executor is the
@@ -549,6 +551,8 @@ final class RequestExecutor {
 
         $keyspace = $this->session->getKeyspace();
         if ($keyspace === '') {
+            $request->clearDefaultKeyspace();
+
             return;
         }
 

@@ -20,6 +20,19 @@ use TypeError;
 use ValueError;
 
 final class ResponseReader {
+    /**
+     * Largest frame body the protocol allows, and so the largest this reader
+     * will try to assemble.
+     *
+     * The length is four bytes on the wire, i.e. up to 4 GiB, while the spec
+     * caps a frame body at 256 MB — so a corrupted or hostile length is a
+     * number this reader would otherwise spend gigabytes of memory buffering
+     * towards, one socket read at a time, before anything went wrong enough to
+     * notice. Refused at the header instead, where nothing has been read
+     * towards it yet.
+     */
+    private const MAX_FRAME_BODY_LENGTH = 256 * 1024 * 1024;
+
     private ?Header $currentHeader;
     private Lz4Decompressor $lz4Decompressor;
 
@@ -234,6 +247,22 @@ final class ResponseReader {
                 'host' => $nodeConfig->host,
                 'port' => $nodeConfig->port,
                 'protocol_version' => $version,
+            ]);
+        }
+
+        // Negative as well as too large: the length is an unsigned 32-bit field,
+        // and on 32-bit PHP unpack('N') hands anything past 2 GiB back as a
+        // negative int — which would otherwise sail past an upper bound and
+        // reach read() as a nonsense length.
+        if ($headerData['length'] < 0 || $headerData['length'] > self::MAX_FRAME_BODY_LENGTH) {
+            $nodeConfig = $node->getConfig();
+
+            throw new ConnectionException('Response frame body exceeds the maximum length the protocol allows.', ExceptionCode::CONNECTION_RESPONSE_BODY_TOO_LARGE->value, [
+                'host' => $nodeConfig->host,
+                'port' => $nodeConfig->port,
+                'protocol_version' => $version->inOptionFormat(),
+                'body_length' => $headerData['length'],
+                'max_body_length' => self::MAX_FRAME_BODY_LENGTH,
             ]);
         }
 
