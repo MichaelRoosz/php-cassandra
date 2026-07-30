@@ -96,6 +96,22 @@ final class DefaultKeyspaceTest extends AbstractUnitTestCase {
         $this->assertSame('explicit', $request->getOptions()->keyspace);
     }
 
+    public function testARequestSentAgainTakesTheKeyspaceTheConnectionIsOnNow(): void {
+        // A request is addressed on its way to the wire and keeps what it was
+        // given, so sending it a second time finds the keyspace of the first
+        // send already on it. That is the connection's own default, not a
+        // keyspace the caller named, and it has to give way to the current one
+        // — otherwise a request reused across setKeyspace() would go on running
+        // against the keyspace the connection has left, and say nothing about it.
+        $request = new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions());
+
+        $request->applyDefaultKeyspace('app');
+        $this->assertSame('app', $request->getOptions()->keyspace);
+
+        $request->applyDefaultKeyspace('reporting');
+        $this->assertSame('reporting', $request->getOptions()->keyspace);
+    }
+
     public function testBuildingARequestDoesNotOpenAConnection(): void {
         // The keyspace is no longer decided while the request is being built, so
         // nothing here has to know the negotiated version yet — and a node that
@@ -111,6 +127,36 @@ final class DefaultKeyspaceTest extends AbstractUnitTestCase {
         $this->assertNull($batchRequest->getOptions()->keyspace);
         $this->assertFalse($connection->isConnected());
         $this->assertSame('app', $connection->getKeyspace());
+    }
+
+    public function testEveryRequestTypeThatTakesADefaultAlsoGivesItUpAgain(): void {
+        // The four are separate overrides, so each is pinned rather than trusted
+        // to match Query above.
+        $requests = [
+            new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions()),
+            $this->executeRequest(new ExecuteOptions()),
+            new Prepare('SELECT * FROM t', new PrepareOptions()),
+            new Batch(BatchType::LOGGED, Consistency::ONE, new BatchOptions()),
+        ];
+
+        foreach ($requests as $request) {
+            $request->applyDefaultKeyspace('app');
+            $request->applyDefaultKeyspace('reporting');
+
+            $this->assertSame('reporting', $request->getOptions()->keyspace, get_class($request));
+        }
+    }
+
+    public function testTheCallersKeyspaceSurvivesEveryLaterDefault(): void {
+        // Not just the first one: the caller addressed this statement, and no
+        // number of sends on a connection that has since moved on takes that
+        // back.
+        $request = new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions(keyspace: 'explicit'));
+
+        $request->applyDefaultKeyspace('app');
+        $request->applyDefaultKeyspace('reporting');
+
+        $this->assertSame('explicit', $request->getOptions()->keyspace);
     }
 
     public function testTheOtherRequestsHaveNoKeyspaceToTake(): void {

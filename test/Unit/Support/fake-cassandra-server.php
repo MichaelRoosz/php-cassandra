@@ -27,6 +27,9 @@
  *   always-unprepared
  *                   prepare happily, but answer every EXECUTE with UNPREPARED,
  *                   as a node that never keeps the prepared statement would
+ *   refuse-use      report every QUERY on stdout as "query <cql>", and answer
+ *                   the ones that switch keyspace with INVALID, as a node asked
+ *                   for a keyspace that does not exist would
  */
 
 declare(strict_types=1);
@@ -125,6 +128,25 @@ function unpreparedErrorBody(): string {
     return pack('N', 0x2500)                               // error code = UNPREPARED
         . cqlString('unprepared')                          // message [string]
         . pack('n', 4) . 'pid1';                           // unknown id [short bytes]
+}
+
+/**
+ * An INVALID ERROR, which is how a node refuses a USE for a keyspace that does
+ * not exist.
+ */
+function invalidErrorBody(string $message): string {
+    return pack('N', 0x2200)                               // error code = INVALID
+        . cqlString($message);                             // message [string]
+}
+
+/**
+ * The CQL of a QUERY frame, whose body starts with the [long string] query.
+ */
+function queryCql(string $body): string {
+    /** @var array{length: int} $parsed */
+    $parsed = unpack('Nlength', $body);
+
+    return substr($body, 4, $parsed['length']);
 }
 
 /** STATUS_CHANGE / UP for 127.0.0.1:9042. */
@@ -265,6 +287,24 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_QUERY:
+            if ($mode === 'refuse-use') {
+                // Reported verbatim so that a test can pin how the client
+                // spells the keyspace it is switching to.
+                $cql = queryCql($frame['body']);
+                fwrite(STDOUT, 'query ' . $cql . "\n");
+                fflush(STDOUT);
+
+                if (stripos($cql, 'USE ') === 0) {
+                    writeFrame($client, $frame['stream'], OPCODE_ERROR, invalidErrorBody('Keyspace does not exist'));
+
+                    break;
+                }
+
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody());
+
+                break;
+            }
+
             if ($mode === 'defer-slow') {
                 // Answer queries mentioning SLOW only after the delay, without
                 // blocking, so that other queries on the same connection are

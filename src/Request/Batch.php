@@ -80,11 +80,15 @@ final class Batch extends Request {
     #[\Override]
     public function applyDefaultKeyspace(string $keyspace): void {
 
-        if ($this->options->keyspace !== null) {
+        if (!$this->acceptsDefaultKeyspace($this->options->keyspace)) {
             return;
         }
 
-        $this->options = $this->options->withKeyspace($keyspace);
+        if ($this->options->keyspace !== $keyspace) {
+            $this->options = $this->options->withKeyspace($keyspace);
+        }
+
+        $this->markKeyspaceAsConnectionDefault();
     }
 
     /**

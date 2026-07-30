@@ -186,7 +186,9 @@ final class Connection {
      * timeout is one of the two ways a call that never waits can nonetheless
      * fail the connection with a ConnectionException — the other being the
      * orphaned-stream limit, which the request budgets kept here can reach; see
-     * {@see self::waitForNextResponse()}.
+     * {@see self::waitForNextResponse()}. The probe's write failing takes the
+     * connection down as well, but is reported as the transport failure it is
+     * rather than as either of those.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -565,14 +567,21 @@ final class Connection {
      * How it takes effect depends on the negotiated protocol version, and so
      * does when a keyspace that does not exist is refused. Up to v4 it is the
      * node's session that is switched over, with a USE sent from here, so a bad
-     * keyspace fails this call. From v5 the keyspace travels with each request
-     * — USE is deprecated there — so this call only records it, and a bad one
-     * is refused by the next request instead.
+     * keyspace fails this call — and leaves the connection on the keyspace it
+     * was already on, which is where the node's session stayed. From v5 the
+     * keyspace travels with each request — USE is deprecated there — so this
+     * call only records it, and a bad one is refused by the next request
+     * instead.
      *
      * Either way it applies to every request sent on this connection, including
      * one built by hand and handed to {@see self::syncRequest()} or
      * {@see self::asyncRequest()} — except where that request names a keyspace
-     * of its own, which wins.
+     * of its own, which wins. A request sent more than once takes whatever this
+     * connection is on at each send; it is only a keyspace the caller put on the
+     * request that survives a change here.
+     *
+     * The name is taken exactly as given, on every protocol version: a keyspace
+     * created as `MyKs` is reached by that spelling and not by `myks`.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException

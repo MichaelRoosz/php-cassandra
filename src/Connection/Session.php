@@ -641,6 +641,8 @@ final class Session {
      */
     public function setKeyspace(string $keyspace): void {
 
+        $previousKeyspace = $this->keyspace;
+
         $this->keyspace = $keyspace;
 
         if (!$this->isConnected() || $this->keyspace === '') {
@@ -657,7 +659,21 @@ final class Session {
             return;
         }
 
-        $this->useKeyspace('setKeyspace');
+        try {
+            $this->useKeyspace('setKeyspace');
+        } catch (Throwable $e) {
+            // Up to v4 the keyspace is the node session's, and a USE that failed
+            // left it on the old one. Recording the new one anyway would make
+            // this connection lie about where its requests run — every one of
+            // them would go to $previousKeyspace while
+            // {@see \Cassandra\Connection::getKeyspace()} named the other — and
+            // would arm the next connect() with a USE that fails the handshake,
+            // turning one rejected call into a connection that can no longer be
+            // opened.
+            $this->keyspace = $previousKeyspace;
+
+            throw $e;
+        }
     }
 
     /**
@@ -1479,6 +1495,28 @@ final class Session {
     }
 
     /**
+     * Spell a keyspace name as a CQL identifier.
+     *
+     * The name is a value the application chose, and the only place it is ever
+     * pasted into CQL is the USE below — everywhere else it travels as the
+     * keyspace request option, which is a length-prefixed string the server
+     * takes as a name and nothing else. Quoting closes that one gap: without it
+     * a keyspace containing a semicolon would carry whatever followed it into
+     * the statement as CQL of its own.
+     *
+     * Quoting also settles the case question the same way the request option
+     * already does. An unquoted identifier is folded to lower case by the
+     * server, so up to v4 `USE MyKs` reached `myks` while from v5 the same name
+     * in the request option reached `MyKs` — the same connection, addressed the
+     * same way, on two keyspaces. Quoted, both versions mean the keyspace that
+     * is spelled exactly as given.
+     */
+    private static function quoteIdentifier(string $identifier): string {
+
+        return '"' . str_replace('"', '""', $identifier) . '"';
+    }
+
+    /**
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -1702,6 +1740,9 @@ final class Session {
      * the callers gate on the version rather than this doing it for them, there
      * being nothing for it to do on v5 at all.
      *
+     * The keyspace goes in as a quoted identifier, see
+     * {@see self::quoteIdentifier()}.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -1714,7 +1755,7 @@ final class Session {
      */
     private function useKeyspace(string $operation): void {
 
-        $response = $this->sendSyncRequest(new Request\Query("USE {$this->keyspace};"));
+        $response = $this->sendSyncRequest(new Request\Query('USE ' . self::quoteIdentifier($this->keyspace) . ';'));
 
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during setKeyspace', ExceptionCode::CONNECTION_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [

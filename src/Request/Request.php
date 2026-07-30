@@ -24,6 +24,21 @@ abstract class Request implements Frame, Stringable {
     private const INT32_MIN = -2147483647 - 1;
 
     /**
+     * Whether the keyspace this request carries was put there by the connection
+     * rather than by the caller.
+     *
+     * A request is addressed on its way to the wire and keeps what it was given,
+     * so the option alone cannot say who set it: sent a second time — by hand,
+     * or after {@see \Cassandra\Connection::setKeyspace()} — a request that took
+     * the connection's default on the first send would look exactly like one the
+     * caller addressed themselves, and would go on running against the keyspace
+     * the connection has since left. Recorded here so that a default can be
+     * replaced by the next default while a keyspace the caller named is still
+     * never touched.
+     */
+    private bool $keyspaceIsConnectionDefault = false;
+
+    /**
      * @param ?array<string,string> $payload
      */
     public function __construct(
@@ -96,8 +111,14 @@ abstract class Request implements Frame, Stringable {
      * is known; see {@see \Cassandra\Connection\RequestExecutor}.
      *
      * A no-op for the requests that have no keyspace to speak of — STARTUP,
-     * OPTIONS, REGISTER, AUTH_RESPONSE — and for one that already names it,
-     * which is the caller's to be right about.
+     * OPTIONS, REGISTER, AUTH_RESPONSE — and for one the caller named a keyspace
+     * on, which is theirs to be right about.
+     *
+     * The overrides decide that with {@see self::acceptsDefaultKeyspace()} and
+     * then say so with {@see self::markKeyspaceAsConnectionDefault()}, rather
+     * than by testing the option for null: a request sent a second time already
+     * carries the keyspace of the first send, and telling that apart from one
+     * the caller put there is exactly what those two are for.
      *
      * @throws \Cassandra\Exception\RequestException the overrides rebuild their
      * options to put the keyspace in, and building options can refuse what it is
@@ -184,6 +205,21 @@ abstract class Request implements Frame, Stringable {
 
     public function setVersion(ProtocolVersion $version): void {
         $this->version = $version;
+    }
+
+    /**
+     * Whether {@see self::applyDefaultKeyspace()} may write the connection's
+     * keyspace onto this request, given the one its options carry now.
+     *
+     * Yes while it carries none, and yes again for one this connection put there
+     * itself — that is a default being replaced by the current default, not the
+     * caller being overruled. Only a keyspace the caller named is left alone,
+     * for good: they pointed this one statement somewhere, and no later
+     * {@see \Cassandra\Connection::setKeyspace()} takes that back.
+     */
+    final protected function acceptsDefaultKeyspace(?string $currentKeyspace): bool {
+
+        return $currentKeyspace === null || $this->keyspaceIsConnectionDefault;
     }
 
     /**
@@ -502,6 +538,15 @@ abstract class Request implements Frame, Stringable {
         }
 
         return $encodedValues;
+    }
+
+    /**
+     * Record that the keyspace this request now carries is the connection's
+     * default, see {@see self::$keyspaceIsConnectionDefault}.
+     */
+    final protected function markKeyspaceAsConnectionDefault(): void {
+
+        $this->keyspaceIsConnectionDefault = true;
     }
 
     private function missingBindValueException(int|string $key): RequestException {
