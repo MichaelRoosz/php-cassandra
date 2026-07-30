@@ -844,8 +844,18 @@ final class Session {
 
         $this->timeOutExpiredStatements();
 
-        $initialReady = 0;
+        // Counted per distinct statement rather than per element: the return
+        // value is how many of the caller's requests this call answered, and the
+        // same statement handed in twice is still one request. Without this it
+        // would be reported as two, and a caller counting down the statements
+        // they are waiting for would think one more had arrived than did.
+        $distinct = [];
         foreach ($statements as $s) {
+            $distinct[spl_object_id($s)] = $s;
+        }
+
+        $initialReady = 0;
+        foreach ($distinct as $s) {
             if ($s->isResultReady()) {
                 $initialReady++;
 
@@ -862,7 +872,7 @@ final class Session {
             $processed < $max
         ) {
             $hasUnresolvedStatements = false;
-            foreach ($statements as $s) {
+            foreach ($distinct as $s) {
                 if (!$s->isResultReady()) {
                     $hasUnresolvedStatements = true;
 
@@ -884,7 +894,7 @@ final class Session {
         $this->keepNonBlockingBookkeeping($readAttempted, statementsAlreadyExpired: !$readAttempted);
 
         $ready = 0;
-        foreach ($statements as $s) {
+        foreach ($distinct as $s) {
             if ($s->isResultReady()) {
                 $ready++;
             }

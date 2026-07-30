@@ -96,6 +96,28 @@ final class DefaultKeyspaceTest extends AbstractUnitTestCase {
         $this->assertSame('explicit', $request->getOptions()->keyspace);
     }
 
+    public function testARequestGivesUpTheDefaultKeyspaceForAVersionThatCannotCarryOne(): void {
+        // The keyspace option only exists from v5, and getBody() refuses to
+        // encode one the version cannot express. A request object sent once on
+        // a v5 connection still carries the keyspace that send gave it, so a
+        // later send on a v4 connection — a second Connection, or the same one
+        // after it renegotiated down on reconnect — has to take it off again, or
+        // a request that worked once could never be sent again.
+        $request = new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions());
+        $request->setStream(1);
+
+        $request->setVersion(ProtocolVersion::V5);
+        $request->applyDefaultKeyspace('app');
+        $this->assertSame('app', $request->getOptions()->keyspace);
+        $this->assertNotSame('', (string) $request);
+
+        $request->setVersion(ProtocolVersion::V4);
+        $request->clearDefaultKeyspace();
+
+        $this->assertNull($request->getOptions()->keyspace);
+        $this->assertNotSame('', (string) $request);
+    }
+
     public function testARequestSentAgainTakesTheKeyspaceTheConnectionIsOnNow(): void {
         // A request is addressed on its way to the wire and keeps what it was
         // given, so sending it a second time finds the keyspace of the first
@@ -145,6 +167,36 @@ final class DefaultKeyspaceTest extends AbstractUnitTestCase {
 
             $this->assertSame('reporting', $request->getOptions()->keyspace, get_class($request));
         }
+    }
+
+    public function testEveryRequestTypeThatTakesADefaultAlsoGivesItUpForAnOlderVersion(): void {
+        // Four separate overrides again, each pinned rather than trusted to
+        // match Query above.
+        $requests = [
+            new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions()),
+            $this->executeRequest(new ExecuteOptions()),
+            new Prepare('SELECT * FROM t', new PrepareOptions()),
+            new Batch(BatchType::LOGGED, Consistency::ONE, new BatchOptions()),
+        ];
+
+        foreach ($requests as $request) {
+            $request->applyDefaultKeyspace('app');
+            $this->assertSame('app', $request->getOptions()->keyspace, get_class($request));
+
+            $request->clearDefaultKeyspace();
+            $this->assertNull($request->getOptions()->keyspace, get_class($request));
+        }
+    }
+
+    public function testTheCallersKeyspaceIsNotGivenUpForAnOlderVersion(): void {
+        // Taking it off would quietly run the statement against whatever the
+        // v4 session is on, which is not where the caller pointed it. Refusing
+        // to encode it is the right answer, so it stays put.
+        $request = new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions(keyspace: 'explicit'));
+
+        $request->clearDefaultKeyspace();
+
+        $this->assertSame('explicit', $request->getOptions()->keyspace);
     }
 
     public function testTheCallersKeyspaceSurvivesEveryLaterDefault(): void {

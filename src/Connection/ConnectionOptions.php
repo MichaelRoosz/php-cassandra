@@ -84,6 +84,25 @@ final class ConnectionOptions {
         // healthy node dead. "No timeout" is spelled null for the two that
         // allow it, and the heartbeat timeout only matters when the interval
         // has already turned heartbeats on.
+        //
+        // NAN is tested for separately because it passes every comparison below:
+        // it is neither greater than zero nor less than or equal to it. Left
+        // through, it would reach {@see Deadline::at()} and produce a deadline no
+        // clock ever compares greater than, i.e. a request that silently waits
+        // for good — and it would be the one way to get that past
+        // {@see Deadline::assertValidRequestTimeout()}, which refuses it for
+        // {@see \Cassandra\Connection::setRequestTimeout()} and for the per-call
+        // arguments.
+        if ($requestTimeoutInSeconds !== null && is_nan($requestTimeoutInSeconds)) {
+            throw new ConnectionException(
+                'Invalid request timeout: it must be a number greater than zero, or null to wait indefinitely',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'request_timeout_seconds' => 'NAN',
+                ]
+            );
+        }
+
         if ($requestTimeoutInSeconds !== null && $requestTimeoutInSeconds <= 0.0) {
             throw new ConnectionException(
                 'Invalid request timeout: it must be greater than zero, or null to wait indefinitely',
@@ -94,12 +113,41 @@ final class ConnectionOptions {
             );
         }
 
+        // The two heartbeat values have to be finite as well, which the request
+        // timeout does not: INF there asks for an unbounded wait and
+        // {@see Deadline::at()} normalises it to exactly that. Here it would
+        // instead put INF where a deadline is expected —
+        // {@see HeartbeatMonitor::getNextActionAt()} hands it to every read — and
+        // a read bounded by INF is not an unbounded read but a bounded one that
+        // never comes due, which is what tells {@see Session::readResponseUntil()}
+        // to swallow the transport's stall window rather than treat it as the
+        // last judgement available. Heartbeats are switched off with null.
+        if ($heartbeatIntervalInSeconds !== null && !is_finite($heartbeatIntervalInSeconds)) {
+            throw new ConnectionException(
+                'Invalid heartbeat interval: it must be a finite number greater than zero, or null to disable heartbeats',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'heartbeat_interval_seconds' => is_nan($heartbeatIntervalInSeconds) ? 'NAN' : ($heartbeatIntervalInSeconds > 0.0 ? 'INF' : '-INF'),
+                ]
+            );
+        }
+
         if ($heartbeatIntervalInSeconds !== null && $heartbeatIntervalInSeconds <= 0.0) {
             throw new ConnectionException(
                 'Invalid heartbeat interval: it must be greater than zero, or null to disable heartbeats',
                 ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
                 [
                     'heartbeat_interval_seconds' => $heartbeatIntervalInSeconds,
+                ]
+            );
+        }
+
+        if ($heartbeatIntervalInSeconds !== null && !is_finite($heartbeatTimeoutInSeconds)) {
+            throw new ConnectionException(
+                'Invalid heartbeat timeout: it must be a finite number greater than zero',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'heartbeat_timeout_seconds' => is_nan($heartbeatTimeoutInSeconds) ? 'NAN' : ($heartbeatTimeoutInSeconds > 0.0 ? 'INF' : '-INF'),
                 ]
             );
         }

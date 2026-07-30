@@ -127,6 +127,30 @@ abstract class Request implements Frame, Stringable {
     public function applyDefaultKeyspace(string $keyspace): void {
     }
 
+    /**
+     * Take back a keyspace {@see self::applyDefaultKeyspace()} put on this
+     * request, for a send on a protocol version that cannot carry one.
+     *
+     * The keyspace option only exists from v5. A request is addressed on its way
+     * to the wire and keeps what it was given, so one that took the connection's
+     * default on a v5 send still carries it when the same object is sent again
+     * on a v4 connection — a second {@see \Cassandra\Connection}, or the same one
+     * after it renegotiated down on reconnect. Left there it is not merely
+     * ignored: {@see self::getBody()} refuses to encode a keyspace the version
+     * cannot express, so a request that worked once would fail for good.
+     *
+     * Only a keyspace this driver put there is taken off, which is the whole
+     * point of {@see self::$keyspaceIsConnectionDefault}: one the caller named
+     * themselves is theirs, and refusing to encode it is the right answer rather
+     * than quietly running the statement somewhere else.
+     *
+     * @throws \Cassandra\Exception\RequestException the overrides rebuild their
+     * options to take the keyspace out, and building options can refuse what it
+     * is given
+     */
+    public function clearDefaultKeyspace(): void {
+    }
+
     public function enableTracing(): void {
         $this->flags |= Flag::TRACING;
     }
@@ -220,6 +244,16 @@ abstract class Request implements Frame, Stringable {
     final protected function acceptsDefaultKeyspace(?string $currentKeyspace): bool {
 
         return $currentKeyspace === null || $this->keyspaceIsConnectionDefault;
+    }
+
+    /**
+     * Whether the keyspace this request carries is one the connection put there,
+     * see {@see self::$keyspaceIsConnectionDefault}. What
+     * {@see self::clearDefaultKeyspace()} is allowed to take back.
+     */
+    final protected function carriesDefaultKeyspace(): bool {
+
+        return $this->keyspaceIsConnectionDefault;
     }
 
     /**
@@ -538,6 +572,16 @@ abstract class Request implements Frame, Stringable {
         }
 
         return $encodedValues;
+    }
+
+    /**
+     * Forget that the keyspace this request carried was the connection's,
+     * because it no longer carries one; the counterpart of
+     * {@see self::markKeyspaceAsConnectionDefault()}.
+     */
+    final protected function forgetDefaultKeyspace(): void {
+
+        $this->keyspaceIsConnectionDefault = false;
     }
 
     /**

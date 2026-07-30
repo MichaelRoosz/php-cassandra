@@ -29,4 +29,18 @@ final class PrepareOptions extends RequestOptions {
             requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
         );
     }
+
+    /**
+     * The same options with no keyspace at all, for a request that has to go
+     * out on a protocol version where the keyspace option does not exist; see
+     * {@see \Cassandra\Request\Request::clearDefaultKeyspace()}.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    public function withoutKeyspace(): self {
+        return new self(
+            keyspace: null,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
+        );
+    }
 }

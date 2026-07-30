@@ -64,6 +64,27 @@ class QueryOptions extends RequestOptions {
     }
 
     /**
+     * The same options with no keyspace at all, for a request that has to go
+     * out on a protocol version where the keyspace option does not exist; see
+     * {@see \Cassandra\Request\Request::clearDefaultKeyspace()}.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    public function withoutKeyspace(): self {
+        return new self(
+            autoPrepare: $this->autoPrepare,
+            pageSize: $this->pageSize,
+            pagingState: $this->pagingState,
+            serialConsistency: $this->serialConsistency,
+            defaultTimestamp: $this->defaultTimestamp,
+            namesForValues: $this->namesForValues,
+            keyspace: null,
+            nowInSeconds: $this->nowInSeconds,
+            requestTimeoutInSeconds: $this->requestTimeoutInSeconds,
+        );
+    }
+
+    /**
      * @throws \Cassandra\Exception\RequestException
      */
     public function withPagingState(string $pagingState): self {

@@ -73,6 +73,22 @@ final class RequestExecutor {
 
         $streamGeneration = $statement->getStreamGeneration();
 
+        // Checked ahead of the try below rather than inside it, because this is
+        // the one failure whose stream id is not this statement's to give back:
+        // another statement is registered at it, so the disposal that try owes a
+        // send that never happened would put a live request's id back into
+        // circulation — and {@see StreamIdPool::release()} could not tell, since
+        // the id really is outstanding, just not ours. Nothing has been written
+        // or claimed yet either, so the statement is all there is to finish.
+        if ($this->statements->has($streamId)) {
+            $statement->setStatus(StatementStatus::ABANDONED);
+
+            throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
+                'operation' => 'chainAsyncRequest',
+                'stream_id' => $streamId,
+            ]);
+        }
+
         // The statement is not among the pending ones at this point: the
         // response that triggered the follow-up took it out of the map. Nothing
         // else would mark it if the follow-up never goes out, so it is done
@@ -108,13 +124,6 @@ final class RequestExecutor {
             $this->applyDefaultKeyspace($request);
             $request->setStream($streamId);
 
-            if ($this->statements->has($streamId)) {
-                throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
-                    'operation' => 'chainAsyncRequest',
-                    'stream_id' => $streamId,
-                ]);
-            }
-
             $sentAt = 0.0;
 
             try {
@@ -144,11 +153,12 @@ final class RequestExecutor {
                 // Nothing reached the node and no statement holds this id any
                 // more, so it goes back into circulation instead of being
                 // burned for the lifetime of the connection. One release covers
-                // every way of failing above, the guards included: a node
-                // failure among them took the whole pool with it, and
+                // every way of failing inside this try: a node failure among
+                // them took the whole pool with it, and
                 // {@see StreamIdPool::release()} passes over an id whose pool
                 // has been started over rather than leaving that to be told
-                // apart here.
+                // apart here. The one failure whose id is somebody else's is
+                // kept out of the try altogether, see the guard above.
                 $this->streamIds->release($streamId, $streamGeneration);
             }
         }
@@ -286,6 +296,13 @@ final class RequestExecutor {
             }
 
             if ($this->statements->has($streamId)) {
+                // Accounted for by the statement already registered at this id,
+                // not by this call: the disposals below must leave it alone, or
+                // an id a live request is still waiting on would go back into
+                // circulation — and {@see StreamIdPool::release()} could not tell,
+                // since the id really is outstanding, just not ours.
+                $streamIdAccountedFor = true;
+
                 throw new ConnectionException('Stream ID already in use', ExceptionCode::CONNECTION_STREAM_ID_ALREADY_IN_USE->value, [
                     'operation' => 'sendAsyncRequest',
                     'stream_id' => $streamId,
@@ -510,6 +527,12 @@ final class RequestExecutor {
      * option does not exist at all — attaching one would make the request
      * unencodable.
      *
+     * Which is why below v5 this takes one off rather than simply doing nothing:
+     * a request object sent once on a v5 connection still carries the keyspace
+     * that send gave it, and encoding it here would fail outright. Only a
+     * keyspace this driver put there is taken back; see
+     * {@see Request\Request::clearDefaultKeyspace()}.
+     *
      * The request is modified in place, as {@see Request\Request::setStream()}
      * and setVersion() already are: a request handed to the executor is the
      * connection's to finish addressing.
@@ -519,6 +542,8 @@ final class RequestExecutor {
     private function applyDefaultKeyspace(Request\Request $request): void {
 
         if ($this->session->getProtocolVersion()->value < ProtocolVersion::V5->value) {
+            $request->clearDefaultKeyspace();
+
             return;
         }
 

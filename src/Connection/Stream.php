@@ -349,8 +349,18 @@ final class Stream extends NodeImplementation implements IoNode {
         // writing a large frame over a slow but healthy connection cannot trip it.
         $lastProgressAt = microtime(true);
 
+        // A blocking stream normally needs no select(): fwrite() waits for room
+        // of its own accord, bounded by the stream timeout. But a pass that comes
+        // back without moving a byte would go straight into another fwrite(), and
+        // on a blocking stream that is a tight loop burning a core until the
+        // stall window runs out — the read side selects even in blocking mode for
+        // the same reason. So once a pass makes no progress, writability is
+        // waited for with select() from then on: bounded by what is left of the
+        // window, and free while the stream is writable.
+        $selectBeforeWrite = !$this->isBlockingIo;
+
         do {
-            if (!$this->isBlockingIo) {
+            if ($selectBeforeWrite) {
                 $canWrite = $this->selectStreamForWrite($stream, $lastProgressAt);
                 if (!$canWrite) {
                     continue;
@@ -406,6 +416,10 @@ final class Stream extends NodeImplementation implements IoNode {
             if ($sentBytes === 0) {
 
                 $this->checkForWriteTimeout($stream, $lastProgressAt);
+
+                // Back to the top so the stream is selected for writability
+                // again instead of spinning on fwrite().
+                $selectBeforeWrite = true;
 
                 continue;
             }

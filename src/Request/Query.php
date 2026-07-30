@@ -47,6 +47,23 @@ final class Query extends Request {
     }
 
     /**
+     * See {@see Request::clearDefaultKeyspace()}.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    #[\Override]
+    public function clearDefaultKeyspace(): void {
+
+        if (!$this->carriesDefaultKeyspace()) {
+            return;
+        }
+
+        $this->options = $this->options->withoutKeyspace();
+
+        $this->forgetDefaultKeyspace();
+    }
+
+    /**
      * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]

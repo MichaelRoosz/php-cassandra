@@ -38,6 +38,23 @@ final class Prepare extends Request {
     }
 
     /**
+     * See {@see Request::clearDefaultKeyspace()}.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    #[\Override]
+    public function clearDefaultKeyspace(): void {
+
+        if (!$this->carriesDefaultKeyspace()) {
+            return;
+        }
+
+        $this->options = $this->options->withoutKeyspace();
+
+        $this->forgetDefaultKeyspace();
+    }
+
+    /**
      * @throws \Cassandra\Exception\RequestException
      */
     #[\Override]
@@ -74,9 +91,15 @@ final class Prepare extends Request {
     }
 
     public function getHash(): string {
+        $keyspace = $this->options->keyspace;
+
         // "\0" separates query and keyspace so that (query, keyspace) pairs like
-        // ("SELECT…x", "y") and ("SELECT…xy", "") cannot share a cache slot.
-        return hash('sha256', $this->query . "\0" . ($this->options->keyspace ?? ''));
+        // ("SELECT…x", "y") and ("SELECT…xy", "") cannot share a cache slot. The
+        // marker byte after it separates carrying no keyspace from carrying an
+        // empty one, which are two different requests — one runs against
+        // whatever the session is on, the other names a keyspace — and would
+        // otherwise both hash as the bare query.
+        return hash('sha256', $this->query . "\0" . ($keyspace === null ? '-' : '+' . $keyspace));
     }
 
     public function getOptions(): PrepareOptions {

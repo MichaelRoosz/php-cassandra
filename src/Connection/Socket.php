@@ -354,8 +354,19 @@ final class Socket extends NodeImplementation implements IoNode {
         // writing a large frame over a slow but healthy connection cannot trip
         // it. This mirrors SO_SNDTIMEO, which POSIX defines per send() call.
         $lastProgressAt = microtime(true);
+
+        // A blocking socket normally needs no select(): socket_write() waits for
+        // room of its own accord, bounded by SO_SNDTIMEO. But a pass that comes
+        // back without moving a byte would go straight into another
+        // socket_write(), and on a blocking socket that is a tight loop burning
+        // a core until the stall window runs out — the read side selects even in
+        // blocking mode for the same reason. So once a pass makes no progress,
+        // writability is waited for with select() from then on: bounded by what
+        // is left of the window, and free while the socket is writable.
+        $selectBeforeWrite = !$this->isBlockingIo;
+
         do {
-            if (!$this->isBlockingIo) {
+            if ($selectBeforeWrite) {
                 $canWrite = $this->selectSocketForWrite($socket, $lastProgressAt);
                 if (!$canWrite) {
                     continue;
@@ -372,6 +383,8 @@ final class Socket extends NodeImplementation implements IoNode {
 
                     // Back to the outer loop so the socket is selected for
                     // writability again instead of spinning on socket_write().
+                    $selectBeforeWrite = true;
+
                     continue 2;
                 }
 
@@ -388,6 +401,8 @@ final class Socket extends NodeImplementation implements IoNode {
 
                         // Back to the outer loop so the socket is selected for
                         // writability again instead of spinning on socket_write().
+                        $selectBeforeWrite = true;
+
                         continue 2;
                     }
 
