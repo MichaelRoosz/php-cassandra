@@ -7,6 +7,8 @@ namespace Cassandra\Test\Unit;
 use Cassandra\Connection;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Exception\ConnectionException;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ServerException;
 
 /**
@@ -14,10 +16,14 @@ use Cassandra\Exception\ServerException;
  *
  * There the keyspace is a property of the node's session rather than of a
  * request, so {@see \Cassandra\Connection::setKeyspace()} has to send a USE and
- * live with what the node makes of it. Driven against the fake server's
- * "refuse-use" mode rather than mocks, because what is pinned here is what the
- * connection does with a USE that came back refused, and how it spelled the
- * keyspace on the way out.
+ * live with what the node makes of it: how it spells the keyspace on the way
+ * out, what it does with a USE that came back refused, that it cannot move the
+ * session off a keyspace at all, and that the statements prepared in the one it
+ * is leaving do not follow it into the next.
+ *
+ * Driven against the fake server rather than mocks — "refuse-use" for the calls
+ * the node turns down, "idle" for the ones it accepts — because every one of
+ * those is a question about what actually went over the wire.
  */
 final class KeyspaceSwitchTest extends AbstractUnitTestCase {
     /** @var ?array<int, resource> $serverPipes */
@@ -27,6 +33,27 @@ final class KeyspaceSwitchTest extends AbstractUnitTestCase {
 
     protected function tearDown(): void {
         $this->stopServer();
+    }
+
+    public function testAConnectedConnectionCannotBeMovedOffItsKeyspace(): void {
+        $connection = $this->connect('idle');
+
+        $connection->setKeyspace('ks_a');
+
+        // Up to v4 the keyspace belongs to the node's session and no CQL un-sets
+        // one, so recording '' would leave every request running against ks_a
+        // while getKeyspace() named none.
+        try {
+            $connection->setKeyspace('');
+            $this->fail('expected clearing the keyspace to be refused up to v4');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_KEYSPACE_CANNOT_BE_CLEARED->value, $e->getCode());
+        }
+
+        $this->assertSame('ks_a', $connection->getKeyspace(), 'a refused clear must not change the recorded keyspace');
+        $this->assertTrue($connection->isConnected(), 'refusing the call is not a reason to drop the connection');
+
+        $connection->disconnect();
     }
 
     public function testAKeyspaceCannotCarryCqlOfItsOwn(): void {
@@ -58,6 +85,56 @@ final class KeyspaceSwitchTest extends AbstractUnitTestCase {
         $connection->disconnect();
     }
 
+    public function testClearingAKeyspaceThatWasNeverSetIsANoOp(): void {
+        $connection = $this->connect('idle');
+
+        // Nothing to move off, so there is nothing this cannot honour.
+        $connection->setKeyspace('');
+
+        $this->assertSame('', $connection->getKeyspace());
+
+        $connection->disconnect();
+    }
+
+    public function testSwitchingKeyspaceEmptiesThePreparedStatementCache(): void {
+        $connection = $this->connect('idle');
+
+        $query = 'SELECT * FROM t WHERE id = ?';
+
+        $connection->setKeyspace('ks_a');
+        $connection->prepare($query);
+
+        // Up to v4 a PREPARE cannot carry a keyspace, so the cache cannot tell
+        // ks_a's prepared statement from ks_b's. Kept, it would answer this
+        // second prepare with ks_a's statement id and every EXECUTE on it would
+        // silently hit ks_a's table.
+        $connection->setKeyspace('ks_b');
+        $connection->prepare($query);
+
+        $this->assertSame(2, $this->preparesSeenByServer(), 'the second keyspace must prepare its own statement');
+
+        $connection->disconnect();
+    }
+
+    public function testTheCacheSurvivesAKeyspaceThatDidNotChange(): void {
+        $connection = $this->connect('idle');
+
+        $query = 'SELECT * FROM t WHERE id = ?';
+
+        $connection->setKeyspace('ks_a');
+        $connection->prepare($query);
+
+        // Same keyspace, so the statements in the cache are still the right
+        // ones: throwing them away would cost a round trip per prepare for
+        // nothing.
+        $connection->setKeyspace('ks_a');
+        $connection->prepare($query);
+
+        $this->assertSame(1, $this->preparesSeenByServer(), 'a switch that changed nothing must not empty the cache');
+
+        $connection->disconnect();
+    }
+
     public function testTheKeyspaceIsSentAsAQuotedIdentifier(): void {
         $connection = $this->connect();
 
@@ -72,8 +149,8 @@ final class KeyspaceSwitchTest extends AbstractUnitTestCase {
         $connection->disconnect();
     }
 
-    private function connect(): Connection {
-        $port = $this->startServer();
+    private function connect(string $mode = 'refuse-use'): Connection {
+        $port = $this->startServer($mode);
 
         $node = new SocketNodeConfig(
             host: '127.0.0.1',
@@ -112,6 +189,27 @@ final class KeyspaceSwitchTest extends AbstractUnitTestCase {
     }
 
     /**
+     * How many PREPAREs the server has been sent so far, which it reports as
+     * "prepared <n>" on stdout — the count the prepared-result cache is there to
+     * hold down, and the only way to tell a cache hit from a round trip.
+     */
+    private function preparesSeenByServer(): int {
+        if ($this->serverPipes === null) {
+            $this->fail('the fake Cassandra server is not running');
+        }
+
+        $prepares = 0;
+
+        while (($line = fgets($this->serverPipes[1])) !== false) {
+            if (str_starts_with(trim($line), 'prepared ')) {
+                $prepares++;
+            }
+        }
+
+        return $prepares;
+    }
+
+    /**
      * The CQL of every QUERY the server has seen so far, which it reports as
      * "query <cql>" on stdout.
      *
@@ -134,10 +232,10 @@ final class KeyspaceSwitchTest extends AbstractUnitTestCase {
         return $queries;
     }
 
-    private function startServer(): int {
+    private function startServer(string $mode): int {
         $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $process = proc_open(
-            ['php', __DIR__ . '/Support/fake-cassandra-server.php', 'refuse-use', '0'],
+            ['php', __DIR__ . '/Support/fake-cassandra-server.php', $mode, '0'],
             $descriptors,
             $pipes
         );

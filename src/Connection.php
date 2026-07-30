@@ -20,7 +20,11 @@ use Cassandra\Value\ValueEncodeConfig;
 /**
  * A client connection to a Cassandra or ScyllaDB cluster.
  *
- * This is the whole public API. It builds requests out of what a caller passes
+ * This is the whole of what a caller does to a connection; the rest of the
+ * public API is the things they hand it and get back — {@see ConnectionOptions}
+ * and {@see \Cassandra\Connection\NodeConfig} on the way in,
+ * {@see \Cassandra\Statement} and the {@see \Cassandra\Response\Response} tree
+ * on the way out. It builds requests out of what a caller passes
  * — filling in the connection's keyspace and consistency where a call leaves
  * them out — and hands everything that touches the node to its
  * {@see \Cassandra\Connection\Session}, which opens the connection, sends the
@@ -573,6 +577,19 @@ final class Connection {
      * call only records it, and a bad one is refused by the next request
      * instead.
      *
+     * That difference is also why an empty keyspace — moving this connection off
+     * a keyspace rather than onto another one — is only accepted from v5, where
+     * it means the absence of a keyspace on each request. Up to v4 there is no
+     * CQL that un-sets a node session's keyspace, so on a connected v4
+     * connection this raises rather than recording a keyspace the requests would
+     * not actually run against; before connecting, and from v5, it is recorded
+     * like any other value. Reconnecting is what clears it on v4.
+     *
+     * Switching keyspace also empties the prepared-statement cache up to v4,
+     * where a prepared statement cannot be told apart by the keyspace it was
+     * prepared in. From v5 it is kept: the keyspace is part of what each entry
+     * is filed under, so both keyspaces keep their own.
+     *
      * Either way it applies to every request sent on this connection, including
      * one built by hand and handed to {@see self::syncRequest()} or
      * {@see self::asyncRequest()} — except where that request names a keyspace
@@ -662,8 +679,8 @@ final class Connection {
      * It bounds each request this call sends, not the call as a whole: when the
      * driver has to prepare or reprepare the statement first, the PREPARE and
      * the request it precedes each get the full budget, so the call can take a
-     * multiple of it before giving up — a multiple bounded in turn by
-     * {@see \Cassandra\Connection\ResponseDispatcher::MAX_REPREPARATIONS}, since a node can answer the re-executed
+     * multiple of it before giving up — a multiple bounded in turn by the
+     * driver's repreparation limit, since a node can answer the re-executed
      * statement with UNPREPARED all over again. The wait for a free stream id,
      * on a connection that has handed out every one of them, is held to it
      * separately as well.

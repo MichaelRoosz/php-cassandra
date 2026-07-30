@@ -643,16 +643,41 @@ final class Session {
 
         $previousKeyspace = $this->keyspace;
 
+        $usesSessionKeyspace = $this->version->value < ProtocolVersion::V5->value;
+
+        if ($keyspace === '' && $previousKeyspace !== '' && $usesSessionKeyspace && $this->isConnected()) {
+            // Refused rather than recorded, because up to v4 there is no way to
+            // say it: the keyspace is a property of the node's session and CQL
+            // has no USE that un-sets one. Recording it anyway would leave the
+            // node's session on $previousKeyspace while
+            // {@see \Cassandra\Connection::getKeyspace()} named none — every
+            // unqualified request would keep running against a keyspace this
+            // connection no longer admits to being on, which is the same lie the
+            // rollback below exists to prevent. Reconnecting is what clears it,
+            // and from v5 the keyspace travels per request, so there it is
+            // simply the absence of one and is recorded like any other value.
+            throw new ConnectionException(
+                'A connection on protocol v4 or below cannot be moved off its keyspace, only onto another one: up to v4 the keyspace belongs to the node\'s session and there is no CQL to un-set it. Name the keyspace to switch to, or open a new connection without one.',
+                ExceptionCode::CONNECTION_KEYSPACE_CANNOT_BE_CLEARED->value,
+                [
+                    'operation' => 'setKeyspace',
+                    'keyspace' => $previousKeyspace,
+                    'protocol_version' => $this->version->inOptionFormat(),
+                    'required_protocol_version' => ProtocolVersion::V5->inOptionFormat(),
+                ]
+            );
+        }
+
         $this->keyspace = $keyspace;
 
-        if (!$this->isConnected() || $this->keyspace === '') {
+        if (!$this->isConnected() || $keyspace === '') {
             // Nothing to switch to yet: the handshake sends the USE for a
             // connection that has still to be opened, and an empty keyspace is
             // not a keyspace to switch to but the absence of one.
             return;
         }
 
-        if ($this->version->value >= ProtocolVersion::V5->value) {
+        if (!$usesSessionKeyspace) {
             // From v5 the keyspace travels with each request instead, so
             // recording it is the whole of the work; USE is deprecated from v5
             // and answers with a warning.
@@ -673,6 +698,22 @@ final class Session {
             $this->keyspace = $previousKeyspace;
 
             throw $e;
+        }
+
+        if ($keyspace !== $previousKeyspace) {
+            // The prepared statements this connection knows the id of were
+            // prepared in the keyspace it has just left, and up to v4 nothing
+            // tells them apart: a PREPARE cannot carry a keyspace before v5, so
+            // {@see \Cassandra\Request\Prepare::getHash()} keys them on the
+            // query alone and the next prepare of the same CQL would be answered
+            // out of this cache with the previous keyspace's statement id — an
+            // EXECUTE against the wrong table, with no error to show for it.
+            //
+            // From v5 the keyspace is part of that key, because
+            // {@see RequestExecutor::applyDefaultKeyspace()} puts it on the
+            // request before the cache is consulted, so the two keyspaces get
+            // an entry each and there is nothing to throw away.
+            $this->preparedResultCache->clear();
         }
     }
 
@@ -1286,12 +1327,36 @@ final class Session {
             $node = $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
 
             $authResult = $this->sendSyncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
+
+            if ($authResult instanceof Response\AuthChallenge) {
+                // The node asked for another round of the SASL exchange. Only
+                // the single-round password authenticators are implemented here
+                // — the driver has one credential pair and no way to answer a
+                // challenge with anything derived from it — so this is reported
+                // for the unsupported authenticator it is rather than as the
+                // rejected password it is not. Told apart from a failure so that
+                // nobody goes looking for a typo in credentials the node never
+                // passed judgement on.
+                throw new ConnectionException(
+                    'The node answered with an authentication challenge, which needs a multi-round SASL exchange this driver does not implement. Only single-round password authentication is supported.',
+                    ExceptionCode::CONNECTION_AUTH_CHALLENGE_UNSUPPORTED->value,
+                    [
+                        'operation' => 'connect/authenticate',
+                        'host' => $nodeConfig->host,
+                        'port' => $nodeConfig->port,
+                        'username' => $nodeConfig->username,
+                        'authenticator' => $response->getData(),
+                    ]
+                );
+            }
+
             if (!($authResult instanceof Response\AuthSuccess)) {
                 throw new ConnectionException('Authentication failed.', ExceptionCode::CONNECTION_AUTH_FAILED->value, [
                     'operation' => 'connect/authenticate',
                     'host' => $nodeConfig->host,
                     'port' => $nodeConfig->port,
                     'username' => $nodeConfig->username,
+                    'received' => get_class($authResult),
                 ]);
             }
         } elseif ($response instanceof Response\Ready) {
@@ -1710,7 +1775,13 @@ final class Session {
         $this->statements->forget($streamId);
         $this->streamIds->park($streamId, $streamGeneration);
 
-        if ($statement !== null) {
+        if ($statement !== null && !$statement->isAbandoned()) {
+            // Not over an abandoned one: that is a statement whose connection
+            // went away while this pass was reading, and the failure it was
+            // given up on for is the one its owner has to hear about. Marking it
+            // timed out would report the deadline this call happened to be
+            // holding it to as the reason a request never sent on a live
+            // connection failed.
             $statement->setStatus(StatementStatus::TIMED_OUT);
         }
 

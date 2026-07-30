@@ -15,8 +15,13 @@ class RequestOptions {
      * is the same judgement {@see \Cassandra\Connection\ConnectionOptions}
      * makes about its own default and {@see \Cassandra\Connection::setRequestTimeout()}
      * about the value it is handed. "Use the connection default" is spelled
-     * null, and an unbounded wait is configured on the connection rather than
-     * per request.
+     * null.
+     *
+     * INF passes, and asks for a request that waits for as long as it takes —
+     * the same wait a null connection default gives, spelled per request so that
+     * one statement can outlast the default without changing what it means for
+     * everything else. {@see \Cassandra\Connection\Deadline::at()} normalises it
+     * to that unbounded wait.
      *
      * @throws \Cassandra\Exception\RequestException
      */
