@@ -30,7 +30,7 @@ final class ConnectionOptions {
         public readonly int $preparedResultCacheSize = 100,
 
         /** @var ProtocolVersion[] $allowedProtocolVersions */
-        public readonly array $allowedProtocolVersions = ProtocolVersion::PREFRED_ORDER,
+        public readonly array $allowedProtocolVersions = ProtocolVersion::PREFERRED_ORDER,
         public readonly ProtocolVersion $initialProtocolVersion = ProtocolVersion::V4,
 
         /**

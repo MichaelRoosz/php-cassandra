@@ -30,11 +30,23 @@ enum ProtocolVersion: int {
     public const OPTION_FORMAT_V4 = '4/v4';
     public const OPTION_FORMAT_V5 = '5/v5';
 
-    public const PREFRED_ORDER = [
+    /**
+     * The versions this driver speaks, best first — what a connection works
+     * down when it negotiates, and the default for
+     * {@see \Cassandra\Connection\ConnectionOptions::$allowedProtocolVersions}.
+     */
+    public const PREFERRED_ORDER = [
         self::V5,
         self::V4,
         self::V3,
     ];
+
+    /**
+     * @deprecated Misspelled; use {@see self::PREFERRED_ORDER} instead. Kept as
+     * an alias of it because it is public API, and constants cannot be renamed
+     * without breaking whoever named this one.
+     */
+    public const PREFRED_ORDER = self::PREFERRED_ORDER;
 
     public function asIncomingVersion(): int {
         return $this->value + 0x80;
@@ -66,7 +78,7 @@ enum ProtocolVersion: int {
             return null;
         }
 
-        foreach (self::PREFRED_ORDER as $version) {
+        foreach (self::PREFERRED_ORDER as $version) {
             if (in_array($version, $possibleVersions, true)) {
                 return $version;
             }

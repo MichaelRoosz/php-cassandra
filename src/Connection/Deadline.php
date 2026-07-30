@@ -64,6 +64,45 @@ final class Deadline {
     }
 
     /**
+     * Reject a wait timeout that would not bound anything.
+     *
+     * Unlike a request timeout this one may be zero — "do not wait, make one
+     * non-blocking attempt" — and negative values are clamped to the same thing
+     * by {@see self::in()} and {@see self::at()}, so the only value that has to
+     * be refused is NAN.
+     *
+     * NAN is refused because it passes every comparison rather than failing
+     * them: {@see self::in()} would hand back a deadline of NAN, which no clock
+     * ever compares greater than or equal to, so the wait would never end of its
+     * own accord — and, worse, {@see \Cassandra\Connection\NodeImplementation::mayBlock()}
+     * answers the same NAN comparison with "must not block", so every read in
+     * that wait would come straight back and the endless wait would be a busy
+     * one. {@see self::earlier()} cannot save it either: min() with NAN keeps
+     * whichever operand it happens to see first.
+     *
+     * The counterpart of {@see self::assertValidRequestTimeout()}, which refuses
+     * NAN by the same reasoning — there it falls out of "must be greater than
+     * zero", which NAN is not.
+     *
+     * @throws \Cassandra\Exception\ConnectionException
+     */
+    public function assertValidWaitTimeout(?float $timeoutInSeconds, string $operation): void {
+
+        if ($timeoutInSeconds === null || !is_nan($timeoutInSeconds)) {
+            return;
+        }
+
+        throw new ConnectionException(
+            'Invalid wait timeout: it must be a number, zero to make a single non-blocking attempt, INF to wait for as long as it takes, or null for the default',
+            ExceptionCode::CONNECTION_INVALID_WAIT_TIMEOUT->value,
+            [
+                'operation' => $operation,
+                'timeout_seconds' => 'NAN',
+            ]
+        );
+    }
+
+    /**
      * Absolute microtime at which a wait must give up, or null to wait forever.
      *
      * The budget runs from $sentAt — when the request was handed to the node —

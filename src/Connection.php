@@ -182,13 +182,13 @@ final class Connection {
      * {@see self::tryResolveStatement()} and
      * {@see self::tryResolveStatements()}:
      *
-     * Getting a connection at all. Only the two reads open one: called before
-     * anything has been sent, this method and
-     * {@see self::tryReadNextEvent()}/{@see self::tryReadNextResponse()} open a
-     * connection and take it through the handshake first, as every other method
-     * that touches the transport does — and even they do not where they never
-     * get as far as reading, which a $max of zero here does not. The two calls
-     * that take statements never open one at all: a statement is only
+     * Getting a connection at all. Only the calls that read off the wire on
+     * their own account open one: called before anything has been sent, this
+     * method and {@see self::tryReadNextEvent()}/{@see self::tryReadNextResponse()}
+     * open a connection and take it through the handshake first, as every other
+     * method that touches the transport does — and even they do not where they
+     * never get as far as reading, which a $max of zero here does not. The two
+     * calls that take statements never open one at all: a statement is only
      * resolvable here if this connection is the one that sent it, so where
      * there is no connection there is nothing they could be asked about, and
      * they raise a StatementException instead of opening one to read on.
@@ -646,10 +646,12 @@ final class Connection {
      * Applies to every request that has no explicit timeout of its own. That
      * includes the ones already in flight, whose budgets are measured against
      * this value as it stands when they are looked at rather than as it stood
-     * when they were sent: lowering it can therefore expire outstanding
-     * requests at once — and since giving up on a request parks its stream id,
-     * doing so to enough of them at once can reach
-     * {@see ConnectionOptions::$maxOrphanedStreams} and replace the connection.
+     * when they were sent: lowering it can therefore leave outstanding requests
+     * already overdue. This call does not act on that — nothing is given up on
+     * here — but the next wait or poll that examines them does, all in one pass,
+     * and since giving up on a request parks its stream id, doing so to enough
+     * of them at once can reach {@see ConnectionOptions::$maxOrphanedStreams}
+     * and replace the connection.
      * Requests sent with a timeout of their own — from their options, or from
      * the argument {@see self::syncRequest()} and {@see self::asyncRequest()}
      * take — are unaffected.

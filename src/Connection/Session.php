@@ -927,6 +927,8 @@ final class Session {
      */
     public function waitForAllPendingStatements(?float $timeoutInSeconds = null): void {
 
+        $this->deadlines->assertValidWaitTimeout($timeoutInSeconds, 'waitForAllPendingStatements');
+
         $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
@@ -973,6 +975,8 @@ final class Session {
      * @throws \Cassandra\Exception\StatementException
      */
     public function waitForAnyStatement(array $statements, ?float $timeoutInSeconds = null): ?Statement {
+
+        $this->deadlines->assertValidWaitTimeout($timeoutInSeconds, 'waitForAnyStatement');
 
         if ($statements === []) {
             return null;
@@ -1041,6 +1045,8 @@ final class Session {
      */
     public function waitForNextEvent(?float $timeoutInSeconds = null): ?Response\Event {
 
+        $this->deadlines->assertValidWaitTimeout($timeoutInSeconds, 'waitForNextEvent');
+
         $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
 
@@ -1092,6 +1098,8 @@ final class Session {
      * @throws \Cassandra\Exception\ServerException
      */
     public function waitForNextResponse(?float $timeoutInSeconds = null): ?Response\Response {
+
+        $this->deadlines->assertValidWaitTimeout($timeoutInSeconds, 'waitForNextResponse');
 
         $waitDeadline = $this->deadlines->at($timeoutInSeconds);
         $deadlineExceeded = false;
@@ -1148,6 +1156,8 @@ final class Session {
      * @throws \Cassandra\Exception\StatementException
      */
     public function waitForStatements(array $statements, ?float $timeoutInSeconds = null): void {
+
+        $this->deadlines->assertValidWaitTimeout($timeoutInSeconds, 'waitForStatements');
 
         $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;

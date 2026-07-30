@@ -114,11 +114,22 @@ final class HeartbeatMonitor {
      * A probe that is not due yet is a different matter, and is still worth
      * reporting: the bound is in the future, so it costs no spin, and an id may
      * well have come free by the time a read comes back for it. Only where the
-     * id space is still exhausted then does the wait go unbounded, and that
-     * leaves the transport's stall window as the only judgement — so a
-     * connection configured without one ({@see SocketNodeConfig} with
-     * SO_RCVTIMEO zeroed, {@see StreamNodeConfig} with a non-positive timeout)
-     * has, in that one corner, nothing bounding it at all.
+     * id space is still exhausted then does the wait go unbounded.
+     *
+     * Reporting no bound is not free, though, and this is the one place that
+     * hands {@see Session::readResponseUntil()} a null it did not get from the
+     * caller. A read with nothing bounding it is exactly the state in which that
+     * method treats the transport's stall window as the last judgement available
+     * and fails the connection over it — so a client that has every stream id in
+     * flight, all of them unbounded, and is waiting without a deadline of its
+     * own can lose the connection to a quiet moment that is its own backlog
+     * rather than the node's fault. It takes all three at once: one bounded
+     * request in flight, or a caller wait with a timeout, puts a bound back and
+     * the stall window goes back to meaning nothing. At the other end, a
+     * connection configured without a stall window at all
+     * ({@see SocketNodeConfig} with SO_RCVTIMEO zeroed, {@see StreamNodeConfig}
+     * with a non-positive timeout) has, in that same corner, nothing bounding it
+     * whatsoever.
      */
     public function getNextActionAt(bool $handshakeComplete, bool $streamIdAvailable): ?float {
 

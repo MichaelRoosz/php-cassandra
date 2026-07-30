@@ -62,6 +62,25 @@ final class DeadlineTest extends AbstractUnitTestCase {
         $this->assertNull((new Deadline(null))->at(null));
     }
 
+    /**
+     * The two properties that make NAN worth refusing rather than clamping.
+     *
+     * A NAN deadline is never reached, so the wait cannot end of its own
+     * accord — and it is not the unbounded wait null asks for either, because
+     * a bound of NAN also tells the transport it may not block. Together those
+     * turn a bounded wait into an endless busy one, so the value is refused at
+     * the entry point instead.
+     */
+    public function testAWaitTimeoutOfNotANumberWouldNeverComeDue(): void {
+        $deadlines = new Deadline(30.0);
+
+        $waitDeadline = $deadlines->in(NAN);
+
+        $this->assertNotNull($waitDeadline);
+        $this->assertNan($waitDeadline);
+        $this->assertFalse(microtime(true) >= $waitDeadline);
+    }
+
     public function testDescribeSpellsOutInfinitiesForExceptionContexts(): void {
         $deadlines = new Deadline(30.0);
 
@@ -118,5 +137,37 @@ final class DeadlineTest extends AbstractUnitTestCase {
 
         $this->expectException(ConnectionException::class);
         $deadlines->assertValidRequestTimeout(0.0, 'test');
+    }
+
+    public function testNotANumberIsRejectedAsARequestTimeout(): void {
+        $deadlines = new Deadline(30.0);
+
+        // Refused by "must be greater than zero", which NAN is not — the same
+        // judgement ConnectionOptions makes about its own default.
+        $this->expectException(ConnectionException::class);
+        $deadlines->assertValidRequestTimeout(NAN, 'test');
+    }
+
+    public function testNotANumberIsRejectedAsAWaitTimeout(): void {
+        $deadlines = new Deadline(30.0);
+
+        $this->expectException(ConnectionException::class);
+        $deadlines->assertValidWaitTimeout(NAN, 'test');
+    }
+
+    public function testWaitTimeoutsThatBoundSomethingAreAccepted(): void {
+        $deadlines = new Deadline(30.0);
+
+        // Zero is one non-blocking attempt, INF is "for as long as it takes",
+        // null is the method's own default, and a negative value is clamped to
+        // a wait that is already over — all of them bound the wait.
+        $deadlines->assertValidWaitTimeout(null, 'test');
+        $deadlines->assertValidWaitTimeout(0.0, 'test');
+        $deadlines->assertValidWaitTimeout(0.5, 'test');
+        $deadlines->assertValidWaitTimeout(INF, 'test');
+        $deadlines->assertValidWaitTimeout(-INF, 'test');
+        $deadlines->assertValidWaitTimeout(-1.0, 'test');
+
+        $this->expectNotToPerformAssertions();
     }
 }

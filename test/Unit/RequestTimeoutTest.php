@@ -625,6 +625,44 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAWaitTimeoutOfNotANumberIsRejectedByEveryWait(): void {
+        // NAN passes every comparison rather than failing them, so a deadline
+        // derived from it is never reached — and it also answers "may this read
+        // block?" with no, so the wait that could never end would not even have
+        // waited. It is refused at the entry point instead, before any of that
+        // reaches the read loop.
+        $connection = $this->connect('idle', requestTimeoutInSeconds: 30.0);
+
+        $statement = $connection->queryAsync('SELECT * FROM t');
+
+        $waits = [
+            'waitForNextEvent' => static fn (Connection $c): mixed => $c->waitForNextEvent(NAN),
+            'waitForNextResponse' => static fn (Connection $c): mixed => $c->waitForNextResponse(NAN),
+            'waitForStatements' => static fn (Connection $c): mixed => $c->waitForStatements([$statement], NAN),
+            'waitForAnyStatement' => static fn (Connection $c): mixed => $c->waitForAnyStatement([$statement], NAN),
+            'waitForAllPendingStatements' => static fn (Connection $c): mixed => $c->waitForAllPendingStatements(NAN),
+        ];
+
+        foreach ($waits as $name => $wait) {
+            $start = microtime(true);
+
+            try {
+                $wait($connection);
+                $this->fail($name . ' accepted a wait timeout of NAN');
+            } catch (ConnectionException $e) {
+                $this->assertSame(ExceptionCode::CONNECTION_INVALID_WAIT_TIMEOUT->value, $e->getCode(), $name);
+                $this->assertLessThan(1.0, microtime(true) - $start, $name . ' must refuse before it waits or reads');
+            }
+        }
+
+        // Refused rather than acted on: the connection and the statement it was
+        // asked about are untouched, so a caller that fixes the argument can
+        // simply wait again.
+        $this->assertTrue($connection->isConnected());
+        $this->assertFalse($statement->isTimedOut());
+        $this->assertFalse($statement->isAbandoned());
+    }
+
     public function testAWaitWithNothingElseBoundingItFallsBackToTheStallWindow(): void {
         // A transport read timeout is swallowed while something else still
         // bounds the wait — the caller's deadline or the next heartbeat will
