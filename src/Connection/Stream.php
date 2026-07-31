@@ -495,7 +495,7 @@ final class Stream extends NodeImplementation implements IoNode {
      */
     private function checkForReadTimeout($stream, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): void {
 
-        if (microtime(true) - $start > $this->receiveTimeout) {
+        if (microtime(true) - $start >= $this->receiveTimeout) {
             throw new StreamException(
                 message: 'Stream read timed out',
                 code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
@@ -520,7 +520,7 @@ final class Stream extends NodeImplementation implements IoNode {
      */
     private function checkForWriteTimeout($stream, float $lastProgressAt): void {
 
-        if (microtime(true) - $lastProgressAt > $this->sendTimeout) {
+        if (microtime(true) - $lastProgressAt >= $this->sendTimeout) {
             throw new StreamException(
                 message: 'Stream write timed out',
                 code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
@@ -621,7 +621,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     return false;
                 }
 
-                if (microtime(true) - $start > $this->receiveTimeout) {
+                if (microtime(true) - $start >= $this->receiveTimeout) {
                     throw new StreamException(
                         message: 'Stream select failed',
                         code: ExceptionCode::STREAM_SELECT_FAILED->value,

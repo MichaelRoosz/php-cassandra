@@ -330,6 +330,16 @@ final class Session {
 
             $this->checkHeartbeat();
 
+            // Every pass, not only when a deadline fires: this wait can only end
+            // when an id comes back, and the branch below is never reached at all
+            // where nothing bounds the wait — no timeout of the request's or the
+            // connection's, and nothing in flight that is bounded either. Without
+            // this, a connection that has parked its whole id space would wait
+            // here for good: a parked id needs a late answer to come back, and
+            // the probe that would notice the node is gone cannot be sent for want
+            // of an id. Enforcing it here replaces the connection instead.
+            $this->enforceOrphanedStreamLimit();
+
             if ($deadlineExceeded) {
                 // Giving up on a request parks its id rather than releasing it,
                 // so this does not by itself make one available; it is done here
@@ -990,7 +1000,9 @@ final class Session {
                 if ($s->isResultReady()) {
                     return $s;
                 }
+            }
 
+            foreach ($statements as $s) {
                 $this->statements->assertResolvable($s);
             }
 
@@ -1435,13 +1447,23 @@ final class Session {
      * The node is not recorded as failed: it may simply be slow, and this only
      * says that this particular connection has accumulated too much debris.
      *
+     * The configured limit is capped at {@see StreamIdPool::MAX_ORPHANED_STREAMS}
+     * rather than taken as given: a limit at or above the size of the id space
+     * would let every id a connection owns end up parked, which is a connection
+     * that can no longer send anything at all — see that constant.
+     *
      * @throws \Cassandra\Exception\ConnectionException
      */
     private function enforceOrphanedStreamLimit(): void {
 
         $orphanedCount = $this->streamIds->getOrphanedCount();
 
-        if ($orphanedCount <= max(0, $this->options->maxOrphanedStreams)) {
+        $maxOrphanedStreams = min(
+            max(0, $this->options->maxOrphanedStreams),
+            StreamIdPool::MAX_ORPHANED_STREAMS,
+        );
+
+        if ($orphanedCount <= $maxOrphanedStreams) {
             return;
         }
 
@@ -1449,7 +1471,8 @@ final class Session {
         $context = [
             'operation' => 'enforceOrphanedStreamLimit',
             'orphaned_streams' => $orphanedCount,
-            'max_orphaned_streams' => $this->options->maxOrphanedStreams,
+            'max_orphaned_streams' => $maxOrphanedStreams,
+            'configured_max_orphaned_streams' => $this->options->maxOrphanedStreams,
             'abandoned_statements' => $this->statements->getCount(),
             'host' => $node?->getConfig()->host,
             'port' => $node?->getConfig()->port,

@@ -36,6 +36,20 @@ final class StreamIdPool {
     public const MAX_STREAM_ID = 32767;
 
     /**
+     * Most ids a connection may hold back before it has to be replaced,
+     * whatever {@see ConnectionOptions::$maxOrphanedStreams} asks for.
+     *
+     * One below the size of the id space, so that a connection can never reach
+     * the state where every id it owns is parked. A parked id only comes back
+     * when its late answer arrives, so a pool in that state can hand out
+     * nothing — not even the heartbeat's probe, which
+     * {@see Session::checkHeartbeat()} skips rather than waits for an id for —
+     * and with no probe to send there is nothing left that could notice the
+     * node is gone. A wait for a free id would then never end.
+     */
+    public const MAX_ORPHANED_STREAMS = self::MAX_STREAM_ID;
+
+    /**
      * Which run of the id space we are on, bumped every time it is started
      * over. An id is only meaningful together with this: the numbers repeat on
      * every connection, so the generation is what tells an id claimed on the

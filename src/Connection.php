@@ -363,6 +363,14 @@ final class Connection {
      * Returns the protocol version used by this connection.
      * Before connecting, it will return the initial protocol version,
      * as set in the connection options.
+     *
+     * "Before connecting" includes after {@see self::disconnect()}, and after
+     * any failure that dropped the connection: the negotiated version belongs to
+     * the connection that is gone, and the next one negotiates again from the
+     * initial version rather than from what the last one settled on. So this,
+     * and {@see self::supportsKeyspaceRequestOption()} and
+     * {@see self::supportsNowInSecondsRequestOption()} with it, only report a
+     * negotiated version while {@see self::isConnected()} is true.
      */
     public function getProtocolVersion(): ProtocolVersion {
         return $this->session->getProtocolVersion();
@@ -621,9 +629,17 @@ final class Connection {
      * Either way it applies to every request sent on this connection, including
      * one built by hand and handed to {@see self::syncRequest()} or
      * {@see self::asyncRequest()} — except where that request names a keyspace
-     * of its own, which wins. A request sent more than once takes whatever this
-     * connection is on at each send; it is only a keyspace the caller put on the
-     * request that survives a change here.
+     * of its own, which wins from v5. A request sent more than once takes
+     * whatever this connection is on at each send; it is only a keyspace the
+     * caller put on the request that survives a change here.
+     *
+     * Up to v4 a keyspace on the request has nothing to win with: the request
+     * option does not exist before v5, so a request carrying one is refused when
+     * it is encoded, with a RequestException, rather than being sent against the
+     * keyspace it names. Only the connection's own keyspace reaches a v4 node,
+     * and only through the USE described above — which is why the driver takes
+     * its own default back off a request before a v4 send, and why a keyspace
+     * the caller named is left there to be refused rather than quietly dropped.
      *
      * The name is taken exactly as given, on every protocol version: a keyspace
      * created as `MyKs` is reached by that spelling and not by `myks`.
@@ -721,6 +737,12 @@ final class Connection {
      * request never reached the node, and the connection is left alone: every
      * other request on it is still being waited for, which is why there was no
      * id to be had.
+     *
+     * That wait keeps the other requests' budgets as it goes, though, so it can
+     * end in the one failure that is not this request's: giving up on enough of
+     * them reaches {@see ConnectionOptions::$maxOrphanedStreams}, and that
+     * replaces the connection and raises a ConnectionException in place of the
+     * timeout, as it does in {@see self::waitForNextResponse()}.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException

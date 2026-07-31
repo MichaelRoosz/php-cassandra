@@ -568,7 +568,7 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     private function checkForReceiveTimeout(float $start, int $expectedLength, int $upperBoundaryLength): void {
 
-        if (microtime(true) - $start > $this->receiveTimeout) {
+        if (microtime(true) - $start >= $this->receiveTimeout) {
             throw new SocketException(
                 message: 'Socket read timed out',
                 code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
@@ -590,7 +590,7 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     private function checkForWriteTimeout(float $lastProgressAt): void {
 
-        if (microtime(true) - $lastProgressAt > $this->sendTimeout) {
+        if (microtime(true) - $lastProgressAt >= $this->sendTimeout) {
             throw new SocketException(
                 message: 'Socket write timed out',
                 code: ExceptionCode::SOCKET_TIMEOUT_DURING_WRITE->value,
