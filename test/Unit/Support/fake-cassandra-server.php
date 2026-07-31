@@ -30,6 +30,14 @@
  *   refuse-use      report every QUERY on stdout as "query <cql>", and answer
  *                   the ones that switch keyspace with INVALID, as a node asked
  *                   for a keyspace that does not exist would
+ *   trickle-result  answer every QUERY with one large RESULT written in pieces
+ *                   over [delaySeconds], as a node streaming a wide page over a
+ *                   slow link does. Bytes arrive the whole time but no frame is
+ *                   complete until the end, and — being busy writing — the
+ *                   server reads nothing meanwhile, so anything sent to it in
+ *                   between (a heartbeat OPTIONS above all) is answered only
+ *                   afterwards, exactly as a SUPPORTED queued behind a big
+ *                   response on the one socket would be
  */
 
 declare(strict_types=1);
@@ -97,6 +105,53 @@ function supportedBody(): string {
 /** A void RESULT. */
 function voidResultBody(): string {
     return pack('N', 1);
+}
+
+/**
+ * A VOID RESULT padded out to a few megabytes, so that writing it takes long
+ * enough to be trickled across a heartbeat timeout.
+ *
+ * The padding sits past the kind, where a VOID result has nothing more to read,
+ * so the client parses it as an ordinary empty result — the point being how long
+ * the frame takes to arrive, not what is in it.
+ */
+function largeVoidResultBody(): string {
+    return voidResultBody() . str_repeat("\0", 4 * 1024 * 1024);
+}
+
+/**
+ * Write one frame in equal pieces spread over $seconds, so that bytes keep
+ * arriving for the whole time without a frame ever completing until the end.
+ *
+ * @param resource $client
+ */
+function trickleFrame($client, int $stream, int $opcode, string $body, float $seconds): void {
+    $frame = pack('CCnCN', PROTOCOL_VERSION | 0x80, 0, $stream, $opcode, strlen($body)) . $body;
+
+    $pieces = 40;
+    $pieceLength = (int) ceil(strlen($frame) / $pieces);
+    $pauseMicroseconds = (int) ($seconds * 1_000_000 / $pieces);
+
+    for ($offset = 0; $offset < strlen($frame); $offset += $pieceLength) {
+        $piece = substr($frame, $offset, $pieceLength);
+
+        $written = 0;
+        while ($written < strlen($piece)) {
+            $result = fwrite($client, substr($piece, $written));
+            if ($result === false) {
+                return;
+            }
+            if ($result === 0) {
+                usleep(2000);
+
+                continue;
+            }
+            $written += $result;
+        }
+
+        fflush($client);
+        usleep($pauseMicroseconds);
+    }
 }
 
 /**
@@ -316,6 +371,12 @@ while (microtime(true) < $deadline) {
                 }
 
                 writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody());
+
+                break;
+            }
+
+            if ($mode === 'trickle-result') {
+                trickleFrame($client, $frame['stream'], OPCODE_RESULT, largeVoidResultBody(), $delay);
 
                 break;
             }

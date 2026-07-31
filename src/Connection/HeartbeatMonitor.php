@@ -27,8 +27,27 @@ use Cassandra\Statement;
  */
 final class HeartbeatMonitor {
     /**
-     * When the node last sent us anything, used to decide whether an idle
-     * connection needs a heartbeat.
+     * When the node last gave us anything at all — a whole response, or merely
+     * some of the bytes of one — used to decide whether an outstanding probe
+     * has really gone unanswered or is simply queued behind a transfer that is
+     * still arriving.
+     *
+     * Kept apart from {@see self::$lastResponseAt} because the two answer
+     * different questions. Whether the connection is idle enough to be worth
+     * probing is about completed responses: bytes trickling in mid-frame are
+     * not the node saying anything. Whether an unanswered probe means the
+     * connection is dead is about bytes: a response larger than the heartbeat
+     * timeout is long produces no completed frame for longer than the timeout,
+     * and the probe's own answer cannot overtake it — frames are serialised on
+     * one socket, so a SUPPORTED queued behind a large page arrives after it.
+     * Judged on responses alone, a connection delivering a big result at full
+     * speed is indistinguishable from one that died.
+     */
+    private float $lastProgressAt = 0.0;
+
+    /**
+     * When the node last sent us a complete response, used to decide whether an
+     * idle connection needs a heartbeat.
      */
     private float $lastResponseAt = 0.0;
 
@@ -72,6 +91,7 @@ final class HeartbeatMonitor {
     public function anchor(): void {
 
         $this->lastResponseAt = microtime(true);
+        $this->lastProgressAt = $this->lastResponseAt;
     }
 
     public function beginSending(): void {
@@ -140,13 +160,28 @@ final class HeartbeatMonitor {
         }
 
         if ($this->probe !== null && !$this->probe->isResultReady()) {
-            return $this->probeSentAt + $this->options->heartbeatTimeoutInSeconds;
+            return $this->probeDeadline();
         }
 
+        $now = microtime(true);
         $dueAt = $this->lastResponseAt + $interval;
 
-        if ($dueAt <= microtime(true) && !$streamIdAvailable) {
-            return null;
+        if ($dueAt <= $now && !$streamIdAvailable) {
+            // The probe is due and cannot be sent, so there is nothing to wake
+            // a read for at $dueAt — it is already past, and reporting it would
+            // put every read's bound in the past and turn each wait into a spin
+            // over reads that return at once and a probe that is never sent.
+            //
+            // An interval from now rather than no bound at all, though. A bound
+            // in the future costs one wake per interval and no spin, and it
+            // keeps {@see Session::readResponseUntil()} from reading with
+            // nothing bounding it — which is the state in which that method
+            // treats the transport's stall window as the last judgement and
+            // fails the connection over it. A client with every stream id in
+            // flight, all of them unbounded, waiting without a deadline of its
+            // own would otherwise lose the connection to a quiet moment that is
+            // its own backlog rather than the node's fault.
+            return $now + $interval;
         }
 
         return $dueAt;
@@ -194,6 +229,9 @@ final class HeartbeatMonitor {
      * Whether the outstanding probe has now gone unanswered for longer than the
      * heartbeat timeout, i.e. whether the connection is to be treated as dead.
      *
+     * Measured from the last sign of life rather than from the probe alone, see
+     * {@see self::probeDeadline()}.
+     *
      * Inclusive, as {@see self::isProbeDue()} is, so that the instant
      * {@see self::getNextActionAt()} wakes a read for is one this already has
      * an answer for. Strictly greater would send the wait back into a read
@@ -201,7 +239,7 @@ final class HeartbeatMonitor {
      */
     public function isProbeOverdue(float $now): bool {
 
-        return $now - $this->probeSentAt >= $this->options->heartbeatTimeoutInSeconds;
+        return $now >= $this->probeDeadline();
     }
 
     /**
@@ -220,10 +258,42 @@ final class HeartbeatMonitor {
     }
 
     /**
+     * Bytes arrived from the node, whether or not they completed a response.
+     *
+     * That is not the node saying anything — the interval is left alone, so a
+     * connection dribbling out one large answer is still probed on schedule —
+     * but it is proof that the connection is carrying data, which is the whole
+     * of what an outstanding probe is asking about; see
+     * {@see self::$lastProgressAt}.
+     */
+    public function recordProgress(): void {
+
+        $this->lastProgressAt = microtime(true);
+    }
+
+    /**
      * The node said something, whatever it was, so the interval starts over.
      */
     public function recordResponse(): void {
 
         $this->lastResponseAt = microtime(true);
+        $this->lastProgressAt = $this->lastResponseAt;
+    }
+
+    /**
+     * When an outstanding probe is to be given up on, and the connection with
+     * it.
+     *
+     * The heartbeat timeout runs from the last sign of life rather than from
+     * when the probe went out, so a connection that is demonstrably carrying
+     * data is never declared dead. A dead one produces no progress at all, so
+     * the deadline stays at $probeSentAt + timeout and fires exactly as before.
+     *
+     * Progress from before the probe was sent does not count: it says nothing
+     * about a question that had not been asked yet.
+     */
+    private function probeDeadline(): float {
+
+        return max($this->probeSentAt, $this->lastProgressAt) + $this->options->heartbeatTimeoutInSeconds;
     }
 }

@@ -65,6 +65,10 @@ final class RequestCompressor extends NodeImplementation {
     public function getConfig(): NodeConfig {
         return $this->node->getConfig();
     }
+    #[\Override]
+    public function getReceivedByteCount(): int {
+        return $this->node->getReceivedByteCount();
+    }
 
     /**
      * Reads are handed to the wrapped node whole, rather than being reassembled

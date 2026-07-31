@@ -19,6 +19,8 @@ use Cassandra\Response\Event\StatusChangeEvent;
 use Cassandra\Response\Result;
 use Cassandra\Statement;
 use ReflectionMethod;
+use Cassandra\Connection\NodeConnector;
+use Cassandra\Connection\NodeHealth;
 use Cassandra\Connection\Session;
 use Cassandra\Connection\StatementRegistry;
 use Cassandra\Connection\StreamIdPool;
@@ -88,6 +90,44 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $this->assertFalse($connection->isConnected(), 'no replacement connection may be opened for it');
             $this->assertTrue($statement->isAbandoned());
         }
+    }
+
+    public function testAHeartbeatDoesNotKillAConnectionThatIsStillDeliveringAnAnswer(): void {
+        // The heartbeat exists to tell a dead connection from a quiet one, and
+        // a connection carrying bytes is neither. A single answer can take
+        // longer to arrive than the heartbeat timeout is long — a wide page, a
+        // blob column, a slow link — and while one is being assembled no frame
+        // completes, so nothing but the bytes themselves distinguishes that
+        // transfer from silence. The probe's own answer cannot arrive first
+        // either: frames are serialised on one socket, so a SUPPORTED queued
+        // behind a large response comes after it.
+        //
+        // Judged on the probe's clock alone, this is the common case of an idle
+        // connection woken by a big query: the wait that sends the request
+        // finds the probe due and sends it, and the answer then takes longer
+        // than the timeout to stream in.
+        $connection = $this->connect(
+            'trickle-result',
+            delaySeconds: 3.0,
+            requestTimeoutInSeconds: 60.0,
+            heartbeatIntervalInSeconds: 0.2,
+            heartbeatTimeoutInSeconds: 1.0,
+        );
+
+        // Long enough for the probe to fall due, so it is outstanding when the
+        // transfer begins.
+        usleep(300_000);
+
+        $start = microtime(true);
+
+        $connection->query('SELECT * FROM big');
+
+        $this->assertGreaterThan(
+            1.0,
+            microtime(true) - $start,
+            'the answer must have taken longer than the heartbeat timeout, or this proves nothing'
+        );
+        $this->assertTrue($connection->isConnected(), 'bytes were arriving the whole time, so nothing died');
     }
 
     public function testAHeartbeatIsStillSentWithTheTransportTimeoutDisabled(): void {
@@ -635,12 +675,25 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $statement = $connection->queryAsync('SELECT * FROM t');
 
+        // Each wait is called for its refusal, never for what it returns, so
+        // they are wrapped as void rather than given a common return type the
+        // two that return nothing cannot honour.
         $waits = [
-            'waitForNextEvent' => static fn (Connection $c): mixed => $c->waitForNextEvent(NAN),
-            'waitForNextResponse' => static fn (Connection $c): mixed => $c->waitForNextResponse(NAN),
-            'waitForStatements' => static fn (Connection $c): mixed => $c->waitForStatements([$statement], NAN),
-            'waitForAnyStatement' => static fn (Connection $c): mixed => $c->waitForAnyStatement([$statement], NAN),
-            'waitForAllPendingStatements' => static fn (Connection $c): mixed => $c->waitForAllPendingStatements(NAN),
+            'waitForNextEvent' => static function (Connection $c): void {
+                $c->waitForNextEvent(NAN);
+            },
+            'waitForNextResponse' => static function (Connection $c): void {
+                $c->waitForNextResponse(NAN);
+            },
+            'waitForStatements' => static function (Connection $c) use ($statement): void {
+                $c->waitForStatements([$statement], NAN);
+            },
+            'waitForAnyStatement' => static function (Connection $c) use ($statement): void {
+                $c->waitForAnyStatement([$statement], NAN);
+            },
+            'waitForAllPendingStatements' => static function (Connection $c): void {
+                $c->waitForAllPendingStatements(NAN);
+            },
         ];
 
         foreach ($waits as $name => $wait) {
@@ -1085,6 +1138,31 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $connection->query('SELECT * FROM quick');
     }
 
+    public function testUnansweredHeartbeatDoesNotPutTheNodeIntoItsCooldown(): void {
+        // The connection goes, but the node keeps its record. An unanswered
+        // probe says this socket is finished, not that the node is bad — and a
+        // node in its cooldown is tried last, which on a single-node
+        // configuration means the reconnect has to wait for a node it has no
+        // alternative to. Same reasoning as the orphaned-stream limit, which
+        // has always left the record alone.
+        $connection = $this->connect('deaf', heartbeatIntervalInSeconds: 0.5, heartbeatTimeoutInSeconds: 1.0);
+
+        $nodeConfig = $this->nodeConfigOf($connection);
+
+        try {
+            $connection->waitForNextEvent(timeoutInSeconds: 10.0);
+            $this->fail('expected the unanswered heartbeat to be detected');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_HEARTBEAT_TIMEOUT->value, $e->getCode());
+        }
+
+        $this->assertFalse($connection->isConnected(), 'the connection itself is dropped');
+        $this->assertTrue(
+            $this->nodeHealthOf($connection)->isAvailable($nodeConfig),
+            'but the node is still one this connection would open on straight away'
+        );
+    }
+
     public function testUnansweredHeartbeatIsDetectedWhileWaitingForEvents(): void {
         // The server stops answering after the handshake, so the heartbeat sent
         // by the idle event wait goes unanswered and the connection is dropped.
@@ -1195,6 +1273,32 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
             usleep(20_000);
         } while (microtime(true) < $deadline);
+    }
+
+    /**
+     * The single node these tests are pointed at.
+     */
+    private function nodeConfigOf(Connection $connection): SocketNodeConfig {
+        /** @var NodeConnector $nodeConnector */
+        $nodeConnector = (new ReflectionProperty(Session::class, 'nodeConnector'))->getValue(self::sessionOf($connection));
+
+        /** @var array<SocketNodeConfig> $nodes */
+        $nodes = (new ReflectionProperty(NodeConnector::class, 'nodes'))->getValue($nodeConnector);
+
+        return $nodes[0];
+    }
+
+    /**
+     * How each node this connection knows about has been behaving.
+     */
+    private function nodeHealthOf(Connection $connection): NodeHealth {
+        /** @var NodeConnector $nodeConnector */
+        $nodeConnector = (new ReflectionProperty(Session::class, 'nodeConnector'))->getValue(self::sessionOf($connection));
+
+        /** @var NodeHealth $health */
+        $health = (new ReflectionProperty(NodeConnector::class, 'health'))->getValue($nodeConnector);
+
+        return $health;
     }
 
     /**

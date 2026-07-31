@@ -127,6 +127,8 @@ final class ResponseReaderResetTest extends AbstractUnitTestCase {
  * empty string rather than a short read when it cannot satisfy the request.
  */
 final class FakeReadOnlyNode implements Node {
+    private int $receivedByteCount = 0;
+
     public function __construct(private string $buffer) {
     }
 
@@ -137,6 +139,10 @@ final class FakeReadOnlyNode implements Node {
         return new SocketNodeConfig(host: '127.0.0.1');
     }
 
+    public function getReceivedByteCount(): int {
+        return $this->receivedByteCount;
+    }
+
     public function read(int $length, ?float $readDeadline): string {
         if (strlen($this->buffer) < $length) {
             return '';
@@ -144,6 +150,7 @@ final class FakeReadOnlyNode implements Node {
 
         $data = substr($this->buffer, 0, $length);
         $this->buffer = substr($this->buffer, $length);
+        $this->receivedByteCount += $length;
 
         return $data;
     }

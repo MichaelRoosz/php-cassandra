@@ -597,9 +597,11 @@ final class Connection {
      * a keyspace rather than onto another one — is only accepted from v5, where
      * it means the absence of a keyspace on each request. Up to v4 there is no
      * CQL that un-sets a node session's keyspace, so on a connected v4
-     * connection this raises rather than recording a keyspace the requests would
-     * not actually run against; before connecting, and from v5, it is recorded
-     * like any other value.
+     * connection that is on one this raises rather than recording a keyspace the
+     * requests would not actually run against; before connecting, and from v5,
+     * it is recorded like any other value. A connection that is on no keyspace
+     * already is not being moved off anything, so an empty keyspace is recorded
+     * there too, on every version — there is nothing for it to contradict.
      *
      * {@see self::disconnect()} is therefore what makes a v4 connection
      * clearable: with no connection there is no node session to contradict, so

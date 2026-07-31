@@ -29,13 +29,20 @@ use SplQueue;
  * reads that return immediately.
  */
 final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
-    public function testAnExhaustedIdSpaceDoesNotBoundTheReadForAProbeItWillNotSend(): void {
+    public function testAnExhaustedIdSpaceBoundsTheReadInTheFutureRatherThanNotAtAll(): void {
         $connection = $this->connectionWithHeartbeatDue();
 
         $this->exhaustStreamIds($connection);
 
-        $this->assertNull(
-            $this->nextHeartbeatActionAt($connection),
+        $boundAt = $this->nextHeartbeatActionAt($connection);
+
+        $this->assertNotNull(
+            $boundAt,
+            'an unbounded read would let the transport stall window fail a connection over the client\'s own backlog'
+        );
+        $this->assertGreaterThan(
+            microtime(true),
+            $boundAt,
             'a bound in the past for a probe that is never sent would spin every wait'
         );
     }

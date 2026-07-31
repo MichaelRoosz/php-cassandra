@@ -19,11 +19,22 @@ abstract class NodeImplementation implements Node {
     private int $readBufferLength = 0;
     private int $readBufferOffset = 0;
 
+    /**
+     * Bytes taken off the wire so far, see {@see Node::getReceivedByteCount()}.
+     */
+    private int $receivedByteCount = 0;
+
     #[\Override]
     abstract public function close(): void;
 
     #[\Override]
     abstract public function getConfig(): NodeConfig;
+
+    #[\Override]
+    public function getReceivedByteCount(): int {
+
+        return $this->receivedByteCount;
+    }
 
     /**
      * Returns exactly $length bytes of data, or an empty string if not enough data is available.
@@ -162,6 +173,13 @@ abstract class NodeImplementation implements Node {
         if ($data !== '') {
 
             $dataLength = strlen($data);
+
+            $newReceivedByteCount = $this->receivedByteCount + $dataLength;
+            if (!is_int($newReceivedByteCount)) {
+                $this->receivedByteCount = $dataLength;
+            } else {
+                $this->receivedByteCount = $newReceivedByteCount;
+            }
 
             if ($this->readBufferOffset === 0 && $this->readBufferLength > 0) {
                 // Nothing consumed yet (e.g. a large body arriving in pieces):

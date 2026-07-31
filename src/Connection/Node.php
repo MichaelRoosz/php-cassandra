@@ -18,6 +18,25 @@ interface Node {
     public function getConfig(): NodeConfig;
 
     /**
+     * How many bytes this connection has taken off the wire since it was
+     * opened, as a monotonically rising count.
+     *
+     * Read for one purpose: it is the only evidence that a connection is alive
+     * which does not depend on a whole frame having arrived. A single response
+     * can be larger than the heartbeat timeout is long — a wide page, a blob
+     * column, a slow link — and while one is being assembled no frame is
+     * decoded and nothing else can tell that transfer apart from a connection
+     * that died; see {@see HeartbeatMonitor::recordProgress()}.
+     *
+     * The count itself is never interpreted, only compared with what it was
+     * before a read, so it may wrap or start anywhere; it must only rise when
+     * bytes arrive and never otherwise. A decorator reports the count of the
+     * node it wraps rather than of what it hands on, since re-framing turns
+     * bytes that arrived into bytes that did not.
+     */
+    public function getReceivedByteCount(): int;
+
+    /**
      * Returns exactly $length bytes of data, or an empty string if not enough data is available.
      *
      * @param ?float $readDeadline how long this read may block, as an absolute

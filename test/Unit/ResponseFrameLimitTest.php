@@ -95,6 +95,10 @@ final class FakeFrameNode implements Node {
         return new SocketNodeConfig(host: '127.0.0.1');
     }
 
+    public function getReceivedByteCount(): int {
+        return $this->bytesRead;
+    }
+
     public function read(int $length, ?float $readDeadline): string {
         if (strlen($this->buffer) < $length) {
             return '';

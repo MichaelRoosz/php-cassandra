@@ -1268,11 +1268,7 @@ final class Session {
                 'port' => $node?->getConfig()->port,
             ];
 
-            if ($node !== null) {
-                $this->handleNodeException($node);
-            } else {
-                $this->disconnect();
-            }
+            $this->disconnect();
 
             throw new ConnectionException(
                 'Node did not answer the connection heartbeat in time',
@@ -1640,6 +1636,8 @@ final class Session {
     private function readResponse(bool &$drainedResponses = false): ?Response\Response {
         $node = $this->getConnectedNode();
 
+        $receivedBefore = $node->getReceivedByteCount();
+
         try {
             $response = $this->responseReader->readResponse($node, $this->version, Node::DO_NOT_WAIT);
         } catch (NodeException $e) {
@@ -1658,6 +1656,8 @@ final class Session {
             // timeout that no wait was even attempted for.
             $response = null;
         }
+
+        $this->recordReadProgress($node, $receivedBefore);
 
         if ($response === null) {
             $drainedResponses = true;
@@ -1724,6 +1724,8 @@ final class Session {
         // on a connection nobody has set a deadline on.
         $readDeadline = $this->deadlines->earlier($deadline, $this->heartbeat->getNextActionAt($this->handshakeComplete, $this->streamIds->hasImmediate()));
 
+        $receivedBefore = $node->getReceivedByteCount();
+
         try {
             $response = $this->responseReader->readResponse($node, $this->version, $readDeadline);
         } catch (NodeException $e) {
@@ -1751,6 +1753,8 @@ final class Session {
             $response = null;
         }
 
+        $this->recordReadProgress($node, $receivedBefore);
+
         // Checked after the read, not before it: the read is bounded by the
         // deadline rather than merely started on the strength of it, so it is
         // only on the way out that the deadline can have passed. Reaching it is
@@ -1766,6 +1770,25 @@ final class Session {
         }
 
         return $this->processResponse($response, $node);
+    }
+
+    /**
+     * Tell the heartbeat that the read it just bounded brought bytes, so that a
+     * transfer still arriving is never mistaken for a connection that died.
+     *
+     * Asked of the node rather than derived from the response, because the case
+     * this exists for is exactly the one where no response came out: a single
+     * answer can take longer to arrive than the heartbeat timeout is long, and
+     * while it is being assembled nothing else can tell it from silence. See
+     * {@see HeartbeatMonitor::recordProgress()}.
+     */
+    private function recordReadProgress(Node $node, int $receivedBefore): void {
+
+        if ($node->getReceivedByteCount() === $receivedBefore) {
+            return;
+        }
+
+        $this->heartbeat->recordProgress();
     }
 
     private function resetSessionState(): void {

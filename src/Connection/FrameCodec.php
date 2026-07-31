@@ -90,6 +90,11 @@ final class FrameCodec extends NodeImplementation {
         return $this->node->getConfig();
     }
 
+    #[\Override]
+    public function getReceivedByteCount(): int {
+        return $this->node->getReceivedByteCount();
+    }
+
     /**
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\CompressionException
