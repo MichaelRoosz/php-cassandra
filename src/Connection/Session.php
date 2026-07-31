@@ -1256,6 +1256,12 @@ final class Session {
                 return;
             }
 
+            if ($probe->isAbandoned() || $probe->isTimedOut()) {
+                $this->heartbeat->forgetProbe();
+
+                return;
+            }
+
             if (!$this->heartbeat->isProbeOverdue($now)) {
                 return;
             }
@@ -1865,7 +1871,11 @@ final class Session {
                 'request_timeout_seconds' => $this->deadlines->describe($requestTimeoutInSeconds ?? $this->deadlines->getRequestTimeout()),
                 'orphaned_streams' => $this->streamIds->getOrphanedCount(),
             ],
-            timedOutStatements: $statement === null ? [] : [$statement],
+            // An abandoned statement is left out for the reason it was left
+            // unmarked above: it did not run out of time, so naming it among the
+            // statements that did would have a caller re-sending it on the
+            // strength of a deadline that is not why it failed.
+            timedOutStatements: ($statement === null || $statement->isAbandoned()) ? [] : [$statement],
         );
     }
 

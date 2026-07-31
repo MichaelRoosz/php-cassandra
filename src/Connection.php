@@ -191,7 +191,9 @@ final class Connection {
      * calls that take statements never open one at all: a statement is only
      * resolvable here if this connection is the one that sent it, so where
      * there is no connection there is nothing they could be asked about, and
-     * they raise a StatementException instead of opening one to read on.
+     * they raise instead of opening one to read on — a StatementException for
+     * one that was never this connection's or was abandoned with it, a
+     * RequestTimeoutException for one already given up on.
      *
      * Writing the heartbeat. Having read, these calls owe the connection the
      * probe a wait would have sent, and a write blocks until the transport
@@ -779,8 +781,10 @@ final class Connection {
      * Non-blocking: try to resolve a specific statement; returns true if it is ready.
      *
      * Unlike the reads, this never opens a connection: a statement can only be
-     * resolved on the connection that sent it, so one raises a
-     * StatementException here rather than being waited on. What the
+     * resolved on the connection that sent it, so one that cannot be raises
+     * here rather than being waited on — a StatementException where it was
+     * never this connection's or was abandoned with it, a
+     * RequestTimeoutException where it was already given up on. What the
      * non-blocking calls do have in common is described at
      * {@see self::drainAvailableResponses()}.
      *

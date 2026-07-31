@@ -174,11 +174,10 @@ abstract class NodeImplementation implements Node {
 
             $dataLength = strlen($data);
 
-            $newReceivedByteCount = $this->receivedByteCount + $dataLength;
-            if (!is_int($newReceivedByteCount)) {
+            if ($this->receivedByteCount > PHP_INT_MAX - $dataLength) {
                 $this->receivedByteCount = $dataLength;
             } else {
-                $this->receivedByteCount = $newReceivedByteCount;
+                $this->receivedByteCount += $dataLength;
             }
 
             if ($this->readBufferOffset === 0 && $this->readBufferLength > 0) {
