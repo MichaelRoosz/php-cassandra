@@ -706,10 +706,22 @@ final class Session {
      */
     public function parkUnresolvedStream(int $streamId, int $streamGeneration): void {
 
+        // Only while the id is still this connection's. A failure unwinding
+        // after the connection was replaced — a sync wait that found its
+        // generation gone, above all — names a number the new pool has started
+        // over on and may already have handed to somebody else. Forgetting it
+        // would unregister a live request, which neither
+        // {@see StatementRegistry::forget()} nor {@see StreamIdPool::park()} can
+        // catch on its own: the id really is registered and outstanding, just
+        // not ours. The pool passes the park below over of its own accord, so
+        // this guard is what the forget needs.
+        if ($streamGeneration !== $this->streamIds->getGeneration()) {
+            return;
+        }
+
         $this->statements->forget($streamId);
 
-        // An id that is already parked, or that belongs to a connection which
-        // has since been replaced, is passed over by the pool itself.
+        // An id that is already parked is passed over by the pool itself.
         $this->streamIds->park($streamId, $streamGeneration);
     }
 
@@ -1555,6 +1567,35 @@ final class Session {
     }
 
     /**
+     * Close a connection whose frame stream the reader has lost its place in.
+     *
+     * A reader failure normally leaves the connection alone: the frame was
+     * consumed whole and only making sense of it went wrong, so the stream is
+     * still in step and one bad answer costs one request — which is what
+     * {@see self::parkUnresolvedStream()} then tidies up after. A header the
+     * reader refused is the other kind. Its nine bytes are gone and the body
+     * they announced is not, so every later response would be read at the wrong
+     * offset: the connection is not slow or unlucky, it is unusable, and going
+     * on with it would at best fail every request from here and at worst parse
+     * the drift into a well-formed frame and hand somebody another request's
+     * answer. See {@see ResponseReader::$frameSyncLost}.
+     *
+     * Dropped rather than blamed on the node, as the other paths that replace a
+     * connection do ({@see self::enforceOrphanedStreamLimit()},
+     * {@see self::checkHeartbeat()}): the failure is raised to the caller by the
+     * read this was called from, and the next connect is free to try the same
+     * node at once rather than sitting out a cooldown.
+     */
+    private function dropConnectionIfFrameSyncLost(): void {
+
+        if (!$this->responseReader->hasLostFrameSync()) {
+            return;
+        }
+
+        $this->disconnect();
+    }
+
+    /**
      * Replace the connection once it is holding back too many stream ids.
      *
      * A parked id is only released when its late answer arrives, so a node that
@@ -1814,6 +1855,10 @@ final class Session {
             // over a quiet moment would be the worst possible reading of a
             // timeout that no wait was even attempted for.
             $response = null;
+        } catch (ConnectionException $e) {
+            $this->dropConnectionIfFrameSyncLost();
+
+            throw $e;
         }
 
         $this->recordReadProgress($node, $receivedBefore);
@@ -1910,6 +1955,10 @@ final class Session {
             }
 
             $response = null;
+        } catch (ConnectionException $e) {
+            $this->dropConnectionIfFrameSyncLost();
+
+            throw $e;
         }
 
         $this->recordReadProgress($node, $receivedBefore);
@@ -1975,7 +2024,17 @@ final class Session {
         // the number says nothing across the two. The waits themselves clear
         // their own entry as they unwind; this is for one that was deposited and
         // never picked up.
+        //
+        // The announcements go with them, for the same reason: an id announced
+        // by a wait on the connection that is going away says nothing on the
+        // next one, and left standing it would have {@see self::processResponse()}
+        // put an answer aside under that number for a wait that no longer exists
+        // — where it would sit until the next reset. Every wait still on the
+        // stack is on a stream generation that is about to be stale, so each of
+        // them unwinds through the generation check rather than being waited out,
+        // and a wait started on the new connection announces itself afresh.
         $this->syncWaitResponses = [];
+        $this->syncWaitStreams = [];
     }
 
     /**
@@ -2034,9 +2093,16 @@ final class Session {
         // here because the invariant is one this method cannot see for itself.
         //
         // The sync path has no statement registered, so there the question is
-        // only whether this wait still owns the id, which it does: its answer
-        // is picked up by the caller above rather than resolved here.
-        if ($statement === null || $this->statements->get($streamId) === $statement) {
+        // only whether this wait still owns the id — which is what the
+        // generation settles, and why it is asked first. Without it the sync
+        // branch would forget whatever is registered at that number, and after
+        // the connection was replaced from inside this very pass (a listener
+        // disconnecting during the read above) that is somebody else's live
+        // request; see {@see self::parkUnresolvedStream()}.
+        if (
+            $streamGeneration === $this->streamIds->getGeneration()
+            && ($statement === null || $this->statements->get($streamId) === $statement)
+        ) {
             $this->statements->forget($streamId);
             $this->streamIds->park($streamId, $streamGeneration);
         }

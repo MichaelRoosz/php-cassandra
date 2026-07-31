@@ -254,6 +254,34 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAMalformedResponseHeaderDropsTheConnectionInsteadOfDesynchronisingIt(): void {
+        // A response header the reader refuses is not one bad answer: its nine
+        // bytes are already off the buffer and the body they announced is still
+        // on it, with nothing left that knows how long it is. Kept, the
+        // connection would read every later response at the wrong offset —
+        // failing request after request at best, and at worst parsing the drift
+        // into a well-formed frame and handing somebody another request's
+        // answer.
+        //
+        // Told apart from the reader failures that consume the whole frame
+        // first (an unknown opcode, a result kind this driver has no class for),
+        // which cost one request and deliberately leave the connection alone.
+        $connection = $this->connect('bad-response-header', requestTimeoutInSeconds: 5.0);
+
+        try {
+            $connection->query('SELECT 1');
+            $this->fail('expected the malformed header to be reported');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_PROTOCOL_VERSION_MISMATCH->value, $e->getCode());
+        }
+
+        $this->assertFalse($connection->isConnected(), 'a reader that lost its place must not keep its connection');
+
+        // And the next request opens a fresh one and is answered on it, rather
+        // than inheriting the drift.
+        $this->assertInstanceOf(Result::class, $connection->query('SELECT 2'));
+    }
+
     public function testAnAutoPreparedAsyncQueryUsesThePreparedResultCache(): void {
         // The synchronous path gets this for free by recursing into
         // syncRequest() for its PREPARE; the async path has to look the cache
@@ -377,6 +405,69 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $this->assertSame([$statement->getStreamId()], array_keys($this->orphanedStreamsOf($connection)));
             $this->assertTrue($connection->isConnected(), 'only the statement is affected');
         }
+    }
+
+    public function testAReplacedConnectionsFailureLeavesTheNewConnectionsRequestsAlone(): void {
+        // A sync wait that finds its connection replaced reports that and
+        // unwinds — and on the way out it has a stream id to dispose of. That id
+        // was handed out by the connection that is gone, whose id space the new
+        // one has started over on, so the same number may well be registered to
+        // somebody else by now: a request the listener sent on the connection it
+        // opened. Disposing of it without asking which run of the id space it
+        // belongs to unregisters that live request, which nothing can then
+        // resolve, and strands the id it holds — outstanding for good, and not
+        // even counted as orphaned, so maxOrphanedStreams never notices.
+        //
+        // The numbers line up on their own: both connections spend ids 0 and 1
+        // on the handshake, so the query below and the listener's own request
+        // are both id 2.
+        $connection = $this->connect('event-then-reorder', delaySeconds: 0.5, requestTimeoutInSeconds: 30.0);
+
+        $nested = null;
+        $connection->registerEventListener(new class($connection, $nested) implements EventListenerInterface {
+            public function __construct(
+                private Connection $connection,
+                private ?Statement &$nested,
+            ) {
+            }
+
+            public function onEvent(Event $event): void {
+                // The first event only: the statement it left behind is what
+                // says the replacement has already happened.
+                if ($this->nested !== null) {
+                    return;
+                }
+
+                // Replaces the connection from inside the read that dispatched
+                // this event, then puts a request on the new one.
+                $this->connection->disconnect();
+                $this->connection->connect();
+                $this->nested = $this->connection->queryAsync('SELECT * FROM fresh');
+            }
+        });
+
+        try {
+            $connection->query('SELECT * FROM SLOW');
+            $this->fail('expected the replaced connection to be reported');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_WAIT_CONNECTION_REPLACED->value, $e->getCode());
+        }
+
+        $this->assertInstanceOf(Statement::class, $nested, 'the listener must have run from inside the wait');
+        $this->assertSame(
+            $this->currentStreamGenerationOf($connection),
+            $nested->getStreamGeneration(),
+            'the listener\'s request must be on the connection that replaced the first',
+        );
+
+        // The request the listener sent is still the connection's to answer,
+        // and is answered.
+        $this->assertInstanceOf(Result::class, $nested->getResult());
+
+        // Its id went back into circulation with the answer rather than being
+        // left outstanding by the disposal that ran over it.
+        $this->assertSame([], $this->orphanedStreamsOf($connection));
+        $this->assertSame([], $this->outstandingStreamsOf($connection));
     }
 
     public function testARequestTimeoutFiresOnTimeUnderAMuchLongerTransportTimeout(): void {
@@ -1444,6 +1535,15 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
     }
 
     /**
+     * Which run of the id space this connection is currently handing ids out
+     * from, which is what tells an id claimed on a connection that has since
+     * been replaced from the same number handed out by the one that replaced it.
+     */
+    private function currentStreamGenerationOf(Connection $connection): int {
+        return $this->streamIdPoolOf($connection)->getGeneration();
+    }
+
+    /**
      * Read until every parked stream id has been handed back, or until
      * $withinSeconds is up.
      *
@@ -1505,6 +1605,20 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $orphaned = (new ReflectionProperty(StreamIdPool::class, 'orphanedStreams'))->getValue($this->streamIdPoolOf($connection));
 
         return $orphaned;
+    }
+
+    /**
+     * The ids this connection has handed out and not had back, which is what
+     * makes the pool their owner. An id that leaves this set without being
+     * recycled or parked is lost for the life of the connection.
+     *
+     * @return array<int>
+     */
+    private function outstandingStreamsOf(Connection $connection): array {
+        /** @var array<int, true> $outstanding */
+        $outstanding = (new ReflectionProperty(StreamIdPool::class, 'outstanding'))->getValue($this->streamIdPoolOf($connection));
+
+        return array_keys($outstanding);
     }
 
     /**

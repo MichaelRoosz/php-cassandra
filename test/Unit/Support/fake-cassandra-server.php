@@ -16,6 +16,13 @@
  * query it should have had cached.
  *
  * Modes:
+ *   bad-response-header
+ *                   answer the first QUERY with a frame whose header carries the
+ *                   wrong protocol version, and every later one normally. The
+ *                   nine header bytes are well-formed enough to be read and then
+ *                   refused, so the body they announce is left on the wire — a
+ *                   client that keeps the connection would read the next
+ *                   response at the wrong offset
  *   idle            handshake, then never send anything unprompted
  *   slow-query      handshake, then answer every QUERY after [delaySeconds]
  *   defer-slow      answer QUERYs mentioning SLOW after [delaySeconds] and all
@@ -97,9 +104,11 @@ function readFrame($client): ?array {
 
 /**
  * @param resource $client
+ * @param ?int $version the version byte to put in the header, for the modes that
+ * send one the client is meant to refuse; the response bit (0x80) is set here.
  */
-function writeFrame($client, int $stream, int $opcode, string $body): void {
-    fwrite($client, pack('CCnCN', PROTOCOL_VERSION | 0x80, 0, $stream, $opcode, strlen($body)) . $body);
+function writeFrame($client, int $stream, int $opcode, string $body, ?int $version = null): void {
+    fwrite($client, pack('CCnCN', ($version ?? PROTOCOL_VERSION) | 0x80, 0, $stream, $opcode, strlen($body)) . $body);
     fflush($client);
 }
 
@@ -251,6 +260,7 @@ if ($client === false) {
 $handshakeDone = false;
 $eventDueAt = null;
 $prepareCount = 0;
+$badHeaderSent = false;
 $deadline = microtime(true) + 60;
 
 /** @var list<array{dueAt: float, stream: int}> $deferredAnswers */
@@ -369,6 +379,17 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_QUERY:
+            if ($mode === 'bad-response-header' && !$badHeaderSent) {
+                // Deliberately not $badHeaderSent per connection: the client is
+                // expected to drop this one, and the next has to be served
+                // normally for the recovery to be visible.
+                $badHeaderSent = true;
+
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody(), PROTOCOL_VERSION - 1);
+
+                break;
+            }
+
             if ($mode === 'close-on-query') {
                 // Hangs up on the query instead of answering it, so the
                 // client's read fails as a transport failure rather than as a

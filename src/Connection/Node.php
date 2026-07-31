@@ -19,7 +19,7 @@ interface Node {
 
     /**
      * How many bytes this connection has taken off the wire since it was
-     * opened, as a monotonically rising count.
+     * opened.
      *
      * Read for one purpose: it is the only evidence that a connection is alive
      * which does not depend on a whole frame having arrived. A single response
@@ -29,10 +29,12 @@ interface Node {
      * that died; see {@see HeartbeatMonitor::recordProgress()}.
      *
      * The count itself is never interpreted, only compared with what it was
-     * before a read, so it may wrap or start anywhere; it must only rise when
-     * bytes arrive and never otherwise. A decorator reports the count of the
-     * node it wraps rather than of what it hands on, since re-framing turns
-     * bytes that arrived into bytes that did not.
+     * before a read, so it need not rise without end: an implementation may
+     * start it anywhere and wrap it when it runs out of room. All that is
+     * required is that it change when bytes arrive and never otherwise. A
+     * decorator reports the count of the node it wraps rather than of what it
+     * hands on, since re-framing turns bytes that arrived into bytes that did
+     * not.
      */
     public function getReceivedByteCount(): int;
 

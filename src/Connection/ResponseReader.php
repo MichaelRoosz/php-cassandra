@@ -34,11 +34,41 @@ final class ResponseReader {
     private const MAX_FRAME_BODY_LENGTH = 256 * 1024 * 1024;
 
     private ?Header $currentHeader;
+
+    /**
+     * Whether a failure left this reader out of step with the frame stream, so
+     * that carrying on would read the next response at the wrong offset.
+     *
+     * Only {@see self::readHeader()} can do that. It consumes the nine header
+     * bytes and only then passes judgement on them, so a header it refuses
+     * leaves the body of that frame in the transport's buffer with nothing left
+     * that knows how long it is — the next read would take those bytes for a
+     * header. Everything else that fails here has already consumed the whole
+     * frame ({@see self::createResponse()}, and the decompression above it), so
+     * the stream is still in step and the connection is worth keeping: that is
+     * the case {@see Session::parkUnresolvedStream()} exists for.
+     *
+     * Told apart because the two need opposite handling, and the exception
+     * alone cannot say which is which. {@see Session::readResponse()} and
+     * {@see Session::readResponseUntil()} ask this before deciding whether a
+     * reader failure costs the connection.
+     */
+    private bool $frameSyncLost = false;
+
     private Lz4Decompressor $lz4Decompressor;
 
     public function __construct() {
         $this->lz4Decompressor = new Lz4Decompressor();
         $this->currentHeader = null;
+    }
+
+    /**
+     * Whether this reader can no longer be used on its connection, see
+     * {@see self::$frameSyncLost}.
+     */
+    public function hasLostFrameSync(): bool {
+
+        return $this->frameSyncLost;
     }
 
     /**
@@ -118,10 +148,13 @@ final class ResponseReader {
      * response after that would be read at the wrong offset.
      *
      * Called whenever the connection is dropped, see
-     * {@see Session::disconnect()}.
+     * {@see Session::disconnect()}. Which is also what makes a reader that lost
+     * its place usable again: the frames it was out of step with went away with
+     * the socket, so the next connection starts from a clean stream.
      */
     public function reset(): void {
         $this->currentHeader = null;
+        $this->frameSyncLost = false;
     }
 
     /**
@@ -217,6 +250,14 @@ final class ResponseReader {
             return null;
         }
 
+        // The nine bytes are off the buffer now, and the body they announce is
+        // still on it with nothing left that knows how long it is. So every way
+        // of failing below leaves this reader out of step with the frame
+        // stream; it is cleared again once the header has been made sense of.
+        // Marked here rather than at each throw so that a check added later
+        // cannot forget to say so. See {@see self::$frameSyncLost}.
+        $this->frameSyncLost = true;
+
         $headerVersion = ord($headerBytes[0]) - 0x80;
 
         if ($headerVersion !== $version->value) {
@@ -291,6 +332,8 @@ final class ResponseReader {
                 'protocol_version' => $version,
             ], $e);
         }
+
+        $this->frameSyncLost = false;
 
         return $header;
     }

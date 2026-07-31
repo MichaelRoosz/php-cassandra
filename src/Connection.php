@@ -364,6 +364,12 @@ final class Connection {
     /**
      * The transport of the current connection, or null when there is none.
      *
+     * Not the socket or stream itself once the handshake is through: from v5
+     * that is wrapped in {@see \Cassandra\Connection\FrameCodec}, and on a
+     * compressed v3/v4 connection in
+     * {@see \Cassandra\Connection\RequestCompressor}, so what comes back is
+     * whichever decorator the negotiated options called for.
+     *
      * @deprecated The transport is the session's, not the caller's: writing to
      * it, or closing it, behind the session's back desynchronises the response
      * reader and strands every request in flight on a socket nothing is going to
@@ -395,6 +401,12 @@ final class Connection {
     /**
      * How long the server may take to answer a request that asks for no timeout
      * of its own, in seconds, or null where such a request waits indefinitely.
+     *
+     * INF is returned as it was set and means the same unbounded wait null
+     * does; both are accepted, here and on a request's own options, and the
+     * driver treats them alike. Only this getter tells them apart, so a caller
+     * comparing what it reads back with what it set gets its own spelling
+     * rather than a normalised one.
      *
      * The connection default, i.e. what {@see self::setRequestTimeout()} last
      * set or what {@see ConnectionOptions::$requestTimeoutInSeconds} started it
@@ -429,6 +441,13 @@ final class Connection {
      * statement's answer; it resolves the statement all the same, and is handed
      * back here rather than being overtaken by the budget that ran out while
      * the nested request was still being waited for.
+     *
+     * What such a listener cannot do is have this wait carry on across a
+     * connection it replaced: a statement is only resolvable on the connection
+     * that sent it, so one whose connection went away while its answer was
+     * outstanding is reported with a ConnectionException — as
+     * {@see self::syncRequest()} describes — instead of being waited on for an
+     * answer that can no longer reach it.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -726,7 +745,11 @@ final class Connection {
     /**
      * How long to wait for the server's answer to a request before giving up
      * with a {@see \Cassandra\Exception\RequestTimeoutException}, in seconds.
-     * Null waits indefinitely.
+     * Null waits indefinitely, and so does INF — the same wait, spelled the way
+     * a single request spells it, so that one value can be passed around
+     * without having to be translated on the way in; see
+     * {@see self::getRequestTimeout()}. Zero or less is refused, being a
+     * request that would be out of time before it was sent.
      *
      * Applies to every request that has no explicit timeout of its own. That
      * includes the ones already in flight, whose budgets are measured against
@@ -808,6 +831,17 @@ final class Connection {
      * them reaches {@see ConnectionOptions::$maxOrphanedStreams}, and that
      * replaces the connection and raises a ConnectionException in place of the
      * timeout, as it does in {@see self::waitForNextResponse()}.
+     *
+     * A connection replaced while this call is waiting for its answer is
+     * likewise reported rather than resumed, with a ConnectionException of its
+     * own: the stream id this request went out on says nothing on the
+     * connection that took over, which is free to hand the same number to
+     * somebody else, so waiting on it any longer could return their answer as
+     * this one's. Every failure inside the driver that replaces a connection
+     * raises on its own account, so what reaches this is the one that does not
+     * — an event or warnings listener, running from inside this very wait,
+     * calling {@see self::disconnect()} itself. The request has to be sent
+     * again; whether the node acted on it is not knowable from here.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1008,6 +1042,10 @@ final class Connection {
     /**
      * Wait for the next server event.
      *
+     * Opens the connection first if there is none yet, as every call that reads
+     * off the wire on its own account does; see
+     * {@see self::drainAvailableResponses()}.
+     *
      * An idle event stream is not an error, so this keeps waiting across
      * transport read timeouts instead of tearing the connection down: the node
      * simply had nothing to report. While waiting, an OPTIONS heartbeat is sent
@@ -1066,6 +1104,9 @@ final class Connection {
     /**
      * Wait for the next response of any kind, the counterpart of
      * {@see self::waitForNextEvent()}.
+     *
+     * Opens the connection first if there is none yet, exactly as that call
+     * does.
      *
      * @param ?float $timeoutInSeconds how long this call may block:
      *   null  use the connection's request timeout (the default)

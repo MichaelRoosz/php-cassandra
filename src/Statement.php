@@ -323,11 +323,22 @@ final class Statement {
     /**
      * Note that this statement is being reprepared once more, see
      * {@see self::$repreparationCount}.
+     *
+     * @internal this is the connection's bookkeeping and not part of the public
+     * API; it may change at any time. Calling it from an application resets
+     * what {@see \Cassandra\Connection\ResponseDispatcher::MAX_REPREPARATIONS}
+     * is counting.
      */
     public function recordRepreparation(): void {
         $this->repreparationCount++;
     }
 
+    /**
+     * @internal this is the connection's bookkeeping and not part of the public
+     * API; it may change at any time. The request a statement is waiting for is
+     * set when it is sent and replaced when a follow-up is chained onto it, see
+     * {@see \Cassandra\Connection\RequestExecutor::chainAsyncRequest()}.
+     */
     public function setRequest(Request\Request $request): void {
         $this->request = $request;
     }
@@ -335,11 +346,21 @@ final class Statement {
     /**
      * Note the EXECUTE whose repreparation is about to be sent, see
      * {@see self::$requestBeingReprepared}.
+     *
+     * @internal this is the connection's bookkeeping and not part of the public
+     * API; it may change at any time.
      */
     public function setRequestBeingReprepared(?Request\Execute $request): void {
         $this->requestBeingReprepared = $request;
     }
 
+    /**
+     * @internal this is the connection's bookkeeping and not part of the public
+     * API; it may change at any time. An answer is put here by the read that
+     * took it off the wire, together with the stream id being released; setting
+     * one from outside would resolve a statement the connection still has in
+     * flight and strand the id it holds.
+     */
     public function setResponse(?Response\Response $response): void {
         $this->response = $response;
 
@@ -351,11 +372,21 @@ final class Statement {
     /**
      * Restarts the request timeout budget, for when the request behind this
      * statement is (re)written to the node.
+     *
+     * @internal this is the connection's bookkeeping and not part of the public
+     * API; it may change at any time. Use the request timeout to say how long a
+     * request may take, rather than moving when it counts as having been sent.
      */
     public function setSentAt(float $sentAt): void {
         $this->sentAt = $sentAt;
     }
 
+    /**
+     * @internal this is the connection's bookkeeping and not part of the public
+     * API; it may change at any time. The status is what tells the connection
+     * whether this statement is still its to answer, so setting it from outside
+     * can leave a request in flight that nothing will ever resolve.
+     */
     public function setStatus(StatementStatus $status): void {
         $this->status = $status;
     }
