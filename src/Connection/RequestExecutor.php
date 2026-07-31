@@ -73,6 +73,22 @@ final class RequestExecutor {
 
         $streamGeneration = $statement->getStreamGeneration();
 
+        if ($statement->isAbandoned() || $streamGeneration !== $this->streamIds->getGeneration()) {
+            $statement->setStatus(StatementStatus::ABANDONED);
+
+            throw new ConnectionException(
+                'The connection this statement was sent on was closed before its follow-up request could be sent, so the request was given up on. Send it again.',
+                ExceptionCode::CONNECTION_CHAINED_REQUEST_CONNECTION_GONE->value,
+                [
+                    'operation' => 'chainAsyncRequest',
+                    'stream_id' => $streamId,
+                    'request_class' => get_class($request),
+                    'stream_generation' => $streamGeneration,
+                    'current_stream_generation' => $this->streamIds->getGeneration(),
+                ]
+            );
+        }
+
         // Checked ahead of the try below rather than inside it, because this is
         // the one failure whose stream id is not this statement's to give back:
         // another statement is registered at it, so the disposal that try owes a

@@ -104,6 +104,40 @@ final class Session {
      */
     private StreamIdPool $streamIds;
 
+    /**
+     * Answers that arrived for a stream id the sync path is waiting on, kept
+     * until that wait picks them up; see {@see self::$syncWaitStreams}.
+     *
+     * @var array<int, Response\Response>
+     */
+    private array $syncWaitResponses = [];
+
+    /**
+     * The stream ids {@see self::getNextResponseForStream()} is waiting on
+     * without a statement to hold them, i.e. the sync path's.
+     *
+     * A sync request is the one kind this connection does not register in
+     * {@see StatementRegistry}: the caller is already blocked on it, so its
+     * answer is delivered by being returned up the stack to the loop that read
+     * it. That only works while that loop is the one reading. Anything reached
+     * from inside a read can read again — a warnings or event listener issuing a
+     * request of its own, above all — and a nested read that takes the frame off
+     * the wire would find nobody to give it to: {@see self::processResponse()}
+     * has no statement to resolve, and the nested loop discards an answer whose
+     * stream id is not the one it was asked about. The sync caller would then
+     * wait out its whole budget for a request the node answered on time.
+     *
+     * So the stream ids being waited on this way are recorded here, and an
+     * answer for one of them is put aside in {@see self::$syncWaitResponses}
+     * whichever loop happens to read it. The wait picks it up on its next pass.
+     * The answer is still returned to that reader as well, exactly as an async
+     * statement's is: putting it aside is about it reaching its owner, not about
+     * taking it away from whoever was reading.
+     *
+     * @var array<int, true>
+     */
+    private array $syncWaitStreams = [];
+
     private ?ValueEncodeConfig $valueEncodeConfig = null;
 
     private ProtocolVersion $version;
@@ -383,128 +417,157 @@ final class Session {
         // anchored once, now. A statement's own anchor is read per pass below.
         $sentAt = microtime(true);
 
-        while (true) {
-            if ($statement !== null) {
-                // Checked every pass, not just before the loop: once the
-                // statement is finished the stream id stops being ours to give
-                // up on, and parking it below would hold back an id that has
-                // already gone back into circulation — or, after the connection
-                // was replaced, one the next connection may hand to somebody
-                // else, whose answer would then be discarded as a late one.
-                $alreadyAnswered = $statement->peekResponse();
-                if ($alreadyAnswered !== null) {
-                    return $alreadyAnswered;
-                }
+        // A wait with no statement behind it is the sync path, whose answer
+        // nothing but this loop can take delivery of. Announced for the duration
+        // of the wait so that a read nested inside it puts the answer aside
+        // instead of discarding it; see {@see self::$syncWaitStreams}.
+        if ($statement === null) {
+            $this->syncWaitStreams[$streamId] = true;
+        }
 
-                // A dead end reached while we were reading, which today only a
-                // disconnect can do — and every path that disconnects raises on
-                // its own, so this is the braces to that belt. Waiting on
-                // further passes would be waiting for an answer that cannot
-                // come.
-                //
-                // A statement given up on is reported as the timeout it is,
-                // matching {@see StatementRegistry::assertResolvable()} when it
-                // finds the same statement in the same state before the wait
-                // begins: which side of a read the budget ran out on is timing,
-                // not a difference the caller should have to tell apart.
-                if ($statement->isTimedOut()) {
-                    throw new RequestTimeoutException(
-                        'This request timed out and was given up on while its answer was outstanding, so it can no longer be resolved. Send it again.',
-                        ExceptionCode::REQUESTTIMEOUT_WAITING_FOR_STATEMENTS->value,
-                        [
-                            'operation' => 'getResponseForStatement',
-                            'stream_id' => $streamId,
-                            'request_class' => get_class($statement->getRequest()),
-                        ],
-                        timedOutStatements: [$statement],
-                    );
-                }
-
-                // Abandoned, on the other hand, means the statement was given up
-                // on without ever running out of time — the connection it was
-                // sent on went away, or a follow-up request of its own never
-                // reached the node — so it is reported as a connection failure
-                // rather than a timeout. It is deliberately not the StatementException
-                // StatementRegistry::assertResolvable() raises: the sync path shares
-                // this loop and has no statement at all, so raising that here
-                // would put StatementException on the @throws list of every
-                // method that ends up in syncRequest(), for a failure none of
-                // them can produce.
-                if ($statement->isAbandoned()) {
-                    throw new ConnectionException(
-                        'The statement being waited on was given up on while its answer was outstanding, so this connection can no longer resolve it',
-                        ExceptionCode::CONNECTION_STATEMENT_NO_LONGER_RESOLVABLE->value,
-                        [
-                            'operation' => 'getResponseForStatement',
-                            'stream_id' => $streamId,
-                            'request_class' => get_class($statement->getRequest()),
-                            'abandoned' => true,
-                        ]
-                    );
-                }
-            }
-
-            // The deadline is recomputed every pass rather than taken once: a
-            // chained follow-up request (repreparation, auto-prepare) restarts
-            // the statement's budget, and a deadline captured before the loop
-            // would hold that new request to the budget of the one it replaced.
-            $ownDeadline = $this->deadlines->at($requestTimeoutInSeconds, $statement?->getSentAt() ?? $sentAt);
-
-            // The other requests in flight keep their own budgets while this
-            // one waits, so one of them going overdue is noticed here too
-            // rather than only whenever its caller next waits on it.
-            $deadline = $this->deadlines->earlier($ownDeadline, $this->getPendingStatementsDeadline());
-
-            $response = $this->readResponseUntil($deadline, $deadlineExceeded);
-
-            $this->checkHeartbeat();
-
-            if ($response !== null && $response->getStream() === $streamId) {
-                return $response;
-            }
-
-            if ($deadlineExceeded) {
-                // The deadline that fired may well belong to another request,
-                // so everything overdue is given up on first and only then is
-                // it decided whether this request is among them.
-                $expired = $this->timeOutExpiredStatements();
-
-                $statementStillPending = false;
-
+        try {
+            while (true) {
                 if ($statement !== null) {
-                    $mine = $this->statements->intersect($expired, [$statement]);
-                    if ($mine !== []) {
-                        $this->statements->reportTimedOut($mine, 'getResponseForStatement');
+                    // Checked every pass, not just before the loop: once the
+                    // statement is finished the stream id stops being ours to give
+                    // up on, and parking it below would hold back an id that has
+                    // already gone back into circulation — or, after the connection
+                    // was replaced, one the next connection may hand to somebody
+                    // else, whose answer would then be discarded as a late one.
+                    $alreadyAnswered = $statement->peekResponse();
+                    if ($alreadyAnswered !== null) {
+                        return $alreadyAnswered;
                     }
 
-                    // Not among the expired, so it is still waiting — its budget
-                    // has not run out, or a chained follow-up restarted it while
-                    // we were reading. Either way the connection's own
-                    // bookkeeping is authoritative for a statement, and the
-                    // fallback below must not second-guess it; carry on against
-                    // the deadline the next pass computes.
+                    // A dead end reached while we were reading, which today only a
+                    // disconnect can do — and every path that disconnects raises on
+                    // its own, so this is the braces to that belt. Waiting on
+                    // further passes would be waiting for an answer that cannot
+                    // come.
                     //
-                    // Asked of the statement rather than of the stream id: what
-                    // matters is that this statement is still ours to wait for,
-                    // not that something is registered at the number it was sent
-                    // on.
-                    $statementStillPending = $this->statements->get($streamId) === $statement;
+                    // A statement given up on is reported as the timeout it is,
+                    // matching {@see StatementRegistry::assertResolvable()} when it
+                    // finds the same statement in the same state before the wait
+                    // begins: which side of a read the budget ran out on is timing,
+                    // not a difference the caller should have to tell apart.
+                    if ($statement->isTimedOut()) {
+                        throw new RequestTimeoutException(
+                            'This request timed out and was given up on while its answer was outstanding, so it can no longer be resolved. Send it again.',
+                            ExceptionCode::REQUESTTIMEOUT_WAITING_FOR_STATEMENTS->value,
+                            [
+                                'operation' => 'getResponseForStatement',
+                                'stream_id' => $streamId,
+                                'request_class' => get_class($statement->getRequest()),
+                            ],
+                            timedOutStatements: [$statement],
+                        );
+                    }
+
+                    // Abandoned, on the other hand, means the statement was given up
+                    // on without ever running out of time — the connection it was
+                    // sent on went away, or a follow-up request of its own never
+                    // reached the node — so it is reported as a connection failure
+                    // rather than a timeout. It is deliberately not the StatementException
+                    // StatementRegistry::assertResolvable() raises: the sync path shares
+                    // this loop and has no statement at all, so raising that here
+                    // would put StatementException on the @throws list of every
+                    // method that ends up in syncRequest(), for a failure none of
+                    // them can produce.
+                    if ($statement->isAbandoned()) {
+                        throw new ConnectionException(
+                            'The statement being waited on was given up on while its answer was outstanding, so this connection can no longer resolve it',
+                            ExceptionCode::CONNECTION_STATEMENT_NO_LONGER_RESOLVABLE->value,
+                            [
+                                'operation' => 'getResponseForStatement',
+                                'stream_id' => $streamId,
+                                'request_class' => get_class($statement->getRequest()),
+                                'abandoned' => true,
+                            ]
+                        );
+                    }
                 }
 
-                if (
-                    !$statementStillPending
-                    && $ownDeadline !== null
-                    && microtime(true) >= $ownDeadline
-                ) {
-                    $this->timeOutStream(
-                        $streamId,
-                        $streamGeneration,
-                        $statement === null ? 'syncRequest' : 'getResponseForStatement',
-                        $requestTimeoutInSeconds,
-                        $requestClass,
-                        $statement,
-                    );
+                // The deadline is recomputed every pass rather than taken once: a
+                // chained follow-up request (repreparation, auto-prepare) restarts
+                // the statement's budget, and a deadline captured before the loop
+                // would hold that new request to the budget of the one it replaced.
+                $ownDeadline = $this->deadlines->at($requestTimeoutInSeconds, $statement?->getSentAt() ?? $sentAt);
+
+                // The other requests in flight keep their own budgets while this
+                // one waits, so one of them going overdue is noticed here too
+                // rather than only whenever its caller next waits on it.
+                $deadline = $this->deadlines->earlier($ownDeadline, $this->getPendingStatementsDeadline());
+
+                $response = $this->readResponseUntil($deadline, $deadlineExceeded);
+
+                $this->checkHeartbeat();
+
+                if ($response !== null && $response->getStream() === $streamId) {
+                    return $response;
                 }
+
+                // Read by somebody else and put aside for us: a read nested
+                // inside the one above — a listener issuing a request of its own
+                // — took our answer off the wire, and the sync path has no
+                // statement for it to have been left on. Checked before the
+                // deadline is acted on below, so that an answer which did arrive
+                // is never reported as a timeout.
+                if ($statement === null) {
+                    $deposited = $this->syncWaitResponses[$streamId] ?? null;
+                    if ($deposited !== null) {
+                        unset($this->syncWaitResponses[$streamId]);
+
+                        return $deposited;
+                    }
+                }
+
+                if ($deadlineExceeded) {
+                    // The deadline that fired may well belong to another request,
+                    // so everything overdue is given up on first and only then is
+                    // it decided whether this request is among them.
+                    $expired = $this->timeOutExpiredStatements();
+
+                    $statementStillPending = false;
+
+                    if ($statement !== null) {
+                        $mine = $this->statements->intersect($expired, [$statement]);
+                        if ($mine !== []) {
+                            $this->statements->reportTimedOut($mine, 'getResponseForStatement');
+                        }
+
+                        // Not among the expired, so it is still waiting — its budget
+                        // has not run out, or a chained follow-up restarted it while
+                        // we were reading. Either way the connection's own
+                        // bookkeeping is authoritative for a statement, and the
+                        // fallback below must not second-guess it; carry on against
+                        // the deadline the next pass computes.
+                        //
+                        // Asked of the statement rather than of the stream id: what
+                        // matters is that this statement is still ours to wait for,
+                        // not that something is registered at the number it was sent
+                        // on.
+                        $statementStillPending = $this->statements->get($streamId) === $statement;
+                    }
+
+                    if (
+                        !$statementStillPending
+                        && $ownDeadline !== null
+                        && microtime(true) >= $ownDeadline
+                    ) {
+                        $this->timeOutStream(
+                            $streamId,
+                            $streamGeneration,
+                            $statement === null ? 'syncRequest' : 'getResponseForStatement',
+                            $requestTimeoutInSeconds,
+                            $requestClass,
+                            $statement,
+                        );
+                    }
+                }
+            }
+        } finally {
+            if ($statement === null) {
+                unset($this->syncWaitStreams[$streamId], $this->syncWaitResponses[$streamId]);
             }
         }
     }
@@ -1589,6 +1652,15 @@ final class Session {
 
         $statement = $this->statements->get($streamId);
 
+        if ($statement === null && isset($this->syncWaitStreams[$streamId])) {
+            // Nothing here can take delivery of it — the sync path registers no
+            // statement — and the loop that is waiting for it may not be the one
+            // that read it. Put aside for that loop to pick up on its next pass;
+            // see {@see self::$syncWaitStreams}. Still returned below, exactly as
+            // an async statement's answer is.
+            $this->syncWaitResponses[$streamId] = $response;
+        }
+
         $isHeartbeatProbe = $statement !== null && $statement === $this->heartbeat->getProbe();
 
         if ($statement !== null) {
@@ -1827,6 +1899,14 @@ final class Session {
         $this->version = $this->options->initialProtocolVersion;
         $this->responseReader->reset();
         $this->streamIds->reset();
+
+        // An answer put aside for a sync wait belongs to the connection it
+        // arrived on. Kept, it would be handed to a wait on the same number on
+        // the connection that replaces this one — the stream ids start over, so
+        // the number says nothing across the two. The waits themselves clear
+        // their own entry as they unwind; this is for one that was deposited and
+        // never picked up.
+        $this->syncWaitResponses = [];
     }
 
     /**

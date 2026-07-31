@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Connection;
+use Cassandra\EventListener as EventListenerInterface;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Exception\ConnectionException;
@@ -15,6 +16,7 @@ use Cassandra\Exception\RequestTimeoutException;
 use Cassandra\Exception\StatementException;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Query;
+use Cassandra\Response\Event;
 use Cassandra\Response\Event\StatusChangeEvent;
 use Cassandra\Response\Result;
 use Cassandra\Statement;
@@ -90,6 +92,39 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $this->assertFalse($connection->isConnected(), 'no replacement connection may be opened for it');
             $this->assertTrue($statement->isAbandoned());
         }
+    }
+
+    public function testAFollowUpRequestIsNotSentOnceTheConnectionHasBeenReplaced(): void {
+        // The same as above, but with the connection already back up by the time
+        // the follow-up is chained — which is what a warnings listener issuing a
+        // request of its own can do, since it runs before the dispatcher gets
+        // that far. There is a node again, so nothing about it being non-null
+        // says the statement's stream id still means anything: the id space
+        // started over with the new connection, so writing on that id would
+        // register the statement at a number the new connection is free to hand
+        // to somebody else, and releasing it afterwards would be refused for the
+        // stale generation and leak it for good.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0);
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW');
+        $connection->disconnect();
+        $connection->connect();
+
+        $this->assertTrue($connection->isConnected());
+
+        $method = new ReflectionMethod(Session::class, 'chainAsyncRequest');
+
+        try {
+            $method->invoke(self::sessionOf($connection), new Query('SELECT * FROM SLOW'), $statement);
+            $this->fail('expected the follow-up request to be given up on');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_CHAINED_REQUEST_CONNECTION_GONE->value, $e->getCode());
+            $this->assertTrue($statement->isAbandoned());
+            $this->assertSame(0, self::statementsOf($connection)->getCount(), 'nothing may be registered on the replacement connection');
+        }
+
+        // The replacement connection is untouched by any of it.
+        $this->assertInstanceOf(Result::class, $connection->query('SELECT 1'));
     }
 
     public function testAHeartbeatDoesNotKillAConnectionThatIsStillDeliveringAnAnswer(): void {
@@ -1113,6 +1148,44 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->drainUntilStreamIdsAreReclaimed($connection, withinSeconds: $delaySeconds + 10.0);
 
         $this->assertSame([], $this->orphanedStreamsOf($connection), 'the late answer should have released the stream id');
+    }
+
+    public function testSyncRequestIsNotLostToAReadNestedInsideItsWait(): void {
+        // A synchronous request is the one kind the connection registers no
+        // statement for, so its answer is delivered by being returned up the
+        // stack to the loop that read it. Anything reached from inside a read
+        // can read again — an event listener issuing a request of its own, here
+        // — and that nested read takes the answer off the wire while looking for
+        // a different stream id. Without somewhere to put it, the frame is
+        // dropped and the caller waits out its whole budget for a request the
+        // node answered on time.
+        //
+        // The server pushes the event before answering, and answers the
+        // listener's own query only afterwards, so the nested wait is
+        // guaranteed to be the one reading when the answer arrives.
+        $connection = $this->connect('event-then-reorder', delaySeconds: 0.3, requestTimeoutInSeconds: 3.0);
+
+        $nestedResults = 0;
+        $connection->registerEventListener(new class($connection, $nestedResults) implements EventListenerInterface {
+            public function __construct(
+                private Connection $connection,
+                private int &$nestedResults,
+            ) {
+            }
+
+            public function onEvent(Event $event): void {
+                $this->connection->query('SELECT 1');
+                $this->nestedResults++;
+            }
+        });
+
+        $started = microtime(true);
+        $result = $connection->query('SELECT * FROM SLOW');
+        $elapsed = microtime(true) - $started;
+
+        $this->assertInstanceOf(Result::class, $result);
+        $this->assertSame(1, $nestedResults, 'the listener must have run a request of its own inside the wait');
+        $this->assertLessThan(3.0, $elapsed, 'the answer was there; the wait must not have run to its budget');
     }
 
     public function testTimingOutOneAsyncStatementLeavesTheConnectionAndItsOtherStatementsIntact(): void {

@@ -29,25 +29,31 @@ use SplQueue;
  */
 final class StreamIdPool {
     /**
-     * Highest stream id a client may use. The protocol carries it as a signed
-     * [short] and reserves the negative half for server-initiated streams
-     * (events use -1), leaving 0..32767 for requests.
-     */
-    public const MAX_STREAM_ID = 32767;
-
-    /**
      * Most ids a connection may hold back before it has to be replaced,
      * whatever {@see ConnectionOptions::$maxOrphanedStreams} asks for.
      *
-     * One below the size of the id space, so that a connection can never reach
-     * the state where every id it owns is parked. A parked id only comes back
+     * One below the size of the id space, so that a connection cannot be left
+     * in the state where every id it owns is parked. A parked id only comes back
      * when its late answer arrives, so a pool in that state can hand out
      * nothing — not even the heartbeat's probe, which
      * {@see Session::checkHeartbeat()} skips rather than waits for an id for —
      * and with no probe to send there is nothing left that could notice the
      * node is gone. A wait for a free id would then never end.
+     *
+     * "Left in" rather than "reach": the last id is parked before anything
+     * counts them, so the state is reached for as long as it takes
+     * {@see Session::enforceOrphanedStreamLimit()} to be asked. That is the very
+     * next thing every path that parks one does — see
+     * {@see Session::timeOutStream()} and {@see Session::timeOutExpiredStatements()}
+     * — so the connection is replaced before it can be waited on again.
      */
     public const MAX_ORPHANED_STREAMS = self::MAX_STREAM_ID;
+    /**
+     * Highest stream id a client may use. The protocol carries it as a signed
+     * [short] and reserves the negative half for server-initiated streams
+     * (events use -1), leaving 0..32767 for requests.
+     */
+    public const MAX_STREAM_ID = 32767;
 
     /**
      * Which run of the id space we are on, bumped every time it is started

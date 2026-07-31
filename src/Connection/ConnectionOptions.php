@@ -78,6 +78,18 @@ final class ConnectionOptions {
          * Reads are bounded by when the probe is next due, so this holds even
          * during a wait that has no deadline of its own and whatever the
          * transport timeouts are set to — including not at all.
+         *
+         * One corner is beyond it: a connection that has handed out every stream
+         * id the protocol allows cannot send the probe either, since claiming an
+         * id would mean waiting for one. If on top of that every one of those
+         * requests waits indefinitely ({@see self::$requestTimeoutInSeconds}
+         * null, and no timeout on any of them) and the caller waits without a
+         * timeout as well, nothing is left that could notice the node is gone.
+         * Any one of the three breaks it: a bounded request timeout, whether the
+         * connection default or one on a single request, lets the requests run
+         * out and orphan their ids until
+         * {@see self::$maxOrphanedStreams} replaces the connection, and a finite
+         * timeout on the wait ends it on its own.
          */
         public readonly ?float $heartbeatIntervalInSeconds = 30,
 

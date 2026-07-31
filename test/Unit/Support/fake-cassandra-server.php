@@ -30,6 +30,13 @@
  *   refuse-use      report every QUERY on stdout as "query <cql>", and answer
  *                   the ones that switch keyspace with INVALID, as a node asked
  *                   for a keyspace that does not exist would
+ *   event-then-reorder
+ *                   on a QUERY mentioning SLOW, push an event at once and answer
+ *                   that query after [delaySeconds]; answer every other QUERY
+ *                   after twice that. So a client whose event listener issues a
+ *                   request of its own is still inside that nested request's
+ *                   wait when the first query's answer arrives, and it is the
+ *                   nested read that takes it off the wire
  *   trickle-result  answer every QUERY with one large RESULT written in pieces
  *                   over [delaySeconds], as a node streaming a wide page over a
  *                   slow link does. Bytes arrive the whole time but no frame is
@@ -270,7 +277,24 @@ while (microtime(true) < $deadline) {
 
     $frame = readFrame($client);
     if ($frame === null) {
-        break;
+        // The client hung up. Wait for another one rather than exiting, so that
+        // a test can disconnect and reconnect against the same server — which
+        // is the only way to reach the states that are about one connection
+        // having replaced another. Everything that belonged to the old client
+        // goes with it: its stream ids mean nothing on the new connection, and
+        // the handshake starts over.
+        fclose($client);
+
+        $client = stream_socket_accept($server, 20);
+        if ($client === false) {
+            break;
+        }
+
+        $handshakeDone = false;
+        $eventDueAt = null;
+        $deferredAnswers = [];
+
+        continue;
     }
 
     // The handshake is always answered, so that the connection under test is
@@ -356,6 +380,27 @@ while (microtime(true) < $deadline) {
                 }
 
                 writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody());
+
+                break;
+            }
+
+            if ($mode === 'event-then-reorder') {
+                if (str_contains($frame['body'], 'SLOW')) {
+                    // The event goes out first, so the client reads it while
+                    // still waiting for this query — and whatever its listener
+                    // does then is what the answer below arrives in the middle
+                    // of.
+                    $eventDueAt = microtime(true);
+                    $deferredAnswers[] = ['dueAt' => microtime(true) + $delay, 'stream' => $frame['stream']];
+
+                    break;
+                }
+
+                // Twice the delay, so a query the listener sends is answered
+                // after the one that is already outstanding rather than before
+                // it: the nested wait is still reading when the first answer
+                // comes, and so is the one that reads it.
+                $deferredAnswers[] = ['dueAt' => microtime(true) + 2 * $delay, 'stream' => $frame['stream']];
 
                 break;
             }
