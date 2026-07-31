@@ -438,7 +438,7 @@ final class RequestExecutor {
             $prepareResponse = $this->sendSyncRequest($autoPrepareRequest, $requestTimeoutInSeconds, $repreparationDepth);
             if (!($prepareResponse instanceof Response\Result\PreparedResult)) {
                 throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
-                    'expected' => Response\Result::class,
+                    'expected' => Response\Result\PreparedResult::class,
                     'received' => get_class($prepareResponse),
                 ]);
             }

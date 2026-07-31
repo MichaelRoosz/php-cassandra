@@ -477,7 +477,7 @@ final class Connection {
         $response = $this->syncRequest(new Request\Prepare($query, $options), $requestTimeoutInSeconds);
         if (!($response instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
-                'expected' => Response\Result::class,
+                'expected' => Response\Result\PreparedResult::class,
                 'received' => get_class($response),
             ]);
         }
@@ -978,9 +978,12 @@ final class Connection {
      * where one of them is answered in the same pass that another runs out, the
      * exception is what the caller sees. Nothing is lost by it — the answer
      * stays on its statement and the exception names the ones that ran out, so
-     * calling again returns the ready one, as long as those are dropped from
-     * $statements first. They are not resolvable any more, and a statement that
-     * can never resolve is reported rather than waited on.
+     * calling again hands back the one that is ready: a statement already
+     * holding its answer is looked for before any of them is judged resolvable,
+     * so the ones that ran out do not have to be dropped from $statements for
+     * that. They do once nothing is ready any more, though — a statement that
+     * can never resolve is reported rather than waited on, so a call with only
+     * those left raises instead of waiting.
      *
      * A timeout of 0 still costs a read while anything is outstanding, but a
      * non-blocking one, so it does not wait on the transport either;

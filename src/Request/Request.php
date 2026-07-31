@@ -101,6 +101,29 @@ abstract class Request implements Frame, Stringable {
     }
 
     /**
+     * Take over another request's record of who the keyspace it carries belongs
+     * to, for a request built out of that one's options.
+     *
+     * The driver builds requests from other requests — the PREPARE an
+     * auto-prepared query needs, the PREPARE and EXECUTE a repreparation sends;
+     * see {@see \Cassandra\Connection\ResponseDispatcher}. Those are built from
+     * the source's options, which carry the keyspace but not the record of who
+     * put it there ({@see self::$keyspaceIsConnectionDefault}), so the derived
+     * request would start out claiming that the caller named a keyspace this
+     * driver applied.
+     *
+     * That is not a cosmetic difference: a keyspace the caller named is never
+     * taken back, so {@see self::clearDefaultKeyspace()} would leave it on a
+     * request bound for a connection below v5, where {@see self::getBody()}
+     * refuses to encode one at all — a request that worked on v5 failing for
+     * good rather than being addressed the way v4 addresses one.
+     */
+    final public function adoptDefaultKeyspaceMarkerFrom(Request $source): void {
+
+        $this->keyspaceIsConnectionDefault = $source->keyspaceIsConnectionDefault;
+    }
+
+    /**
      * Fill in the keyspace the connection is on, for a request that names none
      * of its own.
      *

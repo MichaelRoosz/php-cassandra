@@ -51,6 +51,45 @@ final class DefaultKeyspaceTest extends AbstractUnitTestCase {
         $this->assertSame('app', $request->getOptions()->keyspace);
     }
 
+    public function testADerivedRequestGivesUpAKeyspaceTheDriverApplied(): void {
+        // The driver builds requests out of other requests' options — the
+        // PREPARE an auto-prepared query needs, the PREPARE and EXECUTE a
+        // repreparation sends. Options carry the keyspace but not the record of
+        // who put it there, so without adopting that record the derived request
+        // would claim the caller named a keyspace this driver applied — and a
+        // keyspace the caller named is never taken back, so a v4 send would
+        // refuse to encode it rather than addressing the request the way v4
+        // addresses one.
+        $source = new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions());
+        $source->applyDefaultKeyspace('app');
+
+        $derived = new Prepare('SELECT * FROM t', new PrepareOptions(keyspace: $source->getOptions()->keyspace));
+        $derived->adoptDefaultKeyspaceMarkerFrom($source);
+
+        $this->assertSame('app', $derived->getOptions()->keyspace);
+
+        $derived->clearDefaultKeyspace();
+
+        $this->assertNull($derived->getOptions()->keyspace, 'a keyspace the driver applied is the driver\'s to take back');
+    }
+
+    public function testADerivedRequestKeepsAKeyspaceTheCallerNamed(): void {
+        // The other half of it: the marker is adopted, not assumed. A keyspace
+        // the caller put on the request they handed in stays put on everything
+        // derived from it, exactly as it does on the request itself.
+        $source = new Query('SELECT * FROM t', [], Consistency::ONE, new QueryOptions(keyspace: 'explicit'));
+        $source->applyDefaultKeyspace('app');
+
+        $derived = new Prepare('SELECT * FROM t', new PrepareOptions(keyspace: $source->getOptions()->keyspace));
+        $derived->adoptDefaultKeyspaceMarkerFrom($source);
+
+        $this->assertSame('explicit', $derived->getOptions()->keyspace);
+
+        $derived->clearDefaultKeyspace();
+
+        $this->assertSame('explicit', $derived->getOptions()->keyspace, 'a keyspace the caller named is not the driver\'s to take back');
+    }
+
     public function testAnExecuteTakesTheDefaultKeyspace(): void {
         $request = $this->executeRequest(new ExecuteOptions());
 

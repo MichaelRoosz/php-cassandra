@@ -112,6 +112,12 @@ final class ResponseDispatcher {
                     $prepareRequest = new Request\Prepare($request->getQuery(), $prepareOptions);
                     $prepareRequest->setVersion($this->session->getProtocolVersion());
 
+                    // The options were copied off a query the executor has
+                    // already addressed, so a keyspace among them is this
+                    // connection's rather than the caller's; see
+                    // {@see Request\Request::adoptDefaultKeyspaceMarkerFrom()}.
+                    $prepareRequest->adoptDefaultKeyspaceMarkerFrom($request);
+
                     return $prepareRequest;
                 }
             }
@@ -161,6 +167,11 @@ final class ResponseDispatcher {
             $originalRequest->getConsistency(),
             ExecuteOptions::fromQueryOptions($originalRequest->getOptions())
         );
+
+        // Built out of the query's options, so a keyspace among them is
+        // whoever's it was on that query; see
+        // {@see Request\Request::adoptDefaultKeyspaceMarkerFrom()}.
+        $newExecuteRequest->adoptDefaultKeyspaceMarkerFrom($originalRequest);
 
         if ($statement !== null) {
             $this->session->chainAsyncRequest($newExecuteRequest, $statement);
@@ -278,6 +289,11 @@ final class ResponseDispatcher {
             $originalRequest->getOptions()
         );
 
+        // Built out of the refused EXECUTE's options, so a keyspace among them
+        // is whoever's it was on that request; see
+        // {@see Request\Request::adoptDefaultKeyspaceMarkerFrom()}.
+        $newExecuteRequest->adoptDefaultKeyspaceMarkerFrom($originalRequest);
+
         if ($statement !== null) {
             $this->session->chainAsyncRequest($newExecuteRequest, $statement);
 
@@ -341,6 +357,14 @@ final class ResponseDispatcher {
             }
 
             $newPrepareRequest = new Request\Prepare($prevRequest->getQuery(), $prevRequest->getOptions());
+
+            // Built out of the options of the PREPARE that produced the
+            // statement id the node has just forgotten, so a keyspace among them
+            // is whoever's it was on that PREPARE. It matters here more than
+            // anywhere: the request it was taken from can have been prepared on
+            // another connection, on another protocol version, which is exactly
+            // the case {@see Request\Request::clearDefaultKeyspace()} exists for.
+            $newPrepareRequest->adoptDefaultKeyspaceMarkerFrom($prevRequest);
 
             $this->preparedResultCache->invalidate($newPrepareRequest);
 

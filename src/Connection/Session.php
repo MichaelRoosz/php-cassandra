@@ -487,6 +487,35 @@ final class Session {
                     }
                 }
 
+                // The connection this wait belongs to was replaced while we were
+                // reading. Every id the old pool handed out is meaningless now:
+                // the number being watched here says nothing on the connection
+                // that replaced it, which is free to hand it to somebody else —
+                // and their answer would match the stream id test below and be
+                // returned as this caller's. Asked of the pool rather than
+                // inferred, because the sync path has no statement to have been
+                // told on: an async one is caught by isAbandoned() above, and
+                // that is the whole of what the check is for there.
+                //
+                // Every failure inside this driver that replaces the connection
+                // raises on its own, so what this is left with is the one that
+                // does not: an event or warnings listener, which runs from
+                // inside the nested read, calling
+                // {@see \Cassandra\Connection::disconnect()} itself.
+                if ($streamGeneration !== $this->streamIds->getGeneration()) {
+                    throw new ConnectionException(
+                        'The connection this request was sent on was replaced while its answer was outstanding, so it can no longer be resolved. Send it again.',
+                        ExceptionCode::CONNECTION_WAIT_CONNECTION_REPLACED->value,
+                        [
+                            'operation' => $statement === null ? 'syncRequest' : 'getResponseForStatement',
+                            'stream_id' => $streamId,
+                            'request_class' => $requestClass ?? ($statement === null ? null : get_class($statement->getRequest())),
+                            'stream_generation' => $streamGeneration,
+                            'current_stream_generation' => $this->streamIds->getGeneration(),
+                        ]
+                    );
+                }
+
                 // The deadline is recomputed every pass rather than taken once: a
                 // chained follow-up request (repreparation, auto-prepare) restarts
                 // the statement's budget, and a deadline captured before the loop
@@ -1354,37 +1383,37 @@ final class Session {
         $probe = $this->heartbeat->getProbe();
         if ($probe !== null) {
 
-            if ($probe->isResultReady()) {
+            if ($probe->isResultReady() || $probe->isAbandoned() || $probe->isTimedOut()) {
+                // Answered, or finished without an answer by something other
+                // than this method. Either way it is no longer the outstanding
+                // question, so it is forgotten and the schedule below decides
+                // afresh rather than this returning and costing the connection a
+                // whole interval of not being probed.
+                //
+                // An answered probe leaves nothing for that schedule to do — the
+                // answer reset the interval on its way through
+                // {@see self::processResponse()} — so only the other two, which
+                // nothing reaches today, actually gain anything by it.
                 $this->heartbeat->forgetProbe();
-
+            } elseif (!$this->heartbeat->isProbeOverdue($now)) {
                 return;
+            } else {
+                $node = $this->node;
+                $context = [
+                    'operation' => 'heartbeat',
+                    'heartbeat_timeout_seconds' => $this->heartbeat->getTimeoutInSeconds(),
+                    'host' => $node?->getConfig()->host,
+                    'port' => $node?->getConfig()->port,
+                ];
+
+                $this->disconnect();
+
+                throw new ConnectionException(
+                    'Node did not answer the connection heartbeat in time',
+                    ExceptionCode::CONNECTION_HEARTBEAT_TIMEOUT->value,
+                    $context
+                );
             }
-
-            if ($probe->isAbandoned() || $probe->isTimedOut()) {
-                $this->heartbeat->forgetProbe();
-
-                return;
-            }
-
-            if (!$this->heartbeat->isProbeOverdue($now)) {
-                return;
-            }
-
-            $node = $this->node;
-            $context = [
-                'operation' => 'heartbeat',
-                'heartbeat_timeout_seconds' => $this->heartbeat->getTimeoutInSeconds(),
-                'host' => $node?->getConfig()->host,
-                'port' => $node?->getConfig()->port,
-            ];
-
-            $this->disconnect();
-
-            throw new ConnectionException(
-                'Node did not answer the connection heartbeat in time',
-                ExceptionCode::CONNECTION_HEARTBEAT_TIMEOUT->value,
-                $context
-            );
         }
 
         if (!$this->heartbeat->isProbeDue($now)) {
@@ -1465,7 +1494,7 @@ final class Session {
 
             // From here every frame is framed and compressed as the node has
             // just agreed, the AUTH_RESPONSE below included.
-            $node = $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
+            $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
 
             $authResult = $this->sendSyncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
 
@@ -1501,7 +1530,7 @@ final class Session {
                 ]);
             }
         } elseif ($response instanceof Response\Ready) {
-            $node = $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
+            $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
         } else {
             $nodeConfig = $node->getConfig();
 

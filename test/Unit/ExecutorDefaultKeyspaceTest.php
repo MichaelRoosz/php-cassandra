@@ -6,11 +6,13 @@ namespace Cassandra\Test\Unit;
 
 use Cassandra\Connection;
 use Cassandra\Connection\RequestExecutor;
+use Cassandra\Connection\ResponseDispatcher;
 use Cassandra\Connection\Session;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Request\Prepare;
 use Cassandra\Request\Query;
 use ReflectionMethod;
 use ReflectionProperty;
@@ -32,6 +34,43 @@ use ReflectionProperty;
  * nothing about that needs a node to answer.
  */
 final class ExecutorDefaultKeyspaceTest extends AbstractUnitTestCase {
+    public function testAnAutoPreparedPrepareGivesUpTheDefaultKeyspaceOnAV4Send(): void {
+        // The PREPARE an auto-prepared query needs is built out of that query's
+        // options, which the executor has already addressed — so the keyspace
+        // among them is this connection's, and the derived request has to know
+        // that. Told otherwise it would count as a keyspace the caller named,
+        // which is never taken back, and a later v4 send would refuse to encode
+        // the request instead of addressing it the way v4 does.
+        $connection = self::connectionOn(ProtocolVersion::V5, 'ks_a');
+
+        $request = new Query('SELECT * FROM t WHERE id = ?', [1]);
+        self::address($connection, $request);
+        $this->assertSame('ks_a', $request->getOptions()->keyspace);
+
+        $prepare = self::autoPrepareFor($connection, $request);
+        $this->assertNotNull($prepare, 'a query with an untyped bind value is auto-prepared');
+        $this->assertSame('ks_a', $prepare->getOptions()->keyspace);
+
+        $prepare->clearDefaultKeyspace();
+
+        $this->assertNull($prepare->getOptions()->keyspace, 'the keyspace came from the connection, so a v4 send takes it back');
+    }
+
+    public function testAnAutoPreparedPrepareKeepsAKeyspaceTheCallerNamed(): void {
+        $connection = self::connectionOn(ProtocolVersion::V5, 'ks_a');
+
+        $request = new Query('SELECT * FROM t WHERE id = ?', [1], Consistency::ONE, new QueryOptions(keyspace: 'explicit'));
+        self::address($connection, $request);
+
+        $prepare = self::autoPrepareFor($connection, $request);
+        $this->assertNotNull($prepare);
+        $this->assertSame('explicit', $prepare->getOptions()->keyspace);
+
+        $prepare->clearDefaultKeyspace();
+
+        $this->assertSame('explicit', $prepare->getOptions()->keyspace, 'the caller addressed the query, so its PREPARE stays addressed too');
+    }
+
     public function testASecondSendTakesTheKeyspaceTheConnectionIsOnNow(): void {
         $connection = self::connectionOn(ProtocolVersion::V5, 'ks_a');
 
@@ -104,6 +143,20 @@ final class ExecutorDefaultKeyspaceTest extends AbstractUnitTestCase {
         self::assertInstanceOf(RequestExecutor::class, $executor);
 
         (new ReflectionMethod(RequestExecutor::class, 'applyDefaultKeyspace'))->invoke($executor, $request);
+    }
+
+    /**
+     * The PREPARE the driver would send for $request, or null where the query
+     * needs none.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \ReflectionException
+     */
+    private static function autoPrepareFor(Connection $connection, Query $request): ?Prepare {
+        $dispatcher = (new ReflectionProperty(Session::class, 'dispatcher'))->getValue(self::sessionOf($connection));
+        self::assertInstanceOf(ResponseDispatcher::class, $dispatcher);
+
+        return $dispatcher->getAutoPrepareRequestIfNeeded($request);
     }
 
     /**

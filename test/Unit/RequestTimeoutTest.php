@@ -596,6 +596,49 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $connection->query('SELECT * FROM quick');
     }
 
+    public function testASyncWaitIsRefusedOnceItsConnectionHasBeenReplaced(): void {
+        // A sync wait matches its answer on the stream id alone, which is only
+        // meaningful on the connection that handed the id out. Every failure
+        // inside the driver that replaces the connection raises on its own, so
+        // what is left is the one that does not: a listener — which runs from
+        // inside the nested read, in the middle of this very wait — calling
+        // disconnect() itself.
+        //
+        // Resuming would then reconnect on the next pass, and the fresh id space
+        // is free to hand the same number to somebody else, whose answer would
+        // match the test below and be returned as this caller's result. So the
+        // wait asks the pool which run of the id space it is on, which is what
+        // the statement path is told by isAbandoned().
+        $connection = $this->connect('event-then-reorder', delaySeconds: 0.5, requestTimeoutInSeconds: 30.0);
+
+        $disconnects = 0;
+        $connection->registerEventListener(new class($connection, $disconnects) implements EventListenerInterface {
+            public function __construct(
+                private Connection $connection,
+                private int &$disconnects,
+            ) {
+            }
+
+            public function onEvent(Event $event): void {
+                $this->connection->disconnect();
+                $this->disconnects++;
+            }
+        });
+
+        try {
+            $connection->query('SELECT * FROM SLOW');
+            $this->fail('expected the replaced connection to be reported');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_WAIT_CONNECTION_REPLACED->value, $e->getCode());
+        }
+
+        $this->assertSame(1, $disconnects, 'the listener must have run from inside the wait');
+
+        // Reported rather than waited out: the wait must not have gone back for
+        // another read, which would have opened a connection of its own.
+        $this->assertFalse($connection->isConnected());
+    }
+
     public function testATransportFailureOnASyncRequestIsRecordedAgainstTheNodeOnlyOnce(): void {
         // The node hangs up mid-request, so the read fails as the transport
         // failure it is. That is reported by the read loop, which drops the
