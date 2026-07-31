@@ -176,6 +176,10 @@ final class Connection {
      * {@see self::tryResolveStatements()} is what counts a caller's own
      * statements.
      *
+     * @param int $max most frames to take off the wire, which zero or less
+     * makes none: such a call reads nothing and so opens no connection, but it
+     * still keeps the request budgets described below.
+     *
      * "Does not block" is about waiting for the node to answer. Two things
      * around that still can, and they are the same for
      * {@see self::tryReadNextEvent()}, {@see self::tryReadNextResponse()},
@@ -333,6 +337,18 @@ final class Connection {
     }
 
     /**
+     * The consistency level this connection fills into the requests it builds
+     * where a call names none, see {@see self::setConsistency()}.
+     *
+     * It is only a default for the requests built here. One built by hand
+     * carries the consistency it was constructed with, and reaches the node
+     * with it whether or not it matches this.
+     */
+    public function getConsistency(): Consistency {
+        return $this->consistency;
+    }
+
+    /**
      * The keyspace this connection's requests run against, or an empty string
      * when it was given none.
      *
@@ -377,6 +393,21 @@ final class Connection {
     }
 
     /**
+     * How long the server may take to answer a request that asks for no timeout
+     * of its own, in seconds, or null where such a request waits indefinitely.
+     *
+     * The connection default, i.e. what {@see self::setRequestTimeout()} last
+     * set or what {@see ConnectionOptions::$requestTimeoutInSeconds} started it
+     * at. It says nothing about any particular request: one sent with a timeout
+     * of its own — from its options, or from the argument
+     * {@see self::syncRequest()} and {@see self::asyncRequest()} take — is held
+     * to that instead, and is unaffected by this.
+     */
+    public function getRequestTimeout(): ?float {
+        return $this->session->getRequestTimeout();
+    }
+
+    /**
      * Wait for this statement's answer and return it.
      *
      * The wait is bounded by the statement's own request timeout, or by the
@@ -391,6 +422,13 @@ final class Connection {
      * budget on the connection rather than only to this statement's, and a read
      * that something still bounds treats the stall window as the quiet moment it
      * is instead of as a failure.
+     *
+     * An answer that arrives is the answer, whichever read took it off the wire.
+     * A listener invoked from inside this wait can issue a request of its own,
+     * and the read that serves it may well be the one that brings this
+     * statement's answer; it resolves the statement all the same, and is handed
+     * back here rather than being overtaken by the budget that ran out while
+     * the nested request was still being waited for.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -579,10 +617,37 @@ final class Connection {
         return $this->asyncRequest($request, $requestTimeoutInSeconds);
     }
 
+    /**
+     * Be told about the events this connection is sent.
+     *
+     * Registering a listener does not ask for any: which events a node pushes
+     * is settled by a REGISTER request, which this does not send. Send one —
+     * {@see \Cassandra\Request\Register}, through {@see self::syncRequest()} —
+     * naming the {@see EventType}s wanted, or nothing will ever arrive for the
+     * listener to be told about.
+     *
+     * The registration is the connection's rather than the socket's, so it
+     * outlives a reconnect while the node's does not: a connection that was
+     * replaced has to be sent the REGISTER again.
+     *
+     * Listeners are called from inside whichever read took the event off the
+     * wire, so one that issues a request of its own is doing so from within
+     * another call's wait. That is supported — the connection puts an answer
+     * aside for the wait it belongs to rather than losing it to the nested read
+     * — but a listener that blocks holds up the call it was invoked from.
+     */
     public function registerEventListener(EventListener $eventListener): void {
         $this->session->getListeners()->registerEventListener($eventListener);
     }
 
+    /**
+     * Be told about the warnings a response carries alongside its result.
+     *
+     * Nothing has to be asked of the node for these: a warning arrives with the
+     * response that provoked it. As with {@see self::registerEventListener()},
+     * the listener is called from inside the read that took that response off
+     * the wire.
+     */
     public function registerWarningsListener(WarningsListener $warningsListener): void {
         $this->session->getListeners()->registerWarningsListener($warningsListener);
     }
@@ -1083,6 +1148,19 @@ final class Connection {
         $this->session->waitForStatements($statements, $timeoutInSeconds);
     }
 
+    /**
+     * {@see self::setConsistency()}, returning the connection so that it can be
+     * set in the same expression the connection is used in.
+     *
+     * Fluent, not immutable: this changes the connection it is called on and
+     * hands that same object back, rather than producing a copy that differs in
+     * the consistency. There is nothing here a copy could be made of — a
+     * connection is a socket and the requests in flight on it — so
+     * `$connection->withConsistency(...)` is `setConsistency()` written to
+     * chain, and every other reference to the connection sees the change. The
+     * `with` prefix on the request options means the other thing: those really
+     * do return a new object.
+     */
     public function withConsistency(Consistency $consistency): self {
         $this->setConsistency($consistency);
 
@@ -1090,6 +1168,15 @@ final class Connection {
     }
 
     /**
+     * {@see self::setKeyspace()}, returning the connection so that it can be
+     * set in the same expression the connection is used in.
+     *
+     * Fluent, not immutable, for the reason {@see self::withConsistency()}
+     * gives — and more pointedly here, since up to v4 the keyspace is the
+     * node's session's: there is only one of those per connection, so a copy
+     * on another keyspace is not something this could hand back even in
+     * principle.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException

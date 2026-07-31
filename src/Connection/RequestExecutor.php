@@ -501,7 +501,9 @@ final class RequestExecutor {
             $response = $this->dispatcher->handleResponse($request, $response, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
             $this->session->recordNodeSuccess($node->getConfig());
         } catch (NodeException $e) {
-            $this->session->handleNodeException($node);
+            if ($this->session->getNode() === $node) {
+                $this->session->handleNodeException($node);
+            }
 
             throw $e;
         } finally {

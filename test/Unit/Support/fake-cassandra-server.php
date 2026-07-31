@@ -22,6 +22,9 @@
  *                   others at once, without blocking in between
  *   event           handshake, then push a STATUS_CHANGE event after [delaySeconds]
  *   deaf            handshake, then stop answering anything at all
+ *   close-on-query  handshake, then hang up on the first QUERY instead of
+ *                   answering it, so the client's read fails outright rather
+ *                   than going quiet
  *   refuse-startup  answer OPTIONS, then never answer the STARTUP, so that the
  *                   handshake fails part way through
  *   always-unprepared
@@ -366,6 +369,16 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_QUERY:
+            if ($mode === 'close-on-query') {
+                // Hangs up on the query instead of answering it, so the
+                // client's read fails as a transport failure rather than as a
+                // timeout — which is what puts it down the node-failure path
+                // instead of the deadline one.
+                fclose($client);
+
+                break 2;
+            }
+
             if ($mode === 'refuse-use') {
                 // Reported verbatim so that a test can pin how the client
                 // spells the keyspace it is switching to.

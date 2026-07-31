@@ -541,6 +541,86 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAsyncStatementAnsweredByANestedReadIsNotReportedAsATimeout(): void {
+        // The counterpart of testSyncRequestIsNotLostToAReadNestedInsideItsWait()
+        // for a statement. An async statement needs nothing put aside — a nested
+        // read resolves it in place — but the wait it was resolved underneath
+        // still has to hand that answer back rather than the budget that ran out
+        // while the listener's own request was being waited for.
+        //
+        // What makes that safe is an ordering two methods apart, which is the
+        // reason this is pinned here: readResponseUntil() reads the clock before
+        // it dispatches the frame, so a listener that blocks for a second cannot
+        // turn a deadline that had not passed when the frame arrived into one
+        // that has by the time the pass acts on it. Get that the other way round
+        // and this wait comes back to a deadline it thinks has expired and a
+        // statement no longer among the pending ones — because it was answered —
+        // and reports a timeout for a request the node answered on time.
+        //
+        // The timings put the answer inside the nested wait: the statement's
+        // answer at 0.5s, its budget at 0.75s, the listener's own query only at
+        // 1.0s. So the wait is still in the pass that dispatched the event when
+        // its budget passes, with its answer already on it.
+        $connection = $this->connect('event-then-reorder', delaySeconds: 0.5, requestTimeoutInSeconds: 30.0);
+
+        $nestedResults = 0;
+        $connection->registerEventListener(new class($connection, $nestedResults) implements EventListenerInterface {
+            public function __construct(
+                private Connection $connection,
+                private int &$nestedResults,
+            ) {
+            }
+
+            public function onEvent(Event $event): void {
+                $this->connection->query('SELECT 1');
+                $this->nestedResults++;
+            }
+        });
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW', requestTimeoutInSeconds: 0.75);
+
+        $result = $statement->getResult();
+
+        $this->assertInstanceOf(Result::class, $result);
+        $this->assertSame(1, $nestedResults, 'the listener must have run a request of its own inside the wait');
+        $this->assertTrue($statement->isResultReady(), 'the answered statement must not be left reporting a timeout');
+        $this->assertFalse($statement->isTimedOut());
+
+        // The id the statement was sent on was released when its answer
+        // arrived, so giving up on it afterwards would have parked an id that
+        // is back in circulation — and, once the pool wraps, one another
+        // request is using.
+        $this->assertSame([], $this->orphanedStreamsOf($connection), 'an answered statement must not orphan its stream id');
+
+        // And the connection is untouched by any of it.
+        $connection->query('SELECT * FROM quick');
+    }
+
+    public function testATransportFailureOnASyncRequestIsRecordedAgainstTheNodeOnlyOnce(): void {
+        // The node hangs up mid-request, so the read fails as the transport
+        // failure it is. That is reported by the read loop, which drops the
+        // connection — and the sync path wraps the same read in a catch of its
+        // own as a safety net. Both reporting it would count two failures for
+        // one, and the cooldown a node is put into is graded by that count, so
+        // a single hang-up would cost the next connect twice the wait.
+        $connection = $this->connect('close-on-query', requestTimeoutInSeconds: 10.0);
+
+        $nodeConfig = $this->nodeConfigOf($connection);
+
+        try {
+            $connection->query('SELECT 1');
+            $this->fail('expected the hang-up to surface as a transport failure');
+        } catch (NodeException $e) {
+        }
+
+        $this->assertFalse($connection->isConnected(), 'the failed connection is dropped');
+        $this->assertSame(
+            1,
+            $this->recordedFailuresFor($connection, $nodeConfig),
+            'one hang-up is one failure, however many layers caught it'
+        );
+    }
+
     public function testAWaitBoundDoesNotProbeTheConnectionWhenNothingWasRead(): void {
         // A poll that returns before it reads has learned nothing about the
         // connection, so it must not judge the heartbeat either: the probe's
@@ -1399,6 +1479,17 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $reported = stream_get_contents($this->serverStdout);
 
         return $reported === false ? 0 : substr_count($reported, 'prepared ');
+    }
+
+    /**
+     * How many failures this connection has recorded against a node, which is
+     * what decides how long its cooldown is.
+     */
+    private function recordedFailuresFor(Connection $connection, SocketNodeConfig $nodeConfig): int {
+        /** @var array<string, array{failures: int, cooldown_until: float}> $statusByKey */
+        $statusByKey = (new ReflectionProperty(NodeHealth::class, 'statusByKey'))->getValue($this->nodeHealthOf($connection));
+
+        return $statusByKey[$nodeConfig->host . ':' . $nodeConfig->port]['failures'] ?? 0;
     }
 
     private function recycledStreamCountOf(Connection $connection): int {

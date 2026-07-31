@@ -506,13 +506,34 @@ final class Session {
                     return $response;
                 }
 
-                // Read by somebody else and put aside for us: a read nested
-                // inside the one above — a listener issuing a request of its own
-                // — took our answer off the wire, and the sync path has no
-                // statement for it to have been left on. Checked before the
-                // deadline is acted on below, so that an answer which did arrive
-                // is never reported as a timeout.
-                if ($statement === null) {
+                // Read by somebody else: a read nested inside the one above — a
+                // listener issuing a request of its own — took our answer off
+                // the wire. Where it was left depends on which path we are:
+                // an async statement was resolved in place, and the sync path
+                // has no statement for it to have been left on, so its answer
+                // was put aside instead; see {@see self::$syncWaitStreams}.
+                //
+                // Both are checked before the deadline is acted on below, so
+                // that an answer which did arrive is never reported as a
+                // timeout.
+                //
+                // For the sync path that check is load-bearing: nothing else
+                // can deliver its answer. For a statement it is the braces to
+                // a belt held by two other things — the clock being read before
+                // the frame is dispatched ({@see self::readResponseUntil()}), so
+                // a listener that blocks cannot make this pass think its budget
+                // expired, and every nested read keeping the request budgets, so
+                // a statement whose budget really did run out is expired there
+                // rather than surviving to be answered. Checked here anyway,
+                // because those are properties of other methods agreeing with
+                // this one, and the cost of being wrong about them is a timeout
+                // reported for a request the node answered.
+                if ($statement !== null) {
+                    $answered = $statement->peekResponse();
+                    if ($answered !== null) {
+                        return $answered;
+                    }
+                } else {
                     $deposited = $this->syncWaitResponses[$streamId] ?? null;
                     if ($deposited !== null) {
                         unset($this->syncWaitResponses[$streamId]);
@@ -583,6 +604,14 @@ final class Session {
      */
     public function getProtocolVersion(): ProtocolVersion {
         return $this->version;
+    }
+
+    /**
+     * The connection default, i.e. the timeout applied to every request that
+     * asks for none of its own.
+     */
+    public function getRequestTimeout(): ?float {
+        return $this->deadlines->getRequestTimeout();
     }
 
     /**
@@ -1862,6 +1891,17 @@ final class Session {
         // not exclusive with having read something either — a response for
         // another request may well arrive in the same pass — so both are
         // reported and it is left to the caller to act on each.
+        //
+        // And before the frame is dispatched below, not after, which is what
+        // keeps this honest about the read rather than about what handling the
+        // read led to. Dispatching runs the application's listeners, and one of
+        // those can block for as long as it likes — issuing a request of its
+        // own, above all, which waits. Timed on the way out instead, a deadline
+        // that had not passed when the frame arrived would be reported as
+        // exceeded because a listener took a second, and the callers' deadline
+        // branches would then give up on requests that were answered on time —
+        // {@see self::getNextResponseForStream()} on the very statement whose
+        // answer that nested read may have brought.
         if ($deadline !== null && microtime(true) >= $deadline) {
             $deadlineExceeded = true;
         }
@@ -1949,16 +1989,43 @@ final class Session {
      */
     private function timeOutStream(int $streamId, int $streamGeneration, string $operation, ?float $requestTimeoutInSeconds, ?string $requestClass = null, ?Statement $statement = null): never {
 
-        $this->statements->forget($streamId);
-        $this->streamIds->park($streamId, $streamGeneration);
+        // Only where the id is still this wait's to dispose of, which is the
+        // same question {@see RequestExecutor::chainAsyncRequest()} and
+        // {@see RequestExecutor::sendAsyncRequest()} ask before their own
+        // disposals, and it is asked here for the same reason: a statement that
+        // was resolved rather than given up on had its id released, and once the
+        // pool wraps that number may have been handed to somebody else.
+        // Forgetting it would then unregister a live request and parking it
+        // would hold back an id that request is still waiting on, neither of
+        // which {@see StreamIdPool::park()} can catch — the id really is
+        // outstanding, just not ours.
+        //
+        // Its caller does not let an answered statement get this far, so this is
+        // a guard on the invariant rather than a case that is reached; it is
+        // here because the invariant is one this method cannot see for itself.
+        //
+        // The sync path has no statement registered, so there the question is
+        // only whether this wait still owns the id, which it does: its answer
+        // is picked up by the caller above rather than resolved here.
+        if ($statement === null || $this->statements->get($streamId) === $statement) {
+            $this->statements->forget($streamId);
+            $this->streamIds->park($streamId, $streamGeneration);
+        }
 
-        if ($statement !== null && !$statement->isAbandoned()) {
+        if ($statement !== null && !$statement->isAbandoned() && !$statement->isResultReady()) {
             // Not over an abandoned one: that is a statement whose connection
             // went away while this pass was reading, and the failure it was
             // given up on for is the one its owner has to hear about. Marking it
             // timed out would report the deadline this call happened to be
             // holding it to as the reason a request never sent on a live
             // connection failed.
+            //
+            // Nor over an answered one, for the reason the disposal above is
+            // guarded: a statement that already holds its answer must not be
+            // left reporting a timeout, which would make it unresolvable
+            // ({@see StatementRegistry::assertResolvable()}) while its response
+            // sits on it. The caller is handed the answer before this is
+            // reached, so this is the braces to that belt.
             $statement->setStatus(StatementStatus::TIMED_OUT);
         }
 
@@ -1974,11 +2041,11 @@ final class Session {
                 'request_timeout_seconds' => $this->deadlines->describe($requestTimeoutInSeconds ?? $this->deadlines->getRequestTimeout()),
                 'orphaned_streams' => $this->streamIds->getOrphanedCount(),
             ],
-            // An abandoned statement is left out for the reason it was left
-            // unmarked above: it did not run out of time, so naming it among the
-            // statements that did would have a caller re-sending it on the
-            // strength of a deadline that is not why it failed.
-            timedOutStatements: ($statement === null || $statement->isAbandoned()) ? [] : [$statement],
+            // An abandoned or answered statement is left out for the reason it
+            // was left unmarked above: it did not run out of time, so naming it
+            // among the statements that did would have a caller re-sending it on
+            // the strength of a deadline that is not why it failed.
+            timedOutStatements: ($statement === null || $statement->isAbandoned() || $statement->isResultReady()) ? [] : [$statement],
         );
     }
 
