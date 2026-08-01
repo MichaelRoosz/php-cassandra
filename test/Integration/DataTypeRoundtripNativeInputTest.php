@@ -482,7 +482,7 @@ final class DataTypeRoundtripNativeInputTest extends AbstractIntegrationTestCase
             'P12W' => ['php' => '84d', 'cql' => '84d', 'dateinterval' => 'P84D'],
             'P0000-00-00T89:09:09' => ['php' => '89h9m9s', 'cql' => '89h9m9s', 'dateinterval' => 'PT89H9M9S'],
             'PT0S' => ['php' => '0s', 'cql' => '', 'dateinterval' => 'PT0S'],
-            '-1h2m3s' => ['php' => '-1h2m3s', 'cql' => '-1h2m3s', 'dateinterval' => 'PT1H2M3S'],
+            '-1h2m3s' => ['php' => '-1h2m3s', 'cql' => '-1h2m3s', 'dateinterval' => '-PT1H2M3S'],
             'P123Y456M789DT12H34M56S' => ['php' => '161y789d12h34m56s', 'cql' => '161y789d12h34m56s', 'dateinterval' => 'P161Y789DT12H34M56S'],
             '161y2mo112w5d12h34m56s' => ['php' => '161y2mo789d12h34m56s', 'cql' => '161y2mo789d12h34m56s', 'dateinterval' => 'P161Y2M789DT12H34M56S'],
             'P15M' => ['php' => '1y3mo', 'cql' => '1y3mo', 'dateinterval' => 'P1Y3M'],
