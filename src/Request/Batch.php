@@ -149,8 +149,22 @@ final class Batch extends Request {
      */
     #[\Override]
     public function getBody(): string {
+
+        $statementCount = count($this->queryArray);
+        if ($statementCount > self::MAX_SHORT_COUNT) {
+            throw new RequestException(
+                message: 'Too many statements in one batch; the protocol counts them in two bytes',
+                code: ExceptionCode::REQUEST_BATCH_TOO_MANY_STATEMENTS->value,
+                context: [
+                    'stage' => 'batch_encoding',
+                    'statement_count' => $statementCount,
+                    'max_statement_count' => self::MAX_SHORT_COUNT,
+                ]
+            );
+        }
+
         return chr($this->type->value)
-            . pack('n', count($this->queryArray)) . implode('', $this->queryArray)
+            . pack('n', $statementCount) . implode('', $this->queryArray)
             . self::encodeBatchParametersAsBinary($this->consistency, [], $this->options, $this->version);
     }
 

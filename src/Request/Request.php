@@ -20,6 +20,20 @@ use DateTimeInterface;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
+    /**
+     * Most entries a `[short]`-counted list on the wire can hold.
+     *
+     * The protocol writes both the number of bound values and the number of
+     * statements in a batch as a two-byte count. pack('n', …) takes the low two
+     * bytes of whatever it is given without complaint, so a longer list would go
+     * out announcing a count of its own length modulo 65536 — the body would
+     * then be read as that many entries and whatever followed taken for the
+     * fields after them, which is a request the coordinator misparses rather
+     * than rejects. Refused here instead, where the caller can still be told
+     * which list it was.
+     */
+    protected const MAX_SHORT_COUNT = 65535;
+
     private const INT32_MAX = 2147483647;
     private const INT32_MIN = -2147483647 - 1;
 
@@ -379,7 +393,21 @@ abstract class Request implements Frame, Stringable {
      * @throws \Cassandra\Exception\RequestException
      */
     protected function encodeQueryValuesAsBinary(array $values, bool $namesForValues = false, bool $namesAreExact = false): string {
-        $valuesBinary = pack('n', count($values));
+
+        $valueCount = count($values);
+        if ($valueCount > self::MAX_SHORT_COUNT) {
+            throw new RequestException(
+                message: 'Too many bound values for one request; the protocol counts them in two bytes',
+                code: ExceptionCode::REQUEST_VALUES_TOO_MANY_VALUES->value,
+                context: [
+                    'stage' => 'values_encoding',
+                    'value_count' => $valueCount,
+                    'max_value_count' => self::MAX_SHORT_COUNT,
+                ]
+            );
+        }
+
+        $valuesBinary = pack('n', $valueCount);
 
         /** @psalm-suppress MixedAssignment */
         foreach ($values as $name => $value) {

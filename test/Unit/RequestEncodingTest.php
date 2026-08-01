@@ -69,6 +69,23 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testBatchRejectsMoreStatementsThanTheCountCanExpress(): void {
+        // The statement count goes out as a [short]. pack('n', …) takes the low
+        // two bytes without complaint, so one statement past the limit used to
+        // announce a count of zero and leave the coordinator misparsing the body
+        // rather than rejecting it.
+        $batch = new Batch(BatchType::UNLOGGED, Consistency::ONE, new BatchOptions());
+        for ($i = 0; $i <= 65535; $i++) {
+            $batch->appendQuery('INSERT INTO t (id) VALUES (1)');
+        }
+        $batch->setVersion(ProtocolVersion::V5);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_BATCH_TOO_MANY_STATEMENTS->value);
+
+        $batch->getBody();
+    }
+
     public function testBindValuesMatchMarkerNamesCaseInsensitively(): void {
         $markers = [self::columnInfo('userid'), self::columnInfo('name')];
 
@@ -139,6 +156,23 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
             [self::columnInfo('a'), self::columnInfo('b')],
             namesForValues: false
         );
+    }
+
+    public function testQueryAcceptsTheLargestExpressibleValueCount(): void {
+        // The boundary that testQueryRejectsMoreValuesThanTheCountCanExpress is
+        // drawn at: exactly 65535 values still encodes, and announces itself as
+        // 0xffff.
+        $request = new Query(
+            query: 'INSERT INTO t (id) VALUES (?)',
+            values: array_fill(0, 65535, 1),
+            consistency: Consistency::ONE,
+            options: new QueryOptions()
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $body = $request->getBody();
+
+        $this->assertSame("\xff\xff", substr($body, -65535 * 8 - 2, 2));
     }
 
     public function testQueryEncodesInInt32RangeIntAsFourBytes(): void {
@@ -218,6 +252,21 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
 
         $this->expectException(RequestException::class);
         $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_AMBIGUOUS_DATETIME->value);
+
+        $request->getBody();
+    }
+
+    public function testQueryRejectsMoreValuesThanTheCountCanExpress(): void {
+        $request = new Query(
+            query: 'INSERT INTO t (id) VALUES (?)',
+            values: array_fill(0, 65536, 1),
+            consistency: Consistency::ONE,
+            options: new QueryOptions()
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_TOO_MANY_VALUES->value);
 
         $request->getBody();
     }
