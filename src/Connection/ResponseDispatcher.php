@@ -223,21 +223,25 @@ final class ResponseDispatcher {
      * See {@see self::MAX_REPREPARATIONS} for why something has to: neither the
      * request timeout nor anything else bounds the exchange on its own.
      *
+     * $limit is that constant for a single prepared statement, and more for a
+     * batch, which may legitimately need a round per statement it carries; see
+     * {@see self::handleResponseError()}.
+     *
      * @throws \Cassandra\Exception\ConnectionException
      */
-    private function assertRepreparationAllowed(int $repreparationsSoFar, Request\Prepare $prepareRequest): void {
+    private function assertRepreparationAllowed(int $repreparationsSoFar, Request\Prepare $prepareRequest, int $limit): void {
 
-        if ($repreparationsSoFar < self::MAX_REPREPARATIONS) {
+        if ($repreparationsSoFar < $limit) {
             return;
         }
 
         throw new ConnectionException(
-            'The node answered this prepared statement with UNPREPARED again after it was reprepared, ' . self::MAX_REPREPARATIONS . ' times over, so the driver stopped repreparing it',
+            'The node answered a prepared statement with UNPREPARED again after it was reprepared, ' . $limit . ' times over, so the driver stopped repreparing it',
             ExceptionCode::CONNECTION_REPREPARATION_LIMIT_REACHED->value,
             [
                 'operation' => 'unprepared_error_handling',
                 'repreparations' => $repreparationsSoFar,
-                'max_repreparations' => self::MAX_REPREPARATIONS,
+                'max_repreparations' => $limit,
                 'query' => $prepareRequest->getQuery(),
             ]
         );
@@ -267,11 +271,17 @@ final class ResponseDispatcher {
         }
 
         if ($statement !== null) {
-            // The EXECUTE that was refused, which for an auto-prepared query is
+            // The request that was refused, which for an auto-prepared query is
             // not the statement's original request, see
-            // {@see \Cassandra\Statement::$requestBeingReprepared}.
+            // {@see \Cassandra\Statement::$requestBeingReprepared}. A batch is
+            // never derived from another request that way, so it is its own
+            // original and the fallback is what finds it.
             $originalRequest = $statement->getRequestBeingReprepared() ?? $statement->getOriginalRequest();
             $statement->setRequestBeingReprepared(null);
+        }
+
+        if ($originalRequest instanceof Request\Batch) {
+            return $this->resendBatchAfterRepreparation($result, $originalRequest, $statement, $requestTimeoutInSeconds, $repreparationDepth);
         }
 
         if (!($originalRequest instanceof Request\Execute)) {
@@ -327,80 +337,125 @@ final class ResponseDispatcher {
      */
     private function handleResponseError(Request\Request $request, Response\Error $response, ?Statement $statement, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Response {
 
-        // re-prepare query if it is unprepared
-        if (
-            ($request instanceof Request\Execute)
-            && ($response instanceof Response\Error\UnpreparedError)
-        ) {
+        if (!($response instanceof Response\Error\UnpreparedError)) {
+            return $response;
+        }
 
-            $prevResult = $request->getPreviousResult();
-            if (!($prevResult instanceof Response\Result\PreparedResult)) {
+        // Which prepared statement the node has forgotten. An EXECUTE carries
+        // exactly one, so it is whatever that request was built from; a BATCH
+        // may carry several, and the node names the one it tripped on — which
+        // is why the error's own context is what settles it there. Anything
+        // else cannot carry a prepared statement at all, so an UNPREPARED for
+        // one is not something to recover from and is handed to the caller.
+        if ($request instanceof Request\Execute) {
+            $forgottenResult = $request->getPreviousResult();
+
+            if (!($forgottenResult instanceof Response\Result\PreparedResult)) {
                 throw new ConnectionException('Unexpected previous result type for UNPREPARED error', ExceptionCode::CONNECTION_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE->value, [
                     'operation' => 'unprepared_error_handling',
                     'expected' => Response\Result\PreparedResult::class,
-                    'received' => get_class($prevResult),
+                    'received' => get_class($forgottenResult),
                 ]);
             }
 
-            $prevRequest = $prevResult->getRequest();
-            if ($prevRequest === null) {
-                throw new ConnectionException('Previous prepared result has no associated request', ExceptionCode::CONNECTION_UNPREPARED_PREV_NO_REQUEST->value, [
-                    'operation' => 'unprepared_error_handling',
-                ]);
-            }
-            if (!($prevRequest instanceof Request\Prepare)) {
-                throw new ConnectionException('Previous result is not a prepare request', ExceptionCode::CONNECTION_UNPREPARED_PREV_NOT_PREPARE_REQUEST->value, [
-                    'operation' => 'unprepared_error_handling',
-                    'request_class' => get_class($prevRequest),
-                    'expected' => Request\Prepare::class,
-                ]);
-            }
+            $repreparationLimit = self::MAX_REPREPARATIONS;
 
-            $newPrepareRequest = new Request\Prepare($prevRequest->getQuery(), $prevRequest->getOptions());
+        } elseif ($request instanceof Request\Batch) {
+            $unknownStatementId = $response->getContext()->unknownStatementId;
 
-            // Built out of the options of the PREPARE that produced the
-            // statement id the node has just forgotten, so a keyspace among them
-            // is whoever's it was on that PREPARE. It matters here more than
-            // anywhere: the request it was taken from can have been prepared on
-            // another connection, on another protocol version, which is exactly
-            // the case {@see Request\Request::clearDefaultKeyspace()} exists for.
-            $newPrepareRequest->adoptDefaultKeyspaceMarkerFrom($prevRequest);
-
-            $this->preparedResultCache->invalidate($newPrepareRequest);
-
-            if ($statement !== null) {
-                $this->assertRepreparationAllowed($statement->getRepreparationCount(), $newPrepareRequest);
-                $statement->recordRepreparation();
-
-                $statement->setStatus(StatementStatus::REPREPARING);
-                $statement->setRequestBeingReprepared($request);
-
-                $this->session->chainAsyncRequest($newPrepareRequest, $statement);
-
-                return null;
+            $forgottenResult = $request->findPreparedStatement($unknownStatementId);
+            if ($forgottenResult === null) {
+                throw new ConnectionException(
+                    'The node reported a prepared statement this batch does not hold, so there is nothing to prepare again',
+                    ExceptionCode::CONNECTION_UNPREPARED_BATCH_STATEMENT_NOT_FOUND->value,
+                    [
+                        'operation' => 'unprepared_error_handling',
+                        'unknown_statement_id' => bin2hex($unknownStatementId),
+                        'prepared_statements_in_batch' => $request->getDistinctPreparedStatementCount(),
+                    ]
+                );
             }
 
-            $this->assertRepreparationAllowed($repreparationDepth, $newPrepareRequest);
+            // A node answers UNPREPARED for one statement at a time, so a batch
+            // whose statements it has all forgotten — one that was restarted, or
+            // whose prepared cache was emptied — needs a round per distinct
+            // statement to be recovered. Held to the flat limit it would fail
+            // for having done exactly what it was asked to. The flat limit is
+            // still added on top, so a batch keeps the same slack an EXECUTE has
+            // for a coordinator that changes under it.
+            $repreparationLimit = self::MAX_REPREPARATIONS + $request->getDistinctPreparedStatementCount() - 1;
 
-            // Counted one deeper for everything the repreparation sends: the
-            // PREPARE below and the EXECUTE that follows it both belong to this
-            // round, and it is the next UNPREPARED among them that has to find
-            // the higher count.
-            $repreparationDepth++;
-
-            $prepareResponse = $this->session->sendSyncRequest($newPrepareRequest, $requestTimeoutInSeconds, $repreparationDepth);
-            if (!($prepareResponse instanceof Response\Result)) {
-                throw new ConnectionException('Unexpected response type during repreparation', ExceptionCode::CONNECTION_REPREPARATION_UNEXPECTED_RESPONSE->value, [
-                    'operation' => 'unprepared_error_handling',
-                    'expected' => Response\Result::class,
-                    'received' => get_class($prepareResponse),
-                ]);
-            }
-
-            $response = $this->handleReprepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
+        } else {
+            return $response;
         }
 
-        return $response;
+        $prevRequest = $forgottenResult->getRequest();
+        if ($prevRequest === null) {
+            throw new ConnectionException('Previous prepared result has no associated request', ExceptionCode::CONNECTION_UNPREPARED_PREV_NO_REQUEST->value, [
+                'operation' => 'unprepared_error_handling',
+            ]);
+        }
+        if (!($prevRequest instanceof Request\Prepare)) {
+            throw new ConnectionException('Previous result is not a prepare request', ExceptionCode::CONNECTION_UNPREPARED_PREV_NOT_PREPARE_REQUEST->value, [
+                'operation' => 'unprepared_error_handling',
+                'request_class' => get_class($prevRequest),
+                'expected' => Request\Prepare::class,
+            ]);
+        }
+
+        $newPrepareRequest = new Request\Prepare($prevRequest->getQuery(), $prevRequest->getOptions());
+
+        // Built out of the options of the PREPARE that produced the
+        // statement id the node has just forgotten, so a keyspace among them
+        // is whoever's it was on that PREPARE. It matters here more than
+        // anywhere: the request it was taken from can have been prepared on
+        // another connection, on another protocol version, which is exactly
+        // the case {@see Request\Request::clearDefaultKeyspace()} exists for.
+        //
+        // It is also what lets the answer find its way back to the entry it
+        // belongs to without anything being carried across the round trip; see
+        // {@see Request\Batch::replacePreparedStatement()}.
+        $newPrepareRequest->adoptDefaultKeyspaceMarkerFrom($prevRequest);
+
+        $this->preparedResultCache->invalidate($newPrepareRequest);
+
+        if ($statement !== null) {
+            $this->assertRepreparationAllowed($statement->getRepreparationCount(), $newPrepareRequest, $repreparationLimit);
+            $statement->recordRepreparation();
+
+            $statement->setStatus(StatementStatus::REPREPARING);
+
+            // Only for an EXECUTE, whose statement may have been created for a
+            // QUERY that was auto-prepared into it; a batch is its own original
+            // request, so {@see Statement::getOriginalRequest()} already names
+            // it and {@see self::handleReprepareResult()} finds it there.
+            if ($request instanceof Request\Execute) {
+                $statement->setRequestBeingReprepared($request);
+            }
+
+            $this->session->chainAsyncRequest($newPrepareRequest, $statement);
+
+            return null;
+        }
+
+        $this->assertRepreparationAllowed($repreparationDepth, $newPrepareRequest, $repreparationLimit);
+
+        // Counted one deeper for everything the repreparation sends: the
+        // PREPARE below and the request that follows it both belong to this
+        // round, and it is the next UNPREPARED among them that has to find
+        // the higher count.
+        $repreparationDepth++;
+
+        $prepareResponse = $this->session->sendSyncRequest($newPrepareRequest, $requestTimeoutInSeconds, $repreparationDepth);
+        if (!($prepareResponse instanceof Response\Result)) {
+            throw new ConnectionException('Unexpected response type during repreparation', ExceptionCode::CONNECTION_REPREPARATION_UNEXPECTED_RESPONSE->value, [
+                'operation' => 'unprepared_error_handling',
+                'expected' => Response\Result::class,
+                'received' => get_class($prepareResponse),
+            ]);
+        }
+
+        return $this->handleReprepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
     }
 
     /**
@@ -470,5 +525,65 @@ final class ResponseDispatcher {
             $request instanceof Request\Execute => $this->handleResponseExecuteResult($request, $result),
             default => $result,
         };
+    }
+
+    /**
+     * Put a freshly prepared statement into the batch it was prepared for, and
+     * send the batch again.
+     *
+     * The counterpart of what {@see self::handleReprepareResult()} does for an
+     * EXECUTE, and different in one way that matters: an EXECUTE is replaced by
+     * a new request built around the new statement id, whereas a batch is
+     * patched in place and re-sent as itself. It has to be — the other entries
+     * of the batch are still the ones the caller appended, and the node may yet
+     * report another of them as unprepared, which is the round after this one.
+     *
+     * @param int $repreparationDepth see {@see Session::sendSyncRequest()}
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    private function resendBatchAfterRepreparation(Response\Result\PreparedResult $result, Request\Batch $batch, ?Statement $statement, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Result {
+
+        $replaced = $batch->replacePreparedStatement($result);
+        if ($replaced === 0) {
+            // The PREPARE was built from an entry of this very batch, so its
+            // answer always belongs to one; nothing matching means the batch was
+            // changed under the repreparation, and re-sending it would send the
+            // statement id the node has already refused.
+            throw new ConnectionException(
+                'The reprepared statement does not belong to any entry of this batch, so the batch cannot be sent again',
+                ExceptionCode::CONNECTION_REPREPARE_BATCH_STATEMENT_NOT_REPLACED->value,
+                [
+                    'operation' => 'reprepare_batch',
+                    'statement_id' => bin2hex($result->getPreparedData()->id),
+                    'prepared_statements_in_batch' => $batch->getDistinctPreparedStatementCount(),
+                ]
+            );
+        }
+
+        if ($statement !== null) {
+            $this->session->chainAsyncRequest($batch, $statement);
+
+            return null;
+        }
+
+        $response = $this->session->sendSyncRequest($batch, $requestTimeoutInSeconds, $repreparationDepth);
+        if (!($response instanceof Response\Result)) {
+            throw new ConnectionException('Unexpected response type during re-send after repreparation', ExceptionCode::CONNECTION_REPREPARE_UNEXPECTED_RESPONSE_REBATCH->value, [
+                'operation' => 'reprepare_batch',
+                'expected' => Response\Result::class,
+                'received' => get_class($response),
+            ]);
+        }
+
+        return $response;
     }
 }

@@ -2000,7 +2000,7 @@ Notes
 
 - `pageSize` is clamped to a minimum of 100 by the client for efficiency.
 - If you supply non-`Value\*` PHP values with `QueryOptions(autoPrepare: true)`, the driver auto-prepares + executes for correct typing.
-- On `UNPREPARED` server errors, the driver transparently re-prepares and retries the execution.
+- On `UNPREPARED` server errors, the driver transparently re-prepares and retries. This covers `execute()`/`executeAsync()` and batches: a node answers `UNPREPARED` for one statement at a time, so a batch is re-prepared one statement per round and re-sent carrying the new statement id, with a budget of `MAX_REPREPARATIONS` plus one round per distinct prepared statement it holds.
 - Always use fully-qualified table names in `PREPARE` statements.
 
 

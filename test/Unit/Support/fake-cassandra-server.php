@@ -35,8 +35,26 @@
  *   refuse-startup  answer OPTIONS, then never answer the STARTUP, so that the
  *                   handshake fails part way through
  *   always-unprepared
- *                   prepare happily, but answer every EXECUTE with UNPREPARED,
- *                   as a node that never keeps the prepared statement would
+ *                   prepare happily, but answer every EXECUTE and every BATCH
+ *                   with UNPREPARED, as a node that never keeps the prepared
+ *                   statement would. A BATCH is refused by naming the first
+ *                   prepared statement id it actually carries, which is what a
+ *                   real node does and what makes the client's repreparation
+ *                   visible: the id changes as the batch is patched
+ *   unprepared-batch-once
+ *                   hand out a fresh statement id for every PREPARE ("pid1",
+ *                   "pid2", ...), refuse the first BATCH with UNPREPARED naming
+ *                   the id it carries, and answer every later one normally. So
+ *                   a client that recovers has to prepare the statement again
+ *                   and put the new id into the batch before re-sending it.
+ *                   Every BATCH is reported on stdout as "batch <ids>", which
+ *                   is how a test can tell which ids it was sent with
+ *   unprepared-batch-unknown-id
+ *                   answer every BATCH with UNPREPARED naming a statement id the
+ *                   batch does not carry, as a node and a client that disagree
+ *                   about what was sent would. There is nothing for the client
+ *                   to prepare again, so it has to report that rather than
+ *                   guess
  *   refuse-use      report every QUERY on stdout as "query <cql>", and answer
  *                   the ones that switch keyspace with INVALID, as a node asked
  *                   for a keyspace that does not exist would
@@ -70,6 +88,7 @@ const OPCODE_PREPARE = 0x09;
 const OPCODE_EXECUTE = 0x0A;
 const OPCODE_REGISTER = 0x0B;
 const OPCODE_EVENT = 0x0C;
+const OPCODE_BATCH = 0x0D;
 
 const PROTOCOL_VERSION = 0x04;
 
@@ -179,9 +198,9 @@ function trickleFrame($client, int $stream, int $opcode, string $body, float $se
  * Enough for the client to encode an EXECUTE against it, which is all the
  * auto-prepare paths need; the rows metadata is left out entirely.
  */
-function preparedResultBody(): string {
+function preparedResultBody(string $id = 'pid1'): string {
     return pack('N', 4)                                    // kind = PREPARED
-        . pack('n', 4) . 'pid1'                            // id [short bytes]
+        . pack('n', strlen($id)) . $id                     // id [short bytes]
         // prepare metadata: GLOBAL_TABLES_SPEC, one bind marker, no pk index
         . pack('N', 1) . pack('N', 1) . pack('N', 0)
         . cqlString('ks') . cqlString('t')
@@ -198,10 +217,71 @@ function preparedResultBody(): string {
  * answers every re-execution the same way is what the client's repreparation
  * limit exists for.
  */
-function unpreparedErrorBody(): string {
+function unpreparedErrorBody(string $id = 'pid1'): string {
     return pack('N', 0x2500)                               // error code = UNPREPARED
         . cqlString('unprepared')                          // message [string]
-        . pack('n', 4) . 'pid1';                           // unknown id [short bytes]
+        . pack('n', strlen($id)) . $id;                    // unknown id [short bytes]
+}
+
+/**
+ * The prepared statement ids a BATCH body carries, in the order they appear.
+ *
+ * A batch entry is a kind byte followed by either a statement id ([short bytes],
+ * kind 1) or a query ([long string], kind 0), and then that entry's values. The
+ * values have to be walked even though nothing here looks at them, because they
+ * are what separates one entry from the next.
+ *
+ * Needed because a real node names the statement it did not recognise, and the
+ * client is entitled to be told about one the batch actually holds — which,
+ * after a repreparation, is no longer the id it was built with.
+ *
+ * @return list<string>
+ */
+function batchPreparedIds(string $body): array {
+
+    $ids = [];
+    $offset = 1; // batch type
+
+    /** @var array{1: int} $unpacked */
+    $unpacked = unpack('n', substr($body, $offset, 2));
+    $entryCount = $unpacked[1];
+    $offset += 2;
+
+    for ($entry = 0; $entry < $entryCount; $entry++) {
+        $kind = ord($body[$offset]);
+        $offset += 1;
+
+        if ($kind === 1) {
+            /** @var array{1: int} $unpacked */
+            $unpacked = unpack('n', substr($body, $offset, 2));
+            $offset += 2;
+            $ids[] = substr($body, $offset, $unpacked[1]);
+            $offset += $unpacked[1];
+        } else {
+            /** @var array{1: int} $unpacked */
+            $unpacked = unpack('N', substr($body, $offset, 4));
+            $offset += 4 + $unpacked[1];
+        }
+
+        /** @var array{1: int} $unpacked */
+        $unpacked = unpack('n', substr($body, $offset, 2));
+        $valueCount = $unpacked[1];
+        $offset += 2;
+
+        for ($value = 0; $value < $valueCount; $value++) {
+            /** @var array{1: int} $unpacked */
+            $unpacked = unpack('N', substr($body, $offset, 4));
+            $offset += 4;
+
+            // null (-1) and "not set" (-2) are lengths with no bytes behind
+            // them, and unpack('N') hands them back unsigned.
+            if ($unpacked[1] < 0x80000000) {
+                $offset += $unpacked[1];
+            }
+        }
+    }
+
+    return $ids;
 }
 
 /**
@@ -261,6 +341,7 @@ $handshakeDone = false;
 $eventDueAt = null;
 $prepareCount = 0;
 $badHeaderSent = false;
+$batchRefused = false;
 $deadline = microtime(true) + 60;
 
 /** @var list<array{dueAt: float, stream: int}> $deferredAnswers */
@@ -360,7 +441,41 @@ while (microtime(true) < $deadline) {
             fwrite(STDOUT, 'prepared ' . $prepareCount . "\n");
             fflush(STDOUT);
 
-            writeFrame($client, $frame['stream'], OPCODE_RESULT, preparedResultBody());
+            // A fresh id per PREPARE in the modes that refuse a prepared
+            // statement, so that a test can tell the statement before a
+            // repreparation from the one after it — and so that distinct
+            // queries get distinct ids, as a real node gives them. The other
+            // modes keep the single id their expectations are written against.
+            writeFrame($client, $frame['stream'], OPCODE_RESULT, preparedResultBody(
+                ($mode === 'unprepared-batch-once' || $mode === 'always-unprepared') ? 'pid' . $prepareCount : 'pid1'
+            ));
+
+            break;
+
+        case OPCODE_BATCH:
+            $batchIds = batchPreparedIds($frame['body']);
+
+            // Reported so that a test can pin which statement ids the batch
+            // was sent with, which is the whole of what a repreparation
+            // changes about it.
+            fwrite(STDOUT, 'batch ' . implode(',', $batchIds) . "\n");
+            fflush(STDOUT);
+
+            if ($mode === 'unprepared-batch-unknown-id') {
+                writeFrame($client, $frame['stream'], OPCODE_ERROR, unpreparedErrorBody('nosuch'));
+
+                break;
+            }
+
+            if ($batchIds !== [] && ($mode === 'always-unprepared' || ($mode === 'unprepared-batch-once' && !$batchRefused))) {
+                $batchRefused = true;
+
+                writeFrame($client, $frame['stream'], OPCODE_ERROR, unpreparedErrorBody($batchIds[0]));
+
+                break;
+            }
+
+            writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody());
 
             break;
 
