@@ -129,7 +129,7 @@ final class Deadline {
             return null;
         }
 
-        return ($sentAt ?? microtime(true)) + max(0.0, $timeout);
+        return ($sentAt ?? microtime(true)) + self::asWaitLength($timeout);
     }
 
     /**
@@ -245,7 +245,7 @@ final class Deadline {
             return null;
         }
 
-        return microtime(true) + max(0.0, $timeoutInSeconds);
+        return microtime(true) + self::asWaitLength($timeoutInSeconds);
     }
 
     /**
@@ -261,5 +261,17 @@ final class Deadline {
 
         $this->requestTimeout = $requestTimeoutInSeconds;
         $this->revision++;
+    }
+
+    /**
+     * A timeout read as the length of a wait: a negative one asks for a wait
+     * that is already over, which is no time at all from the moment it is
+     * measured against.
+     *
+     * Spelled out rather than left to max(), which is undefined for NAN.
+     */
+    private static function asWaitLength(float $timeoutInSeconds): float {
+
+        return $timeoutInSeconds < 0.0 ? 0.0 : $timeoutInSeconds;
     }
 }
