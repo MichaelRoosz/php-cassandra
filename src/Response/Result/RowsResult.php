@@ -141,6 +141,12 @@ final class RowsResult extends Result {
      * the value of the specified column for each row. Behaves like fetchAll()
      * in that it consumes the stream from the current cursor forward.
      *
+     * The loop is driven by the row cursor rather than by fetchColumn()'s
+     * false-for-no-more-rows sentinel, because that sentinel is indistinguishable
+     * from a legitimate value: a boolean column decodes to PHP false, and testing
+     * for it would end the result at the first false cell and silently drop every
+     * row after it.
+     *
      * @return array<mixed>
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
@@ -148,15 +154,9 @@ final class RowsResult extends Result {
      */
     public function fetchAllColumns(int $index = 0): array {
         $values = [];
-        while (true) {
+        while ($this->fetchedRows < $this->rowCount) {
             /** @psalm-suppress MixedAssignment */
-            $value = $this->fetchColumn($index);
-            if ($value === false) {
-                break;
-            }
-
-            /** @psalm-suppress MixedAssignment */
-            $values[] = $value;
+            $values[] = $this->fetchColumn($index);
         }
 
         return $values;
@@ -173,12 +173,16 @@ final class RowsResult extends Result {
      */
     public function fetchAllKeyPairs(int $keyIndex = 0, int $valueIndex = 1, bool $mergeDuplicates = false): array {
 
-        if ($this->rowsMetadata->columns === null) {
+        $columns = $this->rowsMetadata->columns;
+        if ($columns === null) {
             throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchAllKeyPairs',
                 'result_kind' => $this->kind->name,
             ]);
         }
+
+        self::assertColumnIndex($keyIndex, count($columns), 'keyIndex', 'RowsResult::fetchAllKeyPairs');
+        self::assertColumnIndex($valueIndex, count($columns), 'valueIndex', 'RowsResult::fetchAllKeyPairs');
 
         $map = [];
         $duplicateKeys = [];
@@ -192,7 +196,7 @@ final class RowsResult extends Result {
 
             $previousOffset = $this->stream->pos();
 
-            foreach ($this->rowsMetadata->columns as $j => $column) {
+            foreach ($columns as $j => $column) {
                 /** @psalm-suppress MixedAssignment */
                 $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
                 if ($j === $keyIndex) {
@@ -204,7 +208,11 @@ final class RowsResult extends Result {
                             'key_index' => $keyIndex,
                         ]);
                     }
-                } elseif ($j === $valueIndex) {
+                }
+
+                // Not an elseif: naming the same column as both key and value is
+                // legitimate, and would otherwise yield a null value for every row.
+                if ($j === $valueIndex) {
                     /** @psalm-suppress MixedAssignment */
                     $value = $columnValue;
                 }
@@ -217,7 +225,7 @@ final class RowsResult extends Result {
                 throw new ResponseException('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                     'operation' => 'RowsResult::fetchAllKeyPairs',
                     'key_index' => $keyIndex,
-                    'column_count' => count($this->rowsMetadata->columns),
+                    'column_count' => count($columns),
                 ]);
             }
 
@@ -270,6 +278,11 @@ final class RowsResult extends Result {
      * Returns a single column from the next row of a result set.
      * Returns false when there are no more rows.
      *
+     * Note that false is also a legitimate value of a boolean column, so it
+     * cannot be used to detect the end of the result set; drive the loop off
+     * {@see self::getRowCount()}, or use {@see self::fetchAllColumns()}, which
+     * does.
+     *
      * @return mixed|false
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
@@ -280,17 +293,20 @@ final class RowsResult extends Result {
             return false;
         }
 
-        if ($this->rowsMetadata->columns === null) {
+        $columns = $this->rowsMetadata->columns;
+        if ($columns === null) {
             throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchColumn',
                 'result_kind' => $this->kind->name,
             ]);
         }
 
+        self::assertColumnIndex($index, count($columns), 'index', 'RowsResult::fetchColumn');
+
         $previousOffset = $this->stream->pos();
 
         $value = null;
-        foreach ($this->rowsMetadata->columns as $j => $column) {
+        foreach ($columns as $j => $column) {
             /** @psalm-suppress MixedAssignment */
             $cell = $this->stream->readValue($column->type, $this->valueEncodeConfig);
             if ($j === $index) {
@@ -319,19 +335,23 @@ final class RowsResult extends Result {
             return false;
         }
 
-        if ($this->rowsMetadata->columns === null) {
+        $columns = $this->rowsMetadata->columns;
+        if ($columns === null) {
             throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::fetchKeyPair',
                 'result_kind' => $this->kind->name,
             ]);
         }
 
+        self::assertColumnIndex($keyIndex, count($columns), 'keyIndex', 'RowsResult::fetchKeyPair');
+        self::assertColumnIndex($valueIndex, count($columns), 'valueIndex', 'RowsResult::fetchKeyPair');
+
         $previousOffset = $this->stream->pos();
 
         $key = null;
         $value = null;
 
-        foreach ($this->rowsMetadata->columns as $j => $column) {
+        foreach ($columns as $j => $column) {
             /** @psalm-suppress MixedAssignment */
             $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
             if ($j === $keyIndex) {
@@ -343,7 +363,11 @@ final class RowsResult extends Result {
                         'key_index' => $keyIndex,
                     ]);
                 }
-            } elseif ($j === $valueIndex) {
+            }
+
+            // Not an elseif: naming the same column as both key and value is
+            // legitimate, and would otherwise yield a null value for every row.
+            if ($j === $valueIndex) {
                 /** @psalm-suppress MixedAssignment */
                 $value = $columnValue;
             }
@@ -355,7 +379,7 @@ final class RowsResult extends Result {
         if ($key === null) {
             throw new ResponseException('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                 'key_index' => $keyIndex,
-                'column_count' => count($this->rowsMetadata->columns),
+                'column_count' => count($columns),
             ]);
         }
 
@@ -490,6 +514,43 @@ final class RowsResult extends Result {
     #[\Override]
     protected function onPreviousRowsMetadataUpdated(RowsMetadata $previousRowsMetadata): void {
         $this->rowsMetadata = $this->rowsMetadata->mergeWithPreviousMetadata($previousRowsMetadata);
+    }
+
+    /**
+     * Refuse a column index this result set does not have.
+     *
+     * The fetch helpers that take one pick their value out of the row by
+     * comparing the index against the column position, so an index past the end
+     * simply never matches and the cell they hand back stays null — which is
+     * indistinguishable from a column that really is null. A caller who names
+     * the wrong column gets nulls for every row rather than being told, and the
+     * key index of the key-pair helpers gets it worse: the row is consumed
+     * before the missing key is noticed.
+     *
+     * The key index is reported with its own code, which the key-pair helpers
+     * also raise if a key still comes out null; see
+     * {@see ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX}.
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    private static function assertColumnIndex(int $index, int $columnCount, string $argument, string $operation): void {
+
+        if ($index >= 0 && $index < $columnCount) {
+            return;
+        }
+
+        throw new ResponseException(
+            'Column index ' . $index . ' is outside this result set, which has ' . $columnCount . ' column(s)',
+            $argument === 'keyIndex'
+                ? ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value
+                : ExceptionCode::RESPONSE_ROWS_INVALID_COLUMN_INDEX->value,
+            [
+                'operation' => $operation,
+                'argument' => $argument,
+                'index' => $index,
+                'column_count' => $columnCount,
+            ]
+        );
     }
 
     /**
