@@ -1793,6 +1793,13 @@ final class Session {
             $this->listeners->notifyEvent($response);
         }
 
+        // Last, once the statement this frame belongs to has been resolved and
+        // its stream id disposed of. A listener that threw is reported here
+        // rather than where it threw, so that a fault in the application's own
+        // callback cannot cost it the answer the node did deliver; see
+        // {@see ListenerRegistry}.
+        $this->listeners->throwDeferred();
+
         if ($isHeartbeatProbe) {
             return null;
         }

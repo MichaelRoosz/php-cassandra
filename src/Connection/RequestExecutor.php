@@ -307,6 +307,13 @@ final class RequestExecutor {
                         $this->streamIds->release($streamId, $streamGeneration);
                     }
 
+                    // Handling the cached result ran the warnings listeners, so
+                    // one that threw is reported here — after the statement is
+                    // resolved and the id disposed of, as
+                    // {@see Session::processResponse()} does it for the answers
+                    // that come off the wire. See {@see ListenerRegistry}.
+                    $this->session->getListeners()->throwDeferred();
+
                     return $statement;
                 }
             }
@@ -517,6 +524,12 @@ final class RequestExecutor {
                 $this->session->parkUnresolvedStream($streamId, $streamGeneration);
             }
         }
+
+        // Outside the try above, so that the stream id is disposed of before a
+        // listener failure can end this call, and so that one which threw a
+        // NodeException of its own is not mistaken there for the transport
+        // failing. See {@see ListenerRegistry}.
+        $this->session->getListeners()->throwDeferred();
 
         if ($response === null) {
             throw new ConnectionException('Received unexpected null response from server.', ExceptionCode::CONNECTION_SYNC_NULL_RESPONSE->value, [
