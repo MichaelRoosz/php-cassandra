@@ -285,7 +285,7 @@ $statements[] = $conn->queryAsync(
 );
 $statements[] = $conn->queryAsync(
     'SELECT * FROM users LIMIT 10',
-    options: new QueryOptions(pageSize: 10)
+    options: new QueryOptions(pageSize: 100)
 );
 
 // Process results as they become available
