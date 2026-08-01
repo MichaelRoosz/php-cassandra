@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\Value;
 use Cassandra\ValueFactory;
@@ -71,6 +72,30 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $date = '2025-08-11';
         $this->assertSame($date, (Value\Date::fromValue($date))->asString());
         $this->assertSame($date, Value\Date::fromBinary((Value\Date::fromValue($date))->getBinary())->asString());
+    }
+
+    public function testDateAcceptsOnlyTwoDigitMonthAndDay(): void {
+        // The pattern used to allow one digit for either, but the sign this
+        // class prepends before parsing makes DateTimeImmutable read the next
+        // "-" as a second timezone, so such a date was refused a step later
+        // anyway. Zero-padded forms, and the signed years the padding is there
+        // for, are what actually work.
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Date requires 64-bit integer');
+        }
+
+        foreach (['2024-1-1', '2024-01-1', '2024-1-01'] as $date) {
+            try {
+                Value\Date::fromValue($date);
+                $this->fail('expected ' . $date . ' to be refused');
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, $e->getCode(), $date);
+            }
+        }
+
+        $this->assertSame('2024-01-01', Value\Date::fromValue('2024-01-01')->asString());
+        $this->assertSame('+10000-07-10', Value\Date::fromValue('+10000-07-10')->asString());
+        $this->assertSame('-0001-01-01', Value\Date::fromValue('-0001-01-01')->asString());
     }
 
     public function testDecimal(): void {

@@ -48,7 +48,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
         } elseif (is_string($value)) {
 
-            if (!preg_match('/^[+-]?\d{4,}-\d{1,2}-\d{1,2}$/', $value)) {
+            if (!preg_match('/^[+-]?\d{4,}-\d{2}-\d{2}$/', $value)) {
                 throw new ValueException('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
                     'value' => $value,
                 ]);
