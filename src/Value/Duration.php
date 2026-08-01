@@ -92,9 +92,9 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         if (is_array($value)) {
             $this->value = $this->validateValue($value);
         } elseif (is_string($value)) {
-            $this->value = $this->nativeValueFromString($value);
+            $this->value = $this->validateValue($this->nativeValueFromString($value));
         } else {
-            $this->value = $this->nativeValueFromDateInterval($value);
+            $this->value = $this->validateValue($this->nativeValueFromDateInterval($value));
         }
     }
 
@@ -191,6 +191,10 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             if ($microseconds) {
                 $duration .= $sign . $microseconds . ' microseconds ';
             }
+        }
+
+        if ($duration === '') {
+            $duration = '0 seconds';
         }
 
         try {
