@@ -23,8 +23,16 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         'minutes', 'seconds', 'milliseconds', 'microseconds', 'nanoseconds',
     ];
 
+    /**
+     * The ISO 8601 forms accept an optional leading sign, which is how
+     * {@see self::asDateIntervalString()} spells a negative duration and how
+     * {@see self::asString()} already spelled one. ISO 8601 itself has no
+     * negative duration, but the type does — Cassandra's `duration` is signed —
+     * so a driver that emits these strings has to be able to read its own output
+     * back.
+     */
     private const PATTERNS = [
-        '/^P'
+        '/^(?<sign>[+-])?P'
             . '(?<years>\d+)?'
             . '-'
             . '(?<months>\d+)?'
@@ -39,7 +47,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
                 . '(?<seconds>\d+)?'
             . ')?'
             . '$/',
-        '/^P'
+        '/^(?<sign>[+-])?P'
             . '(?:(?<years>\d+)Y)?'
             . '(?:(?<months>\d+)M)?'
             . '(?:(?<days>\d+)D)?'
@@ -51,7 +59,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
                 . '(?:(?<seconds>\d+)S)?'
             . ')?'
             . '$/',
-        '/^P'
+        '/^(?<sign>[+-])?P'
             . '(?:(?<weeks>\d+)W)?'
             . '$/',
         '/^(?<sign>[+-])?'
@@ -211,6 +219,23 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         return $interval;
     }
 
+    /**
+     * The duration as an ISO 8601 duration string.
+     *
+     * A negative duration is spelled with a leading '-', as
+     * {@see self::asString()} spells one: every component of this type carries
+     * the same sign, so one marker in front says it for all of them. ISO 8601
+     * has no negative duration of its own, but dropping the sign would make a
+     * negative duration and its positive counterpart the same string — and
+     * reading that back through {@see self::fromValue()} would silently flip the
+     * sign. {@see self::PATTERNS} accepts the marker for exactly that reason.
+     *
+     * Note that this is an ISO 8601 duration and so carries whole seconds only:
+     * a duration with a sub-second part is truncated towards zero here. Use
+     * {@see self::asString()}, which spells milliseconds, microseconds and
+     * nanoseconds, or {@see self::asNativeValue()} where no precision may be
+     * lost.
+     */
     public function asDateIntervalString(): string {
         $value = $this->value;
 
@@ -229,7 +254,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             $days = abs($days);
         }
 
-        $duration = 'P';
+        $duration = $isNegative ? '-P' : 'P';
 
         if ($years) {
             $duration .= $years . 'Y';
@@ -258,22 +283,33 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
                 $seconds = abs($seconds);
             }
 
-            $duration .= 'T';
+            // The designator is written only once there is something for it to
+            // introduce. A duration whose whole time part is sub-second — the
+            // precision this format does not carry — leaves all three of these
+            // at zero, and a bare 'T' is not a duration any reader accepts, this
+            // class's own {@see self::PATTERNS} included.
+            if ($hours || $minutes || $seconds) {
+                $duration .= 'T';
 
-            if ($hours) {
-                $duration .= $hours . 'H';
-            }
+                if ($hours) {
+                    $duration .= $hours . 'H';
+                }
 
-            if ($minutes) {
-                $duration .= $minutes . 'M';
-            }
+                if ($minutes) {
+                    $duration .= $minutes . 'M';
+                }
 
-            if ($seconds) {
-                $duration .= $seconds . 'S';
+                if ($seconds) {
+                    $duration .= $seconds . 'S';
+                }
             }
         }
 
-        if ($duration === 'P') {
+        // Nothing survived: an all-zero duration, or one whose only component is
+        // the sub-second part this format cannot carry. Either way it is zero to
+        // this format's precision, and the sign goes with it — a signed zero
+        // would claim a direction the value no longer has.
+        if ($duration === 'P' || $duration === '-P') {
             $duration = 'PT0S';
         }
 
