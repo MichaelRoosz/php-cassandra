@@ -26,6 +26,21 @@ use Cassandra\VIntCodec;
 
 final class StreamReader {
     final protected const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
+    /**
+     * How deeply a type read off the wire may nest before it is refused.
+     *
+     * A collection, tuple, UDT or vector carries its element types inline, so
+     * {@see self::readTypeInfo()} descends once per level of nesting — driven
+     * entirely by what the peer sent. Nothing in the protocol bounds that, and
+     * PHP has no catchable stack overflow: a deep enough type would take the
+     * process down rather than raise, which is not something a client should let
+     * a coordinator do to it.
+     *
+     * Well beyond anything CQL can express — nesting a handful of levels deep is
+     * already an unusual schema — so a type past this is corrupt or hostile
+     * input rather than a limit a real one runs into.
+     */
+    private const MAX_TYPE_NESTING_DEPTH = 64;
 
     protected string $data;
     protected int $dataLength;
@@ -454,95 +469,8 @@ final class StreamReader {
      * @throws \Cassandra\Exception\TypeNameParserException
      */
     final public function readTypeInfo(): TypeInfo {
-        $typeShort = $this->readShort();
 
-        try {
-            $type = Type::from($typeShort);
-        } catch (ValueError|TypeError $e) {
-            throw new ResponseException(
-                message: 'Invalid type discriminator',
-                code: ExceptionCode::RESPONSE_SR_INVALID_TYPE_DISCRIMINATOR->value,
-                context: [
-                    'method' => __METHOD__,
-                    'type_short' => $typeShort,
-                    'offset' => $this->pos(),
-                ],
-                previous: $e,
-            );
-        }
-
-        switch ($type) {
-            case Type::CUSTOM:
-                $javaClassName = $this->readString();
-
-                return $this->typeNameParser->parse($javaClassName);
-
-            case Type::LIST:
-                return new ListCollectionInfo(
-                    valueType: $this->readTypeInfo(),
-                    isFrozen: false,
-                );
-
-            case Type::SET:
-                return new SetCollectionInfo(
-                    valueType: $this->readTypeInfo(),
-                    isFrozen: false,
-                );
-
-            case Type::MAP:
-                return new MapCollectionInfo(
-                    keyType: $this->readTypeInfo(),
-                    valueType: $this->readTypeInfo(),
-                    isFrozen: false,
-                );
-
-            case Type::UDT:
-
-                $keyspace = $this->readString();
-                $name = $this->readString();
-
-                $types = [];
-                $length = $this->readShort();
-                for ($i = 0; $i < $length; ++$i) {
-                    $key = $this->readString();
-                    $types[$key] = $this->readTypeInfo();
-                }
-
-                return new UDTInfo(
-                    valueTypes: $types,
-                    isFrozen: false,
-                    keyspace: $keyspace,
-                    name: $name,
-                );
-
-            case Type::TUPLE:
-
-                $types = [];
-                $length = $this->readShort();
-                for ($i = 0; $i < $length; ++$i) {
-                    $types[] = $this->readTypeInfo();
-                }
-
-                return new TupleInfo(
-                    valueTypes: $types,
-                );
-
-            case Type::VECTOR:
-
-                // not supported as of protocol v5
-                throw new ResponseException(
-                    message: 'Native vector type not supported as of protocol v5',
-                    code: ExceptionCode::RESPONSE_SR_VECTOR_TYPE_NOT_SUPPORTED->value,
-                    context: [
-                        'method' => __METHOD__,
-                    ]
-                );
-
-            default:
-                return new SimpleTypeInfo(
-                    type: $type,
-                );
-        }
+        return $this->readTypeInfoAtDepth(0);
     }
 
     /**
@@ -771,6 +699,121 @@ final class StreamReader {
         }
 
         return $values;
+    }
+
+    /**
+     * The body of {@see self::readTypeInfo()}, carrying how many levels of
+     * nesting it is already inside; see {@see self::MAX_TYPE_NESTING_DEPTH}.
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\TypeNameParserException
+     */
+    private function readTypeInfoAtDepth(int $depth): TypeInfo {
+
+        if ($depth > self::MAX_TYPE_NESTING_DEPTH) {
+            throw new ResponseException(
+                message: 'Type nesting is deeper than this client will read',
+                code: ExceptionCode::RESPONSE_SR_TYPE_NESTING_TOO_DEEP->value,
+                context: [
+                    'method' => __METHOD__,
+                    'max_depth' => self::MAX_TYPE_NESTING_DEPTH,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
+
+        $nestedDepth = $depth + 1;
+
+        $typeShort = $this->readShort();
+
+        try {
+            $type = Type::from($typeShort);
+        } catch (ValueError|TypeError $e) {
+            throw new ResponseException(
+                message: 'Invalid type discriminator',
+                code: ExceptionCode::RESPONSE_SR_INVALID_TYPE_DISCRIMINATOR->value,
+                context: [
+                    'method' => __METHOD__,
+                    'type_short' => $typeShort,
+                    'offset' => $this->pos(),
+                ],
+                previous: $e,
+            );
+        }
+
+        switch ($type) {
+            case Type::CUSTOM:
+                $javaClassName = $this->readString();
+
+                return $this->typeNameParser->parse($javaClassName);
+
+            case Type::LIST:
+                return new ListCollectionInfo(
+                    valueType: $this->readTypeInfoAtDepth($nestedDepth),
+                    isFrozen: false,
+                );
+
+            case Type::SET:
+                return new SetCollectionInfo(
+                    valueType: $this->readTypeInfoAtDepth($nestedDepth),
+                    isFrozen: false,
+                );
+
+            case Type::MAP:
+                return new MapCollectionInfo(
+                    keyType: $this->readTypeInfoAtDepth($nestedDepth),
+                    valueType: $this->readTypeInfoAtDepth($nestedDepth),
+                    isFrozen: false,
+                );
+
+            case Type::UDT:
+
+                $keyspace = $this->readString();
+                $name = $this->readString();
+
+                $types = [];
+                $length = $this->readShort();
+                for ($i = 0; $i < $length; ++$i) {
+                    $key = $this->readString();
+                    $types[$key] = $this->readTypeInfoAtDepth($nestedDepth);
+                }
+
+                return new UDTInfo(
+                    valueTypes: $types,
+                    isFrozen: false,
+                    keyspace: $keyspace,
+                    name: $name,
+                );
+
+            case Type::TUPLE:
+
+                $types = [];
+                $length = $this->readShort();
+                for ($i = 0; $i < $length; ++$i) {
+                    $types[] = $this->readTypeInfoAtDepth($nestedDepth);
+                }
+
+                return new TupleInfo(
+                    valueTypes: $types,
+                );
+
+            case Type::VECTOR:
+
+                // not supported as of protocol v5
+                throw new ResponseException(
+                    message: 'Native vector type not supported as of protocol v5',
+                    code: ExceptionCode::RESPONSE_SR_VECTOR_TYPE_NOT_SUPPORTED->value,
+                    context: [
+                        'method' => __METHOD__,
+                    ]
+                );
+
+            default:
+                return new SimpleTypeInfo(
+                    type: $type,
+                );
+        }
     }
 
     /**

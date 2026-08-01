@@ -29,6 +29,31 @@ use Cassandra\TypeInfo\VectorInfo;
  */
 final class TypeNameParser {
     /**
+     * How deeply a type string may nest before it is refused.
+     *
+     * A parameterised type is parsed by parsing its parameters, so this descends
+     * once per level of nesting — driven entirely by a string that came from the
+     * node. Nothing in the grammar bounds that, and PHP has no catchable stack
+     * overflow: a deep enough type string would take the process down rather
+     * than raise. The same reasoning, and the same limit, as
+     * {@see \Cassandra\Response\StreamReader::MAX_TYPE_NESTING_DEPTH}, which
+     * bounds the wire form of the same thing.
+     */
+    private const MAX_NESTING_DEPTH = 64;
+
+    /**
+     * How many levels of nesting {@see self::parse()} is currently inside.
+     *
+     * Kept here rather than passed down because the descent goes back through
+     * the public parse() at every level: the parameter parsers hand their
+     * parameters to it, so a counter it maintains itself bounds all of them
+     * without every one of them having to carry a depth. It is unwound in a
+     * finally, so a type string that is refused part way down leaves this parser
+     * usable.
+     */
+    private int $nestingDepth = 0;
+
+    /**
      * @var ?array<string, \Cassandra\Type>
      */
     private static ?array $simpleTypeMap = null;
@@ -38,98 +63,25 @@ final class TypeNameParser {
      */
     public function parse(string $typeString, bool $isFrozen = false): TypeInfo {
 
-        $firstBracketIndex = strpos($typeString, '(');
-        if ($firstBracketIndex === false) {
-
-            if (str_contains($typeString, ')')) {
-                throw new TypeNameParserException(
-                    'Invalid type string: contains closing bracket without opening bracket',
-                    ExceptionCode::TYPENAMEPARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value,
-                    [
-                        'type_string' => $typeString,
-                        'reason' => 'closing_bracket_without_opening',
-                    ]
-                );
-            }
-
-            $typeName = trim($typeString);
-            $params = [];
-
-        } else {
-            $typeName = trim(substr($typeString, 0, $firstBracketIndex));
-            $paramString = trim(substr($typeString, $firstBracketIndex + 1));
-
-            if (!str_ends_with($paramString, ')')) {
-                throw new TypeNameParserException(
-                    'Invalid type string: missing closing bracket',
-                    ExceptionCode::TYPENAMEPARSER_INVALID_BRACKETS_MISSING_CLOSING->value,
-                    [
-                        'type_string' => $typeString,
-                        'type_name' => $typeName,
-                        'param_string' => $paramString,
-                        'reason' => 'missing_closing_bracket',
-                    ]
-                );
-            }
-
-            $paramStringWithoutLastBracket = substr($paramString, 0, -1);
-
-            $params = $this->extractParams($paramStringWithoutLastBracket);
+        if ($this->nestingDepth > self::MAX_NESTING_DEPTH) {
+            throw new TypeNameParserException(
+                'Invalid type string: nesting is deeper than this parser will read',
+                ExceptionCode::TYPENAMEPARSER_NESTING_TOO_DEEP->value,
+                [
+                    'type_string' => $typeString,
+                    'max_depth' => self::MAX_NESTING_DEPTH,
+                    'reason' => 'nesting_too_deep',
+                ]
+            );
         }
 
-        $simpleTypeMap = $this->getSimpleTypeMap();
-        if (isset($simpleTypeMap[$typeName])) {
+        $this->nestingDepth++;
 
-            if ($params) {
-                throw new TypeNameParserException(
-                    'Invalid type string: simple types cannot have parameters',
-                    ExceptionCode::TYPENAMEPARSER_SIMPLE_TYPE_WITH_PARAMETERS->value,
-                    [
-                        'type_string' => $typeString,
-                        'type_name' => $typeName,
-                        'parameters' => $params,
-                        'simple_type' => $simpleTypeMap[$typeName]->name,
-                    ]
-                );
-            }
-
-            if ($isFrozen) {
-                throw new TypeNameParserException(
-                    'Invalid type for frozen: simple types cannot be frozen',
-                    ExceptionCode::TYPENAMEPARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value,
-                    [
-                        'type_string' => $typeString,
-                        'type_name' => $typeName,
-                        'simple_type' => $simpleTypeMap[$typeName]->name,
-                        'reason' => 'simple_types_cannot_be_frozen',
-                    ]
-                );
-            }
-
-            return new SimpleTypeInfo($simpleTypeMap[$typeName]);
+        try {
+            return $this->parseType($typeString, $isFrozen);
+        } finally {
+            $this->nestingDepth--;
         }
-
-        $complexTypeInfo = match ($typeName) {
-            TypeName::FROZEN->value => $this->parseFrozenType($params, $isFrozen),
-            TypeName::REVERSED->value => $this->parseReversedType($params, $isFrozen),
-
-            TypeName::MAP->value => $this->parseMapType($params, $isFrozen),
-            TypeName::LIST->value => $this->parseListType($params, $isFrozen),
-            TypeName::SET->value => $this->parseSetType($params, $isFrozen),
-            TypeName::TUPLE->value => $this->parseTupleType($params, $isFrozen),
-            TypeName::UDT->value => $this->parseUDTType($params, $isFrozen),
-            TypeName::VECTOR->value => $this->parseVectorType($params, $isFrozen),
-
-            default => null,
-        };
-
-        if ($complexTypeInfo !== null) {
-            return $complexTypeInfo;
-        }
-
-        return new CustomInfo(
-            javaClassName: $typeString,
-        );
     }
 
     /**
@@ -462,6 +414,105 @@ final class TypeNameParser {
         }
 
         return new TupleInfo($valueTypes);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\TypeNameParserException
+     */
+    private function parseType(string $typeString, bool $isFrozen): TypeInfo {
+
+        $firstBracketIndex = strpos($typeString, '(');
+        if ($firstBracketIndex === false) {
+
+            if (str_contains($typeString, ')')) {
+                throw new TypeNameParserException(
+                    'Invalid type string: contains closing bracket without opening bracket',
+                    ExceptionCode::TYPENAMEPARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING->value,
+                    [
+                        'type_string' => $typeString,
+                        'reason' => 'closing_bracket_without_opening',
+                    ]
+                );
+            }
+
+            $typeName = trim($typeString);
+            $params = [];
+
+        } else {
+            $typeName = trim(substr($typeString, 0, $firstBracketIndex));
+            $paramString = trim(substr($typeString, $firstBracketIndex + 1));
+
+            if (!str_ends_with($paramString, ')')) {
+                throw new TypeNameParserException(
+                    'Invalid type string: missing closing bracket',
+                    ExceptionCode::TYPENAMEPARSER_INVALID_BRACKETS_MISSING_CLOSING->value,
+                    [
+                        'type_string' => $typeString,
+                        'type_name' => $typeName,
+                        'param_string' => $paramString,
+                        'reason' => 'missing_closing_bracket',
+                    ]
+                );
+            }
+
+            $paramStringWithoutLastBracket = substr($paramString, 0, -1);
+
+            $params = $this->extractParams($paramStringWithoutLastBracket);
+        }
+
+        $simpleTypeMap = $this->getSimpleTypeMap();
+        if (isset($simpleTypeMap[$typeName])) {
+
+            if ($params) {
+                throw new TypeNameParserException(
+                    'Invalid type string: simple types cannot have parameters',
+                    ExceptionCode::TYPENAMEPARSER_SIMPLE_TYPE_WITH_PARAMETERS->value,
+                    [
+                        'type_string' => $typeString,
+                        'type_name' => $typeName,
+                        'parameters' => $params,
+                        'simple_type' => $simpleTypeMap[$typeName]->name,
+                    ]
+                );
+            }
+
+            if ($isFrozen) {
+                throw new TypeNameParserException(
+                    'Invalid type for frozen: simple types cannot be frozen',
+                    ExceptionCode::TYPENAMEPARSER_SIMPLE_TYPE_CANNOT_BE_FROZEN->value,
+                    [
+                        'type_string' => $typeString,
+                        'type_name' => $typeName,
+                        'simple_type' => $simpleTypeMap[$typeName]->name,
+                        'reason' => 'simple_types_cannot_be_frozen',
+                    ]
+                );
+            }
+
+            return new SimpleTypeInfo($simpleTypeMap[$typeName]);
+        }
+
+        $complexTypeInfo = match ($typeName) {
+            TypeName::FROZEN->value => $this->parseFrozenType($params, $isFrozen),
+            TypeName::REVERSED->value => $this->parseReversedType($params, $isFrozen),
+
+            TypeName::MAP->value => $this->parseMapType($params, $isFrozen),
+            TypeName::LIST->value => $this->parseListType($params, $isFrozen),
+            TypeName::SET->value => $this->parseSetType($params, $isFrozen),
+            TypeName::TUPLE->value => $this->parseTupleType($params, $isFrozen),
+            TypeName::UDT->value => $this->parseUDTType($params, $isFrozen),
+            TypeName::VECTOR->value => $this->parseVectorType($params, $isFrozen),
+
+            default => null,
+        };
+
+        if ($complexTypeInfo !== null) {
+            return $complexTypeInfo;
+        }
+
+        return new CustomInfo(
+            javaClassName: $typeString,
+        );
     }
 
     /**

@@ -198,6 +198,23 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $this->assertSame($data, $reader->readBytes());
     }
 
+    /**
+     * A collection carries its element type inline, so a type read off the wire
+     * descends once per level of nesting — as deep as the peer asks for. PHP has
+     * no catchable stack overflow, so a type deeper than this client will read
+     * has to be refused rather than followed.
+     */
+    public function testReadTypeInfoRefusesUnboundedNesting(): void {
+        $bin = str_repeat(pack('n', Type::LIST->value), 512) . pack('n', Type::INT->value);
+
+        $reader = new StreamReader($bin);
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_TYPE_NESTING_TOO_DEEP->value);
+
+        $reader->readTypeInfo();
+    }
+
     public function testReadTypeInfoSimpleAndCollections(): void {
         // simple type: INT
         $bin = pack('n', Type::INT->value);
@@ -216,6 +233,19 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $reader = new StreamReader($bin);
         $typeInfo = $reader->readTypeInfo();
         $this->assertSame(Type::MAP, $typeInfo->type);
+    }
+
+    public function testReadTypeInfoStillAcceptsRealisticNesting(): void {
+        // list<list<list<map<text,int>>>> — deeper than any schema needs, and
+        // well inside what the limit allows.
+        $bin = str_repeat(pack('n', Type::LIST->value), 3)
+            . pack('n', Type::MAP->value)
+            . pack('n', Type::VARCHAR->value)
+            . pack('n', Type::INT->value);
+
+        $reader = new StreamReader($bin);
+
+        $this->assertSame(Type::LIST, $reader->readTypeInfo()->type);
     }
 
     public function testReadUuid(): void {

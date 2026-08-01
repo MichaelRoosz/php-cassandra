@@ -632,6 +632,24 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testParserIsUsableAfterRefusingDeepNesting(): void {
+        // The depth is unwound in a finally, so a refused type string does not
+        // leave the parser counting levels it is no longer inside.
+        $typeString = str_repeat(TypeName::LIST->value . '(', 512)
+            . TypeName::INT32->value
+            . str_repeat(')', 512);
+
+        try {
+            $this->parser->parse($typeString);
+        } catch (TypeNameParserException) {
+            // Expected; what matters is the parse below.
+        }
+
+        $result = $this->parser->parse(TypeName::LIST->value . '(' . TypeName::UTF8->value . ')');
+
+        $this->assertInstanceOf(ListCollectionInfo::class, $result);
+    }
+
     // =============================================
     // REVERSED TYPE TESTS
     // =============================================
@@ -975,6 +993,23 @@ class TypeNameParserTest extends AbstractUnitTestCase {
             $this->assertArrayHasKey($fieldName, $result->valueTypes);
             $this->assertEquals($expectedType, $result->valueTypes[$fieldName]->type);
         }
+    }
+
+    /**
+     * A parameterised type is parsed by parsing its parameters, so the parser
+     * descends once per level of nesting — as deep as the type string it was
+     * handed asks for. PHP has no catchable stack overflow, so a string deeper
+     * than this parser will read has to be refused rather than followed.
+     */
+    public function testUnboundedNestingIsRefused(): void {
+        $typeString = str_repeat(TypeName::LIST->value . '(', 512)
+            . TypeName::INT32->value
+            . str_repeat(')', 512);
+
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_NESTING_TOO_DEEP->value);
+
+        $this->parser->parse($typeString);
     }
 
     // =============================================
