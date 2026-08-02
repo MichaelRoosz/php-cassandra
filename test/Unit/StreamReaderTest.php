@@ -46,6 +46,34 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $codec->decodeUnsignedVint64(substr($encoded, 0, -1));
     }
 
+    public function testOffsetsOutsideAvailableDataAreRefused(): void {
+        foreach (
+            [
+                static fn (StreamReader $reader) => $reader->offset(-1),
+                static fn (StreamReader $reader) => $reader->offset(4),
+                static fn (StreamReader $reader) => $reader->extraDataOffset(-1),
+                static fn (StreamReader $reader) => $reader->extraDataOffset(4),
+            ] as $setInvalidOffset
+        ) {
+            $reader = new StreamReader('abc');
+
+            try {
+                $setInvalidOffset($reader);
+                $this->fail('expected an invalid stream offset to be refused');
+            } catch (ResponseException $e) {
+                $this->assertSame(ExceptionCode::RESPONSE_SR_INVALID_OFFSET->value, $e->getCode());
+            }
+        }
+
+        $reader = new StreamReader('abc');
+        $reader->offset(2);
+        $reader->extraDataOffset(2);
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_INVALID_OFFSET->value);
+        $reader->offset(2);
+    }
+
     public function testReadBeyondAvailableThrows(): void {
         $reader = new StreamReader('abc');
         $this->expectException(ResponseException::class);

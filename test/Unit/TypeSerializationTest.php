@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\TypeInfoException;
 use Cassandra\Exception\ValueException;
 use Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Type;
@@ -859,6 +860,24 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testTupleInfoRejectsInvalidValueType(): void {
+        $this->expectException(TypeInfoException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPEINFO_TUPLE_INVALID_VALUETYPE->value);
+
+        (new \ReflectionClass(\Cassandra\TypeInfo\TupleInfo::class))->newInstanceArgs([[123]]);
+    }
+
+    public function testTupleRejectsUndeclaredValues(): void {
+        $typeInfo = new \Cassandra\TypeInfo\TupleInfo([
+            ValueFactory::getTypeInfoFromType(Type::INT),
+        ]);
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_TUPLE_UNDECLARED_VALUE->value);
+
+        new Value\Tuple([1, 2], $typeInfo);
+    }
+
     public function testUDT(): void {
         $value = [
             'intField' => 1,
@@ -880,6 +899,24 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
                 ])
             )->getValue()
         );
+    }
+
+    public function testUdtInfoRejectsInvalidValueType(): void {
+        $this->expectException(TypeInfoException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPEINFO_UDT_INVALID_VALUETYPE->value);
+
+        (new \ReflectionClass(\Cassandra\TypeInfo\UDTInfo::class))->newInstanceArgs([['field' => 123], false]);
+    }
+
+    public function testUdtRejectsUndeclaredFields(): void {
+        $typeInfo = new \Cassandra\TypeInfo\UDTInfo([
+            'declared' => ValueFactory::getTypeInfoFromType(Type::INT),
+        ], false);
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_UDT_UNDECLARED_FIELD->value);
+
+        new Value\UDT(['declared' => 1, 'extra' => 2], $typeInfo);
     }
 
     public function testUuid(): void {

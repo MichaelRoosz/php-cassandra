@@ -12,10 +12,13 @@ use Cassandra\ValueFactory;
 final class TupleInfo extends TypeInfo {
     /**
      * @param list<TypeInfo> $valueTypes
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     public function __construct(
         public readonly array $valueTypes,
     ) {
+        self::validateValueTypes($valueTypes);
+
         parent::__construct(Type::TUPLE);
     }
 
@@ -78,5 +81,24 @@ final class TupleInfo extends TypeInfo {
         }
 
         return new self($valueTypes);
+    }
+
+    /**
+     * @param array<mixed> $valueTypes
+     * @throws \Cassandra\Exception\TypeInfoException
+     */
+    private static function validateValueTypes(array $valueTypes): void {
+        foreach ($valueTypes as $index => $valueType) {
+            if (!$valueType instanceof TypeInfo) {
+                throw new TypeInfoException(
+                    'Tuple value type must be a TypeInfo',
+                    ExceptionCode::TYPEINFO_TUPLE_INVALID_VALUETYPE->value,
+                    [
+                        'index' => $index,
+                        'actual_type' => get_debug_type($valueType),
+                    ]
+                );
+            }
+        }
     }
 }

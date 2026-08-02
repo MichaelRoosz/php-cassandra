@@ -10,6 +10,7 @@ use Cassandra\Connection\ResponseReader;
 use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
+use Cassandra\Protocol\Flag;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Request;
@@ -56,6 +57,24 @@ final class ResponseFrameLimitTest extends AbstractUnitTestCase {
             $this->fail('expected a nonsense frame body length to be refused');
         } catch (ConnectionException $e) {
             $this->assertSame(ExceptionCode::CONNECTION_RESPONSE_BODY_TOO_LARGE->value, $e->getCode());
+        }
+    }
+    public function testCompressedBodyShorterThanLengthPrefixIsRefusedWithoutNativeWarning(): void {
+        $header = "\x84" . chr(Flag::COMPRESSION) . "\x00\x07"
+            . chr(Opcode::RESPONSE_RESULT->value) . pack('N', 1);
+        $node = new FakeFrameNode($header . "\x00");
+
+        set_error_handler(static function (int $severity, string $message): never {
+            throw new \ErrorException($message, 0, $severity);
+        });
+
+        try {
+            (new ResponseReader())->readResponse($node, ProtocolVersion::V4, Node::DO_NOT_WAIT);
+            $this->fail('expected a truncated compressed-frame prefix to be refused');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_CANNOT_READ_DECOMPRESSED_FRAME_LENGTH->value, $e->getCode());
+        } finally {
+            restore_error_handler();
         }
     }
 

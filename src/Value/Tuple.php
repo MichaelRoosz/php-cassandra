@@ -21,8 +21,21 @@ final class Tuple extends ValueReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(array $value, TupleInfo $typeInfo) {
+        $undeclaredIndexes = array_keys(array_diff_key($value, $typeInfo->valueTypes));
+        if ($undeclaredIndexes !== []) {
+            throw new ValueException(
+                'Tuple contains values beyond its declared type definition',
+                ExceptionCode::VALUE_TUPLE_UNDECLARED_VALUE->value,
+                [
+                    'undeclared_indexes' => $undeclaredIndexes,
+                    'declared_value_count' => count($typeInfo->valueTypes),
+                ]
+            );
+        }
+
         $this->value = $value;
         $this->typeInfo = $typeInfo;
     }

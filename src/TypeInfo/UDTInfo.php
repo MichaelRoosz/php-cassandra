@@ -10,6 +10,9 @@ use Cassandra\Type;
 use Cassandra\ValueFactory;
 
 final class UDTInfo extends TypeInfo {
+    /**
+     * @throws \Cassandra\Exception\TypeInfoException
+     */
     public function __construct(
         /**
          * @var array<string,TypeInfo> $valueTypes
@@ -19,6 +22,8 @@ final class UDTInfo extends TypeInfo {
         public readonly ?string $keyspace = null,
         public readonly ?string $name = null,
     ) {
+        self::validateValueTypes($valueTypes);
+
         parent::__construct(Type::UDT);
     }
 
@@ -104,5 +109,24 @@ final class UDTInfo extends TypeInfo {
         }
 
         return new self($valueTypes, $isFrozen, $keyspace, $name);
+    }
+
+    /**
+     * @param array<mixed> $valueTypes
+     * @throws \Cassandra\Exception\TypeInfoException
+     */
+    private static function validateValueTypes(array $valueTypes): void {
+        foreach ($valueTypes as $field => $valueType) {
+            if (!$valueType instanceof TypeInfo) {
+                throw new TypeInfoException(
+                    'UDT field value type must be a TypeInfo',
+                    ExceptionCode::TYPEINFO_UDT_INVALID_VALUETYPE->value,
+                    [
+                        'field' => $field,
+                        'actual_type' => get_debug_type($valueType),
+                    ]
+                );
+            }
+        }
     }
 }

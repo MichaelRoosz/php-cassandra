@@ -108,6 +108,17 @@ final class ResponseReader {
             && $header->length > 0
             && $header->flags & Flag::COMPRESSION
         ) {
+            if (strlen($body) < 4) {
+                throw new ConnectionException(
+                    'Cannot read uncompressed length from compressed frame',
+                    ExceptionCode::CONNECTION_CANNOT_READ_DECOMPRESSED_FRAME_LENGTH->value,
+                    [
+                        'compressed_body_length' => strlen($body),
+                        'required_prefix_length' => 4,
+                    ]
+                );
+            }
+
             /** @var false|array<int> $uncompressedLength */
             $uncompressedLength = unpack('N', substr($body, 0, 4));
             if ($uncompressedLength === false) {

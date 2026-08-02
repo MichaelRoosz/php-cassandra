@@ -432,6 +432,9 @@ final class RowsResult extends Result {
         return $this->getRowsData();
     }
 
+    /**
+     * @throws \Cassandra\Exception\ResponseException
+     */
     #[\Override]
     public function getIterator(): ResultIterator {
 
@@ -503,11 +506,17 @@ final class RowsResult extends Result {
         ];
     }
 
+    /**
+     * @throws \Cassandra\Exception\ResponseException
+     */
     public function rewind(): void {
         $this->fetchedRows = 0;
         $this->stream->offset($this->dataOffset);
     }
 
+    /**
+     * @throws \Cassandra\Exception\ResponseException
+     */
     public function rewindOneRow(): void {
 
         if ($this->fetchedRows < 1) {

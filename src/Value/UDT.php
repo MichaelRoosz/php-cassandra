@@ -21,11 +21,23 @@ final class UDT extends ValueReadableWithoutLength {
 
     /**
      * @param array<mixed> $value
+     * @throws \Cassandra\Exception\ValueException
      */
     final public function __construct(
         array $value,
         UDTInfo $typeInfo ,
     ) {
+        $undeclaredFields = array_keys(array_diff_key($value, $typeInfo->valueTypes));
+        if ($undeclaredFields !== []) {
+            throw new ValueException(
+                'UDT contains fields absent from its declared type definition',
+                ExceptionCode::VALUE_UDT_UNDECLARED_FIELD->value,
+                [
+                    'undeclared_fields' => $undeclaredFields,
+                ]
+            );
+        }
+
         $this->value = $value;
         $this->typeInfo = $typeInfo;
     }

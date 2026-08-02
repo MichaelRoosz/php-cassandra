@@ -41,10 +41,25 @@ final class NodeConnector {
      * Open a connection to the first node that accepts one.
      *
      * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
      */
     public function open(): IoNode {
 
-        $ordered = $this->selector->order($this->nodes);
+        $ordered = $this->orderNodes();
+        foreach ($ordered as $index => $config) {
+            if (!$config instanceof NodeConfig) {
+                throw new NodeException(
+                    'Node selector returned an invalid node configuration',
+                    ExceptionCode::NODE_IMPLEMENTATION_FAILED->value,
+                    [
+                        'selector_class' => get_class($this->selector),
+                        'index' => $index,
+                        'actual_type' => get_debug_type($config),
+                    ]
+                );
+            }
+        }
+
         $parts = $this->health->partitionByAvailability($ordered);
         $candidates = array_merge($parts['available'], $parts['unavailable']);
 
@@ -97,21 +112,7 @@ final class NodeConnector {
             return $node;
         }
 
-        $nodeConfigs = array_map(fn (NodeConfig $config) => [
-            'host' => $config->host,
-            'port' => $config->port,
-            'class' => $config->getNodeClass(),
-        ], $this->nodes);
-
-        throw new ConnectionException(
-            'Unable to connect to any Cassandra node',
-            ExceptionCode::CONNECTION_UNABLE_TO_CONNECT_ANY_NODE->value,
-            [
-                'attempted_nodes' => $nodeConfigs,
-                'node_count' => count($this->nodes),
-            ],
-            $socketException ?? null
-        );
+        throw $this->unableToConnectException($socketException);
     }
 
     public function recordFailure(NodeConfig $config): void {
@@ -122,5 +123,30 @@ final class NodeConnector {
     public function recordSuccess(NodeConfig $config): void {
 
         $this->health->recordSuccess($config);
+    }
+
+    /**
+     * @return array<NodeConfig>
+     */
+    private function orderNodes(): array {
+        return $this->selector->order($this->nodes);
+    }
+
+    private function unableToConnectException(?NodeException $previous): ConnectionException {
+        $nodeConfigs = array_map(fn (NodeConfig $config) => [
+            'host' => $config->host,
+            'port' => $config->port,
+            'config_class' => get_class($config),
+        ], $this->nodes);
+
+        return new ConnectionException(
+            'Unable to connect to any Cassandra node',
+            ExceptionCode::CONNECTION_UNABLE_TO_CONNECT_ANY_NODE->value,
+            [
+                'attempted_nodes' => $nodeConfigs,
+                'node_count' => count($this->nodes),
+            ],
+            $previous
+        );
     }
 }

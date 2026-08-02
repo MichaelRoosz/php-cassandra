@@ -58,8 +58,15 @@ final class StreamReader {
 
     /**
      * Sets the extra data offset used to hide extra data at the beginning of the response.
+     *
+     * @throws \Cassandra\Exception\ResponseException
      */
     public function extraDataOffset(int $extraDataOffset): void {
+        $maximumOffset = min($this->dataLength, $this->offset);
+        if ($extraDataOffset < 0 || $extraDataOffset > $maximumOffset) {
+            throw $this->invalidOffsetException($extraDataOffset, 'extra_data_offset', $maximumOffset);
+        }
+
         $this->extraDataOffset = $extraDataOffset;
     }
 
@@ -67,7 +74,15 @@ final class StreamReader {
         return $includeExtraData ? $this->data : substr($this->data, $this->extraDataOffset);
     }
 
+    /**
+     * @throws \Cassandra\Exception\ResponseException
+     */
     public function offset(int $offset): void {
+        $maximumOffset = $this->dataLength - $this->extraDataOffset;
+        if ($offset < 0 || $offset > $maximumOffset) {
+            throw $this->invalidOffsetException($offset, 'offset', $maximumOffset);
+        }
+
         $this->offset = $this->extraDataOffset + $offset;
     }
 
@@ -702,6 +717,22 @@ final class StreamReader {
             Type::LIST, Type::MAP, Type::SET => [],
             default => null,
         };
+    }
+
+    private function invalidOffsetException(int $offset, string $field, int $maximumOffset): ResponseException {
+        return new ResponseException(
+            message: 'Stream reader offset is outside the available data',
+            code: ExceptionCode::RESPONSE_SR_INVALID_OFFSET->value,
+            context: [
+                'method' => __METHOD__,
+                'field' => $field,
+                'offset' => $offset,
+                'minimum_offset' => 0,
+                'maximum_offset' => $maximumOffset,
+                'data_length' => $this->dataLength,
+                'extra_data_offset' => $this->extraDataOffset,
+            ]
+        );
     }
 
     /**

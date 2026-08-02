@@ -82,6 +82,8 @@ final class ResultIterator implements Iterator {
 
     /**
      * Reset the result set
+     *
+     * @throws \Cassandra\Exception\ResponseException
      */
     #[\Override]
     public function rewind(): void {
