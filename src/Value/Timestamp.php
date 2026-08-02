@@ -26,15 +26,22 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
             $this->value = $value;
 
         } elseif (is_string($value)) {
+            if (!preg_match('/^[+-]?\d{4,}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:?\d{2})?)?$/', $value)) {
+                self::throwInvalidTimestamp($value);
+            }
+
             try {
                 $date = new DateTimeImmutable($value);
+                $parseErrors = DateTimeImmutable::getLastErrors();
+                if ($parseErrors !== false && ($parseErrors['warning_count'] > 0 || $parseErrors['error_count'] > 0)) {
+                    self::throwInvalidTimestamp($value);
+                }
                 $timestamp = $date->getTimestamp();
                 $milliseconds = ($timestamp * 1000) + (int) $date->format('v');
+            } catch (ValueException $e) {
+                throw $e;
             } catch (PhpException $e) {
-                throw new ValueException('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
-                    'value_type' => gettype($value),
-                    'expected_types' => ['int', 'string', DateTimeInterface::class],
-                ], $e);
+                self::throwInvalidTimestamp($value, $e);
             }
 
             $this->value = $milliseconds;
@@ -188,5 +195,20 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function throwInvalidTimestamp(string|DateTimeInterface $value, ?PhpException $previous = null): never {
+        throw new ValueException(
+            'Invalid timestamp value; expected milliseconds as int, date in ISO 8601 format as string, or DateTimeInterface',
+            ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value,
+            [
+                'value_type' => get_debug_type($value),
+                'expected_types' => ['int', 'string', DateTimeInterface::class],
+            ],
+            $previous,
+        );
     }
 }
