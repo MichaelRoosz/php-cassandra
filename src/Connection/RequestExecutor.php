@@ -207,6 +207,121 @@ final class RequestExecutor {
      */
     public function sendAsyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Statement {
 
+        // Handling a cached prepared result below runs the warnings listeners,
+        // so this call is one pass of {@see ListenerRegistry}; see
+        // {@see Session::processResponse()} for what that is for.
+        $outerListenerFailure = $this->session->getListeners()->beginPass();
+
+        try {
+            return $this->executeAsyncRequest($request, $requestTimeoutInSeconds);
+        } finally {
+            $this->session->getListeners()->endPass($outerListenerFailure);
+        }
+    }
+
+    /**
+     * The body of {@see \Cassandra\Connection::syncRequest()}, carrying the repreparation depth
+     * of the chain this call belongs to.
+     *
+     * @param ?float $requestTimeoutInSeconds see {@see \Cassandra\Connection::syncRequest()}
+     * @param int $repreparationDepth how many repreparations this call is
+     * already nested inside, the counterpart of
+     * {@see Statement::getRepreparationCount()} for requests that have no
+     * statement to carry the count. The sync path recurses back into this
+     * method for each round and unwinds in order, so the depth is exactly the
+     * number of rounds this call has behind it.
+     *
+     * Handed down the call chain rather than kept on the connection, so that a
+     * request started from inside one of these calls — an event or warnings
+     * listener issuing a query of its own while a repreparation is being
+     * handled — begins its own chain at zero instead of inheriting this one's
+     * depth and running out of repreparations early.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    public function sendSyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): Response\Response {
+
+        // Handling the answer below runs the warnings listeners, so this call is
+        // one pass of {@see ListenerRegistry}; see {@see Session::processResponse()}
+        // for what that is for.
+        $outerListenerFailure = $this->session->getListeners()->beginPass();
+
+        try {
+            return $this->executeSyncRequest($request, $requestTimeoutInSeconds, $repreparationDepth);
+        } finally {
+            $this->session->getListeners()->endPass($outerListenerFailure);
+        }
+    }
+
+    /**
+     * Put the connection's keyspace into a request that names none of its own.
+     *
+     * Done here rather than where the request was built, because whether it is
+     * needed at all depends on the negotiated protocol version and that is only
+     * settled once the connection is up — which, one line above every call to
+     * this, it now is.
+     *
+     * Only from v5: before that a keyspace is a property of the node's session,
+     * put there by the USE that {@see Session::connect()} sends, and the request
+     * option does not exist at all — attaching one would make the request
+     * unencodable.
+     *
+     * Which is why this takes one off rather than simply doing nothing wherever
+     * there is no default to apply: a request object sent once on a v5
+     * connection still carries the keyspace that send gave it. Below v5
+     * encoding it would fail outright, and on a v5 connection that has been
+     * moved off its keyspace it would quietly run the statement somewhere the
+     * connection no longer admits to being. Only a keyspace this driver put
+     * there is taken back; see {@see Request\Request::clearDefaultKeyspace()}.
+     *
+     * The request is modified in place, as {@see Request\Request::setStream()}
+     * and setVersion() already are: a request handed to the executor is the
+     * connection's to finish addressing.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    private function applyDefaultKeyspace(Request\Request $request): void {
+
+        if ($this->session->getProtocolVersion()->value < ProtocolVersion::V5->value) {
+            $request->clearDefaultKeyspace();
+
+            return;
+        }
+
+        $keyspace = $this->session->getKeyspace();
+        if ($keyspace === '') {
+            $request->clearDefaultKeyspace();
+
+            return;
+        }
+
+        $request->applyDefaultKeyspace($keyspace);
+    }
+
+    /**
+     * The body of {@see self::sendAsyncRequest()}, run as one pass of
+     * {@see ListenerRegistry}.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    private function executeAsyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Statement {
+
         $this->deadlines->assertValidRequestTimeout($requestTimeoutInSeconds, 'asyncRequest');
 
         $node = $this->session->getConnectedNode();
@@ -386,22 +501,10 @@ final class RequestExecutor {
     }
 
     /**
-     * The body of {@see \Cassandra\Connection::syncRequest()}, carrying the repreparation depth
-     * of the chain this call belongs to.
+     * The body of {@see self::sendSyncRequest()}, run as one pass of
+     * {@see ListenerRegistry}.
      *
-     * @param ?float $requestTimeoutInSeconds see {@see \Cassandra\Connection::syncRequest()}
-     * @param int $repreparationDepth how many repreparations this call is
-     * already nested inside, the counterpart of
-     * {@see Statement::getRepreparationCount()} for requests that have no
-     * statement to carry the count. The sync path recurses back into this
-     * method for each round and unwinds in order, so the depth is exactly the
-     * number of rounds this call has behind it.
-     *
-     * Handed down the call chain rather than kept on the connection, so that a
-     * request started from inside one of these calls — an event or warnings
-     * listener issuing a query of its own while a repreparation is being
-     * handled — begins its own chain at zero instead of inheriting this one's
-     * depth and running out of repreparations early.
+     * @param int $repreparationDepth see {@see self::sendSyncRequest()}
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -413,7 +516,7 @@ final class RequestExecutor {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function sendSyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): Response\Response {
+    private function executeSyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): Response\Response {
 
         $this->deadlines->assertValidRequestTimeout($requestTimeoutInSeconds, 'syncRequest');
 
@@ -543,50 +646,5 @@ final class RequestExecutor {
         }
 
         return $response;
-    }
-
-    /**
-     * Put the connection's keyspace into a request that names none of its own.
-     *
-     * Done here rather than where the request was built, because whether it is
-     * needed at all depends on the negotiated protocol version and that is only
-     * settled once the connection is up — which, one line above every call to
-     * this, it now is.
-     *
-     * Only from v5: before that a keyspace is a property of the node's session,
-     * put there by the USE that {@see Session::connect()} sends, and the request
-     * option does not exist at all — attaching one would make the request
-     * unencodable.
-     *
-     * Which is why this takes one off rather than simply doing nothing wherever
-     * there is no default to apply: a request object sent once on a v5
-     * connection still carries the keyspace that send gave it. Below v5
-     * encoding it would fail outright, and on a v5 connection that has been
-     * moved off its keyspace it would quietly run the statement somewhere the
-     * connection no longer admits to being. Only a keyspace this driver put
-     * there is taken back; see {@see Request\Request::clearDefaultKeyspace()}.
-     *
-     * The request is modified in place, as {@see Request\Request::setStream()}
-     * and setVersion() already are: a request handed to the executor is the
-     * connection's to finish addressing.
-     *
-     * @throws \Cassandra\Exception\RequestException
-     */
-    private function applyDefaultKeyspace(Request\Request $request): void {
-
-        if ($this->session->getProtocolVersion()->value < ProtocolVersion::V5->value) {
-            $request->clearDefaultKeyspace();
-
-            return;
-        }
-
-        $keyspace = $this->session->getKeyspace();
-        if ($keyspace === '') {
-            $request->clearDefaultKeyspace();
-
-            return;
-        }
-
-        $request->applyDefaultKeyspace($keyspace);
     }
 }

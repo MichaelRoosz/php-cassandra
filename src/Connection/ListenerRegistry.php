@@ -40,11 +40,34 @@ use Throwable;
  * reason for the others not to hear about it. Only the first failure of a
  * notification is reported; the ones after it would be reporting the same frame
  * a second time.
+ *
+ * What is put aside belongs to the pass that put it there, which is what
+ * {@see self::beginPass()} and {@see self::endPass()} enforce — see
+ * {@see self::$deferredFailure}.
  */
 final class ListenerRegistry {
     /**
-     * The first listener failure of the notification in progress, kept until
+     * The first listener failure of the pass in progress, kept until
      * {@see self::throwDeferred()} reports it.
+     *
+     * Scoped to a pass rather than simply left here until something asks,
+     * because a pass does not always get to ask. Every path that notifies
+     * listeners calls throwDeferred() once its own bookkeeping is complete, but
+     * that call is only reached if the bookkeeping got there: handling the very
+     * frame whose listeners ran can fail on its own — the repreparation limit
+     * above all, see {@see ResponseDispatcher::MAX_REPREPARATIONS} — and then
+     * the pass unwinds with an exception of its own and never reports what it
+     * deferred. Left standing, that failure would be thrown by the next pass
+     * that does reach throwDeferred(), telling a caller whose request had
+     * nothing to do with it that a listener threw.
+     *
+     * So a pass takes custody of the field for its duration and gives it back
+     * as it leaves ({@see self::beginPass()}, {@see self::endPass()}), which
+     * settles both halves of it: a pass that unwinds abnormally discards only
+     * what it deferred itself — its caller is already being told about a real
+     * failure — and a pass nested inside another (a listener issuing a request
+     * of its own, a repreparation reading its own answer) can neither see nor
+     * clear the failure the outer pass is still going to report.
      */
     private ?ConnectionException $deferredFailure = null;
 
@@ -57,6 +80,35 @@ final class ListenerRegistry {
      * @var array<WarningsListener> $warningsListeners
      */
     private array $warningsListeners = [];
+
+    /**
+     * Begin a pass that may notify listeners, taking custody of what is put
+     * aside for its duration; see {@see self::$deferredFailure}.
+     *
+     * The return value is the outer pass's own deferred failure, which the
+     * caller hands back to {@see self::endPass()} and is not otherwise to be
+     * looked at.
+     */
+    public function beginPass(): ?ConnectionException {
+
+        $outerFailure = $this->deferredFailure;
+        $this->deferredFailure = null;
+
+        return $outerFailure;
+    }
+
+    /**
+     * End the pass begun by {@see self::beginPass()}, discarding anything it
+     * deferred and never reported, and giving the outer pass its own back.
+     *
+     * Must run however the pass ends, so it belongs in a finally. Where the
+     * pass reported its failure the discard is a no-op — {@see self::throwDeferred()}
+     * clears the field before it throws.
+     */
+    public function endPass(?ConnectionException $outerFailure): void {
+
+        $this->deferredFailure = $outerFailure;
+    }
 
     public function notifyEvent(Event $event): void {
 
@@ -99,8 +151,9 @@ final class ListenerRegistry {
      * Called by every path that notifies listeners, once that path has finished
      * what the frame required of it — the statement resolved, the stream id
      * disposed of — so that raising this can no longer strand anything. Nothing
-     * accumulates across calls: a notification and the report of its failure are
-     * always in the same pass.
+     * accumulates across calls: what is reported here was deferred by the pass
+     * that is asking, which {@see self::beginPass()} and {@see self::endPass()}
+     * are what make true.
      *
      * @throws \Cassandra\Exception\ConnectionException
      */
