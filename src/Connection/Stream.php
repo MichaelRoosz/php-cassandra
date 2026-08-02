@@ -108,8 +108,6 @@ final class Stream extends NodeImplementation implements IoNode {
             ]
         );
 
-        $flags = $this->config->persistent ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
-
         // If ssl options were configured but the host carries no explicit
         // scheme, connect via TLS — otherwise the ssl options would be
         // silently ignored and the connection would be plaintext.
@@ -117,6 +115,17 @@ final class Stream extends NodeImplementation implements IoNode {
         if (!str_contains($host, '://')) {
             $host = ($this->config->sslOptions !== [] ? 'tls://' : 'tcp://') . $host;
         }
+
+        // A port may only be appended to an IPv6 literal after enclosing the
+        // address in brackets. Accept bare and already bracketed literals,
+        // with or without an explicit transport scheme.
+        $hostParts = explode('://', $host, 2);
+        $scheme = $hostParts[0];
+        $address = $hostParts[1] ?? '';
+        if (str_contains($address, ':') && !str_starts_with($address, '[')) {
+            $address = '[' . $address . ']';
+        }
+        $host = $scheme . '://' . $address;
 
         // Suppressed because the failure is reported through $errorCode and
         // $errorMessage below, which is what those by-reference parameters are
@@ -127,7 +136,7 @@ final class Stream extends NodeImplementation implements IoNode {
             error_code: $errorCode,
             error_message: $errorMessage,
             timeout: $this->config->connectTimeoutInSeconds,
-            flags: $flags,
+            flags: STREAM_CLIENT_CONNECT,
             context: $context
         );
 
@@ -150,7 +159,6 @@ final class Stream extends NodeImplementation implements IoNode {
                     'port' => $this->config->port,
                     'operation' => 'connect',
                     'connect_timeout_seconds' => $this->config->connectTimeoutInSeconds,
-                    'persistent' => $this->config->persistent,
                     'ssl_options' => $this->config->sslOptions,
                     'system_error_code' => $errorCode,
                 ]

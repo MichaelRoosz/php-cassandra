@@ -38,8 +38,6 @@ final class StreamNodeConfig extends NodeConfig {
          */
         public readonly float $timeoutInSeconds = 15,
 
-        public readonly bool $persistent = false,
-
         /**
          * @var array<string,mixed> $sslOptions
          * see https://www.php.net/manual/en/context.ssl.php
