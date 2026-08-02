@@ -98,6 +98,7 @@ final class ListCollection extends ValueReadableWithoutLength {
 
         $list = [];
         $count = $stream->readInt();
+        self::assertCountFits($count, $stream->remainingLength());
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
             $list[] = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
@@ -162,5 +163,19 @@ final class ListCollection extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function assertCountFits(int $count, int $remainingLength): void {
+        $maximumCount = intdiv(max(0, $remainingLength), 4);
+        if ($count < 0 || $count > $maximumCount) {
+            throw new ValueException(
+                'List element count does not fit in the available value data',
+                ExceptionCode::VALUE_LIST_INVALID_VALUE_TYPE->value,
+                ['count' => $count, 'maximum_count' => $maximumCount]
+            );
+        }
     }
 }

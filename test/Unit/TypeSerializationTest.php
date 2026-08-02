@@ -40,6 +40,27 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame(false, Value\Boolean::fromBinary('')->getValue());
     }
 
+    public function testCollectionsRejectCountsThatDoNotFitTheirBodies(): void {
+        $cases = [
+            [Value\ListCollection::class, ['type' => Type::LIST, 'valueType' => Type::INT]],
+            [Value\SetCollection::class, ['type' => Type::SET, 'valueType' => Type::INT]],
+            [Value\MapCollection::class, ['type' => Type::MAP, 'keyType' => Type::INT, 'valueType' => Type::INT]],
+        ];
+
+        foreach ($cases as [$class, $definition]) {
+            $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition($definition);
+
+            foreach ([pack('N', -1), pack('N', 2)] as $binary) {
+                try {
+                    $class::fromBinary($binary, $typeInfo);
+                    $this->fail('expected malformed ' . $definition['type']->name . ' count to be refused');
+                } catch (ValueException) {
+                    $this->addToAssertionCount(1);
+                }
+            }
+        }
+    }
+
     public function testCounter(): void {
 
         foreach ([0, 1, -1, 1000, -1000, PHP_INT_MAX, PHP_INT_MIN] as $v) {
@@ -97,6 +118,17 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame('2024-01-01', Value\Date::fromValue('2024-01-01')->asString());
         $this->assertSame('+10000-07-10', Value\Date::fromValue('+10000-07-10')->asString());
         $this->assertSame('-0001-01-01', Value\Date::fromValue('-0001-01-01')->asString());
+    }
+
+    public function testDateRejectsInvalidCalendarFields(): void {
+        foreach (['2023-02-30', '2023-00-01'] as $date) {
+            try {
+                Value\Date::fromValue($date);
+                $this->fail('expected ' . $date . ' to be refused');
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, $e->getCode());
+            }
+        }
     }
 
     public function testDecimal(): void {
@@ -707,6 +739,19 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
         $timeInMs = 1674341495053;
         $this->assertSame($timeInMs, Value\Timestamp::fromBinary((Value\Timestamp::fromValue($timeInMs))->getBinary())->asInteger());
+    }
+
+    public function testTimestampRejectsInvalidOrNonIsoStrings(): void {
+        foreach (['2023-02-30', 'next Thursday'] as $timestamp) {
+            try {
+                Value\Timestamp::fromValue($timestamp);
+                $this->fail('expected ' . $timestamp . ' to be refused');
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, $e->getCode());
+            }
+        }
+
+        $this->assertSame(1296705900000, Value\Timestamp::fromValue('2011-02-03T04:05:00.000+0000')->asInteger());
     }
 
     public function testTimeuuid(): void {

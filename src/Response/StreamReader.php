@@ -350,6 +350,13 @@ final class StreamReader {
     final public function readReasonMap(): array {
         $map = [];
         $count = $this->readInt();
+        if ($count < 0) {
+            throw new ResponseException(
+                message: 'Invalid reason map count',
+                code: ExceptionCode::RESPONSE_SR_INVALID_REASON_MAP_COUNT->value,
+                context: ['method' => __METHOD__, 'count' => $count, 'offset' => $this->pos()]
+            );
+        }
         for ($i = 0; $i < $count; $i++) {
             $key = $this->readInetAddr();
             $value = $this->readShort();
@@ -654,14 +661,14 @@ final class StreamReader {
                 // directly. Elements recurse through readValue, so they take
                 // these fast paths too.
                 if ($typeInfo instanceof ListCollectionInfo) {
-                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig);
+                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig, $length);
                 }
 
                 break;
 
             case Type::SET:
                 if ($typeInfo instanceof SetCollectionInfo) {
-                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig);
+                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig, $length);
                 }
 
                 break;
@@ -707,8 +714,27 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
      */
-    private function readCollectionValues(TypeInfo $elementType, ValueEncodeConfig $valueEncodeConfig): array {
+    private function readCollectionValues(TypeInfo $elementType, ValueEncodeConfig $valueEncodeConfig, int $cellLength): array {
         $count = $this->readInt();
+
+        // Every element has at least its four-byte length prefix. Refusing an
+        // impossible count before growing the PHP array prevents a hostile frame
+        // from turning a compact sequence of nulls into an enormous allocation.
+        $available = min($this->remainingLength(), max(0, $cellLength - 4));
+        $maximumCount = intdiv($available, 4);
+        if ($count < 0 || $count > $maximumCount) {
+            throw new ResponseException(
+                message: 'Collection count does not fit in the declared value length',
+                code: ExceptionCode::RESPONSE_SR_INVALID_COLLECTION_COUNT->value,
+                context: [
+                    'method' => __METHOD__,
+                    'count' => $count,
+                    'maximum_count' => $maximumCount,
+                    'cell_length' => $cellLength,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
 
         $values = [];
         for ($i = 0; $i < $count; ++$i) {

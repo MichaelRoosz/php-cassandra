@@ -97,6 +97,14 @@ final class SetCollection extends ValueReadableWithoutLength {
 
         $set = [];
         $count = $stream->readInt();
+        $maximumCount = intdiv(max(0, $stream->remainingLength()), 4);
+        if ($count < 0 || $count > $maximumCount) {
+            throw new ValueException(
+                'Set element count does not fit in the available value data',
+                ExceptionCode::VALUE_SET_INVALID_VALUE_TYPE->value,
+                ['count' => $count, 'maximum_count' => $maximumCount]
+            );
+        }
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
             $set[] = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);

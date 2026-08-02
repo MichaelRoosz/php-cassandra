@@ -99,6 +99,14 @@ final class MapCollection extends ValueReadableWithoutLength {
 
         $map = [];
         $count = $stream->readInt();
+        $maximumCount = intdiv(max(0, $stream->remainingLength()), 8);
+        if ($count < 0 || $count > $maximumCount) {
+            throw new ValueException(
+                'Map entry count does not fit in the available value data',
+                ExceptionCode::VALUE_MAP_INVALID_VALUE_TYPE->value,
+                ['count' => $count, 'maximum_count' => $maximumCount]
+            );
+        }
 
         /** @psalm-suppress MixedAssignment */
         for ($i = 0; $i < $count; ++$i) {

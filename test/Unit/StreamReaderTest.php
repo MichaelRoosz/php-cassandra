@@ -382,6 +382,16 @@ final class StreamReaderTest extends AbstractUnitTestCase {
             $this->assertSame($n, $reader->readUnsignedVInt64());
         }
     }
+    public function testReasonMapRejectsNegativeCount(): void {
+        $reader = new StreamReader(pack('N', -1));
+
+        try {
+            $reader->readReasonMap();
+            $this->fail('expected negative reason-map count to be refused');
+        } catch (ResponseException $e) {
+            $this->assertSame(ExceptionCode::RESPONSE_SR_INVALID_REASON_MAP_COUNT->value, $e->getCode());
+        }
+    }
 
     public function testUuidEncodeOptions(): void {
         $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
