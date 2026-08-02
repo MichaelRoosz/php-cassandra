@@ -100,6 +100,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->assertSame(5, $encoded['userid']->getValue());
     }
 
+    public function testCaseCollidingNamedValuesThrow(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            ['UserId' => 5, 'userid' => 6],
+            [self::columnInfo('userid')],
+            namesForValues: true
+        );
+    }
+
     public function testDuplicateNamedBindMarkerThrows(): void {
         // Two markers reported under the same name would otherwise collapse into
         // a single value entry, silently sending fewer values than the statement
@@ -134,6 +145,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
 
         $this->assertSame(['userid' => null], $encoded);
+    }
+
+    public function testExtraPositionalBindValueThrows(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_EXTRA_BIND_VALUE->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            [5, 6],
+            [self::columnInfo('a')],
+            namesForValues: false
+        );
     }
 
     public function testMissingNamedBindValueThrows(): void {
@@ -289,6 +311,31 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_INT_OUT_OF_INT32_RANGE->value);
 
         $request->getBody();
+    }
+
+    public function testQueryRejectsOversizedKeyspace(): void {
+        $request = new Query(
+            query: 'SELECT * FROM t',
+            consistency: Consistency::ONE,
+            options: new QueryOptions(keyspace: str_repeat('k', 65536))
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_FIELD_TOO_LONG->value);
+
+        $request->getBody();
+    }
+
+    public function testUnknownNamedBindValueThrows(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_EXTRA_BIND_VALUE->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            ['a' => 5, 'unused' => 6],
+            [self::columnInfo('a')],
+            namesForValues: true
+        );
     }
 
     private static function columnInfo(string $name): \Cassandra\Response\Result\ColumnInfo {

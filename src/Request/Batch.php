@@ -293,6 +293,7 @@ final class Batch extends Request {
 
         if ($options->keyspace !== null) {
             if ($version->value >= ProtocolVersion::V5->value) {
+                self::assertShortString($options->keyspace, 'batch keyspace');
                 $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {

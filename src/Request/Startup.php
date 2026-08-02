@@ -32,10 +32,16 @@ final class Startup extends Request {
         parent::__construct(Opcode::REQUEST_STARTUP);
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     #[\Override]
     public function getBody(): string {
+        self::assertShortCount(count($this->options), 'startup options');
         $body = pack('n', count($this->options));
         foreach ($this->options as $name => $value) {
+            self::assertShortString($name, 'startup option name');
+            self::assertShortString($value, 'startup option value');
             $body .= pack('n', strlen($name)) . $name;
             $body .= pack('n', strlen($value)) . $value;
         }

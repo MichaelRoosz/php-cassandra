@@ -99,6 +99,30 @@ final class ConnectionOptions {
          */
         public readonly float $heartbeatTimeoutInSeconds = 5,
     ) {
+        if ($allowedProtocolVersions === []) {
+            throw new ConnectionException(
+                'Invalid protocol versions: at least one allowed version is required',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value
+            );
+        }
+
+        foreach ($allowedProtocolVersions as $version) {
+            if (!$version instanceof ProtocolVersion) {
+                throw new ConnectionException(
+                    'Invalid protocol versions: every allowed version must be a ProtocolVersion',
+                    ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                    ['invalid_type' => get_debug_type($version)]
+                );
+            }
+        }
+
+        if (!in_array($initialProtocolVersion, $allowedProtocolVersions, true)) {
+            throw new ConnectionException(
+                'Invalid initial protocol version: it must be included in the allowed versions',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                ['initial_protocol_version' => $initialProtocolVersion->inOptionFormat()]
+            );
+        }
         // Rejected rather than clamped, because every non-positive value here
         // means something the caller cannot have wanted: a request that is out
         // of time before it is sent, a probe on every single read, or a

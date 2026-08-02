@@ -93,9 +93,12 @@ abstract class Request implements Frame, Stringable {
             if ($this->payload === null) {
                 $this->flags &= ~Flag::CUSTOM_PAYLOAD;
             } else {
-                $payloadData = pack('n', count($this->payload));
+                $payload = $this->payload;
+                self::assertShortCount(count($payload), 'custom payload');
+                $payloadData = pack('n', count($payload));
 
-                foreach ($this->payload as $key => $val) {
+                foreach ($payload as $key => $val) {
+                    self::assertShortString($key, 'custom payload key');
                     $payloadData .= pack('n', strlen($key)) . $key;
                     $payloadData .= pack('N', strlen($val)) . $val;
                 }
@@ -284,6 +287,33 @@ abstract class Request implements Frame, Stringable {
     }
 
     /**
+     * @throws \Cassandra\Exception\RequestException
+     */
+    protected static function assertShortCount(int $count, string $field): void {
+        if ($count > self::MAX_SHORT_COUNT) {
+            throw new RequestException(
+                message: ucfirst($field) . ' has too many entries for the protocol short-count encoding',
+                code: ExceptionCode::REQUEST_TOO_MANY_MAP_ENTRIES->value,
+                context: ['field' => $field, 'count' => $count, 'maximum_count' => self::MAX_SHORT_COUNT]
+            );
+        }
+    }
+
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
+    protected static function assertShortString(string $value, string $field): void {
+        $length = strlen($value);
+        if ($length > self::MAX_SHORT_COUNT) {
+            throw new RequestException(
+                message: ucfirst($field) . ' is too long for the protocol short-string encoding',
+                code: ExceptionCode::REQUEST_FIELD_TOO_LONG->value,
+                context: ['field' => $field, 'length' => $length, 'maximum_length' => self::MAX_SHORT_COUNT]
+            );
+        }
+    }
+
+    /**
      * Whether the keyspace this request carries is one the connection put there,
      * see {@see self::$keyspaceIsConnectionDefault}. What
      * {@see self::clearDefaultKeyspace()} is allowed to take back.
@@ -344,6 +374,7 @@ abstract class Request implements Frame, Stringable {
 
         if ($options->keyspace !== null) {
             if ($version->value >= ProtocolVersion::V5->value) {
+                self::assertShortString($options->keyspace, 'query keyspace');
                 $flags |= QueryFlag::WITH_KEYSPACE;
                 $optional .= pack('n', strlen($options->keyspace)) . $options->keyspace;
             } else {
@@ -505,7 +536,9 @@ abstract class Request implements Frame, Stringable {
                     // identifiers are case-sensitive. User-supplied names are
                     // lowercased, matching how the server stores unquoted
                     // identifiers.
-                    $valuesBinary .= pack('n', strlen($name)) . ($namesAreExact ? $name : strtolower($name));
+                    $encodedName = $namesAreExact ? $name : strtolower($name);
+                    self::assertShortString($encodedName, 'bound value name');
+                    $valuesBinary .= pack('n', strlen($encodedName)) . $encodedName;
                 } elseif ($namesAreExact) {
                     // The names came from the server's bind marker metadata, so
                     // this is one of them and not a caller's mistake: PHP turns
@@ -522,6 +555,7 @@ abstract class Request implements Frame, Stringable {
                     // the check below, where an int key really does mean a
                     // sequential array was passed with names_for_values on.
                     $name = (string) $name;
+                    self::assertShortString($name, 'bound value name');
                     $valuesBinary .= pack('n', strlen($name)) . $name;
                 } else {
                     throw new RequestException(
@@ -577,16 +611,27 @@ abstract class Request implements Frame, Stringable {
         // server, so a user-supplied key like "userId" must still bind to the
         // marker "userid".
         $valuesByLowercaseName = [];
+        $originalNameByLowercaseName = [];
         if ($namesForValues) {
             /** @psalm-suppress MixedAssignment */
             foreach ($values as $name => $value) {
                 if (is_string($name)) {
-                    $valuesByLowercaseName[strtolower($name)] = $value;
+                    $lowercaseName = strtolower($name);
+                    if (isset($originalNameByLowercaseName[$lowercaseName]) && $originalNameByLowercaseName[$lowercaseName] !== $name) {
+                        throw new RequestException(
+                            message: 'Multiple supplied value names differ only by case and cannot be bound unambiguously',
+                            code: ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value,
+                            context: ['stage' => 'values_encoding', 'names' => [$originalNameByLowercaseName[$lowercaseName], $name]]
+                        );
+                    }
+                    $originalNameByLowercaseName[$lowercaseName] = $name;
+                    $valuesByLowercaseName[$lowercaseName] = $value;
                 }
             }
         }
 
         $encodedValues = [];
+        $usedValueKeys = [];
         foreach ($bindMarkers as $index => $bindMarker) {
 
             if ($namesForValues) {
@@ -611,9 +656,11 @@ abstract class Request implements Frame, Stringable {
                 if (array_key_exists($key, $values)) {
                     /** @psalm-suppress MixedAssignment */
                     $value = $values[$key];
+                    $usedValueKeys[$key] = true;
                 } elseif (array_key_exists(strtolower($key), $valuesByLowercaseName)) {
                     /** @psalm-suppress MixedAssignment */
                     $value = $valuesByLowercaseName[strtolower($key)];
+                    $usedValueKeys[$originalNameByLowercaseName[strtolower($key)]] = true;
                 } else {
                     throw $this->missingBindValueException($key);
                 }
@@ -626,6 +673,7 @@ abstract class Request implements Frame, Stringable {
 
                 /** @psalm-suppress MixedAssignment */
                 $value = $values[$key];
+                $usedValueKeys[$key] = true;
             }
 
             if (
@@ -637,6 +685,15 @@ abstract class Request implements Frame, Stringable {
             } else {
                 $encodedValues[$key] = ValueFactory::getValueObjectFromValue($bindMarker->type, $value);
             }
+        }
+
+        $extraKeys = array_values(array_diff(array_keys($values), array_keys($usedValueKeys)));
+        if ($extraKeys !== []) {
+            throw new RequestException(
+                message: 'Values were provided that do not match any bind marker',
+                code: ExceptionCode::REQUEST_VALUES_EXTRA_BIND_VALUE->value,
+                context: ['stage' => 'values_encoding', 'extra_bind_values' => $extraKeys]
+            );
         }
 
         return $encodedValues;

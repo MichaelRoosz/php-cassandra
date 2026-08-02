@@ -64,10 +64,12 @@ final class Prepare extends Request {
 
         $body = pack('N', strlen($this->query)) . $this->query;
 
-        if ($this->options->keyspace !== null) {
+        $keyspace = $this->options->keyspace;
+        if ($keyspace !== null) {
             if ($this->version->value >= ProtocolVersion::V5->value) {
+                self::assertShortString($keyspace, 'prepare keyspace');
                 $flags |= PrepareFlag::WITH_KEYSPACE;
-                $optional .= pack('n', strlen($this->options->keyspace)) . $this->options->keyspace;
+                $optional .= pack('n', strlen($keyspace)) . $keyspace;
             } else {
                 throw new RequestException(
                     message: 'Server protocol version does not support request option "keyspace"',
