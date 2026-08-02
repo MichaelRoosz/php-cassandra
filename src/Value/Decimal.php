@@ -24,15 +24,24 @@ final class Decimal extends ValueReadableWithLength {
      */
     private const MAX_EXPONENT_MAGNITUDE = 100_000;
     /**
-     * Upper bound on the absolute scale accepted by {@see fromBinary()}. The
-     * scale is a signed int32 (so a peer may declare a magnitude up to ~2.1
-     * billion), and decoding expands the value into a plain decimal string whose
-     * length grows with the scale (padding the fraction with leading zeros, or
-     * appending trailing zeros for a negative scale). An unbounded scale
-     * therefore lets a peer force a multi-gigabyte allocation from a handful of
-     * bytes. This limit caps a single cell's expansion at ~100 KB while leaving
-     * an enormous margin over any real decimal (real scales are at most a few
-     * hundred), so a larger magnitude is treated as corrupt/hostile input.
+     * Upper bound on the absolute scale this class will carry, in either
+     * direction.
+     *
+     * On the way in ({@see fromBinary()}) the scale is a signed int32, so a peer
+     * may declare a magnitude up to ~2.1 billion, and decoding expands the value
+     * into a plain decimal string whose length grows with it (padding the
+     * fraction with leading zeros, or appending trailing zeros for a negative
+     * scale). An unbounded scale therefore lets a peer force a multi-gigabyte
+     * allocation from a handful of bytes. This limit caps a single cell's
+     * expansion at ~100 KB while leaving an enormous margin over any real
+     * decimal (real scales are at most a few hundred), so a larger magnitude is
+     * treated as corrupt/hostile input.
+     *
+     * On the way out it is applied by {@see self::assertScaleInRange()}, so that
+     * the two sides agree: {@see self::getBinary()} takes the scale straight
+     * from the fraction it was given, and without the same bound this class
+     * would encode values it then refuses to decode — a decimal that can be
+     * written to a node and never read back from one.
      */
     private const MAX_SCALE_MAGNITUDE = 100_000;
 
@@ -55,17 +64,22 @@ final class Decimal extends ValueReadableWithLength {
                 ]);
             }
 
-            $this->value = self::floatToDecimalString($value);
-
-            return;
+            $decimal = self::floatToDecimalString($value);
+        } else {
+            // String (or int) input. is_numeric() also accepts forms the varint
+            // wire encoding cannot express verbatim: scientific notation ("1e5"),
+            // a leading "+", and surrounding whitespace. Normalize those to a plain
+            // decimal string so a value accepted here can always be encoded by
+            // getBinary(); plain decimals are kept verbatim (see below).
+            $decimal = self::normalizeNumericString((string) $value);
         }
 
-        // String (or int) input. is_numeric() also accepts forms the varint
-        // wire encoding cannot express verbatim: scientific notation ("1e5"),
-        // a leading "+", and surrounding whitespace. Normalize those to a plain
-        // decimal string so a value accepted here can always be encoded by
-        // getBinary(); plain decimals are kept verbatim (see below).
-        $this->value = self::normalizeNumericString((string) $value);
+        // Refused here rather than at getBinary(), so that a scale this class
+        // could not read back is reported against the value that named it
+        // instead of at the moment it is sent.
+        self::assertScaleInRange($decimal);
+
+        $this->value = $decimal;
     }
 
     /**
@@ -200,6 +214,41 @@ final class Decimal extends ValueReadableWithLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
+    }
+
+    /**
+     * Refuse a scale {@see self::fromBinary()} would not read back; see
+     * {@see self::MAX_SCALE_MAGNITUDE}.
+     *
+     * Only a positive scale can be reached from here — a plain decimal string
+     * has as many fraction digits as it has, and nothing on the encode side
+     * produces a negative scale — so this is the encode-side half of the bound
+     * fromBinary() applies to both signs. The two meet exactly: a value decoded
+     * at the limit is constructed with a fraction of the same length and passes
+     * this on its way back out.
+     *
+     * @param string $decimal a plain decimal string, as
+     * {@see self::normalizeNumericString()} and {@see self::floatToDecimalString()}
+     * produce
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function assertScaleInRange(string $decimal): void {
+
+        $pointPosition = strpos($decimal, '.');
+        if ($pointPosition === false) {
+            return;
+        }
+
+        $scale = strlen($decimal) - $pointPosition - 1;
+        if ($scale <= self::MAX_SCALE_MAGNITUDE) {
+            return;
+        }
+
+        throw new ValueException('Decimal scale is outside of the supported range', ExceptionCode::VALUE_DECIMAL_SCALE_OUT_OF_RANGE->value, [
+            'scale' => $scale,
+            'max_magnitude' => self::MAX_SCALE_MAGNITUDE,
+        ]);
     }
 
     /**
