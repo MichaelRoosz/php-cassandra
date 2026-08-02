@@ -21,6 +21,7 @@ use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\PrepareOptions;
 use Cassandra\Request\Options\QueryOptions;
 use ReflectionProperty;
+use ReflectionMethod;
 
 /**
  * The send/receive timeouts of both transports are derived from their node
@@ -239,6 +240,30 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
         new Socket(new SocketNodeConfig(connectTimeoutInSeconds: 0));
     }
 
+    public function testSocketOptionNativeErrorIsWrapped(): void {
+        if (!socket_create_pair(AF_UNIX, SOCK_STREAM, 0, $pair)) {
+            $this->fail('could not create a local socket pair');
+        }
+
+        try {
+            $method = new ReflectionMethod(Socket::class, 'setSocketOption');
+            $method->invoke(
+                new Socket(new SocketNodeConfig()),
+                $pair[0],
+                SOL_SOCKET,
+                -999,
+                1,
+            );
+            $this->fail('Expected a SocketException');
+        } catch (SocketException $e) {
+            $this->assertSame(\Cassandra\Exception\ExceptionCode::SOCKET_SET_OPTION_FAILED->value, $e->getCode());
+            $this->assertInstanceOf(\ErrorException::class, $e->getPrevious());
+        } finally {
+            socket_close($pair[0]);
+            socket_close($pair[1]);
+        }
+    }
+
     public function testSocketSubSecondTimeoutIsNotRoundedAway(): void {
         [$sendTimeout, $receiveTimeout] = $this->getTimeouts(new SocketNodeConfig(socketOptions: [
             SO_SNDTIMEO => ['sec' => 0, 'usec' => 200000],
@@ -306,6 +331,23 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
 
         $this->assertSame(INF, $sendTimeout);
         $this->assertSame(INF, $receiveTimeout);
+    }
+
+    public function testUnsupportedStreamTimeoutIsReported(): void {
+        $stream = fopen('php://memory', 'r+');
+        if ($stream === false) {
+            $this->fail('could not create a memory stream');
+        }
+
+        try {
+            $method = new ReflectionMethod(Stream::class, 'setStreamTimeout');
+            $method->invoke(new Stream(new StreamNodeConfig()), $stream, 1, 0);
+            $this->fail('Expected a StreamException');
+        } catch (StreamException $e) {
+            $this->assertSame(\Cassandra\Exception\ExceptionCode::STREAM_SET_TIMEOUT_FAILED->value, $e->getCode());
+        } finally {
+            fclose($stream);
+        }
     }
 
     /**

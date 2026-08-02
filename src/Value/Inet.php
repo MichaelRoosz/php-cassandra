@@ -102,6 +102,15 @@ final class Inet extends ValueReadableWithLength {
      */
     #[\Override]
     public function getBinary(): string {
+        // inet_pton() throws a native ValueError for null bytes rather than
+        // reporting an invalid address with false. Validate that exceptional
+        // case directly so no native exception can cross the value boundary.
+        if (str_contains($this->value, "\0")) {
+            throw new ValueException('Cannot convert inet string to binary', ExceptionCode::VALUE_INET_TO_BINARY_FAILED->value, [
+                'value' => $this->value,
+            ]);
+        }
+
         $binary = inet_pton($this->value);
 
         if ($binary === false) {

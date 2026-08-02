@@ -461,6 +461,16 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame($ipv6, Value\Inet::fromBinary((Value\Inet::fromValue($ipv6))->getBinary())->getValue());
     }
 
+    public function testInetWrapsNativeEncodingErrors(): void {
+        try {
+            Value\Inet::fromValue("bad\0address")->getBinary();
+            $this->fail('Expected a ValueException');
+        } catch (ValueException $e) {
+            $this->assertSame(ExceptionCode::VALUE_INET_TO_BINARY_FAILED->value, $e->getCode());
+            $this->assertNull($e->getPrevious());
+        }
+    }
+
     public function testInteger(): void {
         $int1 = 234355434;
         $this->assertSame($int1, Value\Int32::fromBinary((Value\Int32::fromValue($int1))->getBinary())->getValue());

@@ -7,6 +7,7 @@ namespace Cassandra\Connection;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StreamException;
 use Cassandra\Request\Request;
+use ErrorException;
 
 final class Stream extends NodeImplementation implements IoNode {
     /**
@@ -186,7 +187,7 @@ final class Stream extends NodeImplementation implements IoNode {
         // Only relevant when the stream could not be switched to non-blocking
         // mode; the non-blocking paths enforce the timeouts via stream_select().
         [$timeoutSeconds, $timeoutMicroseconds] = $this->splitTimeout($this->receiveTimeout);
-        stream_set_timeout(
+        $this->setStreamTimeout(
             $stream,
             $timeoutSeconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,
             $timeoutMicroseconds
@@ -272,7 +273,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
         $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
 
-        $readData = fread($stream, $readLength);
+        $readData = @fread($stream, $readLength);
         if ($readData === false) {
 
             if (feof($stream)) {
@@ -503,6 +504,8 @@ final class Stream extends NodeImplementation implements IoNode {
      * same stall window.
      *
      * @param resource $stream
+     *
+     * @throws \Cassandra\Exception\StreamException
      */
     private function applyReceiveTimeout($stream, ?float $readDeadline): ?float {
 
@@ -526,7 +529,7 @@ final class Stream extends NodeImplementation implements IoNode {
             return null;
         }
 
-        stream_set_timeout(
+        $this->setStreamTimeout(
             $stream,
             $seconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,
             $microseconds
@@ -804,6 +807,52 @@ final class Stream extends NodeImplementation implements IoNode {
         }
 
         return true;
+    }
+
+    /**
+     * Apply a stream timeout without allowing a warning, native exception or
+     * Error raised by PHP's stream implementation to cross the transport
+     * boundary.
+     *
+     * @param resource $stream
+     *
+     * @throws \Cassandra\Exception\StreamException
+     */
+    private function setStreamTimeout($stream, int $seconds, int $microseconds): void {
+        set_error_handler(function (int $severity, string $message, string $file, int $line): never {
+            $previous = new ErrorException($message, 0, $severity, $file, $line);
+
+            throw new StreamException(
+                message: 'Failed to set stream timeout',
+                code: ExceptionCode::STREAM_SET_TIMEOUT_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'stream_set_timeout',
+                ],
+                previous: $previous,
+            );
+        });
+
+        try {
+            $success = stream_set_timeout($stream, $seconds, $microseconds);
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($success) {
+            return;
+        }
+
+        throw new StreamException(
+            message: 'Failed to set stream timeout',
+            code: ExceptionCode::STREAM_SET_TIMEOUT_FAILED->value,
+            context: [
+                'host' => $this->config->host,
+                'port' => $this->config->port,
+                'operation' => 'stream_set_timeout',
+            ],
+        );
     }
 
 }

@@ -525,6 +525,8 @@ final class Socket extends NodeImplementation implements IoNode {
      * The option is only touched when the value actually changes, which spares
      * the syscall for the unbounded reads that keep asking for the same stall
      * window.
+     *
+     * @throws \Cassandra\Exception\SocketException
      */
     private function applyReceiveTimeout(?float $readDeadline): ?float {
 
@@ -554,7 +556,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
         // A null seconds value means "no timeout", which the socket option
         // spells as zero.
-        socket_set_option($this->socket, SOL_SOCKET, SO_RCVTIMEO, [
+        $this->setSocketOption($this->socket, SOL_SOCKET, SO_RCVTIMEO, [
             'sec' => $seconds ?? 0,
             'usec' => $seconds === null ? 0 : $microseconds,
         ]);
@@ -606,7 +608,7 @@ final class Socket extends NodeImplementation implements IoNode {
     }
 
     private function closeSocket(PhpSocket $socket, bool $shutdown): void {
-        socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
+        @socket_set_option($socket, SOL_SOCKET, SO_LINGER, [
             'l_onoff' => 1,
             'l_linger' => 1,
         ]);
