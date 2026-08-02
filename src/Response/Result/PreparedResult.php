@@ -99,8 +99,31 @@ class PreparedResult extends Result {
         $flags = $this->stream->readInt();
         $bindMarkersCount = $this->stream->readInt();
 
+        if ($bindMarkersCount < 0) {
+            throw new ResponseException(
+                'Invalid prepared metadata bind marker count',
+                ExceptionCode::RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT->value,
+                [
+                    'operation' => 'PreparedResult::readPrepareMetadata',
+                    'bind_markers_count' => $bindMarkersCount,
+                ]
+            );
+        }
+
         if ($this->getProtocolVersion()->value >= ProtocolVersion::V4->value) {
             $pkCount = $this->stream->readInt();
+
+            if ($pkCount < 0) {
+                throw new ResponseException(
+                    'Invalid prepared metadata partition key count',
+                    ExceptionCode::RESPONSE_PREPARED_INVALID_PK_COUNT->value,
+                    [
+                        'operation' => 'PreparedResult::readPrepareMetadata',
+                        'pk_count' => $pkCount,
+                    ]
+                );
+            }
+
             $pkIndex = [];
 
             if ($pkCount > 0) {

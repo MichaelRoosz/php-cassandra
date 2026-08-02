@@ -210,6 +210,17 @@ class Result extends Response implements IteratorAggregate {
         $flags = $this->stream->readInt();
         $columnsCount = $this->stream->readInt();
 
+        if ($columnsCount < 0) {
+            throw new ResponseException(
+                'Invalid result metadata column count',
+                ExceptionCode::RESPONSE_RES_INVALID_COLUMNS_COUNT->value,
+                [
+                    'operation' => 'Result::readRowsMetadata',
+                    'columns_count' => $columnsCount,
+                ]
+            );
+        }
+
         if ($flags & ResultFlag::ROWS_FLAG_HAS_MORE_PAGES) {
             $pagingState = $this->stream->readBytes();
         } else {

@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1392
+ * Next free code: 1395
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -126,8 +126,10 @@ enum ExceptionCode: int {
     case RESPONSE_EVENT_SCHEMA_CHANGE_INVALID_TYPE = 1093;
     case RESPONSE_EVENT_STATUS_CHANGE_INVALID_TYPE = 1095;
     case RESPONSE_EVENT_TOPOLOGY_CHANGE_INVALID_TYPE = 1096;
+    case RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT = 1393;
+    case RESPONSE_PREPARED_INVALID_PK_COUNT = 1394;
     case RESPONSE_PREPARED_UNEXPECTED_KIND = 1097;
-    // 1098 and 1099 belonged to ProgressiveStreamReader, which was removed.
+    case RESPONSE_RES_INVALID_COLUMNS_COUNT = 1392;
     case RESPONSE_RES_INVALID_KIND_VALUE = 1102;
     case RESPONSE_RES_NOT_PREPARED_RESULT = 1104;
     case RESPONSE_RES_NOT_ROWS_RESULT = 1105;

@@ -54,7 +54,12 @@ final class UDT extends ValueReadableWithoutLength {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+        return self::fromStream(
+            new StreamReader($binary),
+            length: strlen($binary),
+            typeInfo: $typeInfo,
+            valueEncodeConfig: $valueEncodeConfig
+        );
     }
 
     /**

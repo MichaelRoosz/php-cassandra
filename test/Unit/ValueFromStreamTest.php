@@ -83,6 +83,25 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testShortenedTupleAndUdtFromBinaryNullFillTrailingValues(): void {
+        $tupleType = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::TUPLE,
+            'valueTypes' => [Type::INT, Type::VARCHAR],
+        ]);
+        $tuple = Value\Tuple::fromBinary(pack('N', 4) . pack('N', 7), $tupleType);
+        $this->assertSame([7, null], $tuple->getValue());
+
+        $udtType = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::UDT,
+            'valueTypes' => [
+                'existing' => Type::INT,
+                'added_later' => Type::VARCHAR,
+            ],
+        ]);
+        $udt = Value\UDT::fromBinary(pack('N', 4) . pack('N', 7), $udtType);
+        $this->assertSame(['existing' => 7, 'added_later' => null], $udt->getValue());
+    }
+
     public function testSimpleScalarsFromStream(): void {
         // int
         foreach ([0, 1, -1, Value\Int32::VALUE_MAX, Value\Int32::VALUE_MIN] as $v) {
