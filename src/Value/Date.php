@@ -61,6 +61,15 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
             try {
                 $valueAsDate = new DateTimeImmutable($value, new DateTimeZone('UTC'));
+                $parseErrors = DateTimeImmutable::getLastErrors();
+                if ($parseErrors !== false && ($parseErrors['warning_count'] > 0 || $parseErrors['error_count'] > 0)) {
+                    throw new ValueException('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
+                        'value' => $value,
+                        'note' => 'The date contains invalid calendar fields',
+                    ]);
+                }
+            } catch (ValueException $e) {
+                throw $e;
             } catch (PhpException $e) {
                 throw new ValueException('Invalid date string format; expected "YYYY-MM-DD"', ExceptionCode::VALUE_DATE_INVALID_STRING_FORMAT->value, [
                     'value' => $value,
