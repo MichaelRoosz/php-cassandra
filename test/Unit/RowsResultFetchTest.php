@@ -110,6 +110,46 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $result->fetchKeyPair(0, 99);
     }
 
+    public function testGetIteratorWalksEveryRowAfterAPartialFetch(): void {
+        // getIterator() hands back a clone, which carries this result's fetch
+        // cursor as well as its reader. Putting only the reader back to the
+        // first row left the two disagreeing about where the caller had got to,
+        // and the iterator then stopped as many rows early as had been fetched —
+        // handing back false for each of them rather than the rows the reader
+        // was in fact positioned on.
+        $result = self::rowsResultWithOneColumn(Type::INT, [
+            pack('N', 7),
+            pack('N', 8),
+            pack('N', 9),
+        ]);
+
+        $this->assertSame(['col' => 7], $result->fetch());
+        $this->assertSame(['col' => 8], $result->fetch());
+
+        // Driven by hand rather than with foreach(), which calls rewind() of its
+        // own accord and so puts the two back in step whatever getIterator() did.
+        $iterator = $result->getIterator();
+
+        $rows = [];
+        while ($iterator->valid()) {
+            $rows[$iterator->key()] = $iterator->current();
+            $iterator->next();
+        }
+
+        $this->assertSame([['col' => 7], ['col' => 8], ['col' => 9]], $rows);
+
+        // And foreach() over the same result still walks all of it.
+        $rows = [];
+        $keys = [];
+        foreach ($result as $key => $row) {
+            $keys[] = $key;
+            $rows[] = $row;
+        }
+
+        $this->assertSame([0, 1, 2], $keys);
+        $this->assertSame([['col' => 7], ['col' => 8], ['col' => 9]], $rows);
+    }
+
     private static function encodeString(string $value): string {
         return pack('n', strlen($value)) . $value;
     }

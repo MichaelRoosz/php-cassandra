@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Exception\CompressionException as CompressionException;
+use Cassandra\Compression\Lz4Compressor;
 use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Exception\ExceptionCode;
 
 class Lz4DecompressorTest extends AbstractUnitTestCase {
+    private const MAGIC_LEGACY = 0x184C2102;
+
     public function testDecompressBlockThrowsOnIllegalOffset(): void {
         // Have some literals, then offset=0 -> illegal
         $token = chr((1 << 4) | 0x1); // literals=1, match nibble=1 (but we'll fail before using it)
@@ -97,5 +100,67 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         $dec = new Lz4Decompressor($input);
         $result = $dec->decompressBlock();
         $this->assertSame('hello', $result);
+    }
+
+    public function testDecompressLegacyFrameWithoutABlockIsRefused(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value);
+
+        (new Lz4Decompressor(pack('V', self::MAGIC_LEGACY)))->decompress();
+    }
+
+    public function testDecompressLegacyFrameWithSeveralBlocks(): void {
+        // A legacy frame carries a sequence of blocks with neither a length nor
+        // an end mark to say how many. Reading only the first and then looking
+        // for the next frame's magic number took the second block's size field
+        // for one and refused the rest of the input.
+        $first = str_repeat('alpha-', 500);
+        $second = str_repeat('bravo-', 500);
+
+        $this->assertSame(
+            $first . $second,
+            (new Lz4Decompressor(self::legacyFrame([$first, $second])))->decompress()
+        );
+
+        // One block still works, and so does a second frame after the first —
+        // the magic number that ends a frame must be left for decompress().
+        $this->assertSame(
+            $first,
+            (new Lz4Decompressor(self::legacyFrame([$first])))->decompress()
+        );
+
+        $this->assertSame(
+            $first . $second,
+            (new Lz4Decompressor(self::legacyFrame([$first]) . self::legacyFrame([$second])))->decompress()
+        );
+    }
+
+    public function testDecompressLegacyFrameWithTruncatedBlockIsRefused(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value);
+
+        (new Lz4Decompressor(pack('V', self::MAGIC_LEGACY) . pack('V', 9999) . 'short'))->decompress();
+    }
+
+    /**
+     * A pre-1.4 "legacy" frame: the magic number, then one length-prefixed raw
+     * LZ4 block per entry.
+     *
+     * @param array<string> $blocks the uncompressed content of each block
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    private static function legacyFrame(array $blocks): string {
+
+        $compressor = new Lz4Compressor();
+
+        $frame = pack('V', self::MAGIC_LEGACY);
+
+        foreach ($blocks as $block) {
+            $compressed = $compressor->compressBlock($block);
+            $frame .= pack('V', strlen($compressed)) . $compressed;
+        }
+
+        return $frame;
     }
 }

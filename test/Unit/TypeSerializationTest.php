@@ -6,6 +6,7 @@ namespace Cassandra\Test\Unit;
 
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ValueException;
+use Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Type;
 use Cassandra\Value;
 use Cassandra\ValueFactory;
@@ -451,6 +452,40 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testMapCollectionWithBooleanKeys(): void {
+        // A PHP array key is an int or a string and nothing else, so a boolean
+        // key is folded to 1/0 by PHP itself on the way in, and by
+        // MapCollection::fromStream() for the keys it decodes. Encoding has to
+        // spell it back out, or a map<boolean, …> could not be sent at all —
+        // neither one built here nor one read off the wire a moment earlier.
+        $keyDefinition = Type::BOOLEAN;
+        $valueDefinition = Type::VARCHAR;
+
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::MAP,
+            'keyType' => $keyDefinition,
+            'valueType' => $valueDefinition,
+        ]);
+
+        $binary = (Value\MapCollection::fromValue([true => 'yes', false => 'no'], $keyDefinition, $valueDefinition))->getBinary();
+
+        // count, then (len, key, len, value) per entry, the boolean keys being
+        // the one-byte 0x01 and 0x00 the type serializes to.
+        $this->assertSame(
+            '00000002' . '00000001' . '01' . '00000003' . bin2hex('yes')
+                      . '00000001' . '00' . '00000002' . bin2hex('no'),
+            bin2hex($binary)
+        );
+
+        $decoded = Value\MapCollection::fromBinary($binary, $typeInfo);
+
+        $this->assertSame([1 => 'yes', 0 => 'no'], $decoded->getValue());
+
+        // And a decoded map goes back out unchanged, which is what a read-modify-write
+        // of a map<boolean, …> column comes down to.
+        $this->assertSame(bin2hex($binary), bin2hex($decoded->getBinary()));
+    }
+
     public function testNested(): void {
         $value = [
             [
@@ -796,6 +831,75 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame("\xFF", (Value\Varint::fromValue(-1))->getBinary());
         $this->assertSame("\x80", (Value\Varint::fromValue(-128))->getBinary());
         $this->assertSame("\xFF\x7F", (Value\Varint::fromValue(-129))->getBinary());
+    }
+
+    public function testVarintNormalizesIntegerStrings(): void {
+        // Leading zeros and a sign on zero are spellings, not values. The wire
+        // encoding has no way to show them, so one kept on the PHP side would
+        // not survive a round trip through the node.
+        foreach ([
+            ['007', '7'],
+            ['-007', '-7'],
+            ['0000000000000000000', '0'],
+            ['-0000000000000000005', '-5'],
+            ['-0', '0'],
+            ['000000000000000000000000000000000000042', '42'],
+        ] as [$input, $expected]) {
+            $varint = Value\Varint::fromValue($input);
+
+            $this->assertSame($expected, $varint->getValue(), "value for input '{$input}'");
+            $this->assertSame(
+                $expected,
+                Value\Varint::fromBinary($varint->getBinary())->getValue(),
+                "roundtrip for input '{$input}'"
+            );
+        }
+    }
+
+    public function testVarintStringKeepsWholePhpIntRange(): void {
+        // The whole of PHP's int range is available from a string, not just the
+        // values below 10^18: a digit count that stays safely under the bound
+        // would have asInt() refuse a number that fits perfectly well, while the
+        // same value arriving from a node — eight bytes or fewer, so decoded as
+        // an int — came back without complaint.
+        foreach ([PHP_INT_MAX, PHP_INT_MIN, PHP_INT_MAX - 1, PHP_INT_MIN + 1, intdiv(PHP_INT_MAX, 10) * 9] as $value) {
+            $fromString = Value\Varint::fromValue((string) $value);
+
+            $this->assertSame($value, $fromString->asInt(), "asInt() for '{$value}'");
+            $this->assertSame(
+                (Value\Varint::fromValue($value))->getBinary(),
+                $fromString->getBinary(),
+                "binary for '{$value}'"
+            );
+        }
+
+        // One past each end stays a string, there being no int for it. Derived
+        // from the bounds rather than written out, so this says the same thing
+        // on a 32-bit build as on a 64-bit one.
+        $calculator = DecimalCalculator::get();
+
+        $tooLargeValues = [
+            $calculator->add1((string) PHP_INT_MAX),
+            '-' . $calculator->add1(substr((string) PHP_INT_MIN, 1)),
+        ];
+
+        foreach ($tooLargeValues as $tooLarge) {
+            $varint = Value\Varint::fromValue($tooLarge);
+
+            $this->assertSame($tooLarge, $varint->getValue(), "value for '{$tooLarge}'");
+            $this->assertSame(
+                $tooLarge,
+                Value\Varint::fromBinary($varint->getBinary())->getValue(),
+                "roundtrip for '{$tooLarge}'"
+            );
+
+            try {
+                $varint->asInt();
+                $this->fail("asInt() should refuse '{$tooLarge}'");
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_VARINT_OUT_OF_PHP_INT_RANGE->value, $e->getCode());
+            }
+        }
     }
 
     public function testVectorRejectsAssociativeValue(): void {
