@@ -220,19 +220,27 @@ final class Decimal extends ValueReadableWithLength {
      * Normalizes a numeric string to a plain decimal string.
      *
      * Plain decimal strings (optional leading "-", digits, optional fraction)
-     * are returned verbatim so an explicitly specified scale — trailing zeros
-     * such as in "1.50" — survives unchanged to the wire. Everything else that
-     * is_numeric() accepts (a leading "+", surrounding whitespace, scientific
-     * notation, or bare-point forms like ".5") is expanded so that a value
-     * accepted at construction can always be serialized by getBinary().
+     * keep their fraction verbatim, so an explicitly specified scale — trailing
+     * zeros such as in "1.50" — survives unchanged to the wire. Leading zeros of
+     * the integer part are dropped.
+     *
+     * Everything else that is_numeric() accepts (a leading "+", surrounding
+     * whitespace, scientific notation, or bare-point forms like ".5") is
+     * expanded so that a value accepted at construction can always be serialized
+     * by getBinary().
      *
      * @throws \Cassandra\Exception\ValueException
      */
     private static function normalizeNumericString(string $value): string {
         $value = trim($value);
 
-        if (preg_match('/^-?\d+(?:\.\d+)?$/', $value) === 1) {
-            return $value;
+        $matches = [];
+        if (preg_match('/^(?<sign>-?)(?<integer>\d+)(?<fraction>\.\d+)?$/', $value, $matches) === 1) {
+            $integerPart = ltrim($matches['integer'], '0');
+
+            return $matches['sign']
+                . ($integerPart === '' ? '0' : $integerPart)
+                . ($matches['fraction'] ?? '');
         }
 
         return self::scientificToDecimalString($value);
