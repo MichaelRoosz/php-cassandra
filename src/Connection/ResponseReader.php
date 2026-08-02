@@ -126,7 +126,7 @@ final class ResponseReader {
                     'Decompressed frame length does not match expected length',
                     ExceptionCode::CONNECTION_DECOMPRESSED_FRAME_LENGTH_MISMATCH->value,
                     [
-                        'expected_length' => $uncompressedLength,
+                        'expected_length' => $uncompressedLength[1],
                         'actual_length' => strlen($body),
                     ]
                 );
