@@ -12,6 +12,16 @@ class QueryOptions extends RequestOptions {
      */
     public function __construct(
         public readonly bool $autoPrepare = true,
+
+        /**
+         * How many rows the node puts in one page of the result, or null to
+         * leave it to the node's own default.
+         *
+         * Note that this driver applies a floor of 100: a smaller value — zero
+         * and negative ones included — is raised to 100 on its way to the wire
+         * rather than refused, so a caller asking for pages of 10 gets pages of
+         * 100. See {@see \Cassandra\Request\Request::encodeQueryParametersAsBinary()}.
+         */
         public readonly ?int $pageSize = null,
         public readonly ?string $pagingState = null,
         public readonly ?SerialConsistency $serialConsistency = null,

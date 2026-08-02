@@ -506,6 +506,23 @@ abstract class Request implements Frame, Stringable {
                     // lowercased, matching how the server stores unquoted
                     // identifiers.
                     $valuesBinary .= pack('n', strlen($name)) . ($namesAreExact ? $name : strtolower($name));
+                } elseif ($namesAreExact) {
+                    // The names came from the server's bind marker metadata, so
+                    // this is one of them and not a caller's mistake: PHP turns
+                    // an array key that is a canonical decimal integer string
+                    // into an int, and a quoted numeric column name — `"0"` — is
+                    // exactly that. {@see self::encodeQueryValuesForBindMarkerTypes()}
+                    // keys its result by marker name, so such a marker arrives
+                    // here as an int and would otherwise be refused below,
+                    // leaving a statement that can never be bound at all.
+                    //
+                    // Spelled back out rather than worked around, the coercion
+                    // being lossless in exactly the cases it happens in. Only
+                    // for names this driver was told; a caller's own are held to
+                    // the check below, where an int key really does mean a
+                    // sequential array was passed with names_for_values on.
+                    $name = (string) $name;
+                    $valuesBinary .= pack('n', strlen($name)) . $name;
                 } else {
                     throw new RequestException(
                         message: 'Invalid values format: sequential array provided while names_for_values=true expects associative array',
