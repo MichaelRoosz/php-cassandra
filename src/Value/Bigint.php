@@ -31,6 +31,8 @@ class Bigint extends ValueWithFixedLength {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
 
+        self::assertExactBinaryLength($binary);
+
         if (PHP_INT_SIZE >= 8) {
             /**
              * @var false|array<int> $unpacked

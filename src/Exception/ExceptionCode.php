@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1375
+ * Next free code: 1379
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -38,6 +38,7 @@ enum ExceptionCode: int {
     case CONNECTION_DECOMPRESSED_FRAME_LENGTH_MISMATCH = 1323;
     case CONNECTION_EXECUTE_UNEXPECTED_RESPONSE = 1010;
     case CONNECTION_HEARTBEAT_TIMEOUT = 1340;
+    case CONNECTION_INVALID_NODE_CONFIG = 1376;
     case CONNECTION_INVALID_OPCODE_TYPE = 1012;
     case CONNECTION_INVALID_OPTIONS = 1348;
     case CONNECTION_INVALID_REQUEST_TIMEOUT = 1350;
@@ -83,6 +84,7 @@ enum ExceptionCode: int {
     case NODE_DECODE_PAYLOAD_CRC32_FAILED = 1260;
     case NODE_DECOMPRESSOR_NOT_INITIALIZED = 1256;
     case NODE_ENCODE_PAYLOAD_CRC32_FAILED = 1259;
+    case NODE_IMPLEMENTATION_FAILED = 1377;
     case NODE_INVALID_HEADER_CRC24 = 1253;
     case NODE_INVALID_PAYLOAD_CRC32 = 1255;
     case NODE_INVALID_UNCOMPRESSED_LENGTH = 1257;
@@ -95,6 +97,7 @@ enum ExceptionCode: int {
     case REQUEST_EXECUTE_MISSING_RESULT_METADATA_ID = 1083;
     case REQUEST_EXECUTE_PREPARED_STATEMENT_NOT_FOUND = 1084;
     case REQUEST_FIELD_TOO_LONG = 1371;
+    case REQUEST_INVALID_CUSTOM_PAYLOAD = 1375;
     case REQUEST_INVALID_REQUEST_TIMEOUT = 1349;
     case REQUEST_STREAM_NOT_ASSIGNED = 1342;
     case REQUEST_TOO_MANY_MAP_ENTRIES = 1372;
@@ -328,6 +331,7 @@ enum ExceptionCode: int {
     case VALUE_TIME_OUT_OF_RANGE = 1205;
     case VALUE_TIMESTAMP_INVALID_VALUE_TYPE = 1208;
     case VALUE_TIMESTAMP_TO_DATETIME_FAILED = 1209;
+    case VALUE_TIMEUUID_INVALID_VERSION = 1378;
     case VALUE_TINYINT_INVALID_VALUE_TYPE = 1210;
     case VALUE_TINYINT_OUT_OF_RANGE = 1211;
     case VALUE_TINYINT_UNPACK_FAILED = 1212;

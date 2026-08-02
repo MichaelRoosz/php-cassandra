@@ -44,6 +44,8 @@ final class Tinyint extends ValueWithFixedLength {
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
+        self::assertExactBinaryLength($binary);
+
         /**
          * @var false|array<int> $unpacked
          */

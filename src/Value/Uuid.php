@@ -138,7 +138,7 @@ final class Uuid extends ValueWithFixedLength implements ValueWithMultipleEncodi
         try {
             $bytes = random_bytes(16);
         } catch (Exception $e) {
-            throw new ValueException('Failed to generate random bytes', ExceptionCode::VALUE_UUID_RANDOM_FAILED->value);
+            throw new ValueException('Failed to generate random bytes', ExceptionCode::VALUE_UUID_RANDOM_FAILED->value, [], $e);
         }
 
         // Set version to 0100

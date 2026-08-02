@@ -33,6 +33,8 @@ final class Float32 extends ValueWithFixedLength {
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
+        self::assertExactBinaryLength($binary);
+
         /**
          * @var false|array<float> $unpacked
          */

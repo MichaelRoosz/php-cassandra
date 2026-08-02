@@ -150,6 +150,7 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
         self::require64Bit();
+        self::assertExactBinaryLength($binary);
 
         /**
          * @var false|array<int> $unpacked

@@ -47,6 +47,8 @@ final class Int32 extends ValueWithFixedLength {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
 
+        self::assertExactBinaryLength($binary);
+
         /**
          * @var false|array<int> $unpacked
          */

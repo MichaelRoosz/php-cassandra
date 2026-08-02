@@ -7,6 +7,7 @@ namespace Cassandra\Connection;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
+use Throwable;
 
 /**
  * Which node to talk to, and how well each of them has been behaving.
@@ -53,11 +54,39 @@ final class NodeConnector {
 
             $className = $config->getNodeClass();
 
+            if (!is_a($className, IoNode::class, true)) {
+                $socketException = new NodeException(
+                    'Invalid node implementation; configured class must implement IoNode',
+                    ExceptionCode::NODE_IMPLEMENTATION_FAILED->value,
+                    [
+                        'configured_class' => $className,
+                        'required_interface' => IoNode::class,
+                    ]
+                );
+                $this->health->recordFailure($config);
+
+                continue;
+            }
+
             try {
                 $node = new $className($config);
                 $node->connect();
             } catch (NodeException $e) {
                 $socketException = $e;
+                $this->health->recordFailure($config);
+
+                continue;
+            } catch (Throwable $e) {
+                $socketException = new NodeException(
+                    'Node implementation failed',
+                    ExceptionCode::NODE_IMPLEMENTATION_FAILED->value,
+                    [
+                        'configured_class' => $className,
+                        'host' => $config->host,
+                        'port' => $config->port,
+                    ],
+                    $e
+                );
                 $this->health->recordFailure($config);
 
                 continue;

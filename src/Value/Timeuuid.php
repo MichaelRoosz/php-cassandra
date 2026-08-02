@@ -29,6 +29,7 @@ final class Timeuuid extends ValueWithFixedLength implements ValueWithMultipleEn
 
         if (strlen($value) === 16) {
             $this->binary = $value;
+            $this->assertVersionOne();
 
             return;
         }
@@ -47,6 +48,7 @@ final class Timeuuid extends ValueWithFixedLength implements ValueWithMultipleEn
         }
 
         $this->binary = pack('H*', str_replace('-', '', $value));
+        $this->assertVersionOne();
     }
 
     #[\Override]
@@ -132,6 +134,25 @@ final class Timeuuid extends ValueWithFixedLength implements ValueWithMultipleEn
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private function assertVersionOne(): void {
+        $version = ord($this->binary[6]) >> 4;
+        if ($version === 1) {
+            return;
+        }
+
+        throw new ValueException(
+            'Invalid timeuuid value; expected a version 1 UUID',
+            ExceptionCode::VALUE_TIMEUUID_INVALID_VERSION->value,
+            [
+                'value' => $this->toCanonicalString(),
+                'version' => $version,
+            ]
+        );
     }
 
     private function toCanonicalString(): string {

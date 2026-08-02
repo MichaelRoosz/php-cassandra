@@ -121,6 +121,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
         self::require64Bit();
+        self::assertExactBinaryLength($binary);
 
         /**
          * @var false|array<int> $unpacked

@@ -10,8 +10,27 @@ use Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Type;
 use Cassandra\Value;
 use Cassandra\ValueFactory;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 final class TypeSerializationTest extends AbstractUnitTestCase {
+    /**
+     * @return array<string, array{class-string<Value\ValueWithFixedLength>, int}>
+     */
+    public static function fixedLengthValueProvider(): array {
+        return [
+            'bigint' => [Value\Bigint::class, 8],
+            'date' => [Value\Date::class, 4],
+            'double' => [Value\Double::class, 8],
+            'float' => [Value\Float32::class, 4],
+            'int' => [Value\Int32::class, 4],
+            'smallint' => [Value\Smallint::class, 2],
+            'time' => [Value\Time::class, 8],
+            'timestamp' => [Value\Timestamp::class, 8],
+            'tinyint' => [Value\Tinyint::class, 1],
+        ];
+    }
+
     public function testAscii(): void {
         $ascii = 'abcABC123!#_';
         $this->assertSame($ascii, Value\Ascii::fromBinary((Value\Ascii::fromValue($ascii))->getBinary())->getValue());
@@ -416,6 +435,18 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         }
     }
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('fixedLengthValueProvider')]
+    public function testFixedLengthValuesRejectShortAndTrailingData(string $class, int $length): void {
+        foreach ([str_repeat("\0", $length - 1), str_repeat("\0", $length + 1)] as $binary) {
+            try {
+                $class::fromBinary($binary);
+                $this->fail($class . ' accepted a malformed binary length');
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, $e->getCode());
+            }
+        }
+    }
+
     public function testFloat32(): void {
         $float = 1024.5;
         $this->assertSame($float, Value\Float32::fromBinary((new Value\Float32($float))->getBinary())->getValue());
@@ -790,6 +821,13 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testTimeuuidRejectsUuidVersionsOtherThanOne(): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_TIMEUUID_INVALID_VERSION->value);
+
+        Value\Timeuuid::fromValue('550e8400-e29b-41d4-a716-446655440000');
+    }
+
     public function testTinyint(): void {
         $int1 = 127;
         $this->assertSame($int1, Value\Tinyint::fromBinary((Value\Tinyint::fromValue($int1))->getBinary())->getValue());
@@ -880,6 +918,22 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     public function testUuidAcceptsUppercase(): void {
         $uuid = '346C9059-7D07-47E6-91C8-092B50E8306F';
         $this->assertSame(16, strlen(Value\Uuid::fromValue($uuid)->getBinary()));
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function testUuidRandomPreservesRandomBytesFailure(): void {
+        eval('namespace Cassandra\\Value; function random_bytes(int $length): string { throw new \\Exception("random source failed"); }');
+
+        try {
+            Value\Uuid::random();
+            $this->fail('Expected UUID generation to fail');
+        } catch (ValueException $e) {
+            $this->assertSame(ExceptionCode::VALUE_UUID_RANDOM_FAILED->value, $e->getCode());
+            $previous = $e->getPrevious();
+            $this->assertInstanceOf(\Exception::class, $previous);
+            $this->assertSame('random source failed', $previous->getMessage());
+        }
     }
 
     public function testUuidRejectsMalformedValue(): void {

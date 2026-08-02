@@ -16,6 +16,7 @@ use Cassandra\Request\Query;
 use Cassandra\Request\QueryFlag;
 use Cassandra\SerialConsistency;
 use DateTimeImmutable;
+use ReflectionMethod;
 
 /**
  * Unit tests for the binary encoding of request options.
@@ -109,6 +110,23 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
             [self::columnInfo('userid')],
             namesForValues: true
         );
+    }
+
+    public function testCustomPayloadRejectsIntegerKeysAtThePublicBoundary(): void {
+        $request = new Query('SELECT 1');
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_CUSTOM_PAYLOAD->value);
+
+        (new ReflectionMethod($request, 'setPayload'))->invoke($request, [0 => 'value']);
+    }
+    public function testCustomPayloadRejectsNonStringValuesAtThePublicBoundary(): void {
+        $request = new Query('SELECT 1');
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_CUSTOM_PAYLOAD->value);
+
+        (new ReflectionMethod($request, 'setPayload'))->invoke($request, ['key' => []]);
     }
 
     public function testDuplicateNamedBindMarkerThrows(): void {

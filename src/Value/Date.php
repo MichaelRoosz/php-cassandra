@@ -199,6 +199,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     ): static {
 
         self::require64Bit();
+        self::assertExactBinaryLength($binary);
 
         /**
          * @var false|array<int> $unpacked

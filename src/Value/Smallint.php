@@ -44,6 +44,8 @@ final class Smallint extends ValueWithFixedLength {
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
+        self::assertExactBinaryLength($binary);
+
         $bits = PHP_INT_SIZE * 8 - 16;
 
         /**

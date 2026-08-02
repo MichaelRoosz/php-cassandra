@@ -50,12 +50,27 @@ final class Connection {
 
     /**
      * @param array<\Cassandra\Connection\NodeConfig> $nodes
+     *
+     * @throws \Cassandra\Exception\ConnectionException
      */
     public function __construct(
         array $nodes,
         string $keyspace = '',
         ConnectionOptions $options = new ConnectionOptions(),
     ) {
+
+        foreach ($nodes as $index => $node) {
+            if (!$node instanceof Connection\NodeConfig) {
+                throw new ConnectionException(
+                    'Invalid node configuration; every node must be a NodeConfig',
+                    ExceptionCode::CONNECTION_INVALID_NODE_CONFIG->value,
+                    [
+                        'index' => $index,
+                        'actual_type' => get_debug_type($node),
+                    ]
+                );
+            }
+        }
 
         $this->session = new Session($this, $nodes, $keyspace, $options);
     }

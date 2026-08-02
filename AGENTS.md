@@ -11,3 +11,7 @@
 
 - Add regression tests for every bug fix.
 - Run the focused PHPUnit tests, PHPStan, Psalm, PHP CS Fixer, and `git diff --check` before handing off changes. In restricted environments, run tools sequentially when their default parallel workers require local sockets.
+
+## PHPDoc
+
+- Keep PHPDoc types as narrow as the intended contract permits. Do not widen a public parameter or return type merely to make defensive runtime validation visible to a static analyzer; isolate that validation behind an internal helper with the broader input type instead.

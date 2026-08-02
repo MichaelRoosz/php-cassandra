@@ -59,4 +59,24 @@ abstract class ValueWithFixedLength extends ValueBase {
     final public static function isReadableWithoutLength(): bool {
         return true;
     }
+    /**
+     * Reject malformed cells before passing them to unpack(). Besides accepting
+     * trailing bytes, unpack() emits a warning for short input; an application
+     * error handler may turn that warning into a native ErrorException.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    final protected static function assertExactBinaryLength(string $binary): void {
+        $length = strlen($binary);
+        $expectedLength = static::fixedLength();
+        if ($length === $expectedLength) {
+            return;
+        }
+
+        throw new ValueException('Invalid data length for fixed-length type', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
+            'class' => static::class,
+            'length' => $length,
+            'expected_length' => $expectedLength,
+        ]);
+    }
 }

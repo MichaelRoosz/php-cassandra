@@ -257,9 +257,11 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<string,string> $payload
+     *
+     * @throws \Cassandra\Exception\RequestException
      */
     public function setPayload(array $payload): void {
-        $this->payload = $payload;
+        $this->payload = self::validatePayload($payload);
         $this->flags |= Flag::CUSTOM_PAYLOAD;
     }
 
@@ -727,5 +729,31 @@ abstract class Request implements Frame, Stringable {
                 'bind_marker' => $key,
             ]
         );
+    }
+
+    /**
+     * @param array<mixed> $payload
+     * @return array<string,string>
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    private static function validatePayload(array $payload): array {
+        $validatedPayload = [];
+        foreach ($payload as $key => $value) {
+            if (!is_string($key) || !is_string($value)) {
+                throw new RequestException(
+                    'Invalid custom payload; every key and value must be a string',
+                    ExceptionCode::REQUEST_INVALID_CUSTOM_PAYLOAD->value,
+                    [
+                        'key_type' => get_debug_type($key),
+                        'value_type' => get_debug_type($value),
+                    ]
+                );
+            }
+
+            $validatedPayload[$key] = $value;
+        }
+
+        return $validatedPayload;
     }
 }
