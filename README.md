@@ -131,7 +131,7 @@ php-cassandra is a modern PHP client for Apache Cassandra that prioritizes **cor
 ### Key Features
 
 - **Protocol Support**: v3/v4/v5 with automatic negotiation
-- **Transports**: Sockets and PHP streams (SSL/TLS, persistent connections)
+- **Transports**: Sockets and PHP streams (including SSL/TLS)
 - **Request Types**: Synchronous, Asynchronous
 - **Statements**: Prepared statements with positional/named binding, auto-prepare
 - **Data Types**: Full coverage including collections, tuples, UDTs, custom types, vectors
@@ -1657,7 +1657,7 @@ Configuration Reference
 
 #### Node Configuration
 
-**StreamNodeConfig** (supports SSL/TLS, persistent connections)
+**StreamNodeConfig** (supports SSL/TLS)
 ```php
 use Cassandra\Connection\StreamNodeConfig;
 
@@ -1668,7 +1668,6 @@ $node = new StreamNodeConfig(
     password: 'secret',                   // Password (optional)
     connectTimeoutInSeconds: 10,          // Connection timeout (default: 5)
     timeoutInSeconds: 15,                 // I/O timeout (default: 15); fractional values allowed, 0 disables it
-    persistent: true,                     // Use persistent connections
     sslOptions: [                         // SSL/TLS options (see PHP SSL context); a non-empty array enables TLS
         'verify_peer' => true,            // Verify peer certificate
         'verify_peer_name' => true,       // Verify peer name
@@ -1998,7 +1997,7 @@ $conn->registerWarningsListener(new class implements WarningsListener {
 Notes
 -----
 
-- `pageSize` is clamped to a minimum of 100 by the client for efficiency.
+- `pageSize` is clamped to a minimum of 100 by the client for efficiency. Requests for smaller pages—including zero or negative values—are sent as `100`, so use `null` for the server default or a value of at least 100 when an exact page size matters.
 - If you supply non-`Value\*` PHP values with `QueryOptions(autoPrepare: true)`, the driver auto-prepares + executes for correct typing.
 - On `UNPREPARED` server errors, the driver transparently re-prepares and retries. This covers `execute()`/`executeAsync()` and batches: a node answers `UNPREPARED` for one statement at a time, so a batch is re-prepared one statement per round and re-sent carrying the new statement id, with a budget of `MAX_REPREPARATIONS` plus one round per distinct prepared statement it holds.
 - Always use fully-qualified table names in `PREPARE` statements.
@@ -2170,7 +2169,7 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Connection\ConnectionOptions;
 
-// Stream with TLS and persistent
+// Stream with TLS
 $stream = new StreamNodeConfig(
     host: 'tls://cassandra.example.com',
     port: 9042,
@@ -2178,7 +2177,6 @@ $stream = new StreamNodeConfig(
     password: 'secret',
     connectTimeoutInSeconds: 5,
     timeoutInSeconds: 15,
-    persistent: true,
     sslOptions: [
         'cafile' => '/etc/ssl/certs/ca.pem',
         'verify_peer' => true,
