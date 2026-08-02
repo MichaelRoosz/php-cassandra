@@ -40,6 +40,7 @@ final class Lz4Decompressor {
     private int $inputOffset;
     private string $output;
     private int $outputLength;
+    private int $frameOutputStart;
 
     private readonly bool $useExtension;
 
@@ -65,6 +66,7 @@ final class Lz4Decompressor {
 
             $this->inputLength = 0;
             $this->outputLength = 0;
+            $this->frameOutputStart = 0;
 
             $this->output = '';
         }
@@ -139,6 +141,7 @@ final class Lz4Decompressor {
 
         $this->inputLength = $inputLength > 0 ? $inputLength : strlen($compressedData);
         $this->outputLength = 0;
+        $this->frameOutputStart = 0;
 
         $this->output = '';
     }
@@ -222,7 +225,7 @@ final class Lz4Decompressor {
             }
 
             $matchStart = $this->outputLength - $offset;
-            if ($matchStart < 0) {
+            if ($matchStart < $this->frameOutputStart) {
                 throw new CompressionException(
                     'invalid lz4 block data - output underflow for given match start',
                     ExceptionCode::COMPRESSION_OUTPUT_UNDERFLOW->value,
@@ -231,6 +234,7 @@ final class Lz4Decompressor {
                         'matchStart' => $matchStart,
                         'offset' => $offset,
                         'outputLength' => $this->outputLength,
+                        'frameOutputStart' => $this->frameOutputStart,
                     ]
                 );
             }
@@ -294,6 +298,8 @@ final class Lz4Decompressor {
         if ($magicBytes !== 0x184C2102) {
             return false;
         }
+
+        $this->frameOutputStart = $this->outputLength;
 
         if ($this->inputOffset + 4 > $this->inputLength) {
             throw new CompressionException(
@@ -557,6 +563,8 @@ final class Lz4Decompressor {
             return false;
         }
 
+        $frameOutputStart = $this->frameOutputStart = $this->outputLength;
+
         $headerStart = $this->inputOffset;
 
         if ($this->inputOffset + 2 > $this->inputLength) {
@@ -680,7 +688,7 @@ final class Lz4Decompressor {
                 }
                 $contentChecksum = $unpacked[1];
 
-                $this->validateChecksum('content', $this->output, 0, strlen($this->output), $contentChecksum);
+                $this->validateChecksum('content', $this->output, $frameOutputStart, $this->outputLength - $frameOutputStart, $contentChecksum);
             }
 
             $this->inputOffset += 4;
