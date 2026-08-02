@@ -133,8 +133,20 @@ final class StreamReader {
 
         $length = $this->readInt();
 
-        if ($length < 0) {
+        if ($length === -1) {
             return null;
+        }
+
+        if ($length < -1) {
+            throw new ResponseException(
+                message: 'Invalid bytes length',
+                code: ExceptionCode::RESPONSE_SR_INVALID_BYTES_LENGTH->value,
+                context: [
+                    'method' => __METHOD__,
+                    'length' => $length,
+                    'offset' => $this->pos(),
+                ]
+            );
         }
 
         if ($length === 0) {
@@ -551,17 +563,11 @@ final class StreamReader {
 
         $length = $this->readInt();
 
-        if ($length < 0) {
-            if ($length === -1) {
-                return null;
-            }
+        if ($length === -1) {
+            return null;
+        }
 
-            if ($length === -2) { // "not set"
-                // note: we could also return a NotSet object here,
-                // but we return null to avoid serializing issues
-                return null;
-            }
-
+        if ($length < -1) {
             throw new ResponseException(
                 message: 'Invalid value length',
                 code: ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value,
@@ -605,6 +611,27 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ValueFactoryException
      */
     private function decodeValue(TypeInfo $typeInfo, int $length, ValueEncodeConfig $valueEncodeConfig): mixed {
+
+        $fixedLength = match ($typeInfo->type) {
+            Type::INT, Type::FLOAT => 4,
+            Type::DOUBLE, Type::BIGINT, Type::COUNTER => 8,
+            Type::BOOLEAN => 1,
+            default => null,
+        };
+
+        if ($fixedLength !== null && $length !== $fixedLength) {
+            throw new ResponseException(
+                message: 'Fixed-width value length does not match its type',
+                code: ExceptionCode::RESPONSE_SR_VALUE_LENGTH_MISMATCH->value,
+                context: [
+                    'method' => __METHOD__,
+                    'type' => $typeInfo->type->name,
+                    'declared_length' => $length,
+                    'expected_length' => $fixedLength,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
 
         // Fast path: return exactly what the matching Cassandra\Value\*
         // getValue()/asConfigured() would, but without allocating a Value object

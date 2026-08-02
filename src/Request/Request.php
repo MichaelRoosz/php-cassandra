@@ -634,6 +634,15 @@ abstract class Request implements Frame, Stringable {
 
         $encodedValues = [];
         $usedValueKeys = [];
+
+        $markerNamesByLowercaseName = [];
+        if ($namesForValues) {
+            foreach ($bindMarkers as $bindMarker) {
+                $lowercaseName = strtolower($bindMarker->name);
+                $markerNamesByLowercaseName[$lowercaseName][$bindMarker->name] = true;
+            }
+        }
+
         foreach ($bindMarkers as $index => $bindMarker) {
 
             if ($namesForValues) {
@@ -659,6 +668,18 @@ abstract class Request implements Frame, Stringable {
                     /** @psalm-suppress MixedAssignment */
                     $value = $values[$key];
                     $usedValueKeys[$key] = true;
+                } elseif (
+                    array_key_exists(strtolower($key), $valuesByLowercaseName)
+                    && count($markerNamesByLowercaseName[strtolower($key)]) > 1
+                ) {
+                    throw new RequestException(
+                        message: 'Bind marker names differ only by case; named values cannot be matched case-insensitively without ambiguity. Use positional binding.',
+                        code: ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value,
+                        context: [
+                            'stage' => 'values_encoding',
+                            'bind_markers' => array_keys($markerNamesByLowercaseName[strtolower($key)]),
+                        ]
+                    );
                 } elseif (array_key_exists(strtolower($key), $valuesByLowercaseName)) {
                     /** @psalm-suppress MixedAssignment */
                     $value = $valuesByLowercaseName[strtolower($key)];

@@ -101,6 +101,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->assertSame(5, $encoded['userid']->getValue());
     }
 
+    public function testCaseCollidingBindMarkersRejectAmbiguousNamedLookup(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            ['foo' => 5],
+            [self::columnInfo('Foo'), self::columnInfo('foo')],
+            namesForValues: true
+        );
+    }
+
     public function testCaseCollidingNamedValuesThrow(): void {
         $this->expectException(RequestException::class);
         $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value);

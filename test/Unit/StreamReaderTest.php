@@ -106,6 +106,15 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testReadBytesRejectsInvalidNegativeLength(): void {
+        $reader = new StreamReader(pack('N', -2));
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_INVALID_BYTES_LENGTH->value);
+
+        $reader->readBytes();
+    }
+
     public function testReadConsistency(): void {
         // short representing Consistency::ONE (0x0001)
         $reader = new StreamReader(pack('n', Consistency::ONE->value));
@@ -385,14 +394,19 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $bin = pack('N', 8) . pack('N', 1) . pack('N', 2);
         $reader = new StreamReader($bin);
 
-        $this->assertSame(1, $reader->readValue(ValueFactory::getTypeInfoFromType(Type::INT), new ValueEncodeConfig()));
-        // the trailing 4 declared-but-unconsumed bytes are skipped, not re-read
-        $this->assertSame(12, $reader->pos());
-
-        // a uuid cell claiming 4 bytes, where the decoder would want 16
-        $reader = new StreamReader(pack('N', 4) . 'abcd');
         $this->expectException(ResponseException::class);
-        $reader->readValue(ValueFactory::getTypeInfoFromType(Type::UUID), new ValueEncodeConfig());
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_VALUE_LENGTH_MISMATCH->value);
+
+        $reader->readValue(ValueFactory::getTypeInfoFromType(Type::INT), new ValueEncodeConfig());
+    }
+
+    public function testReadValueRejectsRequestSideNotSetSentinel(): void {
+        $reader = new StreamReader(pack('N', -2));
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value);
+
+        $reader->readValue(ValueFactory::getTypeInfoFromType(Type::INT), new ValueEncodeConfig());
     }
 
     public function testReadVIntVariants(): void {
