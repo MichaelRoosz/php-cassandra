@@ -107,6 +107,16 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame($decimal, Value\Decimal::fromBinary((Value\Decimal::fromValue($decimal))->getBinary())->getValue());
     }
 
+    public function testDecimalFromBinaryAcceptsWhatConstructionAllows(): void {
+        // The two bounds meet exactly: a value constructed at the limit encodes
+        // to a scale fromBinary() still reads, so the largest decimal this class
+        // will take is one it can also read back.
+        $atLimit = '0.' . str_repeat('0', 99_999) . '1';
+
+        $decimal = Value\Decimal::fromValue($atLimit);
+        $this->assertSame($atLimit, Value\Decimal::fromBinary($decimal->getBinary())->getValue());
+    }
+
     public function testDecimalFromBinaryRejectsOutOfRangeScale(): void {
         // Decoding expands the value into a plain string whose length grows with
         // the scale, so an absurd (positive or negative) scale — cheap to send,
@@ -172,6 +182,21 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         // Plain decimal strings keep their explicit scale (trailing zeros) verbatim.
         foreach (['1.50', '34345454545.120', '-0.100', '42'] as $plain) {
             $this->assertSame($plain, (new Value\Decimal($plain))->getValue(), "verbatim for '{$plain}'");
+        }
+    }
+
+    public function testDecimalRejectsScaleItCouldNotReadBack(): void {
+        // getBinary() takes the scale straight from the fraction it was given,
+        // so without the same bound fromBinary() applies, this class would encode
+        // values it then refuses to decode — a decimal that can be written to a
+        // node and never read back from one.
+        $tooManyFractionDigits = '0.' . str_repeat('0', 150_000) . '1';
+
+        try {
+            Value\Decimal::fromValue($tooManyFractionDigits);
+            $this->fail('Expected ValueException for an out-of-range decimal scale');
+        } catch (\Cassandra\Exception\ValueException $e) {
+            $this->assertSame(ExceptionCode::VALUE_DECIMAL_SCALE_OUT_OF_RANGE->value, $e->getCode());
         }
     }
 
@@ -484,6 +509,60 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         // And a decoded map goes back out unchanged, which is what a read-modify-write
         // of a map<boolean, …> column comes down to.
         $this->assertSame(bin2hex($binary), bin2hex($decoded->getBinary()));
+    }
+
+    public function testMapCollectionWithIntegerLikeStringKeys(): void {
+        // PHP folds an array key that is the canonical decimal spelling of an
+        // integer into an int, so a map<text, …> key such as "123" is an int by
+        // the time anything sees it — both in a literal written here and in the
+        // key MapCollection::fromStream() decoded a moment earlier. Encoding has
+        // to spell it back out, or such a map could neither be sent nor written
+        // back after being read, and the caller has no way to avoid the fold.
+        $keyDefinition = Type::VARCHAR;
+        $valueDefinition = Type::INT;
+
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::MAP,
+            'keyType' => $keyDefinition,
+            'valueType' => $valueDefinition,
+        ]);
+
+        $binary = (Value\MapCollection::fromValue(['123' => 5], $keyDefinition, $valueDefinition))->getBinary();
+
+        // count, then (len, key, len, value): the key goes out as the three text
+        // bytes it was written as, not as an int.
+        $this->assertSame(
+            '00000001' . '00000003' . bin2hex('123') . '00000004' . '00000005',
+            bin2hex($binary)
+        );
+
+        $decoded = Value\MapCollection::fromBinary($binary, $typeInfo);
+
+        $this->assertSame([123 => 5], $decoded->getValue());
+
+        // And a decoded map goes back out unchanged, which is what a
+        // read-modify-write of a map<text, …> column comes down to.
+        $this->assertSame(bin2hex($binary), bin2hex($decoded->getBinary()));
+
+        // The same for the other string-valued key types, and for a key that is
+        // not an integer spelling and so was never folded.
+        foreach ([Type::ASCII, Type::BLOB, Type::TEXT, Type::VARCHAR] as $stringKeyType) {
+            foreach ([['0' => 1], ['-7' => 1], ['1.5' => 1], ['01' => 1], ['abc' => 1]] as $map) {
+                $encoded = (Value\MapCollection::fromValue($map, $stringKeyType, Type::INT))->getBinary();
+
+                $this->assertSame(
+                    array_map('strval', array_keys($map)),
+                    array_map('strval', array_keys(
+                        Value\MapCollection::fromBinary($encoded, ValueFactory::getTypeInfoFromTypeDefinition([
+                            'type' => Type::MAP,
+                            'keyType' => $stringKeyType,
+                            'valueType' => Type::INT,
+                        ]))->getValue()
+                    )),
+                    $stringKeyType->name . ' key ' . (string) array_key_first($map)
+                );
+            }
+        }
     }
 
     public function testNested(): void {

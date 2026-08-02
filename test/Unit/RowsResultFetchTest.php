@@ -9,6 +9,7 @@ use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\ProtocolVersion;
+use Cassandra\Response\Result\FetchType;
 use Cassandra\Response\Result\RowsResult;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
@@ -70,6 +71,59 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value);
 
         $result->fetchAllKeyPairs(99, 0);
+    }
+
+    public function testFetchBothKeepsPositionalKeysInStepWithTheColumns(): void {
+        // A quoted numeric column name is folded by PHP into the very int key a
+        // position uses, so appending the positional value put it at whatever key
+        // such a name left free and shifted every position after it by one.
+        $result = self::rowsResultWithColumns(
+            ['0', 'name', 'other'],
+            Type::INT,
+            [pack('N', 7), pack('N', 8), pack('N', 9)],
+        );
+
+        $row = $result->fetch(FetchType::BOTH);
+
+        $this->assertIsArray($row);
+
+        // Every column reachable at its own position, and the names beside them.
+        $this->assertSame(7, $row[0]);
+        $this->assertSame(8, $row[1]);
+        $this->assertSame(9, $row[2]);
+        $this->assertSame(8, $row['name']);
+        $this->assertSame(9, $row['other']);
+
+        // And where the collision is with a position another column already
+        // holds, the positional view is the one that survives it.
+        $result = self::rowsResultWithColumns(
+            ['name', '0'],
+            Type::INT,
+            [pack('N', 7), pack('N', 8)],
+        );
+
+        $row = $result->fetch(FetchType::BOTH);
+
+        $this->assertIsArray($row);
+        $this->assertSame(7, $row[0]);
+        $this->assertSame(8, $row[1]);
+        $this->assertSame(7, $row['name']);
+    }
+
+    public function testFetchBothKeepsTheDocumentedKeyOrder(): void {
+        // The README spells the row out as ['id' => …, 0 => …, 'name' => …, 1 => …],
+        // so the two views stay interleaved rather than being appended in blocks.
+        $result = self::rowsResultWithColumns(
+            ['id', 'name'],
+            Type::INT,
+            [pack('N', 7), pack('N', 8)],
+        );
+
+        $row = $result->fetch(FetchType::BOTH);
+
+        $this->assertIsArray($row);
+        $this->assertSame(['id', 0, 'name', 1], array_keys($row));
+        $this->assertSame([7, 7, 8, 8], array_values($row));
     }
 
     public function testFetchColumnRejectsIndexOutsideTheResult(): void {
@@ -152,6 +206,45 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
 
     private static function encodeString(string $value): string {
         return pack('n', strlen($value)) . $value;
+    }
+
+    /**
+     * A ROWS result of one row, with one named column per cell.
+     *
+     * @param array<string> $columnNames
+     * @param array<string> $cells one serialized value per column
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\TypeNameParserException
+     */
+    private static function rowsResultWithColumns(array $columnNames, Type $type, array $cells): RowsResult {
+
+        $body = pack('N', 2) // result kind: ROWS
+            . pack('N', 1) // flags: GLOBAL_TABLES_SPEC
+            . pack('N', count($columnNames)) // column count
+            . self::encodeString('testks')
+            . self::encodeString('testtable');
+
+        foreach ($columnNames as $columnName) {
+            $body .= self::encodeString($columnName) . pack('n', $type->value);
+        }
+
+        $body .= pack('N', 1); // row count
+
+        foreach ($cells as $cell) {
+            $body .= pack('N', strlen($cell)) . $cell;
+        }
+
+        $header = new Header(
+            version: ProtocolVersion::V4,
+            flags: 0,
+            stream: 1,
+            opcode: Opcode::RESPONSE_RESULT,
+            length: strlen($body),
+        );
+
+        return new RowsResult($header, new StreamReader($body));
     }
 
     /**
