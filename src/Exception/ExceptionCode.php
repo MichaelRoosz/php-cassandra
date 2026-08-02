@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1367
+ * Next free code: 1370
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -136,6 +136,7 @@ enum ExceptionCode: int {
     case RESPONSE_ROWS_INVALID_KEY_TYPE = 1111;
     case RESPONSE_ROWS_INVALID_ROWCLASS = 1112;
     case RESPONSE_ROWS_NO_COLUMN_METADATA = 1113;
+    case RESPONSE_ROWS_ROW_COUNT_OUT_OF_RANGE = 1367;
     case RESPONSE_ROWS_ROWCLASS_NOT_SUBCLASS = 1114;
     case RESPONSE_SCHEMA_CHANGE_INVALID_TARGET = 1115;
     case RESPONSE_SCHEMA_CHANGE_INVALID_TYPE = 1116;
@@ -145,6 +146,7 @@ enum ExceptionCode: int {
     case RESPONSE_SR_INET_PARSE_FAIL = 1120;
     case RESPONSE_SR_INVALID_CONSISTENCY = 1135;
     case RESPONSE_SR_INVALID_INET_LENGTH = 1121;
+    case RESPONSE_SR_INVALID_LONG_STRING_LENGTH = 1368;
     case RESPONSE_SR_INVALID_TYPE_DISCRIMINATOR = 1124;
     case RESPONSE_SR_READ_BEYOND_AVAILABLE = 1125;
     case RESPONSE_SR_TYPE_NESTING_TOO_DEEP = 1360;
@@ -274,6 +276,7 @@ enum ExceptionCode: int {
     case VALUE_DATE_INVALID_STRING_FORMAT = 1163;
     case VALUE_DATE_INVALID_VALUE_TYPE = 1164;
     case VALUE_DATE_OUT_OF_RANGE = 1165;
+    case VALUE_DECIMAL_EXPONENT_OUT_OF_RANGE = 1369;
     case VALUE_DECIMAL_INVALID_VALUE_TYPE = 1166;
     case VALUE_DECIMAL_NON_FINITE_FLOAT = 1331;
     case VALUE_DECIMAL_NON_NUMERIC = 1167;
