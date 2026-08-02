@@ -10,6 +10,29 @@ use Cassandra\Request\Request;
 
 final class Stream extends NodeImplementation implements IoNode {
     /**
+     * How many times in a row stream_select() may fail before the connection is
+     * given up on.
+     *
+     * PHP reports an interrupted select() exactly as it reports a failed one,
+     * with no errno to tell the two apart, so a failure is retried rather than
+     * taken as fatal — for as long as the stall window allows. A transport
+     * configured without a stall window ({@see StreamNodeConfig::$timeoutInSeconds}
+     * zero or less) has no such bound at all: the elapsed-time test can never
+     * fire against an infinite window, so a select() failing for a real reason
+     * would be retried forever, spinning on a connection that cannot recover.
+     * This is what ends it — high enough that a burst of signals is still ridden
+     * out, finite so that a genuine failure is eventually reported.
+     *
+     * Counted consecutively: a select() that comes back cleanly, even with
+     * nothing to report, clears the tally.
+     *
+     * The socket transport needs no equivalent. socket_select() reports EINTR
+     * through an errno, so it retries only what really is an interruption and
+     * fails everything else on the spot.
+     */
+    private const MAX_CONSECUTIVE_SELECT_FAILURES = 1000;
+
+    /**
      * PHP has no "never time out" value for stream_set_timeout(), so an
      * effectively unreachable one is used when timeouts are disabled.
      */
@@ -359,9 +382,11 @@ final class Stream extends NodeImplementation implements IoNode {
         // window, and free while the stream is writable.
         $selectBeforeWrite = !$this->isBlockingIo;
 
+        $selectFailures = 0;
+
         do {
             if ($selectBeforeWrite) {
-                $canWrite = $this->selectStreamForWrite($stream, $lastProgressAt);
+                $canWrite = $this->selectStreamForWrite($stream, $lastProgressAt, $selectFailures);
                 if (!$canWrite) {
                     continue;
                 }
@@ -621,7 +646,14 @@ final class Stream extends NodeImplementation implements IoNode {
                     return false;
                 }
 
-                if (microtime(true) - $start >= $this->receiveTimeout) {
+                // The stall window is what normally ends these retries. Where
+                // the transport was configured without one it can never fire,
+                // so the tally is what ends them instead; see
+                // {@see self::MAX_CONSECUTIVE_SELECT_FAILURES}.
+                if (
+                    microtime(true) - $start >= $this->receiveTimeout
+                    || $selectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES
+                ) {
                     throw new StreamException(
                         message: 'Stream select failed',
                         code: ExceptionCode::STREAM_SELECT_FAILED->value,
@@ -644,6 +676,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
             if ($selectResult === 0) {
                 if ($waitForData) {
+                    $selectFailures = 0;
                     $this->checkForReadTimeout($stream, $start, $expectedLength, $upperBoundaryLength, $waitForData);
 
                     continue;
@@ -661,10 +694,13 @@ final class Stream extends NodeImplementation implements IoNode {
 
     /**
      * @param resource $stream
-     * 
+     * @param int $selectFailures how many times in a row select() has failed
+     * across the calls of one write, kept by the caller because each call makes
+     * a single attempt; see {@see self::MAX_CONSECUTIVE_SELECT_FAILURES}
+     *
      * @throws \Cassandra\Exception\StreamException
      */
-    private function selectStreamForWrite($stream, float $lastProgressAt): bool {
+    private function selectStreamForWrite($stream, float $lastProgressAt, int &$selectFailures): bool {
         $read = null;
         $write = [ $stream ];
         $except = null;
@@ -705,11 +741,19 @@ final class Stream extends NodeImplementation implements IoNode {
                 );
             }
 
+            $selectFailures++;
+
             // As on the read side: an interrupted select is indistinguishable
             // from a failed one, so it is retried by the caller's loop for as
             // long as the stall window allows rather than costing the
-            // connection.
-            if (microtime(true) - $lastProgressAt <= $this->sendTimeout) {
+            // connection — and where the transport was configured without a
+            // stall window, for as long as the tally allows, that test being the
+            // only one of the two that can fire there; see
+            // {@see self::MAX_CONSECUTIVE_SELECT_FAILURES}.
+            if (
+                microtime(true) - $lastProgressAt <= $this->sendTimeout
+                && $selectFailures < self::MAX_CONSECUTIVE_SELECT_FAILURES
+            ) {
                 return false;
             }
 
@@ -721,10 +765,13 @@ final class Stream extends NodeImplementation implements IoNode {
                     'port' => $this->config->port,
                     'operation' => 'write',
                     'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
+                    'select_failures' => $selectFailures,
                     'meta' => stream_get_meta_data($stream),
                 ]
             );
         }
+
+        $selectFailures = 0;
 
         if ($selectResult === 0) {
             $this->checkForWriteTimeout($stream, $lastProgressAt);
