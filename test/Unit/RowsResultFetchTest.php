@@ -56,6 +56,20 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->assertSame([7 => 7, 8 => 8], $result->fetchAllKeyPairs(0, 0));
     }
 
+    public function testFetchAllKeyPairsFailureLeavesCursorAtFailedRow(): void {
+        $result = self::rowsResultWithOneColumn(Type::BOOLEAN, [chr(0), chr(1)]);
+
+        try {
+            $result->fetchAllKeyPairs(0, 0);
+            $this->fail('Expected the boolean key to be rejected');
+        } catch (ResponseException $e) {
+            $this->assertSame(ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, $e->getCode());
+        }
+
+        $this->assertSame(['col' => false], $result->fetch());
+        $this->assertSame(['col' => true], $result->fetch());
+    }
+
     public function testFetchAllKeyPairsRejectsIndexOutsideTheResult(): void {
         $result = self::rowsResultWithOneColumn(Type::INT, [pack('N', 7)]);
 
@@ -156,6 +170,20 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->assertSame(1, $result->getRowCount());
     }
 
+    public function testFetchKeyPairFailureLeavesCursorAtFailedRow(): void {
+        $result = self::rowsResultWithOneColumn(Type::BOOLEAN, [chr(0), chr(1)]);
+
+        try {
+            $result->fetchKeyPair(0, 0);
+            $this->fail('Expected the boolean key to be rejected');
+        } catch (ResponseException $e) {
+            $this->assertSame(ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, $e->getCode());
+        }
+
+        $this->assertSame(['col' => false], $result->fetch());
+        $this->assertSame(['col' => true], $result->fetch());
+    }
+
     public function testFetchKeyPairRejectsValueIndexOutsideTheResult(): void {
         $result = self::rowsResultWithOneColumn(Type::INT, [pack('N', 7)]);
 
@@ -164,6 +192,7 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
 
         $result->fetchKeyPair(0, 99);
     }
+
     public function testFetchObjectWrapsRowConstructorFailure(): void {
         $result = self::rowsResultWithOneColumn(Type::INT, [pack('N', 7)]);
         $result->configureFetchObject(FailingRowClass::class);

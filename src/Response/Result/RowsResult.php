@@ -199,26 +199,35 @@ final class RowsResult extends Result {
             $value = null;
 
             $previousOffset = $this->stream->pos();
+            $rowRead = false;
 
-            foreach ($columns as $j => $column) {
-                /** @psalm-suppress MixedAssignment */
-                $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
-                if ($j === $keyIndex) {
+            try {
+                foreach ($columns as $j => $column) {
                     /** @psalm-suppress MixedAssignment */
-                    $key = $columnValue;
-                    if (!is_int($key) && !is_string($key)) {
-                        throw new ResponseException('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
-                            'key_type' => gettype($key),
-                            'key_index' => $keyIndex,
-                        ]);
+                    $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
+                    if ($j === $keyIndex) {
+                        /** @psalm-suppress MixedAssignment */
+                        $key = $columnValue;
+                        if (!is_int($key) && !is_string($key)) {
+                            throw new ResponseException('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
+                                'key_type' => gettype($key),
+                                'key_index' => $keyIndex,
+                            ]);
+                        }
+                    }
+
+                    // Not an elseif: naming the same column as both key and value is
+                    // legitimate, and would otherwise yield a null value for every row.
+                    if ($j === $valueIndex) {
+                        /** @psalm-suppress MixedAssignment */
+                        $value = $columnValue;
                     }
                 }
 
-                // Not an elseif: naming the same column as both key and value is
-                // legitimate, and would otherwise yield a null value for every row.
-                if ($j === $valueIndex) {
-                    /** @psalm-suppress MixedAssignment */
-                    $value = $columnValue;
+                $rowRead = true;
+            } finally {
+                if (!$rowRead) {
+                    $this->stream->offset($previousOffset);
                 }
             }
 
@@ -354,26 +363,35 @@ final class RowsResult extends Result {
 
         $key = null;
         $value = null;
+        $rowRead = false;
 
-        foreach ($columns as $j => $column) {
-            /** @psalm-suppress MixedAssignment */
-            $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
-            if ($j === $keyIndex) {
+        try {
+            foreach ($columns as $j => $column) {
                 /** @psalm-suppress MixedAssignment */
-                $key = $columnValue;
-                if (!is_int($key) && !is_string($key)) {
-                    throw new ResponseException('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
-                        'key_type' => gettype($key),
-                        'key_index' => $keyIndex,
-                    ]);
+                $columnValue = $this->stream->readValue($column->type, $this->valueEncodeConfig);
+                if ($j === $keyIndex) {
+                    /** @psalm-suppress MixedAssignment */
+                    $key = $columnValue;
+                    if (!is_int($key) && !is_string($key)) {
+                        throw new ResponseException('Invalid key type; expected string|int', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_TYPE->value, [
+                            'key_type' => gettype($key),
+                            'key_index' => $keyIndex,
+                        ]);
+                    }
+                }
+
+                // Not an elseif: naming the same column as both key and value is
+                // legitimate, and would otherwise yield a null value for every row.
+                if ($j === $valueIndex) {
+                    /** @psalm-suppress MixedAssignment */
+                    $value = $columnValue;
                 }
             }
 
-            // Not an elseif: naming the same column as both key and value is
-            // legitimate, and would otherwise yield a null value for every row.
-            if ($j === $valueIndex) {
-                /** @psalm-suppress MixedAssignment */
-                $value = $columnValue;
+            $rowRead = true;
+        } finally {
+            if (!$rowRead) {
+                $this->stream->offset($previousOffset);
             }
         }
 
