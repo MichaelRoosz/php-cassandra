@@ -36,8 +36,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
                 if ($parseErrors !== false && ($parseErrors['warning_count'] > 0 || $parseErrors['error_count'] > 0)) {
                     self::throwInvalidTimestamp($value);
                 }
-                $timestamp = $date->getTimestamp();
-                $milliseconds = ($timestamp * 1000) + (int) $date->format('v');
+                $milliseconds = self::millisecondsFromDateTime($date);
             } catch (ValueException $e) {
                 throw $e;
             } catch (PhpException $e) {
@@ -47,10 +46,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
             $this->value = $milliseconds;
 
         } else {
-            $timestamp = $value->getTimestamp();
-            $milliseconds = ($timestamp * 1000) + (int) $value->format('v');
-
-            $this->value = $milliseconds;
+            $this->value = self::millisecondsFromDateTime($value);
         }
     }
 
@@ -199,6 +195,41 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     }
 
     /**
+     * Convert without allowing integer multiplication to overflow to float.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function millisecondsFromDateTime(DateTimeInterface $value): int {
+        $seconds = $value->getTimestamp();
+        $milliseconds = (int) $value->format('v');
+        $maximumSeconds = intdiv(PHP_INT_MAX, 1000);
+        $minimumSeconds = intdiv(PHP_INT_MIN, 1000) - 1;
+
+        if ($seconds > $maximumSeconds || $seconds < $minimumSeconds) {
+            self::throwTimestampOutOfRange($value);
+        }
+
+        if ($seconds === $minimumSeconds) {
+            // Multiplying this second directly would overflow before its
+            // positive millisecond fraction brought it back into range.
+            $safeBase = ($seconds + 1) * 1000;
+            $minimumMilliseconds = PHP_INT_MIN - $safeBase + 1000;
+            if ($milliseconds < $minimumMilliseconds) {
+                self::throwTimestampOutOfRange($value);
+            }
+
+            return $safeBase + ($milliseconds - 1000);
+        }
+
+        $result = $seconds * 1000;
+        if ($seconds === $maximumSeconds && $milliseconds > PHP_INT_MAX - $result) {
+            self::throwTimestampOutOfRange($value);
+        }
+
+        return $result + $milliseconds;
+    }
+
+    /**
      * @throws \Cassandra\Exception\ValueException
      */
     private static function throwInvalidTimestamp(string|DateTimeInterface $value, ?PhpException $previous = null): never {
@@ -210,6 +241,22 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
                 'expected_types' => ['int', 'string', DateTimeInterface::class],
             ],
             $previous,
+        );
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function throwTimestampOutOfRange(DateTimeInterface $value): never {
+        throw new ValueException(
+            'Timestamp value is outside the range representable as integer milliseconds',
+            ExceptionCode::VALUE_TIMESTAMP_OUT_OF_RANGE->value,
+            [
+                'seconds' => $value->getTimestamp(),
+                'milliseconds_fraction' => (int) $value->format('v'),
+                'minimum_milliseconds' => PHP_INT_MIN,
+                'maximum_milliseconds' => PHP_INT_MAX,
+            ]
         );
     }
 }

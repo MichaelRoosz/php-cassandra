@@ -783,6 +783,17 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame($timeInMs, Value\Timestamp::fromBinary((Value\Timestamp::fromValue($timeInMs))->getBinary())->asInteger());
     }
 
+    public function testTimestampRejectsDateTimeOutsideIntegerMillisecondRange(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_TIMESTAMP_OUT_OF_RANGE->value);
+
+        Value\Timestamp::fromValue(new \DateTimeImmutable('@9223372036854776'));
+    }
+
     public function testTimestampRejectsInvalidOrNonIsoStrings(): void {
         foreach (['2023-02-30', 'next Thursday'] as $timestamp) {
             try {
