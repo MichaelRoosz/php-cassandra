@@ -35,7 +35,26 @@ final class ConnectionBoundaryTest extends AbstractUnitTestCase {
             $previous = $e->getPrevious();
             $this->assertInstanceOf(NodeException::class, $previous);
             $this->assertSame(ExceptionCode::NODE_IMPLEMENTATION_FAILED->value, $previous->getCode());
-            $this->assertInstanceOf(\Error::class, $previous->getPrevious());
+            $this->assertNull($previous->getPrevious());
+        }
+    }
+
+    public function testNodeConnectorPropagatesProjectExceptionFromSelector(): void {
+        $failure = new NodeException('selector failed', ExceptionCode::NODE_IMPLEMENTATION_FAILED->value);
+        $selector = new class($failure) implements NodeSelector {
+            public function __construct(private NodeException $failure) {
+            }
+
+            public function order(array $nodes): array {
+                throw $this->failure;
+            }
+        };
+
+        try {
+            (new NodeConnector([new FailingIoNodeConfig()], $selector))->open();
+            $this->fail('Expected the selector exception to propagate');
+        } catch (NodeException $e) {
+            $this->assertSame($failure, $e);
         }
     }
 
@@ -43,40 +62,10 @@ final class ConnectionBoundaryTest extends AbstractUnitTestCase {
         $selector = $this->createMock(NodeSelector::class);
         $selector->method('order')->willReturn([new stdClass()]);
 
-        $this->assertSelectorFailureIsWrapped($selector, null);
-    }
+        $this->expectException(NodeException::class);
+        $this->expectExceptionCode(ExceptionCode::NODE_IMPLEMENTATION_FAILED->value);
 
-    public function testNodeConnectorWrapsSelectorFailure(): void {
-        $selector = new class implements NodeSelector {
-            public function order(array $nodes): array {
-                throw new \Error('selector failed');
-            }
-        };
-
-        $this->assertSelectorFailureIsWrapped($selector, \Error::class);
-    }
-
-    /**
-     * @param ?class-string<\Throwable> $expectedUnderlyingFailure
-     */
-    private function assertSelectorFailureIsWrapped(NodeSelector $selector, ?string $expectedUnderlyingFailure): void {
-        $connector = new NodeConnector([new FailingIoNodeConfig()], $selector);
-
-        try {
-            $connector->open();
-            $this->fail('Expected the selector failure to be wrapped');
-        } catch (ConnectionException $e) {
-            $this->assertSame(ExceptionCode::CONNECTION_UNABLE_TO_CONNECT_ANY_NODE->value, $e->getCode());
-            $previous = $e->getPrevious();
-            $this->assertInstanceOf(NodeException::class, $previous);
-            $this->assertSame(ExceptionCode::NODE_IMPLEMENTATION_FAILED->value, $previous->getCode());
-
-            if ($expectedUnderlyingFailure === null) {
-                $this->assertNull($previous->getPrevious());
-            } else {
-                $this->assertInstanceOf($expectedUnderlyingFailure, $previous->getPrevious());
-            }
-        }
+        (new NodeConnector([new FailingIoNodeConfig()], $selector))->open();
     }
 }
 
@@ -94,7 +83,7 @@ final class FailingIoNode implements IoNode {
     }
 
     public function connect(): void {
-        throw new \Error('implementation failed');
+        throw new NodeException('implementation failed', ExceptionCode::NODE_IMPLEMENTATION_FAILED->value);
     }
 
     public function getConfig(): NodeConfig {

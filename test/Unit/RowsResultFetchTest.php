@@ -10,6 +10,7 @@ use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Response\Result\FetchType;
+use Cassandra\Response\Result\RowClassInterface;
 use Cassandra\Response\Result\RowsResult;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
@@ -163,6 +164,20 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
 
         $result->fetchKeyPair(0, 99);
     }
+    public function testFetchObjectWrapsRowConstructorFailure(): void {
+        $result = self::rowsResultWithOneColumn(Type::INT, [pack('N', 7)]);
+        $result->configureFetchObject(FailingRowClass::class);
+
+        try {
+            $result->fetchObject();
+            $this->fail('Expected row construction to fail');
+        } catch (ResponseException $e) {
+            $this->assertSame(ExceptionCode::RESPONSE_ROWS_ROWCLASS_CONSTRUCTION_FAILED->value, $e->getCode());
+            $this->assertSame(FailingRowClass::class, $e->context()['row_class']);
+            $this->assertInstanceOf(\Error::class, $e->getPrevious());
+            $this->assertSame('row construction failed', $e->getPrevious()->getMessage());
+        }
+    }
 
     public function testGetIteratorWalksEveryRowAfterAPartialFetch(): void {
         // getIterator() hands back a clone, which carries this result's fetch
@@ -280,5 +295,11 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         );
 
         return new RowsResult($header, new StreamReader($body));
+    }
+}
+
+final class FailingRowClass implements RowClassInterface {
+    public function __construct(array $rowData, array $additionalArguments = []) {
+        throw new \Error('row construction failed');
     }
 }

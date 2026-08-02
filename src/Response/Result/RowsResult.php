@@ -14,6 +14,7 @@ use Cassandra\Response\ResultFlag;
 use Cassandra\Response\ResultIterator;
 use Cassandra\Response\StreamReader;
 use Cassandra\Value\ValueEncodeConfig;
+use Throwable;
 
 final class RowsResult extends Result {
     private int $dataOffsetOfPreviousRow;
@@ -417,8 +418,19 @@ final class RowsResult extends Result {
             return false;
         }
 
-        /** @var \Cassandra\Response\Result\RowClassInterface $row */
-        $row = new $rowClass($rowData, $additionalConstructorArgs);
+        try {
+            /** @var \Cassandra\Response\Result\RowClassInterface $row */
+            $row = new $rowClass($rowData, $additionalConstructorArgs);
+        } catch (Throwable $e) {
+            throw new ResponseException(
+                'Failed to construct configured row class',
+                ExceptionCode::RESPONSE_ROWS_ROWCLASS_CONSTRUCTION_FAILED->value,
+                [
+                    'row_class' => $rowClass,
+                ],
+                $e
+            );
+        }
 
         return $row;
     }

@@ -6,6 +6,7 @@
 - Do not use a native exception as internal control flow. Perform validation directly and throw the appropriate project exception.
 - Every new failure mode must have a dedicated entry in `Cassandra\\Exception\\ExceptionCode` unless an existing code describes exactly the same failure.
 - Whenever adding one or more exception codes, update the `Next free code` comment at the top of `src/Exception/ExceptionCode.php` to the next unused integer. Keep all enum values globally unique.
+- Custom implementations supplied through extension points such as `NodeSelector`, `NodeConfig`, and `IoNode` are responsible for honoring the same exception contract: they must throw an appropriate exception from `Cassandra\\Exception` themselves. Library code is not required to translate native exceptions or `Error` instances thrown by those custom implementations.
 
 ## Verification
 
