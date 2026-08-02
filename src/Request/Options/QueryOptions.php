@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Request\Options;
 
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\RequestException;
 use Cassandra\SerialConsistency;
 
 class QueryOptions extends RequestOptions {
@@ -17,10 +19,8 @@ class QueryOptions extends RequestOptions {
          * How many rows the node puts in one page of the result, or null to
          * leave it to the node's own default.
          *
-         * Note that this driver applies a floor of 100: a smaller value — zero
-         * and negative ones included — is raised to 100 on its way to the wire
-         * rather than refused, so a caller asking for pages of 10 gets pages of
-         * 100. See {@see \Cassandra\Request\Request::encodeQueryParametersAsBinary()}.
+         * Every positive value is sent unchanged. Zero and negative values are
+         * invalid because they cannot describe a useful result page.
          */
         public readonly ?int $pageSize = null,
         public readonly ?string $pagingState = null,
@@ -37,6 +37,14 @@ class QueryOptions extends RequestOptions {
         public readonly ?float $requestTimeoutInSeconds = null,
     ) {
         self::assertValidRequestTimeout($requestTimeoutInSeconds);
+
+        if ($pageSize !== null && $pageSize <= 0) {
+            throw new RequestException(
+                'Invalid page size: it must be greater than zero, or null to use the server default',
+                ExceptionCode::REQUEST_INVALID_PAGE_SIZE->value,
+                ['page_size' => $pageSize]
+            );
+        }
     }
 
     /**

@@ -277,6 +277,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testQueryEncodesSmallPositivePageSizeUnchanged(): void {
+        $request = new Query(
+            query: 'SELECT * FROM t',
+            consistency: Consistency::ONE,
+            options: new QueryOptions(pageSize: 1)
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $this->assertSame(1, $this->unpackInt('N', substr($request->getBody(), -4)));
+    }
+
     public function testQueryOmitsSerialConsistencyWhenNotRequested(): void {
         $request = new Query(
             query: 'SELECT * FROM t',
@@ -294,6 +305,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
             $this->unpackInt('N', substr($body, $offset + 2, 4)) & QueryFlag::WITH_SERIAL_CONSISTENCY,
             'The serial consistency flag must not be set when the option is unused'
         );
+    }
+
+    public function testQueryOptionsRejectNonPositivePageSize(): void {
+        foreach ([0, -1] as $pageSize) {
+            try {
+                new QueryOptions(pageSize: $pageSize);
+                $this->fail('expected page size ' . $pageSize . ' to be refused');
+            } catch (RequestException $e) {
+                $this->assertSame(ExceptionCode::REQUEST_INVALID_PAGE_SIZE->value, $e->getCode());
+            }
+        }
     }
 
     public function testQueryRejectsDateTimeInUntypedPath(): void {

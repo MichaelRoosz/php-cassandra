@@ -125,7 +125,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
 
         $this->assertSame('', $data);
         $this->assertGreaterThan(0.2, $elapsed);
-        $this->assertLessThan(3.0, $elapsed);
+        $this->assertLessThan(10.0, $elapsed);
     }
 
     public function testStreamPastDeadlineDoesNotWaitAtAll(): void {

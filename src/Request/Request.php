@@ -352,7 +352,7 @@ abstract class Request implements Frame, Stringable {
 
         if ($options->pageSize !== null) {
             $flags |= QueryFlag::PAGE_SIZE;
-            $optional .= pack('N', max(100, $options->pageSize));
+            $optional .= pack('N', $options->pageSize);
         }
 
         if ($options->pagingState !== null) {
