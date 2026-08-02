@@ -10,6 +10,8 @@ use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\ReleaseConstants;
 
 final class ConnectionOptions {
+    public readonly ProtocolVersion $initialProtocolVersion;
+
     /**
      * @throws \Cassandra\Exception\ConnectionException
      */
@@ -31,7 +33,7 @@ final class ConnectionOptions {
 
         /** @var ProtocolVersion[] $allowedProtocolVersions */
         public readonly array $allowedProtocolVersions = ProtocolVersion::PREFERRED_ORDER,
-        public readonly ProtocolVersion $initialProtocolVersion = ProtocolVersion::V4,
+        ?ProtocolVersion $initialProtocolVersion = null,
 
         /**
          * How long to wait for the server's answer to a request, in seconds,
@@ -116,6 +118,19 @@ final class ConnectionOptions {
             }
         }
 
+        if ($initialProtocolVersion === null) {
+            if (in_array(ProtocolVersion::V4, $allowedProtocolVersions, true)) {
+                $initialProtocolVersion = ProtocolVersion::V4;
+            } else {
+                $initialProtocolVersion = $allowedProtocolVersions[0];
+                foreach ($allowedProtocolVersions as $version) {
+                    if ($version->value < $initialProtocolVersion->value) {
+                        $initialProtocolVersion = $version;
+                    }
+                }
+            }
+        }
+
         if (!in_array($initialProtocolVersion, $allowedProtocolVersions, true)) {
             throw new ConnectionException(
                 'Invalid initial protocol version: it must be included in the allowed versions',
@@ -123,6 +138,8 @@ final class ConnectionOptions {
                 ['initial_protocol_version' => $initialProtocolVersion->inOptionFormat()]
             );
         }
+
+        $this->initialProtocolVersion = $initialProtocolVersion;
         // Rejected rather than clamped, because every non-positive value here
         // means something the caller cannot have wanted: a request that is out
         // of time before it is sent, a probe on every single read, or a
