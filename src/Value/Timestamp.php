@@ -26,7 +26,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
             $this->value = $value;
 
         } elseif (is_string($value)) {
-            if (!preg_match('/^[+-]?\d{4,}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:?\d{2})?)?$/', $value)) {
+            if (!preg_match('/^[+-]?\d{4,}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/', $value)) {
                 self::throwInvalidTimestamp($value);
             }
 

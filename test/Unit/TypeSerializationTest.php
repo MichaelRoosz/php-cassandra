@@ -784,6 +784,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         }
 
         $this->assertSame(1296705900000, Value\Timestamp::fromValue('2011-02-03T04:05:00.000+0000')->asInteger());
+        $this->assertSame(1296705900000, Value\Timestamp::fromValue('2011-02-03 04:05')->asInteger());
     }
 
     public function testTimeuuid(): void {
