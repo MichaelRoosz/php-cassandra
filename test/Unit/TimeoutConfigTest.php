@@ -241,15 +241,26 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
     }
 
     public function testSocketOptionNativeErrorIsWrapped(): void {
+        $pair = [];
         if (!socket_create_pair(AF_UNIX, SOCK_STREAM, 0, $pair)) {
             $this->fail('could not create a local socket pair');
+        }
+
+        if (!is_array($pair)) {
+            $this->fail('socket_create_pair did not return a socket pair');
+        }
+
+        [$firstSocket, $secondSocket] = array_values($pair);
+
+        if (!$firstSocket instanceof \Socket || !$secondSocket instanceof \Socket) {
+            $this->fail('socket_create_pair did not return a socket pair');
         }
 
         try {
             $method = new ReflectionMethod(Socket::class, 'setSocketOption');
             $method->invoke(
                 new Socket(new SocketNodeConfig()),
-                $pair[0],
+                $firstSocket,
                 SOL_SOCKET,
                 -999,
                 1,
@@ -259,8 +270,8 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
             $this->assertSame(\Cassandra\Exception\ExceptionCode::SOCKET_SET_OPTION_FAILED->value, $e->getCode());
             $this->assertInstanceOf(\ErrorException::class, $e->getPrevious());
         } finally {
-            socket_close($pair[0]);
-            socket_close($pair[1]);
+            socket_close($firstSocket);
+            socket_close($secondSocket);
         }
     }
 
