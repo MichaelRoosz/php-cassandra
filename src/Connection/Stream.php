@@ -72,6 +72,14 @@ final class Stream extends NodeImplementation implements IoNode {
         }
         $this->config = $config;
 
+        if (!is_finite($config->connectTimeoutInSeconds) || $config->connectTimeoutInSeconds <= 0.0) {
+            throw new StreamException(
+                message: 'Invalid connect timeout: it must be a finite number greater than zero',
+                code: ExceptionCode::STREAM_INVALID_CONFIG->value,
+                context: ['connect_timeout_seconds' => $config->connectTimeoutInSeconds]
+            );
+        }
+
         // Fractional timeouts are kept as configured; a non-positive value
         // disables the timeout entirely.
         $timeout = $config->timeoutInSeconds > 0.0 ? $config->timeoutInSeconds : self::NO_TIMEOUT;

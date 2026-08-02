@@ -46,7 +46,7 @@ final class Socket extends NodeImplementation implements IoNode {
             'receiveTimeout' => $this->receiveTimeout,
         ] = $this->getTimeoutsFromConfig();
 
-        if ($config->connectTimeoutInSeconds <= 0.0) {
+        if (!is_finite($config->connectTimeoutInSeconds) || $config->connectTimeoutInSeconds <= 0.0) {
             throw new SocketException(
                 message: 'Invalid connect timeout: it must be greater than zero',
                 code: ExceptionCode::SOCKET_INVALID_CONFIG->value,

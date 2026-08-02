@@ -10,7 +10,6 @@ use Cassandra\Type;
 use Cassandra\ValueFactory;
 
 final class VectorInfo extends TypeInfo {
-
     public const MAX_DIMENSIONS = 8192;
 
     /**

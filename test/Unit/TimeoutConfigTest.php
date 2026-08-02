@@ -14,6 +14,7 @@ use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\RequestException;
 use Cassandra\Exception\SocketException;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\PrepareOptions;
@@ -48,6 +49,15 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
 
         new BatchOptions(requestTimeoutInSeconds: $timeout);
     }
+
+    public function testConnectionInitialProtocolVersionMustBeAllowed(): void {
+        $this->expectException(ConnectionException::class);
+
+        new ConnectionOptions(
+            allowedProtocolVersions: [ProtocolVersion::V3],
+            initialProtocolVersion: ProtocolVersion::V4,
+        );
+    }
     public function testConnectionNonPositiveHeartbeatIntervalIsRejected(): void {
         // Heartbeats are turned off with null; zero would mean probing on every
         // single read.
@@ -70,6 +80,19 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
         $this->expectException(ConnectionException::class);
 
         new ConnectionOptions(requestTimeoutInSeconds: 0);
+    }
+
+    public function testConnectionRejectsInvalidAllowedProtocolVersionTypes(): void {
+        $this->expectException(ConnectionException::class);
+
+        /** @phpstan-ignore argument.type */
+        new ConnectionOptions(allowedProtocolVersions: ['v4']);
+    }
+
+    public function testConnectionRequiresAnAllowedProtocolVersion(): void {
+        $this->expectException(ConnectionException::class);
+
+        new ConnectionOptions(allowedProtocolVersions: []);
     }
 
     public function testConnectionTimeoutsMayBeDisabledWithNull(): void {
@@ -174,6 +197,12 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
         $this->assertSame(15.0, $receiveTimeout);
     }
 
+    public function testSocketNonFiniteConnectTimeoutIsRejected(): void {
+        $this->expectException(SocketException::class);
+
+        new Socket(new SocketNodeConfig(connectTimeoutInSeconds: NAN));
+    }
+
     public function testSocketNonPositiveConnectTimeoutIsRejected(): void {
         $this->expectException(SocketException::class);
 
@@ -207,6 +236,18 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
 
         $this->assertSame(0.5, $sendTimeout);
         $this->assertSame(0.5, $receiveTimeout);
+    }
+
+    public function testStreamInvalidConnectTimeoutIsRejected(): void {
+        $this->expectException(\Cassandra\Exception\StreamException::class);
+
+        new Stream(new StreamNodeConfig(connectTimeoutInSeconds: 0));
+    }
+
+    public function testStreamNonFiniteConnectTimeoutIsRejected(): void {
+        $this->expectException(\Cassandra\Exception\StreamException::class);
+
+        new Stream(new StreamNodeConfig(connectTimeoutInSeconds: INF));
     }
 
     public function testStreamTimeoutIsTakenFromTheConfig(): void {
