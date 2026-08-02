@@ -11,6 +11,19 @@ use Cassandra\TypeInfo\TypeInfo;
 
 final class Decimal extends ValueReadableWithLength {
     /**
+     * Upper bound on the absolute exponent accepted from a value in scientific
+     * notation, the encode-side counterpart of {@see MAX_SCALE_MAGNITUDE}.
+     *
+     * The wire encoding is an unscaled varint and a scale, so it cannot carry an
+     * exponent: {@see scientificToDecimalString()} expands one into the plain
+     * decimal string it stands for, which means "1e50000000" — three bytes of
+     * is_numeric()-approved input — becomes a fifty-megabyte string, and a
+     * larger exponent exhausts memory outright. Bounded at the same magnitude as
+     * a decoded scale, which leaves an enormous margin over any real decimal
+     * while keeping a single value's expansion to ~100 KB.
+     */
+    private const MAX_EXPONENT_MAGNITUDE = 100_000;
+    /**
      * Upper bound on the absolute scale accepted by {@see fromBinary()}. The
      * scale is a signed int32 (so a peer may declare a magnitude up to ~2.1
      * billion), and decoding expands the value into a plain decimal string whose
@@ -194,6 +207,10 @@ final class Decimal extends ValueReadableWithLength {
      * shortest string that round-trips to the same float, with any scientific
      * notation expanded (the varint-based wire encoding cannot express an
      * exponent).
+     *
+     * @throws \Cassandra\Exception\ValueException a float's exponent is at most
+     * ~±324, so {@see MAX_EXPONENT_MAGNITUDE} is unreachable from here; it is
+     * declared because the expansion is shared with the string path.
      */
     private static function floatToDecimalString(float $value): string {
         return self::scientificToDecimalString(var_export($value, true));
@@ -208,6 +225,8 @@ final class Decimal extends ValueReadableWithLength {
      * is_numeric() accepts (a leading "+", surrounding whitespace, scientific
      * notation, or bare-point forms like ".5") is expanded so that a value
      * accepted at construction can always be serialized by getBinary().
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     private static function normalizeNumericString(string $value): string {
         $value = trim($value);
@@ -223,6 +242,8 @@ final class Decimal extends ValueReadableWithLength {
      * Expands a signed decimal string that may carry scientific notation and/or
      * a leading sign into a plain decimal string (the varint-based wire encoding
      * cannot express an exponent). Trailing fraction zeros are trimmed.
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     private static function scientificToDecimalString(string $value): string {
         $sign = '';
@@ -240,6 +261,15 @@ final class Decimal extends ValueReadableWithLength {
         } else {
             $mantissa = substr($value, 0, $exponentPos);
             $exponent = (int) substr($value, $exponentPos + 1);
+
+            // Refused before the expansion below allocates towards it; see
+            // {@see MAX_EXPONENT_MAGNITUDE}.
+            if ($exponent > self::MAX_EXPONENT_MAGNITUDE || $exponent < -self::MAX_EXPONENT_MAGNITUDE) {
+                throw new ValueException('Decimal exponent is outside of the supported range', ExceptionCode::VALUE_DECIMAL_EXPONENT_OUT_OF_RANGE->value, [
+                    'exponent' => $exponent,
+                    'max_magnitude' => self::MAX_EXPONENT_MAGNITUDE,
+                ]);
+            }
         }
 
         $dotPos = strpos($mantissa, '.');
