@@ -34,17 +34,24 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
             ]);
         }
 
-        // convert to int value if it fits into PHP_INT_MAX, otherwise keep as string
-        $length = strlen($value);
-        if (str_starts_with($value, '-')) {
-            $length--;
-        }
+        // Normalised before anything is decided about it. Leading zeros and a
+        // sign on zero are spellings rather than values, and one kept here
+        // would travel out to the application through {@see self::asString()}
+        // and {@see self::getValue()} as part of the number —
+        // "0000000000000000000" for what is simply 0. The wire encoding has no
+        // way to show them, so the same value read back from the node would not
+        // match what was written.
+        $value = self::normalizeDecimalString($value);
 
-        $this->value = match (PHP_INT_SIZE) {
-            4 => $length <= 9 ? (int) $value : $value,
-            8 => $length <= 18 ? (int) $value : $value, /** @phpstan-ignore match.alwaysTrue */
-            default => $value,
-        };
+        // Kept as a string only where PHP's int genuinely cannot hold it, and
+        // measured against the real bound rather than a digit count that stays
+        // safely below it. A count gives up the whole top of the range — every
+        // value from 10^18 up to PHP_INT_MAX — and {@see self::asInt()} would
+        // then refuse a number that fits perfectly well, while the same value
+        // arriving from a node came back as an int: eight bytes or fewer is
+        // exactly what PHP's int can hold, so {@see self::fromBinary()} never
+        // takes the string path for one.
+        $this->value = self::fitsInPhpInt($value) ? (int) $value : $value;
     }
 
     /**
@@ -180,6 +187,39 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
         return false;
     }
 
+    /**
+     * Whether a canonical decimal string names a value PHP's int can hold.
+     *
+     * Measured against PHP_INT_MAX — or, for a negative value, the magnitude of
+     * PHP_INT_MIN, which is one larger — so the whole of the range is available,
+     * and on a 32-bit build as well as a 64-bit one.
+     *
+     * Both sides are canonical digit strings by the time they meet, so a
+     * difference in length settles it outright and equal lengths make a byte
+     * comparison a numeric one.
+     *
+     * @param string $decimal a canonical decimal string, as
+     * {@see self::normalizeDecimalString()} produces
+     */
+    private static function fitsInPhpInt(string $decimal): bool {
+
+        $isNegative = str_starts_with($decimal, '-');
+
+        $digits = $isNegative ? substr($decimal, 1) : $decimal;
+
+        // The magnitude of the bound, which on the negative side is PHP_INT_MIN
+        // without its sign and so one more than PHP_INT_MAX.
+        $bound = $isNegative
+            ? substr((string) PHP_INT_MIN, 1)
+            : (string) PHP_INT_MAX;
+
+        if (strlen($digits) !== strlen($bound)) {
+            return strlen($digits) < strlen($bound);
+        }
+
+        return strcmp($digits, $bound) <= 0;
+    }
+
     private function getBinaryFromIntValue(int $value): string {
         $isNegative = $value < 0;
         $breakValue = $isNegative ? -1 : 0;
@@ -204,5 +244,25 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
         }
 
         return pack('C*', ...array_reverse($result));
+    }
+
+    /**
+     * A validated integer string reduced to the one spelling that stands for
+     * its value: no leading zeros, and no sign on zero.
+     *
+     * @param string $decimal digits with an optional leading '-', which is what
+     * the constructor has established by the time this is reached
+     */
+    private static function normalizeDecimalString(string $decimal): string {
+
+        $isNegative = str_starts_with($decimal, '-');
+
+        $digits = ltrim($isNegative ? substr($decimal, 1) : $decimal, '0');
+
+        if ($digits === '') {
+            return '0';
+        }
+
+        return $isNegative ? '-' . $digits : $digits;
     }
 }
