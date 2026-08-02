@@ -292,9 +292,23 @@ final class Connection {
         $pagingState = $response->getRowsMetadata()->pagingState;
         while ($pagingState !== null) {
             $response = $this->execute(
-                previousResult: $previousResult,
+                // The page just read rather than the prepared result this
+                // started from, so that each page is asked for with the result
+                // metadata id the previous one carried. From v5 that id can
+                // change mid-paging — an ALTER while the result set is being
+                // walked — and a request naming the old one makes the node
+                // resend the whole metadata with every remaining page. See
+                // {@see \Cassandra\Request\Execute::__construct()}, which is
+                // what reads it back off a RowsResult.
+                previousResult: $response,
                 values: $values,
                 consistency: $consistency,
+
+                // Still set explicitly, rather than left to be picked up off the
+                // page above: Execute only takes the paging state from the
+                // previous result where the options carry none, so a caller who
+                // passed one of their own would have every page ask for that
+                // same first page again.
                 options: $options->withPagingState($pagingState),
                 requestTimeoutInSeconds: $requestTimeoutInSeconds,
             )->asRowsResult();
