@@ -117,7 +117,7 @@ final class MapCollection extends ValueReadableWithoutLength {
             // key must not be left as-is — PHP would silently truncate it to
             // int); everything else cannot be represented as an array key.
             if (is_float($key)) {
-                $key = (string) $key;
+                $key = self::floatAsMapKey($key);
             } elseif (is_bool($key)) {
                 $key = $key ? 1 : 0;
             }
@@ -206,6 +206,43 @@ final class MapCollection extends ValueReadableWithoutLength {
     }
 
     /**
+     * Represent a floating-point map key without losing enough precision for
+     * two distinct wire values to collapse onto the same PHP array key.
+     *
+     * Seventeen significant decimal digits are sufficient to round-trip every
+     * IEEE-754 double, and therefore every single-precision float as well.
+     * sprintf() honours LC_NUMERIC, while the string is also fed back to PHP's
+     * locale-independent float parser by {@see self::keyAsNativeValue()}, so
+     * normalise the locale's decimal separator before exposing the key.
+     */
+    private static function floatAsMapKey(float $key): string {
+        if (is_nan($key)) {
+            return 'NAN';
+        }
+
+        if ($key === INF) {
+            return 'INF';
+        }
+
+        if ($key === -INF) {
+            return '-INF';
+        }
+
+        $formatted = sprintf('%.17g', $key);
+        $locale = localeconv();
+        $decimalPoint = '.';
+        if (isset($locale['decimal_point']) && is_string($locale['decimal_point']) && $locale['decimal_point'] !== '') {
+            $decimalPoint = $locale['decimal_point'];
+        }
+
+        if ($decimalPoint !== '.') {
+            $formatted = str_replace($decimalPoint, '.', $formatted);
+        }
+
+        return $formatted;
+    }
+
+    /**
      * Undo the array-key coercion a map key went through on its way into the
      * PHP array, so that it can be encoded as the type it belongs to.
      *
@@ -242,12 +279,24 @@ final class MapCollection extends ValueReadableWithoutLength {
      * form back. The canonical string form the default option produces is never
      * an integer spelling, so nothing happens to it.
      *
-     * The rest need nothing: the numeric types take the int PHP left them as,
-     * and float and double — which {@see self::fromStream()} turns into strings
-     * precisely so PHP cannot truncate them to int — are parsed back from that
-     * string by their own value classes.
+     * Float and double — which {@see self::fromStream()} turn into strings
+     * precisely so PHP cannot truncate them to int — are parsed back by their
+     * value classes. Only the non-finite values are restored here, since their
+     * canonical keys are deliberately not numeric strings. Leaving every
+     * other string alone also preserves the value classes' validation for a
+     * caller-supplied invalid key. The remaining numeric types take the int PHP
+     * left them as.
      */
-    private static function keyAsNativeValue(TypeInfo $keyType, int|string $key): int|string|bool {
+    private static function keyAsNativeValue(TypeInfo $keyType, int|string $key): int|string|bool|float {
+
+        if ($keyType->type === Type::FLOAT || $keyType->type === Type::DOUBLE) {
+            return match ($key) {
+                'NAN' => NAN,
+                'INF' => INF,
+                '-INF' => -INF,
+                default => $key,
+            };
+        }
 
         if ($keyType->type === Type::BOOLEAN && ($key === 0 || $key === 1)) {
             return $key === 1;
