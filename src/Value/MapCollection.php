@@ -166,7 +166,7 @@ final class MapCollection extends ValueReadableWithoutLength {
 
         /** @var ValueBase|mixed $val */
         foreach ($this->value as $key => $val) {
-            $keyPacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->keyType, $key);
+            $keyPacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->keyType, self::keyAsNativeValue($this->typeInfo->keyType, $key));
 
             $valuePacked = $val instanceof ValueBase
                 ? $val->getBinary()
@@ -195,5 +195,36 @@ final class MapCollection extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    /**
+     * Undo the array-key coercion a map key went through on its way into the
+     * PHP array, so that it can be encoded as the type it belongs to.
+     *
+     * A PHP array key is an int or a string and nothing else, so a boolean key
+     * is already an int by the time anything here sees it: PHP itself folds
+     * true and false to 1 and 0 on assignment, and {@see self::fromStream()}
+     * spells the same coercion out for the keys it decodes. Boolean is the one
+     * key type that cannot survive that on its own —
+     * {@see Boolean::fromMixedValue()} takes a bool and refuses everything else
+     * — so without this a `map<boolean, …>` could not be encoded at all,
+     * whether it was built by hand or read off the wire a moment earlier.
+     *
+     * Only the two ints a boolean can have become one are converted. Anything
+     * else at a boolean key is not a coerced bool but a key that was never
+     * valid, and is left to be refused where every other bad key is.
+     *
+     * The other key types need nothing here: the numeric ones take the int PHP
+     * left them as, and the two that {@see self::fromStream()} turns into
+     * strings — float and double, which PHP would otherwise truncate to int —
+     * are parsed back from that string by their own value classes.
+     */
+    private static function keyAsNativeValue(TypeInfo $keyType, int|string $key): int|string|bool {
+
+        if ($keyType->type === Type::BOOLEAN && ($key === 0 || $key === 1)) {
+            return $key === 1;
+        }
+
+        return $key;
     }
 }
