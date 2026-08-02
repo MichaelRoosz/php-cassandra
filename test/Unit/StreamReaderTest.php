@@ -106,13 +106,10 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         }
     }
 
-    public function testReadBytesRejectsInvalidNegativeLength(): void {
+    public function testReadBytesTreatsEveryNegativeLengthAsNull(): void {
         $reader = new StreamReader(pack('N', -2));
 
-        $this->expectException(ResponseException::class);
-        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_INVALID_BYTES_LENGTH->value);
-
-        $reader->readBytes();
+        $this->assertNull($reader->readBytes());
     }
 
     public function testReadConsistency(): void {
@@ -376,15 +373,6 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $this->assertSame('', $reader->readValue($typeInfo, $cfg));
     }
 
-    public function testReadValueInvalidNegativeLength(): void {
-        $typeInfo = ValueFactory::getTypeInfoFromType(Type::INT);
-        // -3 is invalid
-        $reader = new StreamReader(pack('N', (-3)));
-        $this->expectException(ResponseException::class);
-        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value);
-        $reader->readValue($typeInfo, new ValueEncodeConfig());
-    }
-
     /**
      * A cell whose declared length disagrees with what the decoder consumed must
      * fail loudly instead of silently shifting every following value.
@@ -400,13 +388,12 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $reader->readValue(ValueFactory::getTypeInfoFromType(Type::INT), new ValueEncodeConfig());
     }
 
-    public function testReadValueRejectsRequestSideNotSetSentinel(): void {
-        $reader = new StreamReader(pack('N', -2));
+    public function testReadValueTreatsEveryNegativeBytesLengthAsNull(): void {
+        $reader = new StreamReader(pack('N', -2) . pack('N', -3));
+        $typeInfo = ValueFactory::getTypeInfoFromType(Type::INT);
 
-        $this->expectException(ResponseException::class);
-        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value);
-
-        $reader->readValue(ValueFactory::getTypeInfoFromType(Type::INT), new ValueEncodeConfig());
+        $this->assertNull($reader->readValue($typeInfo, new ValueEncodeConfig()));
+        $this->assertNull($reader->readValue($typeInfo, new ValueEncodeConfig()));
     }
 
     public function testReadVIntVariants(): void {

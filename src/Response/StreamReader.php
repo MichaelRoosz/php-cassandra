@@ -133,20 +133,8 @@ final class StreamReader {
 
         $length = $this->readInt();
 
-        if ($length === -1) {
+        if ($length < 0) {
             return null;
-        }
-
-        if ($length < -1) {
-            throw new ResponseException(
-                message: 'Invalid bytes length',
-                code: ExceptionCode::RESPONSE_SR_INVALID_BYTES_LENGTH->value,
-                context: [
-                    'method' => __METHOD__,
-                    'length' => $length,
-                    'offset' => $this->pos(),
-                ]
-            );
         }
 
         if ($length === 0) {
@@ -563,19 +551,11 @@ final class StreamReader {
 
         $length = $this->readInt();
 
-        if ($length === -1) {
+        // Result-row cells are [bytes], not request-side [value] fields. The
+        // native protocol defines every negative [bytes] length as null; -2 is
+        // only the "not set" sentinel when a client sends a bound [value].
+        if ($length < 0) {
             return null;
-        }
-
-        if ($length < -1) {
-            throw new ResponseException(
-                message: 'Invalid value length',
-                code: ExceptionCode::RESPONSE_SR_UNPACK_VALUE_LENGTH_FAIL->value,
-                context: [
-                    'method' => __METHOD__,
-                    'length' => $length,
-                ]
-            );
         }
 
         if ($length === 0) {
