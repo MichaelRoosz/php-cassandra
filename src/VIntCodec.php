@@ -19,6 +19,8 @@ final class VIntCodec {
     private const INT_MIN_SIGNED_32BIT = -2_147_483_648;
     private const INT_MIN_UNSIGNED_32BIT = 0;
 
+    private const LOGICAL_SHIFT_8_MASK = PHP_INT_MAX >> 7;
+
     /**
      * @throws \Cassandra\Exception\VIntCodecException
      */
@@ -160,7 +162,7 @@ final class VIntCodec {
 
         while (true) {
             $cur = $number & 0xFF;
-            $next = ($number >> 8) & PHP_INT_MAX;
+            $next = ($number >> 8) & self::LOGICAL_SHIFT_8_MASK;
 
             if ($next === 0 && ($cur & $mask) === 0) {
                 $number = $cur;
