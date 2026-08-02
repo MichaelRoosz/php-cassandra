@@ -93,7 +93,23 @@ final class PreparedResultCache {
             $result->getPreparedData(),
         );
 
-        $cachedResult->setRequest($request);
+        // A copy, not the request itself. A request is addressed on its way to
+        // the wire and keeps what it was given, so
+        // {@see RequestExecutor::applyDefaultKeyspace()} replaces the keyspace of
+        // one that is sent again — and an application that hands the same
+        // {@see Prepare} object to a second send after
+        // {@see \Cassandra\Connection::setKeyspace()} would have that mutation
+        // reach this entry, which is filed under the keyspace of the first send.
+        // What it is filed under is then no longer what it says it is, and the
+        // repreparation path rebuilds its PREPARE out of exactly this request
+        // ({@see \Cassandra\Connection\ResponseDispatcher::handleResponseError()}),
+        // so an UNPREPARED for this statement id would prepare and execute the
+        // query against the other keyspace, with nothing to show for it.
+        //
+        // Shallow is enough: what a send changes is the options, and those are
+        // replaced wholesale rather than mutated, so the copy keeps the ones it
+        // was stored with.
+        $cachedResult->setRequest(clone $request);
 
         $key = $request->getHash();
 
