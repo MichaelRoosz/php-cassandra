@@ -327,6 +327,18 @@ final class StreamReader {
 
         $length = $this->readInt();
 
+        if ($length < 0) {
+            throw new ResponseException(
+                message: 'Invalid long string length',
+                code: ExceptionCode::RESPONSE_SR_INVALID_LONG_STRING_LENGTH->value,
+                context: [
+                    'method' => __METHOD__,
+                    'length' => $length,
+                    'offset' => $this->pos(),
+                ]
+            );
+        }
+
         return $length === 0 ? '' : $this->read($length);
     }
 
@@ -550,6 +562,11 @@ final class StreamReader {
 
         /** @psalm-suppress MixedReturnStatement */
         return $value;
+    }
+
+    public function remainingLength(): int {
+
+        return $this->dataLength - $this->offset;
     }
 
     public function reset(): void {

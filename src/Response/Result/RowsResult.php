@@ -55,6 +55,8 @@ final class RowsResult extends Result {
         $this->rowsMetadata = $this->readRowsMetadata();
         $this->rowCount = $this->stream->readInt();
 
+        $this->assertRowCountFitsInBody();
+
         $this->dataOffset = $this->stream->pos();
         $this->dataOffsetOfPreviousRow = $this->dataOffset;
 
@@ -454,12 +456,19 @@ final class RowsResult extends Result {
         $savedOffset = $this->stream->pos();
         $this->stream->offset($this->dataOffset);
 
-        $rows = [];
-        for ($i = 0; $i < $this->rowCount; ++$i) {
-            $rows[] = $this->readNextRow(FetchType::ASSOC);
+        // Restored however this ends. This reads the whole result set from the
+        // start without moving the fetch cursor, so a row that cannot be decoded
+        // would otherwise leave the reader parked mid-stream while
+        // {@see self::$fetchedRows} still says where the caller had got to — and
+        // the next fetch() would hand them the middle of a row.
+        try {
+            $rows = [];
+            for ($i = 0; $i < $this->rowCount; ++$i) {
+                $rows[] = $this->readNextRow(FetchType::ASSOC);
+            }
+        } finally {
+            $this->stream->offset($savedOffset);
         }
-
-        $this->stream->offset($savedOffset);
 
         return new RowsData(rows: $rows);
     }
@@ -549,6 +558,57 @@ final class RowsResult extends Result {
                 'argument' => $argument,
                 'index' => $index,
                 'column_count' => $columnCount,
+            ]
+        );
+    }
+
+    /**
+     * Refuse a row count the frame body cannot possibly hold.
+     *
+     * The count is four bytes the peer chose, and everything that walks the
+     * result set is driven by it: {@see self::fetchAll()},
+     * {@see self::getRowsData()} and {@see self::fetchAllColumns()} all build an
+     * array with one entry per row. A cell is at least its four-byte length
+     * prefix, so a row is at least four bytes per column, and a count past what
+     * is left of the body is a number no well-formed frame can mean.
+     *
+     * Without this the arithmetic has a hole in it exactly where it hurts: a
+     * result declaring no columns has rows of no bytes at all, so a sixteen-byte
+     * body can announce two billion of them and the walkers will dutifully build
+     * two billion entries for it. There is no such result — a SELECT has at least
+     * one column — so it is refused rather than bounded.
+     *
+     * Checked here rather than left to the readers to run out of data, because
+     * by then the memory has already been asked for; the same reasoning as
+     * {@see \Cassandra\Connection\ResponseReader::MAX_FRAME_BODY_LENGTH} and
+     * {@see \Cassandra\Response\StreamReader::MAX_TYPE_NESTING_DEPTH}.
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    private function assertRowCountFitsInBody(): void {
+
+        $columnsCount = $this->rowsMetadata->columnsCount;
+        $remainingLength = $this->stream->remainingLength();
+
+        // A [int] on the wire, so both of these are signed and a corrupt frame
+        // can make either negative.
+        $maximumRowCount = ($this->rowCount < 0 || $columnsCount < 0)
+            ? -1
+            : ($columnsCount === 0 ? 0 : intdiv($remainingLength, $columnsCount * 4));
+
+        if ($maximumRowCount >= 0 && $this->rowCount <= $maximumRowCount) {
+            return;
+        }
+
+        throw new ResponseException(
+            'Result declares more rows than its frame body can hold',
+            ExceptionCode::RESPONSE_ROWS_ROW_COUNT_OUT_OF_RANGE->value,
+            [
+                'operation' => 'RowsResult::__construct',
+                'row_count' => $this->rowCount,
+                'max_row_count' => $maximumRowCount,
+                'columns_count' => $columnsCount,
+                'remaining_body_length' => $remainingLength,
             ]
         );
     }
