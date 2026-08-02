@@ -58,6 +58,7 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
             initialProtocolVersion: ProtocolVersion::V4,
         );
     }
+
     public function testConnectionNonPositiveHeartbeatIntervalIsRejected(): void {
         // Heartbeats are turned off with null; zero would mean probing on every
         // single read.
@@ -80,6 +81,14 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
         $this->expectException(ConnectionException::class);
 
         new ConnectionOptions(requestTimeoutInSeconds: 0);
+    }
+
+    public function testConnectionPrefersV4WhenInitialVersionIsOmitted(): void {
+        $options = new ConnectionOptions(
+            allowedProtocolVersions: [ProtocolVersion::V5, ProtocolVersion::V3, ProtocolVersion::V4],
+        );
+
+        $this->assertSame(ProtocolVersion::V4, $options->initialProtocolVersion);
     }
 
     public function testConnectionRejectsInvalidAllowedProtocolVersionTypes(): void {
@@ -110,6 +119,14 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
             heartbeatIntervalInSeconds: null,
             heartbeatTimeoutInSeconds: 0,
         ));
+    }
+
+    public function testConnectionUsesLowestAllowedProtocolVersionWhenV4IsNotAllowed(): void {
+        $options = new ConnectionOptions(
+            allowedProtocolVersions: [ProtocolVersion::V5, ProtocolVersion::V3],
+        );
+
+        $this->assertSame(ProtocolVersion::V3, $options->initialProtocolVersion);
     }
 
     /**
