@@ -8,6 +8,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\SocketException;
 use Socket as PhpSocket;
 use Cassandra\Request\Request;
+use ErrorException;
 
 final class Socket extends NodeImplementation implements IoNode {
     /**
@@ -663,10 +664,15 @@ final class Socket extends NodeImplementation implements IoNode {
             );
         }
 
-        socket_set_option($socket, SOL_TCP, TCP_NODELAY, 1);
+        $this->setSocketOption($socket, SOL_TCP, TCP_NODELAY, 1);
 
         foreach ($this->config->socketOptions as $optname => $optval) {
-            socket_set_option($socket, SOL_SOCKET, (int) $optname, $optval);
+            $this->setSocketOption(
+                $socket,
+                SOL_SOCKET,
+                (int) $optname,
+                $this->validateSocketOptionValue($optval, (int) $optname),
+            );
         }
 
         // Whatever SO_RCVTIMEO the previous socket was left with says nothing
@@ -1067,6 +1073,58 @@ final class Socket extends NodeImplementation implements IoNode {
     }
 
     /**
+     * Apply an option without allowing a PHP warning, native exception or
+     * Error raised by ext-sockets to cross the transport boundary.
+     *
+     * @param array<mixed>|int|string $value
+     *
+     * @throws \Cassandra\Exception\SocketException
+     */
+    private function setSocketOption(PhpSocket $socket, int $level, int $option, array|int|string $value): void {
+        set_error_handler(function (int $severity, string $message, string $file, int $line) use ($level, $option): never {
+            $previous = new ErrorException($message, 0, $severity, $file, $line);
+
+            throw new SocketException(
+                message: 'Failed to set socket option',
+                code: ExceptionCode::SOCKET_SET_OPTION_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'socket_set_option',
+                    'socket_option_level' => $level,
+                    'socket_option' => $option,
+                ],
+                previous: $previous,
+            );
+        });
+
+        try {
+            $success = socket_set_option($socket, $level, $option, $value);
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($success) {
+            return;
+        }
+
+        $errorCode = socket_last_error($socket);
+
+        throw new SocketException(
+            message: 'Failed to set socket option: ' . socket_strerror($errorCode),
+            code: ExceptionCode::SOCKET_SET_OPTION_FAILED->value,
+            context: [
+                'host' => $this->config->host,
+                'port' => $this->config->port,
+                'operation' => 'socket_set_option',
+                'socket_option_level' => $level,
+                'socket_option' => $option,
+                'system_error_code' => $errorCode,
+            ],
+        );
+    }
+
+    /**
      * @throws \Cassandra\Exception\SocketException
      */
     private function throwConnectTimeout(): never {
@@ -1079,6 +1137,33 @@ final class Socket extends NodeImplementation implements IoNode {
                 'operation' => 'connect',
                 'socket_options' => $this->config->socketOptions,
             ]
+        );
+    }
+
+    /**
+     * Keep defensive runtime validation of the configuration's broader input
+     * away from the narrower type accepted by ext-sockets.
+     *
+     * @return array<mixed>|int|string
+     *
+     * @throws \Cassandra\Exception\SocketException
+     */
+    private function validateSocketOptionValue(mixed $value, int $option): array|int|string {
+        if (is_array($value) || is_int($value) || is_string($value)) {
+            return $value;
+        }
+
+        throw new SocketException(
+            message: 'Invalid socket option value',
+            code: ExceptionCode::SOCKET_SET_OPTION_FAILED->value,
+            context: [
+                'host' => $this->config->host,
+                'port' => $this->config->port,
+                'operation' => 'socket_set_option',
+                'socket_option_level' => SOL_SOCKET,
+                'socket_option' => $option,
+                'value_type' => get_debug_type($value),
+            ],
         );
     }
 

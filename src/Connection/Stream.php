@@ -80,6 +80,14 @@ final class Stream extends NodeImplementation implements IoNode {
             );
         }
 
+        if (!is_finite($config->timeoutInSeconds)) {
+            throw new StreamException(
+                message: 'Invalid stream timeout: it must be a finite number',
+                code: ExceptionCode::STREAM_INVALID_CONFIG->value,
+                context: ['timeout_seconds' => is_nan($config->timeoutInSeconds) ? 'NAN' : ($config->timeoutInSeconds > 0.0 ? 'INF' : '-INF')]
+            );
+        }
+
         // Fractional timeouts are kept as configured; a non-positive value
         // disables the timeout entirely.
         $timeout = $config->timeoutInSeconds > 0.0 ? $config->timeoutInSeconds : self::NO_TIMEOUT;

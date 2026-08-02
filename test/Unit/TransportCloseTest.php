@@ -10,6 +10,9 @@ use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Connection\Stream;
 use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Exception\NodeException;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\SocketException;
+use ErrorException;
 use Socket as PhpSocket;
 
 /**
@@ -57,6 +60,26 @@ final class TransportCloseTest extends AbstractUnitTestCase {
             fclose($this->server);
         }
         $this->server = null;
+    }
+
+    public function testAnInvalidSocketOptionIsWrappedAtTheTransportBoundary(): void {
+        set_error_handler(static function (int $severity, string $message): never {
+            throw new ErrorException($message, 0, $severity);
+        });
+
+        try {
+            $node = new Socket(new SocketNodeConfig(
+                host: '127.0.0.1',
+                socketOptions: [999999 => 1],
+            ));
+            $node->connect();
+            $this->fail('Expected the invalid socket option to be rejected');
+        } catch (SocketException $e) {
+            $this->assertSame(ExceptionCode::SOCKET_SET_OPTION_FAILED->value, $e->getCode());
+            $this->assertInstanceOf(ErrorException::class, $e->getPrevious());
+        } finally {
+            restore_error_handler();
+        }
     }
 
     public function testASocketResetIsReportedOnlyAsAnException(): void {

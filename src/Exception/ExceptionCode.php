@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1388
+ * Next free code: 1389
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -186,6 +186,7 @@ enum ExceptionCode: int {
     case SOCKET_RESET_BY_PEER_DURING_READ = 1045;
     case SOCKET_RESET_BY_PEER_DURING_WRITE = 1315;
     case SOCKET_SELECT_FAILED = 1312;
+    case SOCKET_SET_OPTION_FAILED = 1388;
     case SOCKET_TIMEOUT_DURING_CONNECT = 1314;
     case SOCKET_TIMEOUT_DURING_READ = 1316;
     case SOCKET_TIMEOUT_DURING_WRITE = 1313;

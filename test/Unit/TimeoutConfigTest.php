@@ -14,6 +14,7 @@ use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\RequestException;
 use Cassandra\Exception\SocketException;
+use Cassandra\Exception\StreamException;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
@@ -31,6 +32,16 @@ use ReflectionProperty;
  * "no timeout" is spelled null instead and a non-positive value is rejected.
  */
 final class TimeoutConfigTest extends AbstractUnitTestCase {
+    /**
+     * @return array<string, array{float}>
+     */
+    public static function nonFiniteStreamTimeoutProvider(): array {
+        return [
+            'not a number' => [NAN],
+            'positive infinity' => [INF],
+            'negative infinity' => [-INF],
+        ];
+    }
     /**
      * @return array<string, array{float}>
      */
@@ -262,9 +273,18 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
     }
 
     public function testStreamNonFiniteConnectTimeoutIsRejected(): void {
-        $this->expectException(\Cassandra\Exception\StreamException::class);
+        $this->expectException(StreamException::class);
 
         new Stream(new StreamNodeConfig(connectTimeoutInSeconds: INF));
+    }
+
+    /**
+     * @dataProvider nonFiniteStreamTimeoutProvider
+     */
+    public function testStreamNonFiniteTimeoutIsRejected(float $timeout): void {
+        $this->expectException(StreamException::class);
+
+        new Stream(new StreamNodeConfig(timeoutInSeconds: $timeout));
     }
 
     public function testStreamTimeoutIsTakenFromTheConfig(): void {
