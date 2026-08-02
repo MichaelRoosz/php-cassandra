@@ -10,10 +10,28 @@ use Cassandra\Type;
 use Cassandra\ValueFactory;
 
 final class VectorInfo extends TypeInfo {
+
+    public const MAX_DIMENSIONS = 8192;
+
+    /**
+     * @throws \Cassandra\Exception\TypeInfoException
+     */
     public function __construct(
         public readonly TypeInfo $valueType,
         public readonly int $dimensions,
     ) {
+        if ($dimensions < 1 || $dimensions > self::MAX_DIMENSIONS) {
+            throw new TypeInfoException(
+                'Vector dimensions must be between 1 and ' . self::MAX_DIMENSIONS,
+                ExceptionCode::TYPEINFO_VECTOR_INVALID_DIMENSIONS->value,
+                [
+                    'dimensions' => $dimensions,
+                    'minimum_dimensions' => 1,
+                    'maximum_dimensions' => self::MAX_DIMENSIONS,
+                ]
+            );
+        }
+
         parent::__construct(Type::VECTOR);
     }
 
@@ -80,6 +98,18 @@ final class VectorInfo extends TypeInfo {
         }
 
         $dimensions = $typeDefinition['dimensions'];
+
+        if ($dimensions < 1 || $dimensions > self::MAX_DIMENSIONS) {
+            throw new TypeInfoException(
+                'Vector dimensions must be between 1 and ' . self::MAX_DIMENSIONS,
+                ExceptionCode::TYPEINFO_VECTOR_INVALID_DIMENSIONS->value,
+                [
+                    'dimensions' => $dimensions,
+                    'minimum_dimensions' => 1,
+                    'maximum_dimensions' => self::MAX_DIMENSIONS,
+                ]
+            );
+        }
 
         return new self($valueType, $dimensions);
     }

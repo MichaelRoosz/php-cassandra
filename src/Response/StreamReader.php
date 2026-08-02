@@ -479,6 +479,7 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     final public function readTypeInfo(): TypeInfo {
 
@@ -725,6 +726,7 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function readTypeInfoAtDepth(int $depth): TypeInfo {
 

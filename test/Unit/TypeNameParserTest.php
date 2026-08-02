@@ -1012,6 +1012,13 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         $this->parser->parse($typeString);
     }
 
+    public function testVectorTypeErrorDimensionsAboveMaximum(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value);
+
+        $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',8193)');
+    }
+
     // =============================================
     // VECTOR TYPE TESTS
     // =============================================
@@ -1065,13 +1072,20 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',' . TypeName::INT32->value . ',' . TypeName::BOOLEAN->value . ')');
     }
 
+    public function testVectorTypeErrorZeroDimensions(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value);
+
+        $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',0)');
+    }
+
     public function testVectorTypes(): void {
         $testCases = [
             [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',128)', Type::FLOAT, 128],
             [TypeName::VECTOR->value . '(' . TypeName::DOUBLE->value . ',256)', Type::DOUBLE, 256],
             [TypeName::VECTOR->value . '(' . TypeName::INT32->value . ',10)', Type::INT, 10],
             [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',1)', Type::FLOAT, 1],
-            [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',999999)', Type::FLOAT, 999999],
+            [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',8192)', Type::FLOAT, 8192],
         ];
 
         foreach ($testCases as [$typeString, $expectedElementType, $expectedDimensions]) {
@@ -1095,7 +1109,7 @@ class TypeNameParserTest extends AbstractUnitTestCase {
     public function testVectorTypeWithBoundaryDimensions(): void {
         $testCases = [
             [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',1)', 1],
-            [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',2147483647)', 2147483647], // Max int
+            [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',8192)', 8192],
         ];
 
         foreach ($testCases as [$typeString, $expectedDimensions]) {

@@ -60,6 +60,7 @@ final class TypeNameParser {
 
     /**
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     public function parse(string $typeString, bool $isFrozen = false): TypeInfo {
 
@@ -269,6 +270,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      *
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseFrozenType(array $params, bool $isFrozen): TypeInfo {
 
@@ -292,6 +294,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseListType(array $params, bool $isFrozen): TypeInfo {
 
@@ -317,6 +320,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseMapType(array $params, bool $isFrozen): TypeInfo {
 
@@ -343,6 +347,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseReversedType(array $params, bool $isFrozen): TypeInfo {
 
@@ -366,6 +371,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseSetType(array $params, bool $isFrozen): TypeInfo {
 
@@ -391,6 +397,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseTupleType(array $params, bool $isFrozen): TypeInfo {
 
@@ -418,6 +425,7 @@ final class TypeNameParser {
 
     /**
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseType(string $typeString, bool $isFrozen): TypeInfo {
 
@@ -519,6 +527,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseUDTType(array $params, bool $isFrozen): TypeInfo {
 
@@ -564,6 +573,7 @@ final class TypeNameParser {
      * @param list<array{name: ?string, value: string}> $params
      * 
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function parseVectorType(array $params, bool $isFrozen): TypeInfo {
 
@@ -596,14 +606,15 @@ final class TypeNameParser {
 
         $dimensions = (int) $params[1]['value'];
 
-        if ($dimensions < 0) {
+        if ($dimensions < 1 || $dimensions > VectorInfo::MAX_DIMENSIONS) {
             throw new TypeNameParserException(
-                'Invalid vector type dimensions: must be non-negative',
+                'Invalid vector type dimensions: must be between 1 and ' . VectorInfo::MAX_DIMENSIONS,
                 ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_OUT_OF_RANGE->value,
                 [
                     'provided_value' => $dimensions,
-                    'minimum_value' => 0,
-                    'reason' => 'dimensions_must_be_non_negative',
+                    'minimum_value' => 1,
+                    'maximum_value' => VectorInfo::MAX_DIMENSIONS,
+                    'reason' => 'dimensions_out_of_supported_range',
                 ]
             );
         }

@@ -926,6 +926,21 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testVectorRejectsInvalidDimensionDefinitions(): void {
+        foreach ([0, -1, 8193] as $dimensions) {
+            try {
+                ValueFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::VECTOR,
+                    'valueType' => Type::FLOAT,
+                    'dimensions' => $dimensions,
+                ]);
+                $this->fail('Expected invalid vector dimensions to be rejected: ' . $dimensions);
+            } catch (\Cassandra\Exception\TypeInfoException $e) {
+                $this->assertSame(ExceptionCode::TYPEINFO_VECTOR_INVALID_DIMENSIONS->value, $e->getCode());
+            }
+        }
+    }
+
     public function testVectorRoundTripEncodesAllElements(): void {
         $value = [1.5, -2.5, 3.5];
         $binary = Value\Vector::fromValue($value, Type::FLOAT, 3)->getBinary();

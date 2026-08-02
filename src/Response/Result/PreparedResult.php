@@ -23,6 +23,7 @@ class PreparedResult extends Result {
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     public function __construct(Header $header, StreamReader $stream) {
 
@@ -56,6 +57,7 @@ class PreparedResult extends Result {
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function readPreparedData(): PreparedData {
 
@@ -91,6 +93,7 @@ class PreparedResult extends Result {
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\TypeNameParserException
+     * @throws \Cassandra\Exception\TypeInfoException
      */
     private function readPrepareMetadata(): PrepareMetadata {
         $flags = $this->stream->readInt();
