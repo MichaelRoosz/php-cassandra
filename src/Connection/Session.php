@@ -1567,6 +1567,98 @@ final class Session {
     }
 
     /**
+     * The body of {@see self::processResponse()}, run as one pass of
+     * {@see ListenerRegistry}.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\RequestException
+     * @throws \Cassandra\Exception\RequestTimeoutException
+     * @throws \Cassandra\Exception\ResponseException
+     * @throws \Cassandra\Exception\ValueException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ServerException
+     */
+    private function dispatchResponse(Response\Response $response, Node $node): ?Response\Response {
+
+        $streamId = $response->getStream();
+
+        $this->heartbeat->recordResponse();
+        $this->nodeConnector->recordSuccess($node->getConfig());
+
+        if ($this->streamIds->isOrphaned($streamId)) {
+            // The late answer to a statement that was already given up on. It
+            // has nowhere to go, but its arrival proves the stream id is free
+            // again, so it goes back into circulation here.
+            $this->streamIds->releaseParked($streamId);
+
+            return null;
+        }
+
+        if ($this->valueEncodeConfig !== null && ($response instanceof Result\RowsResult)) {
+            $response->configureValueEncoding($this->valueEncodeConfig);
+        }
+
+        $statement = $this->statements->get($streamId);
+
+        if ($statement === null && isset($this->syncWaitStreams[$streamId])) {
+            // Nothing here can take delivery of it — the sync path registers no
+            // statement — and the loop that is waiting for it may not be the one
+            // that read it. Put aside for that loop to pick up on its next pass;
+            // see {@see self::$syncWaitStreams}. Still returned below, exactly as
+            // an async statement's answer is.
+            $this->syncWaitResponses[$streamId] = $response;
+        }
+
+        $isHeartbeatProbe = $statement !== null && $statement === $this->heartbeat->getProbe();
+
+        if ($statement !== null) {
+            $this->statements->forget($streamId);
+
+            // Taken out of the pending map before its answer is handled, so
+            // handling that ends in a failure rather than a result — the
+            // repreparation limit above all, see
+            // {@see ResponseDispatcher::MAX_REPREPARATIONS} — must not leave it
+            // neither pending nor finished. It is given up on
+            // instead, or a caller would be left waiting on a statement this
+            // connection has forgotten, holding a stream id nothing releases.
+            $handled = false;
+
+            try {
+                $response = $this->dispatcher->handleResponse($statement->getRequest(), $response, $statement);
+                $handled = true;
+            } finally {
+                if (!$handled) {
+                    $this->statements->releaseAfterFailedResponseHandling($statement, $streamId);
+                }
+            }
+
+            if ($response !== null) {
+                $statement->setResponse($response);
+                $this->streamIds->release($streamId, $statement->getStreamGeneration());
+            }
+        }
+
+        if ($response instanceof Response\Event) {
+            $this->listeners->notifyEvent($response);
+        }
+
+        // Last, once the statement this frame belongs to has been resolved and
+        // its stream id disposed of. A listener that threw is reported here
+        // rather than where it threw, so that a fault in the application's own
+        // callback cannot cost it the answer the node did deliver; see
+        // {@see ListenerRegistry}.
+        $this->listeners->throwDeferred();
+
+        if ($isHeartbeatProbe) {
+            return null;
+        }
+
+        return $response;
+    }
+
+    /**
      * Close a connection whose frame stream the reader has lost its place in.
      *
      * A reader failure normally leaves the connection alone: the frame was
@@ -1719,6 +1811,14 @@ final class Session {
      * finishing the statement, and the driver's own heartbeat, which is not one
      * of the caller's requests and so has no answer of theirs to hand back.
      *
+     * Handling a frame runs the application's listeners, so it is one pass of
+     * {@see ListenerRegistry}: a failure this frame's listeners put aside is
+     * either reported by the throwDeferred() at the end of the work below, or
+     * discarded here when that work raises before reaching it. Left standing it
+     * would be reported by whichever frame is handled next, telling a caller
+     * whose request had nothing to do with it that a listener threw; see
+     * {@see ListenerRegistry::$deferredFailure}.
+     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -1731,80 +1831,13 @@ final class Session {
      */
     private function processResponse(Response\Response $response, Node $node): ?Response\Response {
 
-        $streamId = $response->getStream();
+        $outerListenerFailure = $this->listeners->beginPass();
 
-        $this->heartbeat->recordResponse();
-        $this->nodeConnector->recordSuccess($node->getConfig());
-
-        if ($this->streamIds->isOrphaned($streamId)) {
-            // The late answer to a statement that was already given up on. It
-            // has nowhere to go, but its arrival proves the stream id is free
-            // again, so it goes back into circulation here.
-            $this->streamIds->releaseParked($streamId);
-
-            return null;
+        try {
+            return $this->dispatchResponse($response, $node);
+        } finally {
+            $this->listeners->endPass($outerListenerFailure);
         }
-
-        if ($this->valueEncodeConfig !== null && ($response instanceof Result\RowsResult)) {
-            $response->configureValueEncoding($this->valueEncodeConfig);
-        }
-
-        $statement = $this->statements->get($streamId);
-
-        if ($statement === null && isset($this->syncWaitStreams[$streamId])) {
-            // Nothing here can take delivery of it — the sync path registers no
-            // statement — and the loop that is waiting for it may not be the one
-            // that read it. Put aside for that loop to pick up on its next pass;
-            // see {@see self::$syncWaitStreams}. Still returned below, exactly as
-            // an async statement's answer is.
-            $this->syncWaitResponses[$streamId] = $response;
-        }
-
-        $isHeartbeatProbe = $statement !== null && $statement === $this->heartbeat->getProbe();
-
-        if ($statement !== null) {
-            $this->statements->forget($streamId);
-
-            // Taken out of the pending map before its answer is handled, so
-            // handling that ends in a failure rather than a result — the
-            // repreparation limit above all, see
-            // {@see ResponseDispatcher::MAX_REPREPARATIONS} — must not leave it
-            // neither pending nor finished. It is given up on
-            // instead, or a caller would be left waiting on a statement this
-            // connection has forgotten, holding a stream id nothing releases.
-            $handled = false;
-
-            try {
-                $response = $this->dispatcher->handleResponse($statement->getRequest(), $response, $statement);
-                $handled = true;
-            } finally {
-                if (!$handled) {
-                    $this->statements->releaseAfterFailedResponseHandling($statement, $streamId);
-                }
-            }
-
-            if ($response !== null) {
-                $statement->setResponse($response);
-                $this->streamIds->release($streamId, $statement->getStreamGeneration());
-            }
-        }
-
-        if ($response instanceof Response\Event) {
-            $this->listeners->notifyEvent($response);
-        }
-
-        // Last, once the statement this frame belongs to has been resolved and
-        // its stream id disposed of. A listener that threw is reported here
-        // rather than where it threw, so that a fault in the application's own
-        // callback cannot cost it the answer the node did deliver; see
-        // {@see ListenerRegistry}.
-        $this->listeners->throwDeferred();
-
-        if ($isHeartbeatProbe) {
-            return null;
-        }
-
-        return $response;
     }
 
     /**
