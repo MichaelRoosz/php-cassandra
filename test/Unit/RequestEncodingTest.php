@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Consistency;
+use Cassandra\EventType;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\RequestException;
 use Cassandra\Protocol\ProtocolVersion;
@@ -14,8 +15,11 @@ use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Query;
 use Cassandra\Request\QueryFlag;
+use Cassandra\Request\Register;
+use Cassandra\Request\Startup;
 use Cassandra\SerialConsistency;
 use DateTimeImmutable;
+use ReflectionClass;
 use ReflectionMethod;
 
 /**
@@ -354,6 +358,26 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::REQUEST_FIELD_TOO_LONG->value);
 
         $request->getBody();
+    }
+    public function testRegisterRejectsNonEventTypeEntries(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_REGISTER_EVENT->value);
+
+        (new ReflectionClass(Register::class))->newInstanceArgs([[EventType::SCHEMA_CHANGE, 'STATUS_CHANGE']]);
+    }
+
+    public function testStartupRejectsNonStringNames(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_STARTUP_OPTION->value);
+
+        (new ReflectionClass(Startup::class))->newInstanceArgs([[0 => 'value']]);
+    }
+
+    public function testStartupRejectsNonStringValues(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_STARTUP_OPTION->value);
+
+        (new ReflectionClass(Startup::class))->newInstanceArgs([['name' => 1]]);
     }
 
     public function testUnknownNamedBindValueThrows(): void {

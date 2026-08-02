@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Request;
 
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\RequestException;
 use Cassandra\Protocol\Opcode;
 
 final class Startup extends Request {
@@ -27,9 +29,13 @@ final class Startup extends Request {
      * This is optional, if not specified no compression will be used.
      *
      * @param array<string, string> $options
+     *
+     * @throws \Cassandra\Exception\RequestException
      */
     public function __construct(private array $options = []) {
         parent::__construct(Opcode::REQUEST_STARTUP);
+
+        self::validateOptions($options);
     }
 
     /**
@@ -47,5 +53,26 @@ final class Startup extends Request {
         }
 
         return $body;
+    }
+
+    /**
+     * @param array<mixed> $options
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    private static function validateOptions(array $options): void {
+
+        foreach ($options as $name => $value) {
+            if (!is_string($name) || !is_string($value)) {
+                throw new RequestException(
+                    'Invalid startup option; every name and value must be a string',
+                    ExceptionCode::REQUEST_INVALID_STARTUP_OPTION->value,
+                    [
+                        'name_type' => get_debug_type($name),
+                        'value_type' => get_debug_type($value),
+                    ]
+                );
+            }
+        }
     }
 }

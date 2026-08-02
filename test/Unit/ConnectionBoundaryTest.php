@@ -12,11 +12,23 @@ use Cassandra\Connection\NodeSelector;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
+use Cassandra\Exception\StatementException;
 use Cassandra\Request\Request;
 use ReflectionClass;
 use stdClass;
 
 final class ConnectionBoundaryTest extends AbstractUnitTestCase {
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function statementListMethodProvider(): array {
+        return [
+            'try resolve' => ['tryResolveStatements'],
+            'wait for any' => ['waitForAnyStatement'],
+            'wait for all' => ['waitForStatements'],
+        ];
+    }
+
     public function testConnectionRejectsANonNodeConfiguration(): void {
         $this->expectException(ConnectionException::class);
         $this->expectExceptionCode(ExceptionCode::CONNECTION_INVALID_NODE_CONFIG->value);
@@ -66,6 +78,18 @@ final class ConnectionBoundaryTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::NODE_IMPLEMENTATION_FAILED->value);
 
         (new NodeConnector([new FailingIoNodeConfig()], $selector))->open();
+    }
+
+    /**
+     * @dataProvider statementListMethodProvider
+     */
+    public function testStatementListMethodsRejectNonStatementEntries(string $method): void {
+        $connection = new Connection([]);
+
+        $this->expectException(StatementException::class);
+        $this->expectExceptionCode(ExceptionCode::STATEMENT_INVALID_LIST_ENTRY->value);
+
+        $connection->$method([1]);
     }
 }
 

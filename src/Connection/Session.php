@@ -9,6 +9,7 @@ use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Exception\RequestTimeoutException;
+use Cassandra\Exception\StatementException;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request;
 use Cassandra\Response;
@@ -993,6 +994,8 @@ final class Session {
      */
     public function tryResolveStatements(array $statements, int $max = PHP_INT_MAX): int {
 
+        $statements = self::validateStatementList($statements, 'tryResolveStatements');
+
         $this->timeOutExpiredStatements();
 
         // Counted per distinct statement rather than per element: the return
@@ -1120,6 +1123,7 @@ final class Session {
     public function waitForAnyStatement(array $statements, ?float $timeoutInSeconds = null): ?Statement {
 
         $this->deadlines->assertValidWaitTimeout($timeoutInSeconds, 'waitForAnyStatement');
+        $statements = self::validateStatementList($statements, 'waitForAnyStatement');
 
         if ($statements === []) {
             return null;
@@ -1303,6 +1307,7 @@ final class Session {
     public function waitForStatements(array $statements, ?float $timeoutInSeconds = null): void {
 
         $this->deadlines->assertValidWaitTimeout($timeoutInSeconds, 'waitForStatements');
+        $statements = self::validateStatementList($statements, 'waitForStatements');
 
         $waitDeadline = $this->deadlines->in($timeoutInSeconds);
         $deadlineExceeded = false;
@@ -2219,5 +2224,33 @@ final class Session {
                 'keyspace' => $this->keyspace,
             ]);
         }
+    }
+
+    /**
+     * @param array<mixed> $statements
+     * @return array<Statement>
+     *
+     * @throws \Cassandra\Exception\StatementException
+     */
+    private static function validateStatementList(array $statements, string $operation): array {
+
+        $validated = [];
+        foreach ($statements as $index => $statement) {
+            if (!$statement instanceof Statement) {
+                throw new StatementException(
+                    'Invalid statement list; every entry must be a Statement',
+                    ExceptionCode::STATEMENT_INVALID_LIST_ENTRY->value,
+                    [
+                        'operation' => $operation,
+                        'index' => $index,
+                        'actual_type' => get_debug_type($statement),
+                    ]
+                );
+            }
+
+            $validated[$index] = $statement;
+        }
+
+        return $validated;
     }
 }
