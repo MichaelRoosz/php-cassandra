@@ -649,7 +649,24 @@ final class RowsResult extends Result {
                 break;
 
             case FetchType::BOTH:
-                foreach ($this->rowsMetadata->columns as $column) {
+                // The two views share one key space, because PHP folds a column
+                // name that is a canonical decimal integer string — a quoted
+                // numeric identifier such as "0" — into the very int a position
+                // uses. Appending the positional value would then put it at
+                // whatever key such a name left free, and every position after it
+                // would be off by one; that is why the index is written
+                // explicitly here and why the positional view is written again
+                // below, which puts back anything a later name overwrote.
+                //
+                // Settled in the positional view's favour because that is the one
+                // that has to be complete and in step with the columns: a caller
+                // reading $row[2] means the third column, whereas a name that
+                // spells a number is only ever reachable as that same key anyway.
+                // Re-assigning an existing key leaves it where it is, so the
+                // interleaved order of the row is unchanged.
+                $positional = [];
+
+                foreach ($this->rowsMetadata->columns as $index => $column) {
                     /** @psalm-suppress MixedAssignment */
                     $value = $this->stream->readValue($column->type, $this->valueEncodeConfig);
 
@@ -657,7 +674,15 @@ final class RowsResult extends Result {
                     $row[$column->name] = $value;
 
                     /** @psalm-suppress MixedAssignment */
-                    $row[] = $value;
+                    $row[$index] = $value;
+
+                    /** @psalm-suppress MixedAssignment */
+                    $positional[$index] = $value;
+                }
+
+                /** @psalm-suppress MixedAssignment */
+                foreach ($positional as $index => $value) {
+                    $row[$index] = $value;
                 }
 
                 break;
