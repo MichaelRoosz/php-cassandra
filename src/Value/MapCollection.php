@@ -201,28 +201,62 @@ final class MapCollection extends ValueReadableWithoutLength {
      * Undo the array-key coercion a map key went through on its way into the
      * PHP array, so that it can be encoded as the type it belongs to.
      *
-     * A PHP array key is an int or a string and nothing else, so a boolean key
-     * is already an int by the time anything here sees it: PHP itself folds
-     * true and false to 1 and 0 on assignment, and {@see self::fromStream()}
-     * spells the same coercion out for the keys it decodes. Boolean is the one
-     * key type that cannot survive that on its own —
-     * {@see Boolean::fromMixedValue()} takes a bool and refuses everything else
-     * — so without this a `map<boolean, …>` could not be encoded at all,
-     * whether it was built by hand or read off the wire a moment earlier.
+     * A PHP array key is an int or a string and nothing else, and PHP folds
+     * both booleans and canonical decimal integer strings into ints on
+     * assignment. Two families of key type therefore cannot survive being put
+     * into the array at all, and both are spelled back out here.
      *
-     * Only the two ints a boolean can have become one are converted. Anything
-     * else at a boolean key is not a coerced bool but a key that was never
-     * valid, and is left to be refused where every other bad key is.
+     * A boolean key is already an int by the time anything here sees it: PHP
+     * itself folds true and false to 1 and 0, and {@see self::fromStream()}
+     * spells the same coercion out for the keys it decodes.
+     * {@see Boolean::fromMixedValue()} takes a bool and refuses everything else,
+     * so without this a `map<boolean, …>` could not be encoded at all. Only the
+     * two ints a boolean can have become one are converted; anything else at a
+     * boolean key is not a coerced bool but a key that was never valid, and is
+     * left to be refused where every other bad key is.
      *
-     * The other key types need nothing here: the numeric ones take the int PHP
-     * left them as, and the two that {@see self::fromStream()} turns into
-     * strings — float and double, which PHP would otherwise truncate to int —
-     * are parsed back from that string by their own value classes.
+     * A string-valued key — ascii, text, varchar, blob and custom — goes the
+     * same way whenever it spells a canonical integer: `['123' => …]` is an int
+     * key the moment the literal is written, and so is the "123" that
+     * {@see self::fromStream()} decoded a moment earlier. Their value classes
+     * take a string and nothing else, so without this a `map<text, …>` with
+     * such a key could neither be built by hand nor written back after being
+     * read. The fold is lossless in exactly the cases it happens in — PHP only
+     * folds a key that is already the canonical decimal spelling of the int —
+     * so this restores the original key rather than guessing at one.
+     * {@see \Cassandra\Request\Request::encodeQueryValuesAsBinary()} does the
+     * same for bind marker names, which are array keys for the same reason.
+     *
+     * uuid and timeuuid are among them, though only under
+     * {@see \Cassandra\Value\EncodeOption\UuidEncodeOption::AS_BINARY}: the raw
+     * 16 bytes a key decodes to there are a string, and sixteen digits are a
+     * key PHP folds like any other. {@see Uuid::__construct()} reads that raw
+     * form back. The canonical string form the default option produces is never
+     * an integer spelling, so nothing happens to it.
+     *
+     * The rest need nothing: the numeric types take the int PHP left them as,
+     * and float and double — which {@see self::fromStream()} turns into strings
+     * precisely so PHP cannot truncate them to int — are parsed back from that
+     * string by their own value classes.
      */
     private static function keyAsNativeValue(TypeInfo $keyType, int|string $key): int|string|bool {
 
         if ($keyType->type === Type::BOOLEAN && ($key === 0 || $key === 1)) {
             return $key === 1;
+        }
+
+        if (is_int($key)) {
+            return match ($keyType->type) {
+                Type::ASCII,
+                Type::BLOB,
+                Type::CUSTOM,
+                Type::TEXT,
+                Type::TIMEUUID,
+                Type::UUID,
+                Type::VARCHAR => (string) $key,
+
+                default => $key,
+            };
         }
 
         return $key;
