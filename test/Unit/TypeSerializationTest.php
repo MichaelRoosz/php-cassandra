@@ -60,6 +60,15 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame(false, Value\Boolean::fromBinary('')->getValue());
     }
 
+    public function testBooleanRejectsTrailingBinaryData(): void {
+        try {
+            Value\Boolean::fromBinary("\1\0");
+            $this->fail('Expected a boolean value wider than one byte to be rejected');
+        } catch (ValueException $e) {
+            $this->assertSame(ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, $e->getCode());
+        }
+    }
+
     public function testCollectionsRejectCountsThatDoNotFitTheirBodies(): void {
         $cases = [
             [Value\ListCollection::class, ['type' => Type::LIST, 'valueType' => Type::INT]],
@@ -549,6 +558,44 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
                 ])
             )->getValue()
         );
+    }
+
+    public function testMapCollectionPreservesDistinctFloatingPointKeys(): void {
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::MAP,
+            'keyType' => Type::DOUBLE,
+            'valueType' => Type::INT,
+        ]);
+
+        $binary = pack('N', 2)
+            . pack('N', 8) . pack('E', 1.234567890123456) . pack('N', 4) . pack('N', 1)
+            . pack('N', 8) . pack('E', 1.234567890123457) . pack('N', 4) . pack('N', 2);
+
+        $decoded = Value\MapCollection::fromBinary($binary, $typeInfo);
+
+        $this->assertCount(2, $decoded->getValue());
+        $this->assertSame($binary, $decoded->getBinary());
+    }
+
+    public function testMapCollectionRoundTripsSpecialFloatingPointKeys(): void {
+        foreach ([Type::FLOAT, Type::DOUBLE] as $keyType) {
+            $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+                'type' => Type::MAP,
+                'keyType' => $keyType,
+                'valueType' => Type::INT,
+            ]);
+            $format = $keyType === Type::FLOAT ? 'G' : 'E';
+            $length = $keyType === Type::FLOAT ? 4 : 8;
+
+            foreach ([NAN, INF, -INF, 0.0, -0.0] as $index => $key) {
+                $binary = pack('N', 1)
+                    . pack('N', $length) . pack($format, $key)
+                    . pack('N', 4) . pack('N', $index);
+
+                $decoded = Value\MapCollection::fromBinary($binary, $typeInfo);
+                $this->assertSame($binary, $decoded->getBinary(), $keyType->name . ' key at index ' . $index);
+            }
+        }
     }
 
     public function testMapCollectionWithBooleanKeys(): void {

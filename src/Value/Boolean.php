@@ -29,6 +29,10 @@ final class Boolean extends ValueWithFixedLength {
     ): static {
         // A zero-length (empty, non-null) cell is a legal boolean value and
         // decodes as false, matching the other drivers.
+        if (strlen($binary) > static::fixedLength()) {
+            self::assertExactBinaryLength($binary);
+        }
+
         return new static(($binary[0] ?? "\0") !== "\0");
     }
 
