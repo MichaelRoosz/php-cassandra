@@ -33,6 +33,25 @@ use Cassandra\Exception\CompressionException;
 use Cassandra\Exception\ExceptionCode;
 
 final class Lz4Decompressor {
+    /**
+     * The magic number of the pre-1.4 "legacy" frame format.
+     */
+    private const MAGIC_LEGACY = 0x184C2102;
+
+    /**
+     * Skippable frames take a range of magic numbers rather than one, the low
+     * nibble being free for the writer to use.
+     */
+    private const MAGIC_SKIPPABLE_MAX = 0x184D2A5F;
+
+    private const MAGIC_SKIPPABLE_MIN = 0x184D2A50;
+
+    /**
+     * The magic number of the current (v1.x) frame format.
+     */
+    private const MAGIC_V1 = 0x184D2204;
+    private int $frameOutputStart;
+
     private string $input;
 
     private int $inputLength;
@@ -40,7 +59,6 @@ final class Lz4Decompressor {
     private int $inputOffset;
     private string $output;
     private int $outputLength;
-    private int $frameOutputStart;
 
     private readonly bool $useExtension;
 
@@ -239,17 +257,10 @@ final class Lz4Decompressor {
                 );
             }
 
-            if ($matchStart > $this->outputLength) {
-                throw new CompressionException(
-                    'invalid lz4 block data - output overflow for given match',
-                    ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value,
-                    [
-                        'stage' => 'compute_match_start',
-                        'matchStart' => $matchStart,
-                        'outputLength' => $this->outputLength,
-                    ]
-                );
-            }
+            // No upper bound is checked against $matchStart: the offset is at
+            // least 1 by the test above, so $matchStart is always strictly below
+            // $this->outputLength and the match can only point at output that
+            // has already been produced.
 
             $matchLength = $token & 0xF;
             if ($matchLength === 0xF) {
@@ -292,16 +303,92 @@ final class Lz4Decompressor {
     }
 
     /**
+     * Whether a little-endian 32-bit word is the magic number of a frame this
+     * decompressor knows, i.e. whether a new frame begins at it.
+     */
+    private static function isFrameMagic(int $value): bool {
+
+        return $value === self::MAGIC_V1
+            || $value === self::MAGIC_LEGACY
+            || ($value >= self::MAGIC_SKIPPABLE_MIN && $value <= self::MAGIC_SKIPPABLE_MAX);
+    }
+
+    /**
      * @throws \Cassandra\Exception\CompressionException
      */
     private function readLegacyFrame(int $magicBytes): bool {
-        if ($magicBytes !== 0x184C2102) {
+        if ($magicBytes !== self::MAGIC_LEGACY) {
             return false;
         }
 
         $this->frameOutputStart = $this->outputLength;
 
-        if ($this->inputOffset + 4 > $this->inputLength) {
+        // A legacy frame carries a sequence of blocks, and has neither a length
+        // nor an end mark to say how many: they simply follow one another until
+        // the input runs out or the next four bytes turn out to be the magic
+        // number of another frame. So the whole sequence is read here rather
+        // than one block per call — handed back to {@see self::decompress()}
+        // after the first, the second block's size field would be read as a
+        // magic number and the frame refused for not having one.
+        //
+        // Telling a size from a magic number by its value is what the format
+        // leaves available, and it is what the reference implementation does:
+        // the smallest of the frame magic numbers is 0x184C2102, i.e. a block of
+        // some 388 MB, and the legacy format's blocks are capped at 8 MB.
+        $blocksRead = 0;
+
+        while ($this->inputOffset + 4 <= $this->inputLength) {
+
+            /** @var false|array<int> $unpacked */
+            $unpacked = unpack('V', $this->input, $this->inputOffset);
+            if ($unpacked === false) {
+                throw new CompressionException(
+                    'invalid lz4 frame data - cannot decode block size',
+                    ExceptionCode::COMPRESSION_DECODE_FAILURE->value,
+                    [
+                        'stage' => 'legacy_block_size_unpack',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                    ]
+                );
+            }
+            $blockSize = $unpacked[1];
+
+            if (self::isFrameMagic($blockSize)) {
+                // The frame ended and another begins here. The magic number is
+                // deliberately left unconsumed, for decompress() to read.
+                break;
+            }
+
+            $this->inputOffset += 4;
+
+            if ($blockSize > 0) {
+                if ($this->inputOffset + $blockSize > $this->inputLength) {
+                    throw new CompressionException(
+                        'invalid lz4 frame data - input overflow while reading block data',
+                        ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
+                        [
+                            'stage' => 'legacy_block_data',
+                            'inputOffset' => $this->inputOffset,
+                            'inputLength' => $this->inputLength,
+                            'blockSize' => $blockSize,
+                        ]
+                    );
+                }
+
+                $this->decompressBlockAtOffset($this->inputOffset, $this->inputOffset + $blockSize);
+                $this->inputOffset += $blockSize;
+            }
+
+            $blocksRead++;
+        }
+
+        // A frame with no block at all is malformed however the loop above came
+        // to end: the input ran out with fewer than four bytes left, or what
+        // followed the magic number was another magic number. Reported as the
+        // truncated block size it is, which is what this said before it read
+        // more than one block.
+        if ($blocksRead === 0) {
             throw new CompressionException(
                 'invalid lz4 frame data - input overflow while reading block size',
                 ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
@@ -312,40 +399,6 @@ final class Lz4Decompressor {
                     'requiredBytes' => 4,
                 ]
             );
-        }
-
-        /** @var false|array<int> $unpacked */
-        $unpacked = unpack('V', $this->input, $this->inputOffset);
-        if ($unpacked === false) {
-            throw new CompressionException(
-                'invalid lz4 frame data - cannot decode block size',
-                ExceptionCode::COMPRESSION_DECODE_FAILURE->value,
-                [
-                    'stage' => 'legacy_block_size_unpack',
-                    'inputOffset' => $this->inputOffset,
-                    'inputLength' => $this->inputLength,
-                ]
-            );
-        }
-        $blockSize = $unpacked[1];
-        $this->inputOffset += 4;
-
-        if ($blockSize > 0) {
-            if ($this->inputOffset + $blockSize > $this->inputLength) {
-                throw new CompressionException(
-                    'invalid lz4 frame data - input overflow while reading block data',
-                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
-                    [
-                        'stage' => 'legacy_block_data',
-                        'inputOffset' => $this->inputOffset,
-                        'inputLength' => $this->inputLength,
-                        'blockSize' => $blockSize,
-                    ]
-                );
-            }
-
-            $this->decompressBlockAtOffset($this->inputOffset, $this->inputOffset + $blockSize);
-            $this->inputOffset += $blockSize;
         }
 
         return true;
@@ -391,7 +444,7 @@ final class Lz4Decompressor {
      * @throws \Cassandra\Exception\CompressionException
      */
     private function readSkipableFrame(int $magicBytes): bool {
-        if ($magicBytes < 0x184D2A50 || $magicBytes > 0x184D2A5F) {
+        if ($magicBytes < self::MAGIC_SKIPPABLE_MIN || $magicBytes > self::MAGIC_SKIPPABLE_MAX) {
             return false;
         }
 
@@ -559,7 +612,7 @@ final class Lz4Decompressor {
      * @throws \Cassandra\Exception\CompressionException
      */
     private function readVersionOneFrame(int $magicBytes, bool $validateChecksums): bool {
-        if ($magicBytes !== 0x184D2204) {
+        if ($magicBytes !== self::MAGIC_V1) {
             return false;
         }
 
