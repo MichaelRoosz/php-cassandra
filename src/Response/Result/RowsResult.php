@@ -436,7 +436,8 @@ final class RowsResult extends Result {
 
         $rowResult = clone $this;
         $rowResult->stream = clone $this->stream;
-        $rowResult->stream->offset($rowResult->dataOffset);
+
+        $rowResult->rewind();
 
         return new ResultIterator($rowResult);
     }
