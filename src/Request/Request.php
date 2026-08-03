@@ -256,7 +256,22 @@ abstract class Request implements Frame, Stringable {
         return $this->version->value;
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function setFlags(int $flags): void {
+        if ($flags < 0 || $flags > 0xFF) {
+            throw new RequestException(
+                message: 'Request flags are outside the one-byte range used by the protocol',
+                code: ExceptionCode::REQUEST_INVALID_FLAGS->value,
+                context: [
+                    'flags' => $flags,
+                    'minimum' => 0,
+                    'maximum' => 0xFF,
+                ]
+            );
+        }
+
         $this->flags = $flags;
     }
 
@@ -270,7 +285,22 @@ abstract class Request implements Frame, Stringable {
         $this->flags |= Flag::CUSTOM_PAYLOAD;
     }
 
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
     public function setStream(int $stream): void {
+        if ($stream < 0 || $stream > 32767) {
+            throw new RequestException(
+                message: 'Request stream id is outside the client range used by the protocol',
+                code: ExceptionCode::REQUEST_INVALID_STREAM_ID->value,
+                context: [
+                    'stream_id' => $stream,
+                    'minimum' => 0,
+                    'maximum' => 32767,
+                ]
+            );
+        }
+
         $this->stream = $stream;
     }
 

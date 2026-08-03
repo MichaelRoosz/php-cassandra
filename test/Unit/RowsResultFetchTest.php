@@ -141,6 +141,12 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->assertSame([7, 7, 8, 8], array_values($row));
     }
 
+    public function testFetchColumnFailureLeavesCursorAtFailedRow(): void {
+        $result = self::rowsResultWithOneColumn(Type::INT, ["\x00\x00\x01", pack('N', 7)]);
+
+        $this->assertSameDecodeFailureTwice(static fn () => $result->fetchColumn());
+    }
+
     public function testFetchColumnRejectsIndexOutsideTheResult(): void {
         // Without the bounds check this returned null, which is what a column
         // that really is null returns: a caller naming the wrong column was
@@ -168,6 +174,12 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->assertFalse($result->fetchColumn(), 'the row holds false');
         $this->assertFalse($result->fetchColumn(), 'and so does the end of the result');
         $this->assertSame(1, $result->getRowCount());
+    }
+
+    public function testFetchFailureLeavesCursorAtFailedRow(): void {
+        $result = self::rowsResultWithOneColumn(Type::INT, ["\x00\x00\x01", pack('N', 7)]);
+
+        $this->assertSameDecodeFailureTwice(static fn () => $result->fetch());
     }
 
     public function testFetchKeyPairFailureLeavesCursorAtFailedRow(): void {
@@ -246,6 +258,41 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
 
         $this->assertSame([0, 1, 2], $keys);
         $this->assertSame([['col' => 7], ['col' => 8], ['col' => 9]], $rows);
+    }
+
+    public function testHugeNoMetadataColumnCountIsRejectedWithoutIntegerOverflow(): void {
+        $body = pack('N', 2) // result kind: ROWS
+            . pack('N', 4) // flags: NO_METADATA
+            . pack('N', 2147483647) // column count
+            . pack('N', 1); // row count
+
+        $header = new Header(
+            version: ProtocolVersion::V4,
+            flags: 0,
+            stream: 1,
+            opcode: Opcode::RESPONSE_RESULT,
+            length: strlen($body),
+        );
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_ROWS_ROW_COUNT_OUT_OF_RANGE->value);
+
+        new RowsResult($header, new StreamReader($body));
+    }
+
+    /**
+     * @param callable(): mixed $fetch
+     */
+    private function assertSameDecodeFailureTwice(callable $fetch): void {
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            try {
+                $fetch();
+                $this->fail('Expected malformed fixed-width value to be rejected');
+            } catch (ResponseException $e) {
+                $this->assertSame(ExceptionCode::RESPONSE_SR_VALUE_LENGTH_MISMATCH->value, $e->getCode());
+                $this->assertSame(3, $e->context()['declared_length']);
+            }
+        }
     }
 
     private static function encodeString(string $value): string {

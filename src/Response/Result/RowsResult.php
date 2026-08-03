@@ -111,7 +111,13 @@ final class RowsResult extends Result {
 
         $previousOffset = $this->stream->pos();
 
-        $row = $this->readNextRow($mode);
+        try {
+            $row = $this->readNextRow($mode);
+        } catch (Throwable $e) {
+            $this->stream->offset($previousOffset);
+
+            throw $e;
+        }
 
         $this->dataOffsetOfPreviousRow = $previousOffset;
         $this->fetchedRows++;
@@ -318,14 +324,20 @@ final class RowsResult extends Result {
 
         $previousOffset = $this->stream->pos();
 
-        $value = null;
-        foreach ($columns as $j => $column) {
-            /** @psalm-suppress MixedAssignment */
-            $cell = $this->stream->readValue($column->type, $this->valueEncodeConfig);
-            if ($j === $index) {
+        try {
+            $value = null;
+            foreach ($columns as $j => $column) {
                 /** @psalm-suppress MixedAssignment */
-                $value = $cell;
+                $cell = $this->stream->readValue($column->type, $this->valueEncodeConfig);
+                if ($j === $index) {
+                    /** @psalm-suppress MixedAssignment */
+                    $value = $cell;
+                }
             }
+        } catch (Throwable $e) {
+            $this->stream->offset($previousOffset);
+
+            throw $e;
         }
 
         $this->dataOffsetOfPreviousRow = $previousOffset;
@@ -635,7 +647,7 @@ final class RowsResult extends Result {
         // can make either negative.
         $maximumRowCount = ($this->rowCount < 0 || $columnsCount < 0)
             ? -1
-            : ($columnsCount === 0 ? 0 : intdiv($remainingLength, $columnsCount * 4));
+            : ($columnsCount === 0 ? 0 : intdiv(intdiv($remainingLength, 4), $columnsCount));
 
         if ($maximumRowCount >= 0 && $this->rowCount <= $maximumRowCount) {
             return;

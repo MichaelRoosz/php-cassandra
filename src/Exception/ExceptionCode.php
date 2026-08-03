@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1397
+ * Next free code: 1399
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -96,10 +96,12 @@ enum ExceptionCode: int {
     case REQUEST_FIELD_TOO_LONG = 1371;
     case REQUEST_FRAME_BODY_TOO_LARGE = 1396;
     case REQUEST_INVALID_CUSTOM_PAYLOAD = 1375;
+    case REQUEST_INVALID_FLAGS = 1397;
     case REQUEST_INVALID_PAGE_SIZE = 1390;
     case REQUEST_INVALID_REGISTER_EVENT = 1386;
     case REQUEST_INVALID_REQUEST_TIMEOUT = 1349;
     case REQUEST_INVALID_STARTUP_OPTION = 1385;
+    case REQUEST_INVALID_STREAM_ID = 1398;
     case REQUEST_STREAM_NOT_ASSIGNED = 1342;
     case REQUEST_TOO_MANY_MAP_ENTRIES = 1372;
     case REQUEST_UNSUPPORTED_OPTION_KEYSPACE = 1085;

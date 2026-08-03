@@ -42,8 +42,36 @@ final class RequestStreamIdTest extends AbstractUnitTestCase {
         (string) $request;
     }
 
+    public function testFlagsOutsideByteRangeAreRejected(): void {
+        foreach ([-1, 256, 65536] as $flags) {
+            $request = new Options();
+
+            try {
+                $request->setFlags($flags);
+                $this->fail('Expected flags ' . $flags . ' to be rejected');
+            } catch (RequestException $e) {
+                $this->assertSame(ExceptionCode::REQUEST_INVALID_FLAGS->value, $e->getCode());
+                $this->assertSame($flags, $e->context()['flags']);
+            }
+        }
+    }
+
     public function testStreamIdOfAnUnassignedRequestIsNull(): void {
         $this->assertNull((new Options())->getStream());
+    }
+
+    public function testStreamIdOutsideClientRangeIsRejected(): void {
+        foreach ([-1, 32768, 65536] as $streamId) {
+            $request = new Options();
+
+            try {
+                $request->setStream($streamId);
+                $this->fail('Expected stream id ' . $streamId . ' to be rejected');
+            } catch (RequestException $e) {
+                $this->assertSame(ExceptionCode::REQUEST_INVALID_STREAM_ID->value, $e->getCode());
+                $this->assertSame($streamId, $e->context()['stream_id']);
+            }
+        }
     }
 
     public function testStreamIdZeroIsAnOrdinaryAssignedId(): void {
