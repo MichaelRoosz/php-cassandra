@@ -214,6 +214,9 @@ final class MapCollection extends ValueReadableWithoutLength {
      * sprintf() honours LC_NUMERIC, while the string is also fed back to PHP's
      * locale-independent float parser by {@see self::keyAsNativeValue()}, so
      * normalise the locale's decimal separator before exposing the key.
+     * Everything %.17g emits besides that separator is a digit, a sign or the
+     * exponent marker, so whatever else turns up is the separator itself —
+     * however many bytes the locale happens to spell it with.
      */
     private static function floatAsMapKey(float $key): string {
         if (is_nan($key)) {
@@ -229,13 +232,8 @@ final class MapCollection extends ValueReadableWithoutLength {
         }
 
         $formatted = sprintf('%.17g', $key);
-        $decimalPoint = localeconv()['decimal_point'];
 
-        if ($decimalPoint !== '' && $decimalPoint !== '.') {
-            $formatted = str_replace($decimalPoint, '.', $formatted);
-        }
-
-        return $formatted;
+        return preg_replace('/[^0-9eE+-]+/', '.', $formatted) ?? $formatted;
     }
 
     /**
