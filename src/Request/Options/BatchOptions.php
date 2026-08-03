@@ -23,6 +23,7 @@ final class BatchOptions extends RequestOptions {
         public readonly ?float $requestTimeoutInSeconds = null,
     ) {
         self::assertValidRequestTimeout($requestTimeoutInSeconds);
+        self::assertValidNowInSeconds($nowInSeconds);
     }
 
     /**

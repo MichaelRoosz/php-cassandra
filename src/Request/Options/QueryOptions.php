@@ -19,8 +19,12 @@ class QueryOptions extends RequestOptions {
          * How many rows the node puts in one page of the result, or null to
          * leave it to the node's own default.
          *
-         * Every positive value is sent unchanged. Zero and negative values are
-         * invalid because they cannot describe a useful result page.
+         * Every positive value the protocol can carry is sent unchanged. Zero
+         * and negative values are invalid because they cannot describe a useful
+         * result page, and a value past {@see RequestOptions::INT32_MAX} is
+         * invalid because the option goes out as a signed 32-bit `[int]`: it
+         * would otherwise be truncated to its low four bytes and reach the
+         * coordinator as some other page size entirely.
          */
         public readonly ?int $pageSize = null,
         public readonly ?string $pagingState = null,
@@ -37,12 +41,17 @@ class QueryOptions extends RequestOptions {
         public readonly ?float $requestTimeoutInSeconds = null,
     ) {
         self::assertValidRequestTimeout($requestTimeoutInSeconds);
+        self::assertValidNowInSeconds($nowInSeconds);
 
-        if ($pageSize !== null && $pageSize <= 0) {
+        if ($pageSize !== null && ($pageSize <= 0 || $pageSize > self::INT32_MAX)) {
             throw new RequestException(
-                'Invalid page size: it must be greater than zero, or null to use the server default',
+                'Invalid page size: it must be greater than zero and fit in a signed 32-bit integer, or be null to use the server default',
                 ExceptionCode::REQUEST_INVALID_PAGE_SIZE->value,
-                ['page_size' => $pageSize]
+                [
+                    'page_size' => $pageSize,
+                    'minimum' => 1,
+                    'maximum' => self::INT32_MAX,
+                ]
             );
         }
     }
