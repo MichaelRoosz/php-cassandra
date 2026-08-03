@@ -381,11 +381,19 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
 
         $request->getBody();
     }
+
     public function testRegisterRejectsNonEventTypeEntries(): void {
         $this->expectException(RequestException::class);
         $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_REGISTER_EVENT->value);
 
         (new ReflectionClass(Register::class))->newInstanceArgs([[EventType::SCHEMA_CHANGE, 'STATUS_CHANGE']]);
+    }
+
+    public function testRequestRejectsFrameBodyPastProtocolMaximum(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_FRAME_BODY_TOO_LARGE->value);
+
+        self::testableRequest()->assertBodyLength((256 * 1024 * 1024) + 1);
     }
 
     public function testStartupRejectsNonStringNames(): void {
@@ -443,6 +451,10 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
 final class TestableBindMarkerRequest extends \Cassandra\Request\Request {
     public function __construct() {
         parent::__construct(\Cassandra\Protocol\Opcode::REQUEST_QUERY);
+    }
+
+    public function assertBodyLength(int $length): void {
+        self::assertFrameBodyLength($length);
     }
 
     /**

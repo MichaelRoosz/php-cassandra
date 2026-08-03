@@ -20,6 +20,8 @@ use DateTimeInterface;
 use Stringable;
 
 abstract class Request implements Frame, Stringable {
+    /** Largest body an inner native-protocol frame may declare. */
+    protected const MAX_FRAME_BODY_LENGTH = 256 * 1024 * 1024;
     /**
      * Most entries a `[short]`-counted list on the wire can hold.
      *
@@ -107,13 +109,16 @@ abstract class Request implements Frame, Stringable {
             }
         }
 
+        $bodyLength = strlen($body);
+        self::assertFrameBodyLength($bodyLength);
+
         return pack(
             'CCnCN',
             $this->version->value,
             $this->flags,
             $this->stream,
             $this->opcode->value,
-            strlen($body)
+            $bodyLength
         ) . $body;
     }
 
@@ -286,6 +291,22 @@ abstract class Request implements Frame, Stringable {
     final protected function acceptsDefaultKeyspace(?string $currentKeyspace): bool {
 
         return $currentKeyspace === null || $this->keyspaceIsConnectionDefault;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
+    protected static function assertFrameBodyLength(int $length): void {
+        if ($length > self::MAX_FRAME_BODY_LENGTH) {
+            throw new RequestException(
+                message: 'Request frame body exceeds the maximum length the protocol allows',
+                code: ExceptionCode::REQUEST_FRAME_BODY_TOO_LARGE->value,
+                context: [
+                    'body_length' => $length,
+                    'max_body_length' => self::MAX_FRAME_BODY_LENGTH,
+                ]
+            );
+        }
     }
 
     /**
