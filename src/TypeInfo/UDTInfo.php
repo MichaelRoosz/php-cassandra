@@ -85,7 +85,7 @@ final class UDTInfo extends TypeInfo {
 
         $valueTypes = [];
         foreach ($typeDefinition['valueTypes'] as $key => $valueTypeDefinition) {
-            $valueTypes[$key] = ValueFactory::getTypeInfoFromTypeDefinition($valueTypeDefinition);
+            $valueTypes[$key] = ValueFactory::getTypeInfoFromUnvalidatedDefinition($valueTypeDefinition);
         }
 
         /** @psalm-suppress RedundantConditionGivenDocblockType */

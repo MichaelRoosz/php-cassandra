@@ -7,6 +7,7 @@ namespace Cassandra\Test\Unit;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\TypeInfoException;
 use Cassandra\Exception\ValueException;
+use Cassandra\Exception\ValueFactoryException;
 use Cassandra\StringMath\DecimalCalculator;
 use Cassandra\Type;
 use Cassandra\Value;
@@ -29,6 +30,20 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             'time' => [Value\Time::class, 8],
             'timestamp' => [Value\Timestamp::class, 8],
             'tinyint' => [Value\Tinyint::class, 1],
+        ];
+    }
+    /**
+     * @return array<string, array{array<mixed>}>
+     */
+    public static function malformedNestedTypeDefinitionProvider(): array {
+        return [
+            'list value' => [['type' => Type::LIST, 'valueType' => 'bad']],
+            'set value' => [['type' => Type::SET, 'valueType' => 'bad']],
+            'map key' => [['type' => Type::MAP, 'keyType' => 'bad', 'valueType' => Type::INT]],
+            'map value' => [['type' => Type::MAP, 'keyType' => Type::INT, 'valueType' => 'bad']],
+            'tuple value' => [['type' => Type::TUPLE, 'valueTypes' => ['bad']]],
+            'UDT field' => [['type' => Type::UDT, 'valueTypes' => ['field' => 'bad']]],
+            'vector value' => [['type' => Type::VECTOR, 'valueType' => 'bad', 'dimensions' => 3]],
         ];
     }
 
@@ -536,6 +551,17 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
                 ])
             )->getValue()
         );
+    }
+
+    /**
+     * @param array<mixed> $definition
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('malformedNestedTypeDefinitionProvider')]
+    public function testMalformedNestedTypeDefinitionThrowsProjectException(array $definition): void {
+        $this->expectException(ValueFactoryException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUEFACTORY_TYPEDEF_INVALID_NESTED_DEFINITION->value);
+
+        ValueFactory::getTypeInfoFromTypeDefinition($definition);
     }
 
     public function testMapCollection(): void {

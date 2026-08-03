@@ -59,7 +59,7 @@ final class MapCollectionInfo extends TypeInfo {
                 ]
             );
         }
-        $keyType = ValueFactory::getTypeInfoFromTypeDefinition($typeDefinition['keyType']);
+        $keyType = ValueFactory::getTypeInfoFromUnvalidatedDefinition($typeDefinition['keyType']);
 
         if (!isset($typeDefinition['valueType'])) {
             throw new TypeInfoException(
@@ -71,7 +71,7 @@ final class MapCollectionInfo extends TypeInfo {
                 ]
             );
         }
-        $valueType = ValueFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
+        $valueType = ValueFactory::getTypeInfoFromUnvalidatedDefinition($typeDefinition['valueType']);
 
         if (isset($typeDefinition['isFrozen']) && $typeDefinition['isFrozen'] === true) {
             $isFrozen = true;

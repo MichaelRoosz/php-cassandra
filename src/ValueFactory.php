@@ -87,6 +87,37 @@ final class ValueFactory {
      */
     public static function getTypeInfoFromTypeDefinition(array|Type $typeDefinition): TypeInfo {
 
+        return self::getTypeInfoFromUnvalidatedDefinition($typeDefinition);
+    }
+
+    /**
+     * Runtime-validation boundary for definitions nested inside a complex type.
+     *
+     * The public factory deliberately keeps its documented array|Type contract
+     * narrow. Values inside an array have not, however, crossed a PHP type
+     * boundary of their own. Complex TypeInfo factories use this helper so a
+     * malformed nested value becomes a project exception rather than the
+     * native TypeError that calling the public factory directly would raise.
+     *
+     * @internal
+     *
+     * @throws \Cassandra\Exception\TypeInfoException
+     * @throws \Cassandra\Exception\ValueFactoryException
+     * @throws \Cassandra\Exception\ValueException
+     */
+    public static function getTypeInfoFromUnvalidatedDefinition(mixed $typeDefinition): TypeInfo {
+
+        if (!is_array($typeDefinition) && !($typeDefinition instanceof Type)) {
+            throw new ValueFactoryException(
+                'Nested type definition must be an array or an instance of Type',
+                ExceptionCode::VALUEFACTORY_TYPEDEF_INVALID_NESTED_DEFINITION->value,
+                [
+                    'actual_type' => get_debug_type($typeDefinition),
+                    'expected_types' => ['array', Type::class],
+                ]
+            );
+        }
+
         if ($typeDefinition instanceof Type) {
             return self::getTypeInfoFromType($typeDefinition);
         }

@@ -58,7 +58,7 @@ final class SetCollectionInfo extends TypeInfo {
             );
         }
 
-        $valueType = ValueFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
+        $valueType = ValueFactory::getTypeInfoFromUnvalidatedDefinition($typeDefinition['valueType']);
 
         if (isset($typeDefinition['isFrozen']) && $typeDefinition['isFrozen'] === true) {
             $isFrozen = true;

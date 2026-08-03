@@ -77,7 +77,7 @@ final class TupleInfo extends TypeInfo {
 
         $valueTypes = [];
         foreach ($typeDefinition['valueTypes'] as $valueTypeDefinition) {
-            $valueTypes[] = ValueFactory::getTypeInfoFromTypeDefinition($valueTypeDefinition);
+            $valueTypes[] = ValueFactory::getTypeInfoFromUnvalidatedDefinition($valueTypeDefinition);
         }
 
         return new self($valueTypes);

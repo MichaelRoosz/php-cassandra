@@ -75,7 +75,7 @@ final class VectorInfo extends TypeInfo {
             );
         }
 
-        $valueType = ValueFactory::getTypeInfoFromTypeDefinition($typeDefinition['valueType']);
+        $valueType = ValueFactory::getTypeInfoFromUnvalidatedDefinition($typeDefinition['valueType']);
 
         if (!isset($typeDefinition['dimensions'])) {
             throw new TypeInfoException(
