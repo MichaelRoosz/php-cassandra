@@ -452,6 +452,13 @@ final class RowsResult extends Result {
             /** @var \Cassandra\Response\Result\RowClassInterface $row */
             $row = new $rowClass($rowData, $additionalConstructorArgs);
         } catch (Throwable $e) {
+            // fetch() has already advanced both the reader and the row counter.
+            // Object construction is part of this fetch operation, so leave the
+            // cursor at the failed row just as the scalar fetch helpers do when
+            // decoding fails. This also keeps ResultIterator::current() safe to
+            // retry after a configured row class throws.
+            $this->rewindOneRow();
+
             throw new ResponseException(
                 'Failed to construct configured row class',
                 ExceptionCode::RESPONSE_ROWS_ROWCLASS_CONSTRUCTION_FAILED->value,

@@ -218,6 +218,9 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
             $this->assertInstanceOf(\Error::class, $e->getPrevious());
             $this->assertSame('row construction failed', $e->getPrevious()->getMessage());
         }
+
+        $result->resetFetchObjectConfiguration();
+        $this->assertSame(['col' => 7], $result->fetch(), 'failed construction must not consume the row');
     }
 
     public function testGetIteratorWalksEveryRowAfterAPartialFetch(): void {
@@ -278,6 +281,21 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::RESPONSE_ROWS_ROW_COUNT_OUT_OF_RANGE->value);
 
         new RowsResult($header, new StreamReader($body));
+    }
+
+    public function testIteratorCurrentRetriesRowWhoseObjectConstructionFailed(): void {
+        $result = self::rowsResultWithOneColumn(Type::INT, [pack('N', 7)]);
+        $result->configureFetchObject(FailingRowClass::class);
+        $iterator = $result->getIterator();
+
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            try {
+                $iterator->current();
+                $this->fail('Expected row construction to fail');
+            } catch (ResponseException $e) {
+                $this->assertSame(ExceptionCode::RESPONSE_ROWS_ROWCLASS_CONSTRUCTION_FAILED->value, $e->getCode());
+            }
+        }
     }
 
     /**
