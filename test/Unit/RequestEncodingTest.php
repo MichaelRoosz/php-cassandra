@@ -11,6 +11,7 @@ use Cassandra\Exception\RequestException;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
+use Cassandra\Request\Execute;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Query;
@@ -18,6 +19,13 @@ use Cassandra\Request\QueryFlag;
 use Cassandra\Request\Register;
 use Cassandra\Request\Startup;
 use Cassandra\SerialConsistency;
+use Cassandra\Protocol\Header;
+use Cassandra\Protocol\Opcode;
+use Cassandra\Response\Result\CachedPreparedResult;
+use Cassandra\Response\Result\Data\PreparedData;
+use Cassandra\Response\Result\PrepareMetadata;
+use Cassandra\Response\Result\RowsMetadata;
+use Cassandra\Response\StreamReader;
 use DateTimeImmutable;
 use ReflectionClass;
 use ReflectionMethod;
@@ -89,6 +97,15 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::REQUEST_BATCH_TOO_MANY_STATEMENTS->value);
 
         $batch->getBody();
+    }
+
+    public function testBatchRejectsOversizedPreparedStatementId(): void {
+        $batch = new Batch();
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_FIELD_TOO_LONG->value);
+
+        $batch->appendPreparedStatement(self::preparedResult(str_repeat('i', 65536)));
     }
 
     public function testBindValuesMatchMarkerNamesCaseInsensitively(): void {
@@ -168,6 +185,26 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
 
         $this->assertStringContainsString("\x00\x06userId", $binary);
+    }
+
+    public function testExecuteRejectsOversizedPreparedStatementId(): void {
+        $request = new Execute(self::preparedResult(str_repeat('i', 65536)), []);
+        $request->setVersion(ProtocolVersion::V4);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_FIELD_TOO_LONG->value);
+
+        $request->getBody();
+    }
+
+    public function testExecuteRejectsOversizedResultMetadataId(): void {
+        $request = new Execute(self::preparedResult('id', str_repeat('m', 65536)), []);
+        $request->setVersion(ProtocolVersion::V5);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_FIELD_TOO_LONG->value);
+
+        $request->getBody();
     }
 
     public function testExplicitNullBindValueIsAccepted(): void {
@@ -427,6 +464,19 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
             tableName: 't',
             name: $name,
             type: new \Cassandra\TypeInfo\SimpleTypeInfo(\Cassandra\Type::INT),
+        );
+    }
+
+    private static function preparedResult(string $id, ?string $rowsMetadataId = null): CachedPreparedResult {
+        return new CachedPreparedResult(
+            new Header(version: ProtocolVersion::V5, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
+            new StreamReader(''),
+            new PreparedData(
+                id: $id,
+                prepareMetadata: new PrepareMetadata(flags: 0, bindMarkersCount: 0, bindMarkers: [], pkCount: null, pkIndex: null),
+                rowsMetadata: new RowsMetadata(flags: 0, columnsCount: 0, pagingState: null, metadataId: null, columns: []),
+                rowsMetadataId: $rowsMetadataId,
+            ),
         );
     }
 

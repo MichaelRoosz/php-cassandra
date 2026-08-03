@@ -352,6 +352,7 @@ final class Batch extends Request {
         $prepareData = $prepareResult->getPreparedData();
 
         $queryId = $prepareData->id;
+        self::assertShortString($queryId, 'prepared statement id');
 
         $encodedValues = $this->encodeQueryValuesForBindMarkerTypes(
             $values,

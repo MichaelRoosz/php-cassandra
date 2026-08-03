@@ -142,6 +142,7 @@ final class Execute extends Request {
      */
     #[\Override]
     public function getBody(): string {
+        self::assertShortString($this->queryId, 'prepared statement id');
         $body = pack('n', strlen($this->queryId)) . $this->queryId;
 
         if ($this->version->value >= ProtocolVersion::V5->value) {
@@ -156,6 +157,7 @@ final class Execute extends Request {
                 );
             }
 
+            self::assertShortString($this->rowsMetadataId, 'result metadata id');
             $body .= pack('n', strlen($this->rowsMetadataId)) . $this->rowsMetadataId;
         }
 
