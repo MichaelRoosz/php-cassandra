@@ -9,6 +9,7 @@ use Cassandra\Exception\SocketException;
 use Socket as PhpSocket;
 use Cassandra\Request\Request;
 use ErrorException;
+use Throwable;
 
 final class Socket extends NodeImplementation implements IoNode {
     /**
@@ -81,45 +82,22 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     #[\Override]
     public function connect(): void {
-        if ($this->socket !== null) {
-            return;
-        }
-
-        if (str_contains($this->config->host, '://')) {
+        try {
+            $this->connectInternal();
+        } catch (SocketException $e) {
+            throw $e;
+        } catch (Throwable $e) {
             throw new SocketException(
-                message: 'The socket transport does not support URL schemes in the host (e.g. "tls://"); use a plain hostname or IP, or use StreamNodeConfig for TLS connections',
-                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                message: 'Socket connect failed',
+                code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
-                ]
+                    'operation' => 'connect',
+                ],
+                previous: $e,
             );
         }
-
-        $addresses = $this->resolveHost();
-
-        $lastException = null;
-
-        foreach ($addresses as ['family' => $addressFamily, 'address' => $address]) {
-            try {
-                $this->socket = $this->connectToAddress($addressFamily, $address);
-
-                return;
-
-            } catch (SocketException $e) {
-                $lastException = $e;
-            }
-        }
-
-        throw $lastException ?? new SocketException(
-            message: 'Socket connect failed: no usable address for host',
-            code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
-            context: [
-                'host' => $this->config->host,
-                'port' => $this->config->port,
-                'operation' => 'connect',
-            ]
-        );
     }
 
     #[\Override]
@@ -132,11 +110,14 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     #[\Override]
     public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
-
-        if ($this->socket === null) {
+        try {
+            return $this->readAvailableDataFromSourceInternal($expectedLength, $upperBoundaryLength, $readDeadline);
+        } catch (SocketException $e) {
+            throw $e;
+        } catch (Throwable $e) {
             throw new SocketException(
-                message: 'Socket transport not connected',
-                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_READ->value,
+                message: 'Socket read failed',
+                code: ExceptionCode::SOCKET_READ_FAILED->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
@@ -144,203 +125,11 @@ final class Socket extends NodeImplementation implements IoNode {
                     'expectedLength' => $expectedLength,
                     'upperBoundaryLength' => $upperBoundaryLength,
                     'read_deadline' => $readDeadline,
-                ]
+                    'socket_options' => $this->config->socketOptions,
+                ],
+                previous: $e,
             );
         }
-
-        $socket = $this->socket;
-
-        if ($expectedLength < 1) {
-            return '';
-        }
-
-        $start = microtime(true);
-        $waitForData = $this->mayBlock($readDeadline);
-
-        // Whether the read below is the one that can pass judgement on the
-        // connection, i.e. whether it was given the whole stall window rather
-        // than a shorter deadline of the caller's. Recorded when the timeout is
-        // armed instead of re-derived from the clock afterwards: where nothing
-        // narrows it, the two are the same duration, and comparing the elapsed
-        // time against the stall window can only tell them apart by luck.
-        $stallWindowArmed = false;
-
-        if (!$this->isBlockingIo) {
-            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, $waitForData, $readDeadline);
-            if (!$hasData) {
-                return '';
-            }
-        } elseif (!$waitForData) {
-            // Blocking fallback, asked for "whatever is there right now":
-            // socket_read() alone cannot answer that, since it would sit in the
-            // receive timeout, which is exactly what a caller passing a deadline
-            // that has already passed asked not to happen. Readiness is settled
-            // with a zero-timeout select() instead — that works on a blocking
-            // socket just as well — and only then is the socket read, which now
-            // returns what has arrived without waiting for more. Without this
-            // the polling calls could never take anything off a blocking
-            // socket, and would report an idle connection forever.
-            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, false, $readDeadline);
-            if (!$hasData) {
-                return '';
-            }
-        } else {
-            // Blocking fallback: the deadline is enforced by SO_RCVTIMEO
-            // rather than by select().
-            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
-            if ($appliedTimeout === null) {
-                // The deadline passed between mayBlock() and here.
-                return '';
-            }
-
-            $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
-        }
-
-        $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
-        do {
-            // Suppressed because the errno is read and reported below: every
-            // outcome that matters becomes a SocketException carrying more
-            // context than PHP's warning does. Left unsuppressed, an ordinary
-            // connection reset would raise a warning *and* the exception, and an
-            // application whose error handler turns warnings into exceptions
-            // would get the warning in place of the driver's own report.
-            $readData = @socket_read($socket, $readLength, PHP_BINARY_READ);
-            if ($readData === false) {
-                $errorCode = socket_last_error($socket);
-
-                if ($errorCode === SOCKET_EINTR) {
-                    if ($waitForData) {
-                        $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
-
-                        if ($this->isBlockingIo) {
-                            // The read below runs under SO_RCVTIMEO, which the
-                            // signal has just used up part of — and the option
-                            // arms a duration, not a deadline, so going straight
-                            // back in would hand the read the caller's whole
-                            // budget a second time. Re-narrowed against the
-                            // deadline instead, so that a stream of signals
-                            // cannot add up to a multiple of it.
-                            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
-                            if ($appliedTimeout === null) {
-                                return '';
-                            }
-
-                            $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
-                        }
-
-                        continue;
-                    }
-
-                    return '';
-                }
-
-                if (
-                    $errorCode === SOCKET_EWOULDBLOCK
-                    || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
-                ) {
-                    // A blocking socket reports an expired SO_RCVTIMEO this way.
-                    // Only a stall window that has run out means the connection
-                    // itself went quiet for too long; the caller's deadline
-                    // expiring is not the socket's failure to report.
-                    if ($stallWindowArmed) {
-                        throw new SocketException(
-                            message: 'Socket read timed out',
-                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
-                            context: [
-                                'host' => $this->config->host,
-                                'port' => $this->config->port,
-                                'operation' => 'readAvailableDataFromSource',
-                                'expectedLength' => $expectedLength,
-                                'upperBoundaryLength' => $upperBoundaryLength,
-                                'bytes_read' => 0,
-                                'socket_options' => $this->config->socketOptions,
-                            ]
-                        );
-                    }
-
-                    return '';
-                }
-
-                if (
-                    $errorCode === SOCKET_ECONNRESET
-                    || $errorCode === SOCKET_ENOTCONN
-                    || $errorCode === SOCKET_ECONNABORTED
-                ) {
-                    throw new SocketException(
-                        message: 'Socket connection reset by peer during read.',
-                        code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'readAvailableDataFromSource',
-                            'expectedLength' => $expectedLength,
-                            'upperBoundaryLength' => $upperBoundaryLength,
-                            'bytes_read' => 0,
-                            'socket_options' => $this->config->socketOptions,
-                        ]
-                    );
-                }
-
-                if ($errorCode === SOCKET_ETIMEDOUT) {
-                    if (!$stallWindowArmed) {
-                        // The caller's deadline, applied as SO_RCVTIMEO above,
-                        // rather than the transport's stall window.
-                        return '';
-                    }
-
-                    throw new SocketException(
-                        message: 'Socket read timed out',
-                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'readAvailableDataFromSource',
-                            'expectedLength' => $expectedLength,
-                            'upperBoundaryLength' => $upperBoundaryLength,
-                            'bytes_read' => 0,
-                            'socket_options' => $this->config->socketOptions,
-                        ]
-                    );
-                }
-
-                throw new SocketException(
-                    message: 'Socket read failed: ' . socket_strerror($errorCode),
-                    code: ExceptionCode::SOCKET_READ_FAILED->value,
-                    context: [
-                        'host' => $this->config->host,
-                        'port' => $this->config->port,
-                        'operation' => 'readAvailableDataFromSource',
-                        'expectedLength' => $expectedLength,
-                        'upperBoundaryLength' => $upperBoundaryLength,
-                        'read_deadline' => $readDeadline,
-                        'bytes_read' => 0,
-                        'socket_options' => $this->config->socketOptions,
-                        'system_error_code' => $errorCode,
-                    ]
-                );
-            }
-
-            if ($readData === '') {
-                throw new SocketException(
-                    message: 'Socket connection reset by peer during read.',
-                    code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
-                    context: [
-                        'host' => $this->config->host,
-                        'port' => $this->config->port,
-                        'operation' => 'readAvailableDataFromSource',
-                        'expectedLength' => $expectedLength,
-                        'upperBoundaryLength' => $upperBoundaryLength,
-                        'bytes_read' => 0,
-                        'socket_options' => $this->config->socketOptions,
-                    ]
-                );
-            }
-
-            break;
-
-        } while (true);
-
-        return $readData;
     }
 
     /**
@@ -348,161 +137,23 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     #[\Override]
     public function write(string $data): void {
-        if ($this->socket === null) {
+        try {
+            $this->writeInternal($data);
+        } catch (SocketException $e) {
+            throw $e;
+        } catch (Throwable $e) {
             throw new SocketException(
-                message: 'Socket transport not connected',
-                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_WRITE->value,
+                message: 'Socket write failed',
+                code: ExceptionCode::SOCKET_WRITE_FAILED->value,
                 context: [
                     'host' => $this->config->host,
                     'port' => $this->config->port,
                     'operation' => 'write',
-                ]
+                    'socket_options' => $this->config->socketOptions,
+                ],
+                previous: $e,
             );
         }
-
-        $socket = $this->socket;
-
-        if (strlen($data) < 1) {
-            return;
-        }
-
-        // The send timeout is a stall timeout, not a deadline for the whole
-        // payload: it bounds how long the socket makes no progress at all, so
-        // writing a large frame over a slow but healthy connection cannot trip
-        // it. This mirrors SO_SNDTIMEO, which POSIX defines per send() call.
-        $lastProgressAt = microtime(true);
-
-        // A blocking socket normally needs no select(): socket_write() waits for
-        // room of its own accord, bounded by SO_SNDTIMEO. But a pass that comes
-        // back without moving a byte would go straight into another
-        // socket_write(), and on a blocking socket that is a tight loop burning
-        // a core until the stall window runs out — the read side selects even in
-        // blocking mode for the same reason. So once a pass makes no progress,
-        // writability is waited for with select() from then on: bounded by what
-        // is left of the window, and free while the socket is writable.
-        $selectBeforeWrite = !$this->isBlockingIo;
-
-        do {
-            if ($selectBeforeWrite) {
-                $canWrite = $this->selectSocketForWrite($socket, $lastProgressAt);
-                if (!$canWrite) {
-                    continue;
-                }
-            }
-
-            $bufferErrors = 0;
-            do {
-                // Suppressed for the reason given in readAvailableDataFromSource().
-                $sentBytes = @socket_write($socket, $data);
-
-                if ($sentBytes === 0) {
-                    $this->checkForWriteTimeout($lastProgressAt);
-
-                    // Back to the outer loop so the socket is selected for
-                    // writability again instead of spinning on socket_write().
-                    $selectBeforeWrite = true;
-
-                    continue 2;
-                }
-
-                if ($sentBytes === false) {
-                    $errorCode = socket_last_error($socket);
-
-                    if (
-                        $errorCode === SOCKET_EWOULDBLOCK
-                        || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
-                        || $errorCode === SOCKET_EINTR
-                    ) {
-
-                        $this->checkForWriteTimeout($lastProgressAt);
-
-                        // Back to the outer loop so the socket is selected for
-                        // writability again instead of spinning on socket_write().
-                        $selectBeforeWrite = true;
-
-                        continue 2;
-                    }
-
-                    if (
-                        $errorCode === SOCKET_ECONNRESET
-                        || $errorCode === SOCKET_EPIPE
-                        || $errorCode === SOCKET_ENOTCONN
-                        || $errorCode === SOCKET_ECONNABORTED
-                    ) {
-                        throw new SocketException(
-                            message: 'Socket connection reset by peer during write.',
-                            code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_WRITE->value,
-                            context: [
-                                'host' => $this->config->host,
-                                'port' => $this->config->port,
-                                'operation' => 'write',
-                                'socket_options' => $this->config->socketOptions,
-                                'system_error_code' => $errorCode,
-                            ]
-                        );
-                    }
-
-                    if ($errorCode === SOCKET_ETIMEDOUT) {
-                        throw new SocketException(
-                            message: 'Socket write timed out',
-                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_WRITE->value,
-                            context: [
-                                'host' => $this->config->host,
-                                'port' => $this->config->port,
-                                'operation' => 'write',
-                                'socket_options' => $this->config->socketOptions,
-                            ]
-                        );
-                    }
-
-                    if ($errorCode === SOCKET_ENOBUFS) {
-                        $bufferErrors++;
-
-                        if ($bufferErrors >= 3) {
-                            throw new SocketException(
-                                message: 'Socket write failed: ' . socket_strerror($errorCode),
-                                code: ExceptionCode::SOCKET_WRITE_FAILED->value,
-                                context: [
-                                    'host' => $this->config->host,
-                                    'port' => $this->config->port,
-                                    'operation' => 'write',
-
-                                    'socket_options' => $this->config->socketOptions,
-                                    'system_error_code' => $errorCode,
-                                ]
-                            );
-                        }
-
-                        usleep(1000);
-
-                        continue;
-                    }
-
-                    throw new SocketException(
-                        message: 'Socket write failed: ' . socket_strerror($errorCode),
-                        code: ExceptionCode::SOCKET_WRITE_FAILED->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'write',
-
-                            'socket_options' => $this->config->socketOptions,
-                            'system_error_code' => $errorCode,
-                        ]
-                    );
-                }
-
-                $bufferErrors = 0;
-                $data = substr($data, $sentBytes);
-
-                // Bytes moved, so the stall window starts over.
-                $lastProgressAt = microtime(true);
-
-            } while ($data !== '');
-
-            break;
-
-        } while (true);
     }
 
     /**
@@ -633,6 +284,52 @@ final class Socket extends NodeImplementation implements IoNode {
         }
 
         socket_close($socket);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     * @throws \Throwable from a warning-promoting application error handler
+     */
+    private function connectInternal(): void {
+        if ($this->socket !== null) {
+            return;
+        }
+
+        if (str_contains($this->config->host, '://')) {
+            throw new SocketException(
+                message: 'The socket transport does not support URL schemes in the host (e.g. "tls://"); use a plain hostname or IP, or use StreamNodeConfig for TLS connections',
+                code: ExceptionCode::SOCKET_INVALID_CONFIG->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                ]
+            );
+        }
+
+        $addresses = $this->resolveHost();
+
+        $lastException = null;
+
+        foreach ($addresses as ['family' => $addressFamily, 'address' => $address]) {
+            try {
+                $this->socket = $this->connectToAddress($addressFamily, $address);
+
+                return;
+
+            } catch (SocketException $e) {
+                $lastException = $e;
+            }
+        }
+
+        throw $lastException ?? new SocketException(
+            message: 'Socket connect failed: no usable address for host',
+            code: ExceptionCode::SOCKET_CONNECT_FAILED->value,
+            context: [
+                'host' => $this->config->host,
+                'port' => $this->config->port,
+                'operation' => 'connect',
+            ]
+        );
     }
 
     /**
@@ -848,6 +545,222 @@ final class Socket extends NodeImplementation implements IoNode {
                 (float) SocketNodeConfig::DEFAULT_SO_RCVTIMEO['sec']
             ),
         ];
+    }
+
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     * @throws \Throwable from a warning-promoting application error handler
+     */
+    private function readAvailableDataFromSourceInternal(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
+
+        if ($this->socket === null) {
+            throw new SocketException(
+                message: 'Socket transport not connected',
+                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_READ->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readAvailableDataFromSource',
+                    'expectedLength' => $expectedLength,
+                    'upperBoundaryLength' => $upperBoundaryLength,
+                    'read_deadline' => $readDeadline,
+                ]
+            );
+        }
+
+        $socket = $this->socket;
+
+        if ($expectedLength < 1) {
+            return '';
+        }
+
+        $start = microtime(true);
+        $waitForData = $this->mayBlock($readDeadline);
+
+        // Whether the read below is the one that can pass judgement on the
+        // connection, i.e. whether it was given the whole stall window rather
+        // than a shorter deadline of the caller's. Recorded when the timeout is
+        // armed instead of re-derived from the clock afterwards: where nothing
+        // narrows it, the two are the same duration, and comparing the elapsed
+        // time against the stall window can only tell them apart by luck.
+        $stallWindowArmed = false;
+
+        if (!$this->isBlockingIo) {
+            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, $waitForData, $readDeadline);
+            if (!$hasData) {
+                return '';
+            }
+        } elseif (!$waitForData) {
+            // Blocking fallback, asked for "whatever is there right now":
+            // socket_read() alone cannot answer that, since it would sit in the
+            // receive timeout, which is exactly what a caller passing a deadline
+            // that has already passed asked not to happen. Readiness is settled
+            // with a zero-timeout select() instead — that works on a blocking
+            // socket just as well — and only then is the socket read, which now
+            // returns what has arrived without waiting for more. Without this
+            // the polling calls could never take anything off a blocking
+            // socket, and would report an idle connection forever.
+            $hasData = $this->selectSocketForRead($socket, $start, $expectedLength, $upperBoundaryLength, false, $readDeadline);
+            if (!$hasData) {
+                return '';
+            }
+        } else {
+            // Blocking fallback: the deadline is enforced by SO_RCVTIMEO
+            // rather than by select().
+            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
+            if ($appliedTimeout === null) {
+                // The deadline passed between mayBlock() and here.
+                return '';
+            }
+
+            $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
+        }
+
+        $readLength = $this->isBlockingIo ? $expectedLength : max($expectedLength, $upperBoundaryLength);
+        do {
+            // Suppressed because the errno is read and reported below: every
+            // outcome that matters becomes a SocketException carrying more
+            // context than PHP's warning does. Left unsuppressed, an ordinary
+            // connection reset would raise a warning *and* the exception, and an
+            // application whose error handler turns warnings into exceptions
+            // would get the warning in place of the driver's own report.
+            $readData = @socket_read($socket, $readLength, PHP_BINARY_READ);
+            if ($readData === false) {
+                $errorCode = socket_last_error($socket);
+
+                if ($errorCode === SOCKET_EINTR) {
+                    if ($waitForData) {
+                        $this->checkForReceiveTimeout($start, $expectedLength, $upperBoundaryLength);
+
+                        if ($this->isBlockingIo) {
+                            // The read below runs under SO_RCVTIMEO, which the
+                            // signal has just used up part of — and the option
+                            // arms a duration, not a deadline, so going straight
+                            // back in would hand the read the caller's whole
+                            // budget a second time. Re-narrowed against the
+                            // deadline instead, so that a stream of signals
+                            // cannot add up to a multiple of it.
+                            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
+                            if ($appliedTimeout === null) {
+                                return '';
+                            }
+
+                            $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
+                        }
+
+                        continue;
+                    }
+
+                    return '';
+                }
+
+                if (
+                    $errorCode === SOCKET_EWOULDBLOCK
+                    || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
+                ) {
+                    // A blocking socket reports an expired SO_RCVTIMEO this way.
+                    // Only a stall window that has run out means the connection
+                    // itself went quiet for too long; the caller's deadline
+                    // expiring is not the socket's failure to report.
+                    if ($stallWindowArmed) {
+                        throw new SocketException(
+                            message: 'Socket read timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'readAvailableDataFromSource',
+                                'expectedLength' => $expectedLength,
+                                'upperBoundaryLength' => $upperBoundaryLength,
+                                'bytes_read' => 0,
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    return '';
+                }
+
+                if (
+                    $errorCode === SOCKET_ECONNRESET
+                    || $errorCode === SOCKET_ENOTCONN
+                    || $errorCode === SOCKET_ECONNABORTED
+                ) {
+                    throw new SocketException(
+                        message: 'Socket connection reset by peer during read.',
+                        code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'readAvailableDataFromSource',
+                            'expectedLength' => $expectedLength,
+                            'upperBoundaryLength' => $upperBoundaryLength,
+                            'bytes_read' => 0,
+                            'socket_options' => $this->config->socketOptions,
+                        ]
+                    );
+                }
+
+                if ($errorCode === SOCKET_ETIMEDOUT) {
+                    if (!$stallWindowArmed) {
+                        // The caller's deadline, applied as SO_RCVTIMEO above,
+                        // rather than the transport's stall window.
+                        return '';
+                    }
+
+                    throw new SocketException(
+                        message: 'Socket read timed out',
+                        code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'readAvailableDataFromSource',
+                            'expectedLength' => $expectedLength,
+                            'upperBoundaryLength' => $upperBoundaryLength,
+                            'bytes_read' => 0,
+                            'socket_options' => $this->config->socketOptions,
+                        ]
+                    );
+                }
+
+                throw new SocketException(
+                    message: 'Socket read failed: ' . socket_strerror($errorCode),
+                    code: ExceptionCode::SOCKET_READ_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'readAvailableDataFromSource',
+                        'expectedLength' => $expectedLength,
+                        'upperBoundaryLength' => $upperBoundaryLength,
+                        'read_deadline' => $readDeadline,
+                        'bytes_read' => 0,
+                        'socket_options' => $this->config->socketOptions,
+                        'system_error_code' => $errorCode,
+                    ]
+                );
+            }
+
+            if ($readData === '') {
+                throw new SocketException(
+                    message: 'Socket connection reset by peer during read.',
+                    code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_READ->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'readAvailableDataFromSource',
+                        'expectedLength' => $expectedLength,
+                        'upperBoundaryLength' => $upperBoundaryLength,
+                        'bytes_read' => 0,
+                        'socket_options' => $this->config->socketOptions,
+                    ]
+                );
+            }
+
+            break;
+
+        } while (true);
+
+        return $readData;
     }
 
     /**
@@ -1257,6 +1170,168 @@ final class Socket extends NodeImplementation implements IoNode {
                     'system_error_code' => $errorCode,
                 ]
             );
+
+        } while (true);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\SocketException
+     * @throws \Throwable from a warning-promoting application error handler
+     */
+    private function writeInternal(string $data): void {
+        if ($this->socket === null) {
+            throw new SocketException(
+                message: 'Socket transport not connected',
+                code: ExceptionCode::SOCKET_NOT_CONNECTED_DURING_WRITE->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                ]
+            );
+        }
+
+        $socket = $this->socket;
+
+        if (strlen($data) < 1) {
+            return;
+        }
+
+        // The send timeout is a stall timeout, not a deadline for the whole
+        // payload: it bounds how long the socket makes no progress at all, so
+        // writing a large frame over a slow but healthy connection cannot trip
+        // it. This mirrors SO_SNDTIMEO, which POSIX defines per send() call.
+        $lastProgressAt = microtime(true);
+
+        // A blocking socket normally needs no select(): socket_write() waits for
+        // room of its own accord, bounded by SO_SNDTIMEO. But a pass that comes
+        // back without moving a byte would go straight into another
+        // socket_write(), and on a blocking socket that is a tight loop burning
+        // a core until the stall window runs out — the read side selects even in
+        // blocking mode for the same reason. So once a pass makes no progress,
+        // writability is waited for with select() from then on: bounded by what
+        // is left of the window, and free while the socket is writable.
+        $selectBeforeWrite = !$this->isBlockingIo;
+
+        do {
+            if ($selectBeforeWrite) {
+                $canWrite = $this->selectSocketForWrite($socket, $lastProgressAt);
+                if (!$canWrite) {
+                    continue;
+                }
+            }
+
+            $bufferErrors = 0;
+            do {
+                // Suppressed for the reason given in readAvailableDataFromSource().
+                $sentBytes = @socket_write($socket, $data);
+
+                if ($sentBytes === 0) {
+                    $this->checkForWriteTimeout($lastProgressAt);
+
+                    // Back to the outer loop so the socket is selected for
+                    // writability again instead of spinning on socket_write().
+                    $selectBeforeWrite = true;
+
+                    continue 2;
+                }
+
+                if ($sentBytes === false) {
+                    $errorCode = socket_last_error($socket);
+
+                    if (
+                        $errorCode === SOCKET_EWOULDBLOCK
+                        || $errorCode === SOCKET_EAGAIN /* @phpstan-ignore identical.alwaysFalse */
+                        || $errorCode === SOCKET_EINTR
+                    ) {
+
+                        $this->checkForWriteTimeout($lastProgressAt);
+
+                        // Back to the outer loop so the socket is selected for
+                        // writability again instead of spinning on socket_write().
+                        $selectBeforeWrite = true;
+
+                        continue 2;
+                    }
+
+                    if (
+                        $errorCode === SOCKET_ECONNRESET
+                        || $errorCode === SOCKET_EPIPE
+                        || $errorCode === SOCKET_ENOTCONN
+                        || $errorCode === SOCKET_ECONNABORTED
+                    ) {
+                        throw new SocketException(
+                            message: 'Socket connection reset by peer during write.',
+                            code: ExceptionCode::SOCKET_RESET_BY_PEER_DURING_WRITE->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'write',
+                                'socket_options' => $this->config->socketOptions,
+                                'system_error_code' => $errorCode,
+                            ]
+                        );
+                    }
+
+                    if ($errorCode === SOCKET_ETIMEDOUT) {
+                        throw new SocketException(
+                            message: 'Socket write timed out',
+                            code: ExceptionCode::SOCKET_TIMEOUT_DURING_WRITE->value,
+                            context: [
+                                'host' => $this->config->host,
+                                'port' => $this->config->port,
+                                'operation' => 'write',
+                                'socket_options' => $this->config->socketOptions,
+                            ]
+                        );
+                    }
+
+                    if ($errorCode === SOCKET_ENOBUFS) {
+                        $bufferErrors++;
+
+                        if ($bufferErrors >= 3) {
+                            throw new SocketException(
+                                message: 'Socket write failed: ' . socket_strerror($errorCode),
+                                code: ExceptionCode::SOCKET_WRITE_FAILED->value,
+                                context: [
+                                    'host' => $this->config->host,
+                                    'port' => $this->config->port,
+                                    'operation' => 'write',
+
+                                    'socket_options' => $this->config->socketOptions,
+                                    'system_error_code' => $errorCode,
+                                ]
+                            );
+                        }
+
+                        usleep(1000);
+
+                        continue;
+                    }
+
+                    throw new SocketException(
+                        message: 'Socket write failed: ' . socket_strerror($errorCode),
+                        code: ExceptionCode::SOCKET_WRITE_FAILED->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'write',
+
+                            'socket_options' => $this->config->socketOptions,
+                            'system_error_code' => $errorCode,
+                        ]
+                    );
+                }
+
+                $bufferErrors = 0;
+                $data = substr($data, $sentBytes);
+
+                // Bytes moved, so the stall window starts over.
+                $lastProgressAt = microtime(true);
+
+            } while ($data !== '');
+
+            break;
 
         } while (true);
     }

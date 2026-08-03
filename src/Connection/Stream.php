@@ -8,6 +8,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\StreamException;
 use Cassandra\Request\Request;
 use ErrorException;
+use Throwable;
 
 final class Stream extends NodeImplementation implements IoNode {
     /**
@@ -115,6 +116,188 @@ final class Stream extends NodeImplementation implements IoNode {
      */
     #[\Override]
     public function connect(): void {
+        try {
+            $this->connectInternal();
+        } catch (StreamException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new StreamException(
+                message: 'Stream connect failed',
+                code: ExceptionCode::STREAM_CONNECT_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'connect',
+                ],
+                previous: $e,
+            );
+        }
+    }
+
+    #[\Override]
+    public function getConfig(): StreamNodeConfig {
+        return $this->config;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\StreamException
+     */
+    #[\Override]
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
+        try {
+            return $this->readAvailableDataFromSourceInternal($expectedLength, $upperBoundaryLength, $readDeadline);
+        } catch (StreamException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new StreamException(
+                message: 'Stream read failed',
+                code: ExceptionCode::STREAM_READ_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readAvailableDataFromSource',
+                    'expectedLength' => $expectedLength,
+                    'upperBoundaryLength' => $upperBoundaryLength,
+                    'read_deadline' => $readDeadline,
+                ],
+                previous: $e,
+            );
+        }
+    }
+
+    /**
+     * @throws \Cassandra\Exception\StreamException
+     */
+    #[\Override]
+    public function write(string $data): void {
+        try {
+            $this->writeInternal($data);
+        } catch (StreamException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new StreamException(
+                message: 'Stream write failed',
+                code: ExceptionCode::STREAM_WRITE_FAILED->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                ],
+                previous: $e,
+            );
+        }
+    }
+
+    /**
+     * @throws \Cassandra\Exception\StreamException
+     * @throws \Cassandra\Exception\RequestException
+     */
+    #[\Override]
+    public function writeRequest(Request $request): void {
+        $this->write($request->__toString());
+    }
+
+    /**
+     * Bound a blocking-mode read by the caller's deadline as well as by the
+     * stall window, by narrowing the stream's own timeout for its duration.
+     *
+     * Only reached when the stream could not be switched to non-blocking mode,
+     * where stream_select() would do this instead. Returns the timeout the read
+     * will run under, or null when the deadline has already passed, so the
+     * caller can skip the read altogether and can tell which of the two bounds
+     * it got. The timeout is only re-applied when the value actually changes,
+     * which spares the call for the unbounded reads that keep asking for the
+     * same stall window.
+     *
+     * @param resource $stream
+     *
+     * @throws \Cassandra\Exception\StreamException
+     */
+    private function applyReceiveTimeout($stream, ?float $readDeadline): ?float {
+
+        $remaining = $this->narrowToReadDeadline($this->receiveTimeout, $readDeadline);
+        if ($remaining === null) {
+            return null;
+        }
+
+        if ($this->appliedReceiveTimeout === $remaining) {
+            return $remaining;
+        }
+
+        [$seconds, $microseconds] = $this->splitTimeout($remaining);
+
+        // What is left of the deadline rounded away to nothing, so there is no
+        // point arming a timeout for it: the read is skipped as if the deadline
+        // had passed. This also keeps the stream away from a {0, 0} timeout,
+        // which the socket transport reads as "no timeout" — see
+        // {@see Socket::applyReceiveTimeout()}.
+        if ($seconds === 0 && $microseconds === 0) {
+            return null;
+        }
+
+        $this->setStreamTimeout(
+            $stream,
+            $seconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,
+            $microseconds
+        );
+
+        $this->appliedReceiveTimeout = $remaining;
+
+        return $remaining;
+    }
+
+    /**
+     * @param resource $stream
+     *
+     * @throws \Cassandra\Exception\StreamException
+     */
+    private function checkForReadTimeout($stream, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): void {
+
+        if (microtime(true) - $start >= $this->receiveTimeout) {
+            throw new StreamException(
+                message: 'Stream read timed out',
+                code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'readAvailableDataFromSource',
+                    'expectedLength' => $expectedLength,
+                    'upperBoundaryLength' => $upperBoundaryLength,
+                    'waitForData' => $waitForData,
+                    'receive_timeout_seconds' => $this->describeTimeout($this->receiveTimeout),
+                    'meta' => stream_get_meta_data($stream),
+                ]
+            );
+        }
+    }
+
+    /**
+     * @param resource $stream
+     *
+     * @throws \Cassandra\Exception\StreamException
+     */
+    private function checkForWriteTimeout($stream, float $lastProgressAt): void {
+
+        if (microtime(true) - $lastProgressAt >= $this->sendTimeout) {
+            throw new StreamException(
+                message: 'Stream write timed out',
+                code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                    'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
+                    'meta' => stream_get_meta_data($stream),
+                ]
+            );
+        }
+    }
+
+    /**
+     * @throws \Cassandra\Exception\StreamException
+     * @throws \Throwable from a warning-promoting application error handler
+     */
+    private function connectInternal(): void {
         if ($this->stream !== null) {
             return;
         }
@@ -197,16 +380,11 @@ final class Stream extends NodeImplementation implements IoNode {
         $this->stream = $stream;
     }
 
-    #[\Override]
-    public function getConfig(): StreamNodeConfig {
-        return $this->config;
-    }
-
     /**
      * @throws \Cassandra\Exception\StreamException
+     * @throws \Throwable from a warning-promoting application error handler
      */
-    #[\Override]
-    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
+    private function readAvailableDataFromSourceInternal(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
 
         if ($this->stream === null) {
             throw new StreamException(
@@ -366,225 +544,6 @@ final class Stream extends NodeImplementation implements IoNode {
         }
 
         return $readData;
-    }
-
-    /**
-     * @throws \Cassandra\Exception\StreamException
-     */
-    #[\Override]
-    public function write(string $data): void {
-        if ($this->stream === null) {
-            throw new StreamException(
-                message: 'Stream transport not connected',
-                code: ExceptionCode::STREAM_NOT_CONNECTED_DURING_WRITE->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'write',
-                    'bytes_remaining' => strlen($data),
-                ]
-            );
-        }
-
-        $stream = $this->stream;
-
-        if (strlen($data) < 1) {
-            return;
-        }
-
-        // The send timeout is a stall timeout, not a deadline for the whole
-        // payload: it bounds how long the stream makes no progress at all, so
-        // writing a large frame over a slow but healthy connection cannot trip it.
-        $lastProgressAt = microtime(true);
-
-        // A blocking stream normally needs no select(): fwrite() waits for room
-        // of its own accord, bounded by the stream timeout. But a pass that comes
-        // back without moving a byte would go straight into another fwrite(), and
-        // on a blocking stream that is a tight loop burning a core until the
-        // stall window runs out — the read side selects even in blocking mode for
-        // the same reason. So once a pass makes no progress, writability is
-        // waited for with select() from then on: bounded by what is left of the
-        // window, and free while the stream is writable.
-        $selectBeforeWrite = !$this->isBlockingIo;
-
-        $selectFailures = 0;
-
-        do {
-            if ($selectBeforeWrite) {
-                $canWrite = $this->selectStreamForWrite($stream, $lastProgressAt, $selectFailures);
-                if (!$canWrite) {
-                    continue;
-                }
-            }
-
-            // Suppressed because the failure is inspected and reported below,
-            // as a StreamException carrying the stream's metadata. A peer that
-            // went away is an ordinary outcome, not a diagnostic an application
-            // should have to filter out of its logs.
-            $sentBytes = @fwrite($stream, $data);
-            if ($sentBytes === false) {
-
-                if (feof($stream)) {
-                    throw new StreamException(
-                        message: 'Stream connection reset by peer',
-                        code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_WRITE->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'write',
-                            'meta' => stream_get_meta_data($stream),
-                        ]
-                    );
-                }
-
-                if (stream_get_meta_data($stream)['timed_out']) {
-                    throw new StreamException(
-                        message: 'Stream write timed out',
-                        code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
-                        context: [
-                            'host' => $this->config->host,
-                            'port' => $this->config->port,
-                            'operation' => 'write',
-                            'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
-                            'meta' => stream_get_meta_data($stream),
-                        ]
-                    );
-                }
-
-                throw new StreamException(
-                    message: 'Stream write failed',
-                    code: ExceptionCode::STREAM_WRITE_FAILED->value,
-                    context: [
-                        'host' => $this->config->host,
-                        'port' => $this->config->port,
-                        'operation' => 'write',
-                        'meta' => stream_get_meta_data($stream),
-                    ]
-                );
-            }
-
-            if ($sentBytes === 0) {
-
-                $this->checkForWriteTimeout($stream, $lastProgressAt);
-
-                // Back to the top so the stream is selected for writability
-                // again instead of spinning on fwrite().
-                $selectBeforeWrite = true;
-
-                continue;
-            }
-
-            $data = substr($data, $sentBytes);
-
-            // Bytes moved, so the stall window starts over.
-            $lastProgressAt = microtime(true);
-
-        } while ($data !== '');
-    }
-
-    /**
-     * @throws \Cassandra\Exception\StreamException
-     * @throws \Cassandra\Exception\RequestException
-     */
-    #[\Override]
-    public function writeRequest(Request $request): void {
-        $this->write($request->__toString());
-    }
-
-    /**
-     * Bound a blocking-mode read by the caller's deadline as well as by the
-     * stall window, by narrowing the stream's own timeout for its duration.
-     *
-     * Only reached when the stream could not be switched to non-blocking mode,
-     * where stream_select() would do this instead. Returns the timeout the read
-     * will run under, or null when the deadline has already passed, so the
-     * caller can skip the read altogether and can tell which of the two bounds
-     * it got. The timeout is only re-applied when the value actually changes,
-     * which spares the call for the unbounded reads that keep asking for the
-     * same stall window.
-     *
-     * @param resource $stream
-     *
-     * @throws \Cassandra\Exception\StreamException
-     */
-    private function applyReceiveTimeout($stream, ?float $readDeadline): ?float {
-
-        $remaining = $this->narrowToReadDeadline($this->receiveTimeout, $readDeadline);
-        if ($remaining === null) {
-            return null;
-        }
-
-        if ($this->appliedReceiveTimeout === $remaining) {
-            return $remaining;
-        }
-
-        [$seconds, $microseconds] = $this->splitTimeout($remaining);
-
-        // What is left of the deadline rounded away to nothing, so there is no
-        // point arming a timeout for it: the read is skipped as if the deadline
-        // had passed. This also keeps the stream away from a {0, 0} timeout,
-        // which the socket transport reads as "no timeout" — see
-        // {@see Socket::applyReceiveTimeout()}.
-        if ($seconds === 0 && $microseconds === 0) {
-            return null;
-        }
-
-        $this->setStreamTimeout(
-            $stream,
-            $seconds ?? self::UNLIMITED_STREAM_TIMEOUT_SECONDS,
-            $microseconds
-        );
-
-        $this->appliedReceiveTimeout = $remaining;
-
-        return $remaining;
-    }
-
-    /**
-     * @param resource $stream
-     *
-     * @throws \Cassandra\Exception\StreamException
-     */
-    private function checkForReadTimeout($stream, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): void {
-
-        if (microtime(true) - $start >= $this->receiveTimeout) {
-            throw new StreamException(
-                message: 'Stream read timed out',
-                code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'readAvailableDataFromSource',
-                    'expectedLength' => $expectedLength,
-                    'upperBoundaryLength' => $upperBoundaryLength,
-                    'waitForData' => $waitForData,
-                    'receive_timeout_seconds' => $this->describeTimeout($this->receiveTimeout),
-                    'meta' => stream_get_meta_data($stream),
-                ]
-            );
-        }
-    }
-
-    /**
-     * @param resource $stream
-     * 
-     * @throws \Cassandra\Exception\StreamException
-     */
-    private function checkForWriteTimeout($stream, float $lastProgressAt): void {
-
-        if (microtime(true) - $lastProgressAt >= $this->sendTimeout) {
-            throw new StreamException(
-                message: 'Stream write timed out',
-                code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
-                context: [
-                    'host' => $this->config->host,
-                    'port' => $this->config->port,
-                    'operation' => 'write',
-                    'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
-                    'meta' => stream_get_meta_data($stream),
-                ]
-            );
-        }
     }
 
     /**
@@ -853,6 +812,120 @@ final class Stream extends NodeImplementation implements IoNode {
                 'operation' => 'stream_set_timeout',
             ],
         );
+    }
+
+    /**
+     * @throws \Cassandra\Exception\StreamException
+     * @throws \Throwable from a warning-promoting application error handler
+     */
+    private function writeInternal(string $data): void {
+        if ($this->stream === null) {
+            throw new StreamException(
+                message: 'Stream transport not connected',
+                code: ExceptionCode::STREAM_NOT_CONNECTED_DURING_WRITE->value,
+                context: [
+                    'host' => $this->config->host,
+                    'port' => $this->config->port,
+                    'operation' => 'write',
+                    'bytes_remaining' => strlen($data),
+                ]
+            );
+        }
+
+        $stream = $this->stream;
+
+        if (strlen($data) < 1) {
+            return;
+        }
+
+        // The send timeout is a stall timeout, not a deadline for the whole
+        // payload: it bounds how long the stream makes no progress at all, so
+        // writing a large frame over a slow but healthy connection cannot trip it.
+        $lastProgressAt = microtime(true);
+
+        // A blocking stream normally needs no select(): fwrite() waits for room
+        // of its own accord, bounded by the stream timeout. But a pass that comes
+        // back without moving a byte would go straight into another fwrite(), and
+        // on a blocking stream that is a tight loop burning a core until the
+        // stall window runs out — the read side selects even in blocking mode for
+        // the same reason. So once a pass makes no progress, writability is
+        // waited for with select() from then on: bounded by what is left of the
+        // window, and free while the stream is writable.
+        $selectBeforeWrite = !$this->isBlockingIo;
+
+        $selectFailures = 0;
+
+        do {
+            if ($selectBeforeWrite) {
+                $canWrite = $this->selectStreamForWrite($stream, $lastProgressAt, $selectFailures);
+                if (!$canWrite) {
+                    continue;
+                }
+            }
+
+            // Suppressed because the failure is inspected and reported below,
+            // as a StreamException carrying the stream's metadata. A peer that
+            // went away is an ordinary outcome, not a diagnostic an application
+            // should have to filter out of its logs.
+            $sentBytes = @fwrite($stream, $data);
+            if ($sentBytes === false) {
+
+                if (feof($stream)) {
+                    throw new StreamException(
+                        message: 'Stream connection reset by peer',
+                        code: ExceptionCode::STREAM_RESET_BY_PEER_DURING_WRITE->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'write',
+                            'meta' => stream_get_meta_data($stream),
+                        ]
+                    );
+                }
+
+                if (stream_get_meta_data($stream)['timed_out']) {
+                    throw new StreamException(
+                        message: 'Stream write timed out',
+                        code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
+                        context: [
+                            'host' => $this->config->host,
+                            'port' => $this->config->port,
+                            'operation' => 'write',
+                            'send_timeout_seconds' => $this->describeTimeout($this->sendTimeout),
+                            'meta' => stream_get_meta_data($stream),
+                        ]
+                    );
+                }
+
+                throw new StreamException(
+                    message: 'Stream write failed',
+                    code: ExceptionCode::STREAM_WRITE_FAILED->value,
+                    context: [
+                        'host' => $this->config->host,
+                        'port' => $this->config->port,
+                        'operation' => 'write',
+                        'meta' => stream_get_meta_data($stream),
+                    ]
+                );
+            }
+
+            if ($sentBytes === 0) {
+
+                $this->checkForWriteTimeout($stream, $lastProgressAt);
+
+                // Back to the top so the stream is selected for writability
+                // again instead of spinning on fwrite().
+                $selectBeforeWrite = true;
+
+                continue;
+            }
+
+            $data = substr($data, $sentBytes);
+
+            // Bytes moved, so the stall window starts over.
+            $lastProgressAt = microtime(true);
+
+        } while ($data !== '');
     }
 
 }

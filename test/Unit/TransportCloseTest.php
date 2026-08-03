@@ -12,7 +12,10 @@ use Cassandra\Connection\StreamNodeConfig;
 use Cassandra\Exception\NodeException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\SocketException;
+use Cassandra\Exception\StreamException;
 use ErrorException;
+use Error;
+use ReflectionProperty;
 use Socket as PhpSocket;
 
 /**
@@ -62,6 +65,27 @@ final class TransportCloseTest extends AbstractUnitTestCase {
         $this->server = null;
     }
 
+    public function testANativeSocketReadErrorIsWrapped(): void {
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if (!($socket instanceof PhpSocket)) {
+            $this->markTestSkipped('could not create a socket');
+        }
+        socket_close($socket);
+
+        $node = new Socket(new SocketNodeConfig(host: '127.0.0.1'));
+        (new ReflectionProperty(Socket::class, 'socket'))->setValue($node, $socket);
+
+        try {
+            $node->readAvailableDataFromSource(1, 1, null);
+            $this->fail('expected the closed native socket to be rejected');
+        } catch (SocketException $e) {
+            $this->assertSame(ExceptionCode::SOCKET_READ_FAILED->value, $e->getCode());
+            $this->assertInstanceOf(Error::class, $e->getPrevious());
+        } finally {
+            (new ReflectionProperty(Socket::class, 'socket'))->setValue($node, null);
+        }
+    }
+
     public function testAnInvalidSocketOptionIsWrappedAtTheTransportBoundary(): void {
         set_error_handler(static function (int $severity, string $message): never {
             throw new ErrorException($message, 0, $severity);
@@ -94,6 +118,29 @@ final class TransportCloseTest extends AbstractUnitTestCase {
         });
 
         $this->assertSame([], $warnings, 'the SocketException is the report; PHP must not raise one of its own');
+    }
+
+    public function testAStreamConnectWarningPromotedByTheApplicationIsWrapped(): void {
+        $port = $this->closedPort();
+
+        set_error_handler(static function (int $severity, string $message): never {
+            throw new ErrorException($message, 0, $severity);
+        });
+
+        try {
+            $node = new Stream(new StreamNodeConfig(
+                host: '127.0.0.1',
+                port: $port,
+                connectTimeoutInSeconds: 1.0,
+            ));
+            $node->connect();
+            $this->fail('expected the connection to be refused');
+        } catch (StreamException $e) {
+            $this->assertSame(ExceptionCode::STREAM_CONNECT_FAILED->value, $e->getCode());
+            $this->assertInstanceOf(ErrorException::class, $e->getPrevious());
+        } finally {
+            restore_error_handler();
+        }
     }
 
     public function testAStreamResetIsReportedOnlyAsAnException(): void {
