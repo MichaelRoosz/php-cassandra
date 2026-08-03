@@ -229,13 +229,9 @@ final class MapCollection extends ValueReadableWithoutLength {
         }
 
         $formatted = sprintf('%.17g', $key);
-        $locale = localeconv();
-        $decimalPoint = '.';
-        if (isset($locale['decimal_point']) && is_string($locale['decimal_point']) && $locale['decimal_point'] !== '') {
-            $decimalPoint = $locale['decimal_point'];
-        }
+        $decimalPoint = localeconv()['decimal_point'];
 
-        if ($decimalPoint !== '.') {
+        if ($decimalPoint !== '' && $decimalPoint !== '.') {
             $formatted = str_replace($decimalPoint, '.', $formatted);
         }
 
