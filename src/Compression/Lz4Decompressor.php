@@ -131,11 +131,23 @@ final class Lz4Decompressor {
      * When the caller knows the uncompressed length (it comes from the frame
      * header on v5 and the 4-byte body prefix on v3/v4) and the native LZ4
      * extension is available, decompression is delegated to it; otherwise the
-     * pure-PHP decoder is used.
+     * pure-PHP decoder is used. The expected length is a hard output ceiling;
+     * callers remain responsible for rejecting output that is shorter.
      *
      * @throws \Cassandra\Exception\CompressionException
      */
     public function decompressBlock(?int $expectedUncompressedLength = null): string {
+        if ($expectedUncompressedLength !== null && $expectedUncompressedLength < 0) {
+            throw new CompressionException(
+                'invalid lz4 block data - illegal expected uncompressed length',
+                ExceptionCode::COMPRESSION_ILLEGAL_VALUE->value,
+                [
+                    'stage' => 'validate_expected_output_length',
+                    'expectedUncompressedLength' => $expectedUncompressedLength,
+                ]
+            );
+        }
+
         if ($this->useExtension && $expectedUncompressedLength !== null && $expectedUncompressedLength > 0) {
             $block = substr($this->input, $this->inputOffset, $this->inputLength - $this->inputOffset);
 
@@ -148,7 +160,11 @@ final class Lz4Decompressor {
             }
         }
 
-        $this->decompressBlockAtOffset($this->inputOffset, $this->inputLength);
+        $this->decompressBlockAtOffset(
+            $this->inputOffset,
+            $this->inputLength,
+            $expectedUncompressedLength
+        );
 
         return $this->output;
     }
@@ -167,7 +183,11 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    private function decompressBlockAtOffset(int $inputOffset, int $inputLength): void {
+    private function decompressBlockAtOffset(
+        int $inputOffset,
+        int $inputLength,
+        ?int $expectedUncompressedLength = null
+    ): void {
         while ($inputOffset < $inputLength) {
             $token = ord($this->input[$inputOffset++]);
             $nLiterals = $token >> 4;
@@ -206,6 +226,7 @@ final class Lz4Decompressor {
                         ]
                     );
                 }
+                $this->ensureOutputFits($nLiterals, $expectedUncompressedLength, 'append_literals');
                 $this->output .= substr($this->input, $inputOffset, $nLiterals);
                 $this->outputLength += $nLiterals;
                 $inputOffset += $nLiterals;
@@ -283,6 +304,8 @@ final class Lz4Decompressor {
             }
             $matchLength += 4;
 
+            $this->ensureOutputFits($matchLength, $expectedUncompressedLength, 'expand_match');
+
             if ($offset >= $matchLength) {
                 // Non-overlapping match: the entire source region is already in
                 // the output, so copy it in one shot instead of byte-by-byte.
@@ -300,6 +323,39 @@ final class Lz4Decompressor {
 
             $this->outputLength += $matchLength;
         }
+    }
+
+    /**
+     * Refuse a sequence before constructing output beyond the length declared
+     * by the enclosing protocol frame.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    private function ensureOutputFits(
+        int $additionalOutputLength,
+        ?int $expectedUncompressedLength,
+        string $stage
+    ): void {
+        if (
+            $expectedUncompressedLength === null
+            || (
+                $this->outputLength <= $expectedUncompressedLength
+                && $additionalOutputLength <= $expectedUncompressedLength - $this->outputLength
+            )
+        ) {
+            return;
+        }
+
+        throw new CompressionException(
+            'invalid lz4 block data - output exceeds expected uncompressed length',
+            ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value,
+            [
+                'stage' => $stage,
+                'outputLength' => $this->outputLength,
+                'additionalOutputLength' => $additionalOutputLength,
+                'expectedUncompressedLength' => $expectedUncompressedLength,
+            ]
+        );
     }
 
     /**

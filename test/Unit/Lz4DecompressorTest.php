@@ -12,6 +12,70 @@ use Cassandra\Exception\ExceptionCode;
 class Lz4DecompressorTest extends AbstractUnitTestCase {
     private const MAGIC_LEGACY = 0x184C2102;
 
+    public function testDecompressBlockRejectsLiteralsBeyondExpectedLength(): void {
+        $dec = new Lz4Decompressor("\x20ab", preferExtension: false);
+
+        try {
+            $dec->decompressBlock(1);
+            $this->fail('expected literals beyond the declared output length to be refused');
+        } catch (CompressionException $e) {
+            $this->assertSame(ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value, $e->getCode());
+            $this->assertSame(
+                [
+                    'stage' => 'append_literals',
+                    'outputLength' => 0,
+                    'additionalOutputLength' => 2,
+                    'expectedUncompressedLength' => 1,
+                ],
+                $e->getContext()
+            );
+        }
+    }
+
+    public function testDecompressBlockRejectsMatchBeyondExpectedLengthBeforeExpansion(): void {
+        // One literal followed by a 261,139-byte RLE match. The raw block is
+        // only about 1 KiB, but used to allocate output 261,140 times larger
+        // than the length declared by the enclosing frame before its caller
+        // could detect the mismatch.
+        $extendedMatchLength = str_repeat("\xff", 1024) . "\x00";
+        $input = "\x1fA\x01\x00" . $extendedMatchLength;
+        $dec = new Lz4Decompressor($input, preferExtension: false);
+
+        try {
+            $dec->decompressBlock(1);
+            $this->fail('expected a match beyond the declared output length to be refused');
+        } catch (CompressionException $e) {
+            $this->assertSame(ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value, $e->getCode());
+            $this->assertSame(
+                [
+                    'stage' => 'expand_match',
+                    'outputLength' => 1,
+                    'additionalOutputLength' => 261139,
+                    'expectedUncompressedLength' => 1,
+                ],
+                $e->getContext()
+            );
+        }
+    }
+
+    public function testDecompressBlockRejectsNegativeExpectedLength(): void {
+        $dec = new Lz4Decompressor("\x00", preferExtension: false);
+
+        try {
+            $dec->decompressBlock(-1);
+            $this->fail('expected a negative output length to be refused');
+        } catch (CompressionException $e) {
+            $this->assertSame(ExceptionCode::COMPRESSION_ILLEGAL_VALUE->value, $e->getCode());
+            $this->assertSame(
+                [
+                    'stage' => 'validate_expected_output_length',
+                    'expectedUncompressedLength' => -1,
+                ],
+                $e->getContext()
+            );
+        }
+    }
+
     public function testDecompressBlockThrowsOnIllegalOffset(): void {
         // Have some literals, then offset=0 -> illegal
         $token = chr((1 << 4) | 0x1); // literals=1, match nibble=1 (but we'll fail before using it)
@@ -70,9 +134,9 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         $ext = chr(0x03); // one extension byte 3
         $input = $token . $literals . $offset . $ext;
 
-        $dec = new Lz4Decompressor($input);
-        $result = $dec->decompressBlock();
         $expected = 'abcd' . substr(str_repeat('abcd', 6), 0, 22); // 22 bytes copied from history
+        $dec = new Lz4Decompressor($input, preferExtension: false);
+        $result = $dec->decompressBlock(strlen($expected));
         $this->assertSame($expected, $result);
     }
 
