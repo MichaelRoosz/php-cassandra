@@ -292,9 +292,18 @@ final class ResponseDispatcher {
             ]);
         }
 
+        // The values as the caller passed them, not the ones the refused EXECUTE
+        // encoded. A repreparation is exactly the case where the bind marker
+        // types may have moved under them — a schema change is one of the
+        // reasons a node stops recognising a statement id — and an encoded value
+        // is passed straight through by
+        // {@see Request\Request::encodeQueryValuesForBindMarkerTypes()}, so
+        // rebuilding from those would send the new statement id with the old
+        // statement's encoding. See {@see Request\Execute::$unencodedValues};
+        // {@see self::resendBatchAfterRepreparation()} does the same for a batch.
         $newExecuteRequest = new Request\Execute(
             $result,
-            $originalRequest->getValues(),
+            $originalRequest->getUnencodedValues(),
             $originalRequest->getConsistency(),
             $originalRequest->getOptions()
         );
@@ -483,7 +492,25 @@ final class ResponseDispatcher {
      */
     private function handleResponsePrepareResult(Request\Prepare $request, Response\Result $result, ?Statement $statement, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): ?Response\Result {
 
-        $result->setRequest($request);
+        // Never onto a cached result. That object is the cache's entry, shared
+        // by every hit, and it already carries the copy of the PREPARE it was
+        // stored with — which {@see PreparedResultCache::store()} makes a copy
+        // precisely so that the entry cannot follow a caller's request around:
+        // a request is addressed on its way to the wire and keeps what it was
+        // given, so one that is sent again after
+        // {@see \Cassandra\Connection::setKeyspace()} would leave the entry
+        // naming a keyspace other than the one it is filed under. Putting the
+        // live request back here would undo that, and the repreparation path
+        // rebuilds its PREPARE out of exactly this request
+        // ({@see self::handleResponseError()}), so an UNPREPARED for the
+        // statement id would prepare and execute against the wrong keyspace.
+        //
+        // Reached because a cache hit on the async path is handled like any
+        // other answer ({@see RequestExecutor::sendAsyncRequest()}); the sync
+        // path returns the entry without coming through here at all.
+        if (!($result instanceof Response\Result\CachedPreparedResult)) {
+            $result->setRequest($request);
+        }
 
         if (
             ($result instanceof Response\Result\PreparedResult)

@@ -55,6 +55,16 @@
  *                   about what was sent would. There is nothing for the client
  *                   to prepare again, so it has to report that rather than
  *                   guess
+ *   unprepared-execute-retyped
+ *                   refuse the first EXECUTE with UNPREPARED naming the id it
+ *                   carries, and hand out a statement whose bind marker is a
+ *                   bigint where the refused one's was an int — as a node whose
+ *                   table was altered under a prepared statement would. So a
+ *                   client that recovers has to encode the values it was given
+ *                   against the marker types it has just been told about, not
+ *                   the ones the refused statement carried. Every EXECUTE is
+ *                   reported on stdout as "execute <id> <hex values>", which is
+ *                   how a test can tell which encoding it was sent with
  *   refuse-use      report every QUERY on stdout as "query <cql>", and answer
  *                   the ones that switch keyspace with INVALID, as a node asked
  *                   for a keyspace that does not exist would
@@ -193,18 +203,25 @@ function trickleFrame($client, int $stream, int $opcode, string $body, float $se
 }
 
 /**
- * A PREPARED RESULT for a statement with a single int bind marker named "id".
+ * A PREPARED RESULT for a statement with a single bind marker named "id",
+ * of type int unless another type id is asked for.
  *
  * Enough for the client to encode an EXECUTE against it, which is all the
  * auto-prepare paths need; the rows metadata is left out entirely.
+ *
+ * $markerType is what lets a mode hand out a statement whose marker types have
+ * moved, which is one of the reasons a real node stops recognising a statement
+ * id — an ALTER, or a table dropped and created again. The client has to encode
+ * the values against the type it was just told about rather than the one the
+ * refused statement carried.
  */
-function preparedResultBody(string $id = 'pid1'): string {
+function preparedResultBody(string $id = 'pid1', int $markerType = 0x0009): string {
     return pack('N', 4)                                    // kind = PREPARED
         . pack('n', strlen($id)) . $id                     // id [short bytes]
         // prepare metadata: GLOBAL_TABLES_SPEC, one bind marker, no pk index
         . pack('N', 1) . pack('N', 1) . pack('N', 0)
         . cqlString('ks') . cqlString('t')
-        . cqlString('id') . pack('n', 0x0009)              // marker "id", type int
+        . cqlString('id') . pack('n', $markerType)         // marker "id"
         // rows metadata: NO_METADATA, no columns
         . pack('N', 4) . pack('N', 0);
 }
@@ -285,6 +302,61 @@ function batchPreparedIds(string $body): array {
 }
 
 /**
+ * The statement id and the raw bound values an EXECUTE frame carries.
+ *
+ * The body is the statement id as [short bytes], then the query parameters: a
+ * [short] consistency, a one-byte flag set, and — where the VALUES flag is set
+ * — a [short] count followed by that many [bytes]. Nothing before the values is
+ * of any interest here, but it all has to be walked to reach them.
+ *
+ * Reported so that a test can pin what the client actually put on the wire,
+ * which is the whole of what re-encoding after a repreparation changes: the
+ * same value bound to an int marker and to a bigint one is four bytes and eight.
+ *
+ * @return array{id: string, values: list<string>}
+ */
+function executeIdAndValues(string $body): array {
+
+    /** @var array{1: int} $unpacked */
+    $unpacked = unpack('n', substr($body, 0, 2));
+    $id = substr($body, 2, $unpacked[1]);
+    $offset = 2 + $unpacked[1];
+
+    $offset += 2; // consistency [short]
+
+    $flags = ord($body[$offset]);
+    $offset += 1;
+
+    $values = [];
+
+    if (($flags & 0x01) !== 0) { // VALUES
+        /** @var array{1: int} $unpacked */
+        $unpacked = unpack('n', substr($body, $offset, 2));
+        $valueCount = $unpacked[1];
+        $offset += 2;
+
+        for ($value = 0; $value < $valueCount; $value++) {
+            /** @var array{1: int} $unpacked */
+            $unpacked = unpack('N', substr($body, $offset, 4));
+            $offset += 4;
+
+            // null (-1) and "not set" (-2) are lengths with no bytes behind
+            // them, and unpack('N') hands them back unsigned.
+            if ($unpacked[1] >= 0x80000000) {
+                $values[] = '';
+
+                continue;
+            }
+
+            $values[] = substr($body, $offset, $unpacked[1]);
+            $offset += $unpacked[1];
+        }
+    }
+
+    return ['id' => $id, 'values' => $values];
+}
+
+/**
  * An INVALID ERROR, which is how a node refuses a USE for a keyspace that does
  * not exist.
  */
@@ -342,6 +414,7 @@ $eventDueAt = null;
 $prepareCount = 0;
 $badHeaderSent = false;
 $batchRefused = false;
+$executeRefused = false;
 $deadline = microtime(true) + 60;
 
 /** @var list<array{dueAt: float, stream: int}> $deferredAnswers */
@@ -446,6 +519,17 @@ while (microtime(true) < $deadline) {
             // repreparation from the one after it — and so that distinct
             // queries get distinct ids, as a real node gives them. The other
             // modes keep the single id their expectations are written against.
+            if ($mode === 'unprepared-execute-retyped') {
+                // The statement comes back with a bigint marker where it had an
+                // int one, as it would after the table was altered under it.
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, preparedResultBody(
+                    'pid' . $prepareCount,
+                    $prepareCount === 1 ? 0x0009 : 0x0002,
+                ));
+
+                break;
+            }
+
             writeFrame($client, $frame['stream'], OPCODE_RESULT, preparedResultBody(
                 ($mode === 'unprepared-batch-once' || $mode === 'always-unprepared') ? 'pid' . $prepareCount : 'pid1'
             ));
@@ -480,6 +564,27 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_EXECUTE:
+            if ($mode === 'unprepared-execute-retyped') {
+                $execute = executeIdAndValues($frame['body']);
+
+                // Reported so that a test can pin the encoding each EXECUTE
+                // went out with, before and after the repreparation.
+                fwrite(STDOUT, 'execute ' . $execute['id'] . ' ' . implode(',', array_map('bin2hex', $execute['values'])) . "\n");
+                fflush(STDOUT);
+
+                if (!$executeRefused) {
+                    $executeRefused = true;
+
+                    writeFrame($client, $frame['stream'], OPCODE_ERROR, unpreparedErrorBody($execute['id']));
+
+                    break;
+                }
+
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody());
+
+                break;
+            }
+
             if ($mode === 'always-unprepared') {
                 // Never keeps the prepared statement, so every re-execution is
                 // refused the same way and only the client's own limit can end

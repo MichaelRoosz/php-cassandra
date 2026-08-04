@@ -19,6 +19,31 @@ final class Execute extends Request {
     private ?string $rowsMetadataId = null;
 
     /**
+     * The values as the caller passed them, before they were encoded against
+     * the bind marker types of the prepared statement this request was built
+     * from.
+     *
+     * Kept because a repreparation is exactly the case where those types may
+     * have moved: an ALTER, or a table dropped and created again, is one of the
+     * reasons a node stops recognising a statement id. The encoded values below
+     * carry the types of the statement the node has just forgotten, and
+     * {@see Request::encodeQueryValuesForBindMarkerTypes()} passes a
+     * {@see \Cassandra\Value\ValueBase} straight through — so a replacement
+     * EXECUTE built from them would go out with the new statement id and the
+     * old encoding. {@see \Cassandra\Connection\ResponseDispatcher::handleReprepareResult()}
+     * therefore rebuilds from these, and {@see \Cassandra\Request\Batch} keeps
+     * its own values unencoded for the same reason.
+     *
+     * Keyed as the caller keyed them, which is also what makes the rebuild
+     * honest about a marker that was renamed: the names are matched afresh
+     * against the new metadata, so a value that no longer belongs to any marker
+     * is reported rather than bound to whatever sits at its old position.
+     *
+     * @var array<mixed> $unencodedValues
+     */
+    private readonly array $unencodedValues;
+
+    /**
      * @var array<mixed> $values
      */
     private $values;
@@ -72,6 +97,8 @@ final class Execute extends Request {
 
         $this->queryId = $preparedData->id;
         $this->rowsMetadataId = $preparedData->rowsMetadataId;
+
+        $this->unencodedValues = $values;
 
         $this->values = self::encodeQueryValuesForBindMarkerTypes(
             $values,
@@ -184,6 +211,21 @@ final class Execute extends Request {
     }
 
     /**
+     * The values as the caller passed them, see {@see self::$unencodedValues}.
+     *
+     * @return array<mixed>
+     */
+    public function getUnencodedValues(): array {
+        return $this->unencodedValues;
+    }
+
+    /**
+     * The values as they will go on the wire, encoded against the bind marker
+     * types of the prepared statement this request was built from.
+     *
+     * {@see self::getUnencodedValues()} is what a request built to replace this
+     * one has to be given; see {@see self::$unencodedValues}.
+     *
      * @return array<mixed> $values
      */
     public function getValues(): array {
