@@ -133,7 +133,7 @@ final class Vector extends ValueReadableWithoutLength {
 
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
 
-                $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
+                $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream, $valueEncodeConfig);
 
                 if ($valueObject instanceof ValueWithMultipleEncodings) {
                     /** @psalm-suppress MixedAssignment */
@@ -147,7 +147,7 @@ final class Vector extends ValueReadableWithoutLength {
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
 
                 $serializedLength = $stream->readUnsignedVint32();
-                $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream);
+                $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream, $valueEncodeConfig);
 
                 if ($valueObject instanceof ValueWithMultipleEncodings) {
                     /** @psalm-suppress MixedAssignment */

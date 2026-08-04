@@ -213,6 +213,40 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
             $this->assertEquals((string) $varintVec[$i], (string) $decoded[$i]);
         }
     }
+    /**
+     * A vector element that is itself a container decodes its own children, so
+     * the value-encode config has to reach it rather than only being applied to
+     * the element afterwards: a collection is not a ValueWithMultipleEncodings,
+     * so nothing downstream would put the config back.
+     */
+    public function testVectorFromStreamPassesTheEncodeConfigToContainerElements(): void {
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::VECTOR,
+            'valueType' => ['type' => Type::LIST, 'valueType' => Type::TIMESTAMP],
+            'dimensions' => 1,
+        ]);
+
+        $milliseconds = 1234567890123;
+
+        $binary = ValueFactory::getBinaryByTypeInfo($typeInfo, [[new Value\Timestamp($milliseconds)]]);
+
+        $config = new Value\ValueEncodeConfig(
+            timestampEncodeOption: Value\EncodeOption\TimestampEncodeOption::AS_INT,
+        );
+
+        $decoded = ValueFactory::getValueObjectFromStream(
+            $typeInfo,
+            strlen($binary),
+            new StreamReader($binary),
+            $config,
+        )->getValue();
+
+        $this->assertSame(
+            [[$milliseconds]],
+            $decoded,
+            'a timestamp nested inside a vector element must honour the configured encoding'
+        );
+    }
 
     /**
      * smallint/tinyint have a positive fixedLength() but Cassandra still
@@ -289,6 +323,7 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
         )->getValue();
         $this->assertSame($textVec, $decoded);
     }
+
     /**
      * @template T
      * @param T $phpValue
