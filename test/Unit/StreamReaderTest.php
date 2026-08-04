@@ -291,9 +291,10 @@ final class StreamReaderTest extends AbstractUnitTestCase {
     }
 
     /**
-     * Cassandra distinguishes null (length -1) from empty (length 0), and empty is
-     * legal for every type. A fixed-length decoder must not read its fixed size
-     * anyway — that consumes the following cell and desyncs the rest of the row.
+     * Cassandra distinguishes null (length -1) from empty (length 0), and every
+     * type below allows an empty value (AbstractType::allowsEmpty()). A
+     * fixed-length decoder must not read its fixed size anyway — that consumes
+     * the following cell and desyncs the rest of the row.
      */
     public function testReadValueEmptyFixedLengthValueDoesNotConsumeNextValue(): void {
         $cfg = new ValueEncodeConfig();
@@ -325,6 +326,55 @@ final class StreamReaderTest extends AbstractUnitTestCase {
                 'next',
                 $reader->readValue(ValueFactory::getTypeInfoFromType(Type::VARCHAR), $cfg),
                 'the value after an empty ' . $type->name . ' must still decode'
+            );
+        }
+    }
+
+    /**
+     * A tuple and a UDT are the one family whose empty value is both allowed and
+     * meaningful: Cassandra's TupleType overrides allowsEmpty() to true and
+     * leaves isEmptyValueMeaningless() at false, so an empty cell denotes a
+     * tuple whose components are all absent — an all-null tuple, not a null
+     * tuple. UserType extends TupleType and inherits the same reading. The
+     * DataStax Java driver's TupleCodec agrees ("empty byte buffers will result
+     * in empty values"; null only for a null buffer).
+     *
+     * The null cell is asserted beside it because the whole point is that the
+     * two stay distinct, and the trailing int because an empty cell must still
+     * consume exactly zero bytes of body.
+     */
+    public function testReadValueEmptyTupleAndUdtDecodeToAllNullFields(): void {
+        $cfg = new ValueEncodeConfig();
+
+        $tupleInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::TUPLE,
+            'valueTypes' => [Type::INT, Type::VARCHAR],
+        ]);
+        $udtInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::UDT,
+            'valueTypes' => ['a' => Type::INT, 'b' => Type::VARCHAR],
+        ]);
+
+        foreach ([
+            'tuple' => [$tupleInfo, [0 => null, 1 => null]],
+            'UDT' => [$udtInfo, ['a' => null, 'b' => null]],
+        ] as $label => [$typeInfo, $expected]) {
+            // empty cell, then a null cell, then an int cell holding 4242
+            $bin = pack('N', 0)
+                . "\xff\xff\xff\xff"
+                . pack('N', 4) . pack('N', 4242);
+
+            $reader = new StreamReader($bin);
+
+            $this->assertSame($expected, $reader->readValue($typeInfo, $cfg), 'empty ' . $label);
+            $this->assertSame(4, $reader->pos(), 'empty ' . $label . ' must consume exactly 0 bytes of body');
+
+            $this->assertNull($reader->readValue($typeInfo, $cfg), 'null ' . $label);
+
+            $this->assertSame(
+                4242,
+                $reader->readValue(ValueFactory::getTypeInfoFromType(Type::INT), $cfg),
+                'the value after an empty ' . $label . ' must still decode'
             );
         }
     }

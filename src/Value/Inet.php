@@ -17,6 +17,11 @@ final class Inet extends ValueReadableWithLength {
         $this->value = $value;
     }
 
+    #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
     /**
      * @throws \Cassandra\Exception\ValueException
      */
@@ -25,7 +30,11 @@ final class Inet extends ValueReadableWithLength {
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static {
+    ): ?static {
+
+        if (self::emptyBinaryIsNull($binary)) {
+            return null;
+        }
         $inet = inet_ntop($binary);
 
         if ($inet === false) {
@@ -130,6 +139,11 @@ final class Inet extends ValueReadableWithLength {
     #[\Override]
     public function getValue(): string {
         return $this->value;
+    }
+
+    #[\Override]
+    public static function isEmptyValueMeaningless(): bool {
+        return true;
     }
 
     #[\Override]

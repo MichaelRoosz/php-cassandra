@@ -40,6 +40,11 @@ final class Tuple extends ValueReadableWithoutLength {
         $this->typeInfo = $typeInfo;
     }
 
+    #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
     /**
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException

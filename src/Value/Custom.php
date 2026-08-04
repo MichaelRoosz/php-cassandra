@@ -24,6 +24,11 @@ class Custom extends ValueReadableWithLength {
         $this->value = $value;
     }
 
+    #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
     /**
      * @throws \Cassandra\Exception\ValueException
      */

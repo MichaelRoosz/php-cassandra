@@ -82,6 +82,11 @@ final class Decimal extends ValueReadableWithLength {
         $this->value = $decimal;
     }
 
+    #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
     /**
      * @throws \Cassandra\Exception\ValueException
      */
@@ -90,13 +95,17 @@ final class Decimal extends ValueReadableWithLength {
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static {
+    ): ?static {
+
+        if (self::emptyBinaryIsNull($binary)) {
+            return null;
+        }
 
         $length = strlen($binary);
-        if ($length < 4) {
+        if ($length < 5) {
             throw new ValueException('Cannot unpack decimal binary data', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
                 'binary_length' => $length,
-                'note' => 'expected >= 4 bytes (scale + varint)',
+                'note' => 'expected >= 5 bytes (4-byte scale + at least one varint byte)',
             ]);
         }
         /**
@@ -125,7 +134,18 @@ final class Decimal extends ValueReadableWithLength {
         }
 
         $varintBinary = substr($binary, 4);
+
+        // Non-null by the length guard above, which leaves at least one byte for
+        // the unscaled part; asked anyway because only that guard says so, and
+        // Varint::fromBinary() reports an empty value as null.
         $unscaledVarint = Varint::fromBinary($varintBinary);
+        if ($unscaledVarint === null) {
+            throw new ValueException('Cannot unpack decimal binary data', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
+                'binary_length' => $length,
+                'note' => 'the unscaled varint part is empty',
+            ]);
+        }
+
         $unscaled = $unscaledVarint->asString();
 
         if ($scale === 0) {
@@ -212,6 +232,11 @@ final class Decimal extends ValueReadableWithLength {
     }
 
     #[\Override]
+    public static function isEmptyValueMeaningless(): bool {
+        return true;
+    }
+
+    #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
     }
@@ -252,6 +277,40 @@ final class Decimal extends ValueReadableWithLength {
     }
 
     /**
+     * @param string $decimal a plain decimal string: an optional leading '-',
+     * digits, and an optional '.' followed by digits
+     */
+    private static function canonicalizeDecimalString(string $decimal): string {
+
+        $isNegative = str_starts_with($decimal, '-');
+        $magnitude = $isNegative ? substr($decimal, 1) : $decimal;
+
+        $pointPosition = strpos($magnitude, '.');
+        if ($pointPosition === false) {
+            $integerPart = $magnitude;
+            $fractionPart = '';
+        } else {
+            $integerPart = substr($magnitude, 0, $pointPosition);
+            $fractionPart = substr($magnitude, $pointPosition);
+        }
+
+        $integerPart = ltrim($integerPart, '0');
+        if ($integerPart === '') {
+            $integerPart = '0';
+        }
+
+        $magnitude = $integerPart . $fractionPart;
+
+        // Nothing but zeros and the point, i.e. a value of zero however many
+        // digits it is spelled with.
+        if ($isNegative && strspn($magnitude, '0.') === strlen($magnitude)) {
+            return $magnitude;
+        }
+
+        return $isNegative ? '-' . $magnitude : $magnitude;
+    }
+
+    /**
      * Converts a float to a plain decimal string without losing its value: the
      * shortest string that round-trips to the same float, with any scientific
      * notation expanded (the varint-based wire encoding cannot express an
@@ -285,11 +344,9 @@ final class Decimal extends ValueReadableWithLength {
 
         $matches = [];
         if (preg_match('/^(?<sign>-?)(?<integer>\d+)(?<fraction>\.\d+)?$/', $value, $matches) === 1) {
-            $integerPart = ltrim($matches['integer'], '0');
-
-            return $matches['sign']
-                . ($integerPart === '' ? '0' : $integerPart)
-                . ($matches['fraction'] ?? '');
+            return self::canonicalizeDecimalString(
+                $matches['sign'] . $matches['integer'] . ($matches['fraction'] ?? '')
+            );
         }
 
         return self::scientificToDecimalString($value);
@@ -344,7 +401,7 @@ final class Decimal extends ValueReadableWithLength {
             $result = substr($digits, 0, $pointPos) . '.' . substr($digits, $pointPos);
         }
 
-        return $sign . self::trimTrailingFractionZeros($result);
+        return self::canonicalizeDecimalString($sign . self::trimTrailingFractionZeros($result));
     }
 
     private static function trimTrailingFractionZeros(string $decimal): string {

@@ -26,6 +26,15 @@ final class ValueFactory {
     private static ?array $typeToValueClassMap = null;
 
     /**
+     * @throws \Cassandra\Exception\ValueFactoryException
+     */
+    public static function allowsEmptyValue(Type $type): bool {
+        $class = self::getClassForDataType($type);
+
+        return $class::allowsEmpty();
+    }
+
+    /**
      * @param mixed $value
      *
      * @throws \Cassandra\Exception\ValueFactoryException
@@ -171,7 +180,7 @@ final class ValueFactory {
         TypeInfo $typeInfo,
         string $binary,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): Values\ValueBase {
+    ): ?Values\ValueBase {
 
         $class = self::getClassForDataType($typeInfo->type);
 
@@ -212,6 +221,18 @@ final class ValueFactory {
         $class = self::getClassForDataType($typeInfo->type);
 
         return $class::fromMixedValue($value, $typeInfo);
+    }
+
+    /**
+     * Whether an empty value of $type denotes null rather than a value of its
+     * own; see {@see \Cassandra\Value\ValueBase::isEmptyValueMeaningless()}.
+     *
+     * @throws \Cassandra\Exception\ValueFactoryException
+     */
+    public static function isEmptyValueMeaningless(Type $type): bool {
+        $class = self::getClassForDataType($type);
+
+        return $class::isEmptyValueMeaningless();
     }
 
     /**

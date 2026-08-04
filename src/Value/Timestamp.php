@@ -54,6 +54,11 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
         return $this->asString();
     }
 
+    #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
     /**
      * @throws \Cassandra\Exception\ValueException
      */
@@ -115,7 +120,11 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static {
+    ): ?static {
+
+        if (self::emptyBinaryIsNull($binary)) {
+            return null;
+        }
         self::require64Bit();
         self::assertExactBinaryLength($binary);
 
@@ -175,6 +184,11 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     #[\Override]
     public function getValue(): string {
         return $this->asDateTime()->format('Y-m-d H:i:s.vO');
+    }
+
+    #[\Override]
+    public static function isEmptyValueMeaningless(): bool {
+        return true;
     }
 
     #[\Override]

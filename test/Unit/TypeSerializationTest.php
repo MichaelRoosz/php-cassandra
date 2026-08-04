@@ -55,7 +55,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     public function testBigint(): void {
 
         foreach ([0, 1, -1, 1000, -1000, PHP_INT_MAX, PHP_INT_MIN] as $v) {
-            $this->assertSame($v, Value\Bigint::fromBinary((Value\Bigint::fromValue($v))->getBinary())->getValue());
+            $this->assertSame($v, Value\Bigint::fromBinary((Value\Bigint::fromValue($v))->getBinary())?->getValue());
         }
     }
 
@@ -65,14 +65,21 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testBoolean(): void {
-        $this->assertSame(false, Value\Boolean::fromBinary((Value\Boolean::fromValue(false))->getBinary())->getValue());
-        $this->assertSame(true, Value\Boolean::fromBinary((Value\Boolean::fromValue(true))->getBinary())->getValue());
+        $this->assertSame(false, Value\Boolean::fromBinary((Value\Boolean::fromValue(false))->getBinary())?->getValue());
+        $this->assertSame(true, Value\Boolean::fromBinary((Value\Boolean::fromValue(true))->getBinary())?->getValue());
     }
 
-    public function testBooleanEmptyCellDecodesAsFalse(): void {
-        // A zero-length (empty, non-null) cell is a legal boolean value and
-        // must decode as false, matching the other drivers.
-        $this->assertSame(false, Value\Boolean::fromBinary('')->getValue());
+    public function testBooleanEmptyBinaryDecodesToNull(): void {
+        // An empty value is legal for boolean and denotes null, not false:
+        // BooleanSerializer deserializes one to null and BooleanType reports
+        // isEmptyValueMeaningless(). false is a different value with an encoding
+        // of its own ("\0"). See EmptyValueConformanceTest for the same rule
+        // across every type, and EmptyValueIntegrationTest for a real node.
+        //
+        // A value wider than one byte is the other half of BooleanSerializer's
+        // "Expected 1 or 0 byte value" and stays a length error; see
+        // testBooleanRejectsTrailingBinaryData().
+        $this->assertNull(Value\Boolean::fromBinary(''));
     }
 
     public function testBooleanRejectsTrailingBinaryData(): void {
@@ -108,7 +115,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     public function testCounter(): void {
 
         foreach ([0, 1, -1, 1000, -1000, PHP_INT_MAX, PHP_INT_MIN] as $v) {
-            $this->assertSame($v, Value\Counter::fromBinary((Value\Counter::fromValue($v))->getBinary())->getValue());
+            $this->assertSame($v, Value\Counter::fromBinary((Value\Counter::fromValue($v))->getBinary())?->getValue());
         }
     }
 
@@ -177,10 +184,75 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testDecimal(): void {
         $decimal = '34345454545.120';
-        $this->assertSame($decimal, Value\Decimal::fromBinary((Value\Decimal::fromValue($decimal))->getBinary())->getValue());
+        $this->assertSame($decimal, Value\Decimal::fromBinary((Value\Decimal::fromValue($decimal))->getBinary())?->getValue());
 
         $decimal = '34345454545';
-        $this->assertSame($decimal, Value\Decimal::fromBinary((Value\Decimal::fromValue($decimal))->getBinary())->getValue());
+        $this->assertSame($decimal, Value\Decimal::fromBinary((Value\Decimal::fromValue($decimal))->getBinary())?->getValue());
+    }
+
+    /**
+     * Expanding an exponent must leave the integer part canonical.
+     *
+     * scientificToDecimalString() shifts the decimal point through the mantissa's
+     * digits, which leaves whatever leading zeros the mantissa had: "0.5e1"
+     * became "05" and "0e5" became "000000". The plain-decimal path drops those,
+     * so the same number reached getValue() spelled two different ways depending
+     * on which form it arrived in — and the wire encoding has no way to show a
+     * leading zero, so the value read back from a node did not match the one
+     * that was written.
+     */
+    public function testDecimalDropsLeadingZerosWhenExpandingAnExponent(): void {
+        foreach ([
+            ['0e5', '0'],
+            ['0.5e1', '5'],
+            ['0.05e1', '0.5'],
+            ['0.10e1', '1'],
+            ['-0.5e1', '-5'],
+            ['000.5e1', '5'],
+            ['0.001e3', '1'],
+        ] as [$input, $expected]) {
+            $decimal = new Value\Decimal($input);
+
+            $this->assertSame($expected, $decimal->getValue(), "value for input '{$input}'");
+            $this->assertSame(
+                $expected,
+                Value\Decimal::fromBinary($decimal->getBinary())?->getValue(),
+                "roundtrip for input '{$input}'"
+            );
+        }
+    }
+
+    /**
+     * A decimal whose digits are all zero has an unscaled varint of zero, and
+     * zero has no sign — so "-0" and "-0.0" came back from a node as "0" and
+     * "0.0", which is not what they went out as. The sign is dropped at
+     * construction instead, and only for an all-zero magnitude: "-0.100" has an
+     * unscaled value of -100 and keeps both its sign and its scale.
+     */
+    public function testDecimalDropsTheSignOfAZeroValue(): void {
+        foreach ([
+            ['-0', '0'],
+            ['-0.0', '0.0'],
+            ['-0.00', '0.00'],
+            ['-0e5', '0'],
+            ['-0.000e2', '0'],
+        ] as [$input, $expected]) {
+            $decimal = new Value\Decimal($input);
+
+            $this->assertSame($expected, $decimal->getValue(), "value for input '{$input}'");
+            $this->assertSame(
+                $expected,
+                Value\Decimal::fromBinary($decimal->getBinary())?->getValue(),
+                "roundtrip for input '{$input}'"
+            );
+        }
+
+        $this->assertSame('0', (new Value\Decimal(-0.0))->getValue());
+
+        // A negative value that merely looks like zero at its integer digit
+        // keeps its sign: its unscaled value really is negative.
+        $this->assertSame('-0.100', (new Value\Decimal('-0.100'))->getValue());
+        $this->assertSame('-0.100', Value\Decimal::fromBinary((new Value\Decimal('-0.100'))->getBinary())?->getValue());
     }
 
     public function testDecimalFromBinaryAcceptsWhatConstructionAllows(): void {
@@ -190,7 +262,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $atLimit = '0.' . str_repeat('0', 99_999) . '1';
 
         $decimal = Value\Decimal::fromValue($atLimit);
-        $this->assertSame($atLimit, Value\Decimal::fromBinary($decimal->getBinary())->getValue());
+        $this->assertSame($atLimit, Value\Decimal::fromBinary($decimal->getBinary())?->getValue());
     }
 
     public function testDecimalFromBinaryRejectsOutOfRangeScale(): void {
@@ -212,7 +284,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     public function testDecimalFromBinaryWithNegativeScale(): void {
         // scale is a signed int32; -3 with unscaled 12 means 12 * 10^3.
         $binary = pack('N', 0xFFFFFFFD) . (new Value\Varint(12))->getBinary();
-        $this->assertSame('12000', Value\Decimal::fromBinary($binary)->getValue());
+        $this->assertSame('12000', Value\Decimal::fromBinary($binary)?->getValue());
     }
 
     public function testDecimalFromFloatKeepsFractionalValue(): void {
@@ -224,7 +296,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             [1.0E-5, '0.00001'],
         ] as [$float, $expected]) {
             $this->assertSame($expected, (new Value\Decimal($float))->getValue());
-            $this->assertSame($expected, Value\Decimal::fromBinary((new Value\Decimal($float))->getBinary())->getValue());
+            $this->assertSame($expected, Value\Decimal::fromBinary((new Value\Decimal($float))->getBinary())?->getValue());
         }
 
         $this->expectException(\Cassandra\Exception\ValueException::class);
@@ -250,7 +322,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             $this->assertSame($expected, $decimal->getValue(), "value for input '{$input}'");
             $this->assertSame(
                 $expected,
-                Value\Decimal::fromBinary($decimal->getBinary())->getValue(),
+                Value\Decimal::fromBinary($decimal->getBinary())?->getValue(),
                 "roundtrip for input '{$input}'"
             );
         }
@@ -259,6 +331,28 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         foreach (['1.50', '34345454545.120', '-0.100', '42'] as $plain) {
             $this->assertSame($plain, (new Value\Decimal($plain))->getValue(), "verbatim for '{$plain}'");
         }
+    }
+
+    /**
+     * A decimal is a four-byte scale followed by an unscaled varint, and a
+     * varint is at least one byte — so four bytes is a truncated decimal rather
+     * than one with an unscaled value of zero, and must not be read as though
+     * Varint::fromBinary() had returned something.
+     */
+    public function testDecimalRejectsABodyWithNoUnscaledVarint(): void {
+        $this->assertNull(Value\Decimal::fromBinary(''));
+
+        foreach ([1, 2, 3, 4] as $length) {
+            try {
+                Value\Decimal::fromBinary(str_repeat("\x00", $length));
+                $this->fail('Expected ValueException for a ' . $length . '-byte decimal');
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, $e->getCode());
+            }
+        }
+
+        // Five bytes is the shortest well-formed decimal: scale 0, unscaled 0.
+        $this->assertSame('0', Value\Decimal::fromBinary(pack('N', 0) . "\x00")?->getValue());
     }
 
     public function testDecimalRejectsScaleItCouldNotReadBack(): void {
@@ -278,7 +372,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testDouble(): void {
         $double = 12345678901234.4545435;
-        $this->assertSame($double, Value\Double::fromBinary((Value\Double::fromValue($double))->getBinary())->getValue());
+        $this->assertSame($double, Value\Double::fromBinary((Value\Double::fromValue($double))->getBinary())?->getValue());
     }
 
     public function testDuration(): void {
@@ -474,15 +568,15 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testFloat32(): void {
         $float = 1024.5;
-        $this->assertSame($float, Value\Float32::fromBinary((new Value\Float32($float))->getBinary())->getValue());
+        $this->assertSame($float, Value\Float32::fromBinary((new Value\Float32($float))->getBinary())?->getValue());
     }
 
     public function testInet(): void {
         $ipv4 = '192.168.22.1';
-        $this->assertSame($ipv4, Value\Inet::fromBinary((Value\Inet::fromValue($ipv4))->getBinary())->getValue());
+        $this->assertSame($ipv4, Value\Inet::fromBinary((Value\Inet::fromValue($ipv4))->getBinary())?->getValue());
 
         $ipv6 = '2001:db8:3333:4444:5555:6666:7777:8888';
-        $this->assertSame($ipv6, Value\Inet::fromBinary((Value\Inet::fromValue($ipv6))->getBinary())->getValue());
+        $this->assertSame($ipv6, Value\Inet::fromBinary((Value\Inet::fromValue($ipv6))->getBinary())?->getValue());
     }
 
     public function testInetWrapsNativeEncodingErrors(): void {
@@ -497,10 +591,10 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testInteger(): void {
         $int1 = 234355434;
-        $this->assertSame($int1, Value\Int32::fromBinary((Value\Int32::fromValue($int1))->getBinary())->getValue());
+        $this->assertSame($int1, Value\Int32::fromBinary((Value\Int32::fromValue($int1))->getBinary())?->getValue());
 
         $int2 = -234355434;
-        $this->assertSame($int2, Value\Int32::fromBinary((Value\Int32::fromValue($int2))->getBinary())->getValue());
+        $this->assertSame($int2, Value\Int32::fromBinary((Value\Int32::fromValue($int2))->getBinary())?->getValue());
     }
 
     public function testListCollection(): void {
@@ -853,7 +947,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         }
 
         $timeInMs = 1674341495053;
-        $this->assertSame($timeInMs, Value\Timestamp::fromBinary((Value\Timestamp::fromValue($timeInMs))->getBinary())->asInteger());
+        $this->assertSame($timeInMs, Value\Timestamp::fromBinary((Value\Timestamp::fromValue($timeInMs))->getBinary())?->asInteger());
     }
 
     public function testTimestampRejectsDateTimeOutsideIntegerMillisecondRange(): void {
@@ -883,7 +977,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testTimeuuid(): void {
         $timeUuid = 'bd23b48a-99de-11ed-a8fc-0242ac120002';
-        $this->assertSame($timeUuid, Value\Timeuuid::fromBinary((Value\Timeuuid::fromValue($timeUuid))->getBinary())->getValue());
+        $this->assertSame($timeUuid, Value\Timeuuid::fromBinary((Value\Timeuuid::fromValue($timeUuid))->getBinary())?->getValue());
     }
 
     public function testTimeuuidAcceptsUndashedHexForm(): void {
@@ -1016,7 +1110,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     public function testUuid(): void {
         $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
-        $this->assertSame($uuid, Value\Uuid::fromBinary((Value\Uuid::fromValue($uuid))->getBinary())->getValue());
+        $this->assertSame($uuid, Value\Uuid::fromBinary((Value\Uuid::fromValue($uuid))->getBinary())?->getValue());
     }
 
     public function testUuidAcceptsRawBinaryForm(): void {
@@ -1103,7 +1197,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         ] as $value) {
             $this->assertSame((string) $value, (Value\Varint::fromValue($value))->getValue());
             $this->assertSame($value, (Value\Varint::fromValue($value))->asInt());
-            $this->assertSame((string) $value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())->getValue());
+            $this->assertSame((string) $value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())?->getValue());
             $this->assertSame($value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())->asInt());
         }
 
@@ -1112,17 +1206,17 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             '-999999999999999999999999999999999999999999999999999999999999999999',
         ] as $value) {
             $this->assertSame($value, (Value\Varint::fromValue($value))->getValue());
-            $this->assertSame($value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())->getValue());
+            $this->assertSame($value, Value\Varint::fromBinary((Value\Varint::fromValue($value))->getBinary())?->getValue());
         }
 
-        $this->assertSame('0', Value\Varint::fromBinary("\x00")->getValue());
-        $this->assertSame('1', Value\Varint::fromBinary("\x01")->getValue());
-        $this->assertSame('127', Value\Varint::fromBinary("\x7F")->getValue());
-        $this->assertSame('128', Value\Varint::fromBinary("\x00\x80")->getValue());
-        $this->assertSame('129', Value\Varint::fromBinary("\x00\x81")->getValue());
-        $this->assertSame('-1', Value\Varint::fromBinary("\xFF")->getValue());
-        $this->assertSame('-128', Value\Varint::fromBinary("\x80")->getValue());
-        $this->assertSame('-129', Value\Varint::fromBinary("\xFF\x7F")->getValue());
+        $this->assertSame('0', Value\Varint::fromBinary("\x00")?->getValue());
+        $this->assertSame('1', Value\Varint::fromBinary("\x01")?->getValue());
+        $this->assertSame('127', Value\Varint::fromBinary("\x7F")?->getValue());
+        $this->assertSame('128', Value\Varint::fromBinary("\x00\x80")?->getValue());
+        $this->assertSame('129', Value\Varint::fromBinary("\x00\x81")?->getValue());
+        $this->assertSame('-1', Value\Varint::fromBinary("\xFF")?->getValue());
+        $this->assertSame('-128', Value\Varint::fromBinary("\x80")?->getValue());
+        $this->assertSame('-129', Value\Varint::fromBinary("\xFF\x7F")?->getValue());
 
         $this->assertSame(0, Value\Varint::fromBinary("\x00")->asInt());
         $this->assertSame(1, Value\Varint::fromBinary("\x01")->asInt());
@@ -1143,6 +1237,24 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame("\xFF\x7F", (Value\Varint::fromValue(-129))->getBinary());
     }
 
+    /**
+     * No bytes spell no number. unpack('C*', '') hands back an empty array
+     * rather than false, so the accumulator loop simply never ran and an empty
+     * binary decoded to zero — which zero does not encode as ("\0" does), so it
+     * was a value that could not be written back as what it was read as.
+     */
+    public function testVarintEmptyBinaryDecodesToNull(): void {
+        // No bytes spell no number, and IntegerSerializer deserializes an empty
+        // value to null. Not zero: that has an encoding of its own ("\0"), and
+        // returning it is what this quietly did before — unpack('C*', '') hands
+        // back an empty array rather than false, so the accumulator never ran.
+        $this->assertNull(Value\Varint::fromBinary(''));
+
+        // Zero itself is still a single zero byte, in both directions.
+        $this->assertSame("\x00", Value\Varint::fromValue(0)->getBinary());
+        $this->assertSame('0', Value\Varint::fromBinary("\x00")?->getValue());
+    }
+
     public function testVarintNormalizesIntegerStrings(): void {
         // Leading zeros and a sign on zero are spellings, not values. The wire
         // encoding has no way to show them, so one kept on the PHP side would
@@ -1160,7 +1272,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             $this->assertSame($expected, $varint->getValue(), "value for input '{$input}'");
             $this->assertSame(
                 $expected,
-                Value\Varint::fromBinary($varint->getBinary())->getValue(),
+                Value\Varint::fromBinary($varint->getBinary())?->getValue(),
                 "roundtrip for input '{$input}'"
             );
         }
@@ -1199,7 +1311,7 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             $this->assertSame($tooLarge, $varint->getValue(), "value for '{$tooLarge}'");
             $this->assertSame(
                 $tooLarge,
-                Value\Varint::fromBinary($varint->getBinary())->getValue(),
+                Value\Varint::fromBinary($varint->getBinary())?->getValue(),
                 "roundtrip for '{$tooLarge}'"
             );
 

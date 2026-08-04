@@ -558,7 +558,9 @@ final class StreamReader {
             return null;
         }
 
-        if ($length === 0) {
+        // A tuple or UDT reads its own empty cell rather than being reported by
+        // emptyValue()
+        if ($length === 0 && !($typeInfo instanceof TupleInfo) && !($typeInfo instanceof UDTInfo)) {
             return $this->emptyValue($typeInfo);
         }
 
@@ -711,12 +713,35 @@ final class StreamReader {
     /**
      * The value a zero-length ("empty") cell decodes to.
      *
-     * Cassandra distinguishes null (length -1) from empty (length 0), and empty
-     * is a legal value for every type. Only the types whose serialization is a
-     * raw byte string or a counted collection can represent it; for everything
-     * else — in particular the fixed-length scalars, whose decoders would
-     * otherwise read past the end of the cell and desync the rest of the row —
-     * an empty cell is reported as null.
+     * Cassandra distinguishes null (length -1) from empty (length 0), and which
+     * of the two an empty cell means is the type's own business. Its
+     * AbstractType answers two separate questions, and this mirrors both:
+     *
+     * allowsEmpty() says whether a zero-length value is accepted at all. It is
+     * false by default, and stays false for the collections — CollectionType
+     * refuses one outright ("Not enough bytes to read a list") — as well as for
+     * duration and vector. Cassandra therefore never sends an empty cell for
+     * those; the entries below are leniency towards a peer that does, not a
+     * reading of a value it could have meant.
+     *
+     * isEmptyValueMeaningless() says what an accepted empty value denotes. The
+     * fixed-length scalars — int, bigint, varint, decimal, float, double,
+     * boolean, timestamp, date, time, uuid, timeuuid, inet, counter, smallint,
+     * tinyint — all override it to true, and their serializers deserialize an
+     * empty value to null, which is what they are reported as here. The string
+     * family is the other way about: StringType and BytesType allow empty and
+     * leave isEmptyValueMeaningless() at false, so for ascii, text, varchar and
+     * blob the empty string is the value rather than a spelling of null.
+     *
+     * Reporting null also keeps the reader honest about the cell length, which
+     * is the property the rest of the row depends on: a fixed-length decoder
+     * handed an empty cell would read past its end and desync every value after
+     * it.
+     *
+     * Tuples and UDTs do not come here at all. They are the one family whose
+     * empty value is both allowed and meaningful, and their decoders are bounded
+     * by the declared length rather than by their own idea of a size, so
+     * {@see self::readValue()} hands them the empty cell to read for themselves.
      */
     private function emptyValue(TypeInfo $typeInfo): mixed {
         return match ($typeInfo->type) {

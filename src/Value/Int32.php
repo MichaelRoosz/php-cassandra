@@ -33,6 +33,11 @@ final class Int32 extends ValueWithFixedLength {
     }
 
     #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
+    #[\Override]
     final public static function fixedLength(): int {
         return 4;
     }
@@ -45,7 +50,11 @@ final class Int32 extends ValueWithFixedLength {
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static {
+    ): ?static {
+
+        if (self::emptyBinaryIsNull($binary)) {
+            return null;
+        }
 
         self::assertExactBinaryLength($binary);
 
@@ -104,6 +113,11 @@ final class Int32 extends ValueWithFixedLength {
     #[\Override]
     public function getValue(): int {
         return $this->value;
+    }
+
+    #[\Override]
+    public static function isEmptyValueMeaningless(): bool {
+        return true;
     }
 
     #[\Override]

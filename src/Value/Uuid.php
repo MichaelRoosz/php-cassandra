@@ -51,6 +51,11 @@ final class Uuid extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
+    #[\Override]
     public function asConfigured(ValueEncodeConfig $valueEncodeConfig): mixed {
         return match ($valueEncodeConfig->uuidEncodeOption) {
             UuidEncodeOption::AS_BINARY => $this->binary,
@@ -71,7 +76,11 @@ final class Uuid extends ValueWithFixedLength implements ValueWithMultipleEncodi
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static {
+    ): ?static {
+
+        if (self::emptyBinaryIsNull($binary)) {
+            return null;
+        }
         if (strlen($binary) !== 16) {
             throw new ValueException(
                 'Cannot unpack UUID binary data',
@@ -123,6 +132,11 @@ final class Uuid extends ValueWithFixedLength implements ValueWithMultipleEncodi
     #[\Override]
     public function getValue(): string {
         return $this->toCanonicalString();
+    }
+
+    #[\Override]
+    public static function isEmptyValueMeaningless(): bool {
+        return true;
     }
 
     #[\Override]

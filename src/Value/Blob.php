@@ -17,6 +17,11 @@ final class Blob extends ValueReadableWithLength {
     }
 
     #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
+    #[\Override]
     public static function fromBinary(
         string $binary,
         ?TypeInfo $typeInfo = null,

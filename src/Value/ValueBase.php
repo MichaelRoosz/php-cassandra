@@ -40,6 +40,17 @@ abstract class ValueBase implements Stringable {
         return $json === false ? '' : $json;
     }
 
+    /**
+     * Whether a zero-length ("empty") value is allowed for this type.
+     *
+     * The value follows Cassandra's type *serializer* rather than that its
+     * "allowsEmpty" method, because the serializer is where Cassandra actually
+     * enforces it and the two do not always agree.
+     */
+    public static function allowsEmpty(): bool {
+        return false;
+    }
+
     abstract public static function fixedLength(): int;
 
     /**
@@ -50,7 +61,7 @@ abstract class ValueBase implements Stringable {
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static;
+    ): ?static;
 
     /**
      * @param mixed $value
@@ -79,11 +90,37 @@ abstract class ValueBase implements Stringable {
 
     abstract public static function hasFixedLength(): bool;
 
+    /**
+     * Whether an empty value of this type denotes null rather than a value of
+     * its own.
+     * 
+     * Only consulted where {@see self::allowsEmpty()} is true; a type that does
+     * not admit an empty value has nothing to say about what one would mean.
+     */
+    public static function isEmptyValueMeaningless(): bool {
+        return false;
+    }
+
     abstract public static function isReadableWithoutLength(): bool;
 
     abstract public static function isSerializedAsFixedLength(): bool;
 
     abstract public static function requiresDefinition(): bool;
+
+    /**
+     * Whether an empty binary is this type's spelling of null, so that
+     * {@see self::fromBinary()} reports one.
+     *
+     * Asked of the two predicates rather than of the string alone, so what a
+     * decoder does with an empty value can never drift from what its type
+     * declares about one.
+     */
+    final protected static function emptyBinaryIsNull(string $binary): bool {
+
+        return $binary === ''
+            && static::allowsEmpty()
+            && static::isEmptyValueMeaningless();
+    }
 
     /**
      * @throws \Cassandra\Exception\ValueException

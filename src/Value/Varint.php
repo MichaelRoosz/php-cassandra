@@ -54,6 +54,11 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
         $this->value = self::fitsInPhpInt($value) ? (int) $value : $value;
     }
 
+    #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
     /**
      * @throws \Cassandra\Exception\ValueException
      */
@@ -95,7 +100,12 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static {
+    ): ?static {
+
+        if (self::emptyBinaryIsNull($binary)) {
+            return null;
+        }
+
         $length = strlen($binary);
 
         if ($length > PHP_INT_SIZE) {
@@ -180,6 +190,11 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
     #[\Override]
     public function getValue(): string {
         return (string) $this->value;
+    }
+
+    #[\Override]
+    public static function isEmptyValueMeaningless(): bool {
+        return true;
     }
 
     #[\Override]

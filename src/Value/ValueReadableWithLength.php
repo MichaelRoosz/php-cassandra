@@ -24,7 +24,7 @@ abstract class ValueReadableWithLength extends ValueBase {
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static;
+    ): ?static;
 
     /**
      * @throws \Cassandra\Exception\ValueException
@@ -46,7 +46,24 @@ abstract class ValueReadableWithLength extends ValueBase {
 
         $binary = $stream->read($length);
 
-        return static::fromBinary($binary, typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+        $value = static::fromBinary($binary, typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+
+        // fromBinary() reports null for an empty value of a type that declares
+        // isEmptyValueMeaningless(), which is a reading this method has no way
+        // to hand back: it produces a value object.
+        // The cell length is known one level up, where
+        // {@see \Cassandra\Response\StreamReader::emptyValue()} settles an empty
+        // cell before any decoder is reached — so this is the length being
+        // wrong rather than a value that happens to be null.
+        if ($value === null) {
+            throw new ValueException('Invalid data length', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
+                'class' => static::class,
+                'length' => $length,
+                'note' => 'an empty value of this type denotes null and has no value object',
+            ]);
+        }
+
+        return $value;
     }
 
     #[\Override]

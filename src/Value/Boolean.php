@@ -17,6 +17,11 @@ final class Boolean extends ValueWithFixedLength {
     }
 
     #[\Override]
+    public static function allowsEmpty(): bool {
+        return true;
+    }
+
+    #[\Override]
     final public static function fixedLength(): int {
         return 1;
     }
@@ -26,14 +31,15 @@ final class Boolean extends ValueWithFixedLength {
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static {
-        // A zero-length (empty, non-null) cell is a legal boolean value and
-        // decodes as false, matching the other drivers.
-        if (strlen($binary) > static::fixedLength()) {
-            self::assertExactBinaryLength($binary);
+    ): ?static {
+
+        if (self::emptyBinaryIsNull($binary)) {
+            return null;
         }
 
-        return new static(($binary[0] ?? "\0") !== "\0");
+        self::assertExactBinaryLength($binary);
+
+        return new static($binary[0] !== "\0");
     }
 
     /**
@@ -69,6 +75,11 @@ final class Boolean extends ValueWithFixedLength {
     #[\Override]
     public function getValue(): bool {
         return $this->value;
+    }
+
+    #[\Override]
+    public static function isEmptyValueMeaningless(): bool {
+        return true;
     }
 
     #[\Override]

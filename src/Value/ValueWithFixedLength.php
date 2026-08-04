@@ -19,7 +19,7 @@ abstract class ValueWithFixedLength extends ValueBase {
         string $binary,
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
-    ): static;
+    ): ?static;
 
     /**
      * @throws \Cassandra\Exception\ValueException
@@ -47,7 +47,21 @@ abstract class ValueWithFixedLength extends ValueBase {
 
         $binary = $stream->read(static::fixedLength());
 
-        return static::fromBinary($binary, typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+        $value = static::fromBinary($binary, typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+
+        // Unreachable as things stand — the guard above admits only the type's
+        // own fixed length, which is never zero, so the binary read here is
+        // never the empty value fromBinary() reports null for.
+        if ($value === null) {
+            throw new ValueException('Invalid data length for fixed-length type', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
+                'class' => static::class,
+                'length' => $length,
+                'expected_length' => static::fixedLength(),
+                'note' => 'an empty value of this type denotes null and has no value object',
+            ]);
+        }
+
+        return $value;
     }
 
     #[\Override]
