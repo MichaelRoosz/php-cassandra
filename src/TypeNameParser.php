@@ -623,6 +623,17 @@ final class TypeNameParser {
             );
         }
 
+        if (preg_match('/^[+-]?\d+$/D', $params[1]['value']) !== 1) {
+            throw new TypeNameParserException(
+                'Invalid vector type dimensions: must be an integer',
+                ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_NOT_INTEGER->value,
+                [
+                    'provided_value' => $params[1]['value'],
+                    'reason' => 'dimensions_must_be_an_integer',
+                ]
+            );
+        }
+
         $dimensions = (int) $params[1]['value'];
 
         if ($dimensions < 1 || $dimensions > VectorInfo::MAX_DIMENSIONS) {

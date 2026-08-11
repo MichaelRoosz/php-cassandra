@@ -1130,6 +1130,20 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',0)');
     }
 
+    public function testVectorTypeRejectsFractionalDimensions(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_NOT_INTEGER->value);
+
+        $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',1.5)');
+    }
+
+    public function testVectorTypeRejectsScientificNotationDimensions(): void {
+        $this->expectException(TypeNameParserException::class);
+        $this->expectExceptionCode(ExceptionCode::TYPENAMEPARSER_VECTOR_DIMENSIONS_NOT_INTEGER->value);
+
+        $this->parser->parse(TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',1e2)');
+    }
+
     public function testVectorTypes(): void {
         $testCases = [
             [TypeName::VECTOR->value . '(' . TypeName::FLOAT->value . ',128)', Type::FLOAT, 128],
