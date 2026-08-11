@@ -6,6 +6,7 @@ namespace Cassandra\Response\Event;
 
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Header;
+use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Response\Event;
 use Cassandra\Response\Event\Data\EventData;
 use Cassandra\Response\Event\Data\TopologyChangeData;
@@ -53,6 +54,20 @@ final class TopologyChangeEvent extends Event {
             throw new ResponseException('Invalid topology change type: ' . $changeTypeAsString, ExceptionCode::RESPONSE_EVENT_TOPOLOGY_CHANGE_INVALID_TYPE->value, [
                 'topology_change_type' => $changeTypeAsString,
             ], $e);
+        }
+
+        if (
+            $changeType === TopologyChangeType::MOVED_NODE
+            && $this->getProtocolVersion() !== ProtocolVersion::V3
+        ) {
+            throw new ResponseException(
+                'Invalid topology change type for protocol version: ' . $changeTypeAsString,
+                ExceptionCode::RESPONSE_EVENT_TOPOLOGY_CHANGE_INVALID_TYPE->value,
+                [
+                    'topology_change_type' => $changeTypeAsString,
+                    'protocol_version' => $this->getProtocolVersion()->inOptionFormat(),
+                ]
+            );
         }
 
         $address = $this->stream->readInet();
