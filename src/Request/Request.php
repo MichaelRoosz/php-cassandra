@@ -39,6 +39,9 @@ abstract class Request implements Frame, Stringable {
     private const INT32_MAX = 2147483647;
     private const INT32_MIN = -2147483647 - 1;
 
+    /** Whether one of this request's encoded bind values is NotSet. */
+    private bool $containsNotSet = false;
+
     /**
      * Whether the keyspace this request carries was put there by the connection
      * rather than by the caller.
@@ -90,12 +93,14 @@ abstract class Request implements Frame, Stringable {
         }
 
         $body = $this->getBody();
+        $this->assertNotSetSupported();
 
         if ($this->flags & Flag::CUSTOM_PAYLOAD) {
             if ($this->payload === null) {
                 $this->flags &= ~Flag::CUSTOM_PAYLOAD;
             } else {
                 $payload = $this->payload;
+                $this->assertCustomPayloadSupported();
                 self::assertShortCount(count($payload), 'custom payload');
                 $payloadData = pack('n', count($payload));
 
@@ -340,6 +345,29 @@ abstract class Request implements Frame, Stringable {
     }
 
     /**
+     * Protocol v3 encodes query values as `[bytes]`, where every negative
+     * length means null. The distinct -2 NotSet sentinel exists only from v4;
+     * sending it on v3 would therefore turn an omitted update into a tombstone.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    final protected function assertNotSetSupported(): void {
+        if (!$this->containsNotSet || $this->version->supports(ProtocolVersion::V4)) {
+            return;
+        }
+
+        throw new RequestException(
+            message: 'Server protocol version does not support NotSet bound values',
+            code: ExceptionCode::REQUEST_VALUES_NOT_SET_UNSUPPORTED_PROTOCOL->value,
+            context: [
+                'request' => $this->opcode->name,
+                'required_protocol_version' => ProtocolVersion::V4->inOptionFormat(),
+                'actual_protocol_version' => $this->version->inOptionFormat(),
+            ]
+        );
+    }
+
+    /**
      * @throws \Cassandra\Exception\RequestException
      */
     protected static function assertShortCount(int $count, string $field): void {
@@ -464,6 +492,8 @@ abstract class Request implements Frame, Stringable {
             }
         }
 
+        $this->assertNotSetSupported();
+
         if ($version->value < ProtocolVersion::V5->value) {
             return pack('n', $consistency->value) . chr($flags & 0xFF) . $optional;
         } else {
@@ -502,6 +532,7 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 case $value instanceof NotSet:
+                    $this->containsNotSet = true;
                     $binary = $value;
 
                     break;
@@ -790,6 +821,41 @@ abstract class Request implements Frame, Stringable {
     final protected function markKeyspaceAsConnectionDefault(): void {
 
         $this->keyspaceIsConnectionDefault = true;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
+    private function assertCustomPayloadSupported(): void {
+        if (!$this->version->supports(ProtocolVersion::V4)) {
+            throw new RequestException(
+                message: 'Server protocol version does not support custom payloads',
+                code: ExceptionCode::REQUEST_CUSTOM_PAYLOAD_UNSUPPORTED_PROTOCOL->value,
+                context: [
+                    'request' => $this->opcode->name,
+                    'required_protocol_version' => ProtocolVersion::V4->inOptionFormat(),
+                    'actual_protocol_version' => $this->version->inOptionFormat(),
+                ]
+            );
+        }
+
+        if (in_array($this->opcode, [
+            Opcode::REQUEST_QUERY,
+            Opcode::REQUEST_PREPARE,
+            Opcode::REQUEST_EXECUTE,
+            Opcode::REQUEST_BATCH,
+        ], true)) {
+            return;
+        }
+
+        throw new RequestException(
+            message: 'Request opcode does not support custom payloads',
+            code: ExceptionCode::REQUEST_CUSTOM_PAYLOAD_UNSUPPORTED_OPCODE->value,
+            context: [
+                'request' => $this->opcode->name,
+                'protocol_version' => $this->version->inOptionFormat(),
+            ]
+        );
     }
 
     private function missingBindValueException(int|string $key): RequestException {

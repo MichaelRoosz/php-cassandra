@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1401
+ * Next free code: 1404
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -91,6 +91,8 @@ enum ExceptionCode: int {
 
     // RequestException (REQUEST_)
     case REQUEST_BATCH_TOO_MANY_STATEMENTS = 1365;
+    case REQUEST_CUSTOM_PAYLOAD_UNSUPPORTED_OPCODE = 1402;
+    case REQUEST_CUSTOM_PAYLOAD_UNSUPPORTED_PROTOCOL = 1401;
     case REQUEST_EXECUTE_INVALID_PREVIOUS_RESULT = 1082;
     case REQUEST_EXECUTE_MISSING_RESULT_METADATA_ID = 1083;
     case REQUEST_EXECUTE_PREPARED_STATEMENT_NOT_FOUND = 1084;
@@ -115,6 +117,7 @@ enum ExceptionCode: int {
     case REQUEST_VALUES_MISSING_BIND_VALUE = 1330;
     case REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_ASSOCIATIVE = 1087;
     case REQUEST_VALUES_NAMES_FOR_VALUES_EXPECTS_SEQUENTIAL = 1088;
+    case REQUEST_VALUES_NOT_SET_UNSUPPORTED_PROTOCOL = 1403;
     case REQUEST_VALUES_TOO_MANY_VALUES = 1366;
     case REQUEST_VALUES_UNSUPPORTED_VALUE_TYPE = 1089;
 

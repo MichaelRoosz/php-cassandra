@@ -26,6 +26,7 @@ use Cassandra\Response\Result\Data\PreparedData;
 use Cassandra\Response\Result\PrepareMetadata;
 use Cassandra\Response\Result\RowsMetadata;
 use Cassandra\Response\StreamReader;
+use Cassandra\Value\NotSet;
 use DateTimeImmutable;
 use ReflectionClass;
 use ReflectionMethod;
@@ -161,6 +162,41 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         (new ReflectionMethod($request, 'setPayload'))->invoke($request, ['key' => []]);
     }
 
+    public function testCustomPayloadRemainsSupportedForV4Queries(): void {
+        $request = new Query('SELECT 1');
+        $request->setPayload(['key' => 'value']);
+        $request->setStream(0);
+        $request->setVersion(ProtocolVersion::V4);
+
+        $frame = (string) $request;
+
+        $this->assertSame(\Cassandra\Protocol\Flag::CUSTOM_PAYLOAD, ord($frame[1]));
+    }
+
+    public function testCustomPayloadRequiresProtocolV4(): void {
+        $request = new Query('SELECT 1');
+        $request->setPayload(['key' => 'value']);
+        $request->setStream(0);
+        $request->setVersion(ProtocolVersion::V3);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_CUSTOM_PAYLOAD_UNSUPPORTED_PROTOCOL->value);
+
+        (string) $request;
+    }
+
+    public function testCustomPayloadRequiresSupportedOpcode(): void {
+        $request = new Startup();
+        $request->setPayload(['key' => 'value']);
+        $request->setStream(0);
+        $request->setVersion(ProtocolVersion::V4);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_CUSTOM_PAYLOAD_UNSUPPORTED_OPCODE->value);
+
+        (string) $request;
+    }
+
     public function testDuplicateNamedBindMarkerThrows(): void {
         // Two markers reported under the same name would otherwise collapse into
         // a single value entry, silently sending fewer values than the statement
@@ -248,6 +284,34 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
             [self::columnInfo('a'), self::columnInfo('b')],
             namesForValues: false
         );
+    }
+
+    public function testNotSetIsRejectedForProtocolV3BatchesAfterAppend(): void {
+        $batch = new Batch();
+        $batch->appendQuery('UPDATE t SET v = ? WHERE id = 1', [new NotSet()]);
+        $batch->setVersion(ProtocolVersion::V3);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_NOT_SET_UNSUPPORTED_PROTOCOL->value);
+
+        $batch->getBody();
+    }
+
+    public function testNotSetIsRejectedForProtocolV3Queries(): void {
+        $request = new Query('UPDATE t SET v = ? WHERE id = 1', [new NotSet()]);
+        $request->setVersion(ProtocolVersion::V3);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_NOT_SET_UNSUPPORTED_PROTOCOL->value);
+
+        $request->getBody();
+    }
+
+    public function testNotSetKeepsItsDistinctSentinelFromProtocolV4(): void {
+        $request = new Query('UPDATE t SET v = ? WHERE id = 1', [new NotSet()]);
+        $request->setVersion(ProtocolVersion::V4);
+
+        $this->assertStringEndsWith("\xff\xff\xff\xfe", $request->getBody());
     }
 
     public function testQueryAcceptsTheLargestExpressibleValueCount(): void {

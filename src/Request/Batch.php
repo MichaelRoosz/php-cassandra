@@ -163,6 +163,8 @@ final class Batch extends Request {
             );
         }
 
+        $this->assertNotSetSupported();
+
         return chr($this->type->value)
             . pack('n', $statementCount) . implode('', $this->queryArray)
             . self::encodeBatchParametersAsBinary($this->consistency, [], $this->options, $this->version);
