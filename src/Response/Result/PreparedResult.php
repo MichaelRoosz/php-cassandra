@@ -99,13 +99,14 @@ class PreparedResult extends Result {
         $flags = $this->stream->readInt();
         $bindMarkersCount = $this->stream->readInt();
 
-        if ($bindMarkersCount < 0) {
+        if ($bindMarkersCount < 0 || $bindMarkersCount > self::MAX_EAGER_METADATA_ENTRIES) {
             throw new ResponseException(
                 'Invalid prepared metadata bind marker count',
                 ExceptionCode::RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT->value,
                 [
                     'operation' => 'PreparedResult::readPrepareMetadata',
                     'bind_markers_count' => $bindMarkersCount,
+                    'maximum_count' => self::MAX_EAGER_METADATA_ENTRIES,
                 ]
             );
         }
@@ -113,13 +114,21 @@ class PreparedResult extends Result {
         if ($this->getProtocolVersion()->value >= ProtocolVersion::V4->value) {
             $pkCount = $this->stream->readInt();
 
-            if ($pkCount < 0) {
+            $maximumPkCount = min(
+                $bindMarkersCount,
+                intdiv($this->stream->remainingLength(), 2),
+            );
+
+            if ($pkCount < 0 || $pkCount > $maximumPkCount) {
                 throw new ResponseException(
                     'Invalid prepared metadata partition key count',
                     ExceptionCode::RESPONSE_PREPARED_INVALID_PK_COUNT->value,
                     [
                         'operation' => 'PreparedResult::readPrepareMetadata',
                         'pk_count' => $pkCount,
+                        'maximum_count' => $maximumPkCount,
+                        'bind_markers_count' => $bindMarkersCount,
+                        'remaining_body_length' => $this->stream->remainingLength(),
                     ]
                 );
             }
@@ -141,6 +150,15 @@ class PreparedResult extends Result {
         if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC) {
             $keyspace = $this->stream->readString();
             $tableName = $this->stream->readString();
+            $this->assertCountFitsRemainingBody(
+                count: $bindMarkersCount,
+                maximumCount: intdiv($this->stream->remainingLength(), 4),
+                minimumBytesPerEntry: 4,
+                code: ExceptionCode::RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT,
+                message: 'Prepared metadata bind marker count does not fit in the response body',
+                operation: 'PreparedResult::readPrepareMetadata',
+                field: 'bind_markers_count',
+            );
 
             for ($i = 0; $i < $bindMarkersCount; ++$i) {
                 $bindMarkers[] = new ColumnInfo(
@@ -151,6 +169,16 @@ class PreparedResult extends Result {
                 );
             }
         } else {
+            $this->assertCountFitsRemainingBody(
+                count: $bindMarkersCount,
+                maximumCount: intdiv($this->stream->remainingLength(), 8),
+                minimumBytesPerEntry: 8,
+                code: ExceptionCode::RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT,
+                message: 'Prepared metadata bind marker count does not fit in the response body',
+                operation: 'PreparedResult::readPrepareMetadata',
+                field: 'bind_markers_count',
+            );
+
             for ($i = 0; $i < $bindMarkersCount; ++$i) {
                 $bindMarkers[] = new ColumnInfo(
                     keyspace: $this->stream->readString(),

@@ -33,6 +33,27 @@ final class PreparedMetadataValidationTest extends AbstractUnitTestCase {
                 . pack('N', 0) . pack('N', -1),
             ExceptionCode::RESPONSE_RES_INVALID_COLUMNS_COUNT,
         ];
+
+        yield 'excessive bind marker count' => [
+            pack('N', 0) . pack('N', 65536),
+            ExceptionCode::RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT,
+        ];
+
+        yield 'partition key count exceeds bind markers' => [
+            pack('N', 0) . pack('N', 0) . pack('N', 1),
+            ExceptionCode::RESPONSE_PREPARED_INVALID_PK_COUNT,
+        ];
+
+        yield 'bind marker count does not fit body' => [
+            pack('N', 0) . pack('N', 1) . pack('N', 0),
+            ExceptionCode::RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT,
+        ];
+
+        yield 'result column count does not fit body' => [
+            pack('N', 0) . pack('N', 0) . pack('N', 0)
+                . pack('N', 0) . pack('N', 1),
+            ExceptionCode::RESPONSE_RES_INVALID_COLUMNS_COUNT,
+        ];
     }
 
     #[DataProvider('invalidCounts')]

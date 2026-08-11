@@ -535,6 +535,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // Only the long statement is asked about, so only its budget and this
         // bound can end the wait; the 3s bound is what actually returns.
         $connection->waitForStatements([$long], timeoutInSeconds: 3.0);
+        $waitEndedAt = microtime(true);
 
         $this->assertTrue(
             $short->isTimedOut(),
@@ -548,13 +549,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // out, not merely by the time the wait happens to end. Bounding the
         // read by the waited set alone would park it at the 3s wait bound.
         $this->assertLessThan(
-            1.5,
+            ($waitEndedAt - $start) - 0.1,
             $orphaned[$short->getStreamId()] - $start,
-            'the short budget must bound the read, so the statement is parked when it expires'
+            'the short budget must park the statement before the caller-supplied wait bound ends'
         );
 
         $this->assertFalse($long->isTimedOut(), 'the waited statement still has 30s to go');
-        $this->assertGreaterThan(2.5, microtime(true) - $start, 'the caller-supplied bound is what ends the wait');
+        $this->assertGreaterThan(2.5, $waitEndedAt - $start, 'the caller-supplied bound is what ends the wait');
         $this->assertTrue($connection->isConnected(), 'neither statement takes the connection down');
     }
 

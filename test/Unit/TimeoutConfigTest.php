@@ -62,6 +62,15 @@ final class TimeoutConfigTest extends AbstractUnitTestCase {
         new BatchOptions(requestTimeoutInSeconds: $timeout);
     }
 
+    public function testConnectionAcceptsAssociativeAllowedProtocolVersions(): void {
+        $options = new ConnectionOptions(
+            allowedProtocolVersions: [7 => ProtocolVersion::V3],
+        );
+
+        $this->assertSame(ProtocolVersion::V3, $options->initialProtocolVersion);
+        $this->assertSame([7 => ProtocolVersion::V3], $options->allowedProtocolVersions);
+    }
+
     public function testConnectionInitialProtocolVersionMustBeAllowed(): void {
         $this->expectException(ConnectionException::class);
 

@@ -461,6 +461,25 @@ final class StreamReaderTest extends AbstractUnitTestCase {
             $this->assertSame($n, $reader->readUnsignedVInt64());
         }
     }
+
+    public function testReasonMapRejectsCountThatDoesNotFitBody(): void {
+        $reader = new StreamReader(pack('N', 1));
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_INVALID_REASON_MAP_COUNT->value);
+
+        $reader->readReasonMap();
+    }
+
+    public function testReasonMapRejectsExcessiveEagerAllocation(): void {
+        $entry = chr(4) . inet_pton('127.0.0.1') . pack('n', 1);
+        $reader = new StreamReader(pack('N', 65536) . str_repeat($entry, 65536));
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_SR_INVALID_REASON_MAP_COUNT->value);
+
+        $reader->readReasonMap();
+    }
     public function testReasonMapRejectsNegativeCount(): void {
         $reader = new StreamReader(pack('N', -1));
 

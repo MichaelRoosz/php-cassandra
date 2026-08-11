@@ -26,6 +26,9 @@ use ValueError;
  * @implements IteratorAggregate<array<string, mixed>|null>
  */
 class Result extends Response implements IteratorAggregate {
+    /** Largest metadata array decoded eagerly from one response frame. */
+    protected const MAX_EAGER_METADATA_ENTRIES = 65535;
+
     protected int $dataOffset;
     protected ResultKind $kind;
     protected ?PreparedData $lastPreparedData = null;
@@ -197,6 +200,37 @@ class Result extends Response implements IteratorAggregate {
         $this->request = $request;
     }
 
+    /**
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    final protected function assertCountFitsRemainingBody(
+        int $count,
+        int $maximumCount,
+        int $minimumBytesPerEntry,
+        ExceptionCode $code,
+        string $message,
+        string $operation,
+        string $field,
+    ): void {
+        $remainingLength = $this->stream->remainingLength();
+
+        if ($count <= $maximumCount) {
+            return;
+        }
+
+        throw new ResponseException(
+            message: $message,
+            code: $code->value,
+            context: [
+                'operation' => $operation,
+                $field => $count,
+                'maximum_count_for_remaining_body' => $maximumCount,
+                'remaining_body_length' => $remainingLength,
+                'minimum_bytes_per_entry' => $minimumBytesPerEntry,
+            ]
+        );
+    }
+
     protected function onPreviousRowsMetadataUpdated(RowsMetadata $previousRowsMetadata): void {
     }
 
@@ -217,6 +251,7 @@ class Result extends Response implements IteratorAggregate {
                 [
                     'operation' => 'Result::readRowsMetadata',
                     'columns_count' => $columnsCount,
+                    'maximum_count' => self::MAX_EAGER_METADATA_ENTRIES,
                 ]
             );
         }
@@ -234,11 +269,32 @@ class Result extends Response implements IteratorAggregate {
         }
 
         if (!($flags & ResultFlag::ROWS_FLAG_NO_METADATA)) {
+            if ($columnsCount > self::MAX_EAGER_METADATA_ENTRIES) {
+                throw new ResponseException(
+                    'Invalid result metadata column count',
+                    ExceptionCode::RESPONSE_RES_INVALID_COLUMNS_COUNT->value,
+                    [
+                        'operation' => 'Result::readRowsMetadata',
+                        'columns_count' => $columnsCount,
+                        'maximum_count' => self::MAX_EAGER_METADATA_ENTRIES,
+                    ]
+                );
+            }
+
             $columns = [];
 
             if ($flags & ResultFlag::ROWS_FLAG_GLOBAL_TABLES_SPEC) {
                 $keyspace = $this->stream->readString();
                 $tableName = $this->stream->readString();
+                $this->assertCountFitsRemainingBody(
+                    count: $columnsCount,
+                    maximumCount: intdiv($this->stream->remainingLength(), 4),
+                    minimumBytesPerEntry: 4,
+                    code: ExceptionCode::RESPONSE_RES_INVALID_COLUMNS_COUNT,
+                    message: 'Result metadata column count does not fit in the response body',
+                    operation: 'Result::readRowsMetadata',
+                    field: 'columns_count',
+                );
 
                 for ($i = 0; $i < $columnsCount; ++$i) {
                     $columns[] = new ColumnInfo(
@@ -249,6 +305,16 @@ class Result extends Response implements IteratorAggregate {
                     );
                 }
             } else {
+                $this->assertCountFitsRemainingBody(
+                    count: $columnsCount,
+                    maximumCount: intdiv($this->stream->remainingLength(), 8),
+                    minimumBytesPerEntry: 8,
+                    code: ExceptionCode::RESPONSE_RES_INVALID_COLUMNS_COUNT,
+                    message: 'Result metadata column count does not fit in the response body',
+                    operation: 'Result::readRowsMetadata',
+                    field: 'columns_count',
+                );
+
                 for ($i = 0; $i < $columnsCount; ++$i) {
                     $columns[] = new ColumnInfo(
                         keyspace: $this->stream->readString(),

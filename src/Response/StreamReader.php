@@ -26,6 +26,8 @@ use Cassandra\VIntCodec;
 
 final class StreamReader {
     final protected const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
+
+    private const MAX_EAGER_REASON_MAP_ENTRIES = 65535;
     /**
      * How deeply a type read off the wire may nest before it is refused.
      *
@@ -365,11 +367,23 @@ final class StreamReader {
     final public function readReasonMap(): array {
         $map = [];
         $count = $this->readInt();
-        if ($count < 0) {
+        // One entry is at least a one-byte address length, four IPv4 bytes and
+        // a two-byte reason code.
+        $maximumCount = min(
+            self::MAX_EAGER_REASON_MAP_ENTRIES,
+            intdiv($this->remainingLength(), 7),
+        );
+        if ($count < 0 || $count > $maximumCount) {
             throw new ResponseException(
                 message: 'Invalid reason map count',
                 code: ExceptionCode::RESPONSE_SR_INVALID_REASON_MAP_COUNT->value,
-                context: ['method' => __METHOD__, 'count' => $count, 'offset' => $this->pos()]
+                context: [
+                    'method' => __METHOD__,
+                    'count' => $count,
+                    'maximum_count' => $maximumCount,
+                    'remaining_body_length' => $this->remainingLength(),
+                    'offset' => $this->pos(),
+                ]
             );
         }
         for ($i = 0; $i < $count; $i++) {
