@@ -492,12 +492,20 @@ final class StreamReaderTest extends AbstractUnitTestCase {
     }
 
     public function testUuidEncodeOptions(): void {
-        $uuid = '346c9059-7d07-47e6-91c8-092b50e8306f';
-        $raw = pack('H*', str_replace('-', '', $uuid));
-        $cell = pack('N', strlen($raw)) . $raw;
+        // A timeuuid is a version 1 UUID and nothing else, and the reader
+        // enforces that on this very path, so the two types need a value each
+        // rather than one shared v4.
+        $uuidByType = [
+            Type::UUID->name => '346c9059-7d07-47e6-91c8-092b50e8306f',
+            Type::TIMEUUID->name => '346c9059-7d07-11e6-91c8-092b50e8306f',
+        ];
 
         foreach ([Type::UUID, Type::TIMEUUID] as $type) {
             $typeInfo = ValueFactory::getTypeInfoFromType($type);
+
+            $uuid = $uuidByType[$type->name];
+            $raw = pack('H*', str_replace('-', '', $uuid));
+            $cell = pack('N', strlen($raw)) . $raw;
 
             // default: canonical string form
             $reader = new StreamReader($cell);

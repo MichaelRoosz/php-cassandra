@@ -7,6 +7,7 @@ namespace Cassandra\Response;
 use Cassandra\Consistency;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ResponseException;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\ValueFactory;
 use Cassandra\TypeInfo\ListCollectionInfo;
@@ -547,13 +548,7 @@ final class StreamReader {
      */
     final public function readUuid(): string {
 
-        $hex = bin2hex($this->read(16));
-
-        return substr($hex, 0, 8) . '-'
-            . substr($hex, 8, 4) . '-'
-            . substr($hex, 12, 4) . '-'
-            . substr($hex, 16, 4) . '-'
-            . substr($hex, 20, 12);
+        return self::formatUuid($this->read(16));
     }
 
     /**
@@ -670,9 +665,15 @@ final class StreamReader {
                     );
                 }
 
+                $uuidBinary = $this->read(16);
+
+                if ($typeInfo->type === Type::TIMEUUID && (ord($uuidBinary[6]) >> 4) !== 1) {
+                    throw self::invalidTimeuuidVersionException($uuidBinary);
+                }
+
                 return $valueEncodeConfig->uuidEncodeOption === UuidEncodeOption::AS_BINARY
-                    ? $this->read(16)
-                    : $this->readUuid();
+                    ? $uuidBinary
+                    : self::formatUuid($uuidBinary);
 
             case Type::DOUBLE:
                 return $this->readDouble();
@@ -765,6 +766,23 @@ final class StreamReader {
         };
     }
 
+    /**
+     * The canonical 8-4-4-4-12 string form of a raw 16-byte uuid.
+     *
+     * @param string $uuidBinary the raw 16 bytes, which the caller has already
+     * established the length of
+     */
+    private static function formatUuid(string $uuidBinary): string {
+
+        $hex = bin2hex($uuidBinary);
+
+        return substr($hex, 0, 8) . '-'
+            . substr($hex, 8, 4) . '-'
+            . substr($hex, 12, 4) . '-'
+            . substr($hex, 16, 4) . '-'
+            . substr($hex, 20, 12);
+    }
+
     private function invalidOffsetException(int $offset, string $field, int $maximumOffset): ResponseException {
         return new ResponseException(
             message: 'Stream reader offset is outside the available data',
@@ -777,6 +795,22 @@ final class StreamReader {
                 'maximum_offset' => $maximumOffset,
                 'data_length' => $this->dataLength,
                 'extra_data_offset' => $this->extraDataOffset,
+            ]
+        );
+    }
+
+    /**
+     * @param string $uuidBinary the raw 16 bytes, which the caller has already
+     * established the length of
+     */
+    private static function invalidTimeuuidVersionException(string $uuidBinary): ValueException {
+
+        return new ValueException(
+            'Invalid timeuuid value; expected a version 1 UUID',
+            ExceptionCode::VALUE_TIMEUUID_INVALID_VERSION->value,
+            [
+                'value' => self::formatUuid($uuidBinary),
+                'version' => ord($uuidBinary[6]) >> 4,
             ]
         );
     }
