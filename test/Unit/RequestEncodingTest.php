@@ -13,6 +13,7 @@ use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Execute;
 use Cassandra\Request\Options\BatchOptions;
+use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Query;
 use Cassandra\Request\QueryFlag;
@@ -123,26 +124,18 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->assertSame(5, $encoded['userid']->getValue());
     }
 
-    public function testCaseCollidingBindMarkersRejectAmbiguousNamedLookup(): void {
-        $this->expectException(RequestException::class);
-        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value);
-
-        self::testableRequest()->encodeValuesForBindMarkers(
-            ['foo' => 5],
+    public function testCaseDistinctQuotedBindMarkersUseExactNames(): void {
+        $encoded = self::testableRequest()->encodeValuesForBindMarkers(
+            ['Foo' => 5, 'foo' => 6],
             [self::columnInfo('Foo'), self::columnInfo('foo')],
             namesForValues: true
         );
-    }
 
-    public function testCaseCollidingNamedValuesThrow(): void {
-        $this->expectException(RequestException::class);
-        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value);
-
-        self::testableRequest()->encodeValuesForBindMarkers(
-            ['UserId' => 5, 'userid' => 6],
-            [self::columnInfo('userid')],
-            namesForValues: true
-        );
+        $this->assertSame(['Foo', 'foo'], array_keys($encoded));
+        $this->assertInstanceOf(\Cassandra\Value\Int32::class, $encoded['Foo']);
+        $this->assertInstanceOf(\Cassandra\Value\Int32::class, $encoded['foo']);
+        $this->assertSame(5, $encoded['Foo']->getValue());
+        $this->assertSame(6, $encoded['foo']->getValue());
     }
 
     public function testCustomPayloadRejectsIntegerKeysAtThePublicBoundary(): void {
@@ -197,6 +190,24 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         (string) $request;
     }
 
+    public function testDirectQueryKeepsQuotedBindMarkerCase(): void {
+        $query = 'SELECT * FROM t WHERE "col" = :"CaseSensitive"';
+        $request = new Query(
+            query: $query,
+            values: ['CaseSensitive' => new \Cassandra\Value\Int32(1)],
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $valueSection = substr($request->getBody(), 4 + strlen($query) + 2 + 4);
+
+        $this->assertSame(
+            pack('n', 1)
+                . pack('n', strlen('CaseSensitive')) . 'CaseSensitive'
+                . pack('N', 4) . pack('N', 1),
+            $valueSection,
+        );
+    }
+
     public function testDuplicateNamedBindMarkerThrows(): void {
         // Two markers reported under the same name would otherwise collapse into
         // a single value entry, silently sending fewer values than the statement
@@ -221,6 +232,20 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
 
         $this->assertStringContainsString("\x00\x06userId", $binary);
+    }
+
+    public function testExecuteRejectsNegativeDefaultTimestampFromProtocolV4(): void {
+        $request = new Execute(
+            self::preparedResult('id'),
+            [],
+            options: new ExecuteOptions(defaultTimestamp: -1),
+        );
+        $request->setVersion(ProtocolVersion::V4);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_DEFAULT_TIMESTAMP->value);
+
+        $request->getBody();
     }
 
     public function testExecuteRejectsOversizedPreparedStatementId(): void {
@@ -312,6 +337,27 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $request->setVersion(ProtocolVersion::V4);
 
         $this->assertStringEndsWith("\xff\xff\xff\xfe", $request->getBody());
+    }
+
+    public function testProtocolV3AllowsNegativeDefaultTimestampExceptMinimum(): void {
+        $request = new Query('SELECT * FROM t', options: new QueryOptions(defaultTimestamp: -1));
+        $request->setVersion(ProtocolVersion::V3);
+
+        $this->assertStringEndsWith("\xff\xff\xff\xff\xff\xff\xff\xff", $request->getBody());
+
+        if (PHP_INT_SIZE < 8) {
+            return;
+        }
+
+        $request = new Query('SELECT * FROM t', options: new QueryOptions(defaultTimestamp: PHP_INT_MIN));
+        $request->setVersion(ProtocolVersion::V3);
+
+        try {
+            $request->getBody();
+            $this->fail('Expected the minimum signed 64-bit timestamp to be rejected');
+        } catch (RequestException $e) {
+            $this->assertSame(ExceptionCode::REQUEST_INVALID_DEFAULT_TIMESTAMP->value, $e->getCode());
+        }
     }
 
     public function testQueryAcceptsTheLargestExpressibleValueCount(): void {
@@ -449,6 +495,20 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $request->getBody();
     }
 
+    public function testQueryRejectsNegativeDefaultTimestampFromProtocolV4(): void {
+        foreach ([ProtocolVersion::V4, ProtocolVersion::V5] as $version) {
+            $request = new Query('SELECT * FROM t', options: new QueryOptions(defaultTimestamp: -1));
+            $request->setVersion($version);
+
+            try {
+                $request->getBody();
+                $this->fail('Expected a negative default timestamp to be rejected for ' . $version->name);
+            } catch (RequestException $e) {
+                $this->assertSame(ExceptionCode::REQUEST_INVALID_DEFAULT_TIMESTAMP->value, $e->getCode());
+            }
+        }
+    }
+
     #[\PHPUnit\Framework\Attributes\DataProvider('outOfInt32RangeProvider')]
     public function testQueryRejectsOutOfInt32RangeIntInUntypedPath(int $value): void {
         if (PHP_INT_SIZE < 8) {
@@ -481,6 +541,19 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::REQUEST_FIELD_TOO_LONG->value);
 
         $request->getBody();
+    }
+
+    public function testQuotedMarkerTextInsideStringsAndCommentsIsIgnored(): void {
+        $query = "SELECT ':\"Fake\"' FROM t /* :\"AlsoFake\" */ WHERE id = :fake";
+        $request = new Query(
+            query: $query,
+            values: ['Fake' => new \Cassandra\Value\Int32(1)],
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $valueSection = substr($request->getBody(), 4 + strlen($query) + 2 + 4);
+
+        $this->assertStringStartsWith(pack('n', 1) . pack('n', 4) . 'fake', $valueSection);
     }
 
     public function testRegisterRejectsNonEventTypeEntries(): void {
@@ -518,6 +591,28 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         self::testableRequest()->encodeValuesForBindMarkers(
             ['a' => 5, 'unused' => 6],
             [self::columnInfo('a')],
+            namesForValues: true
+        );
+    }
+
+    public function testUnusedCaseVariantIsReportedAsAnExtraValue(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_EXTRA_BIND_VALUE->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            ['UserId' => 5, 'userid' => 6],
+            [self::columnInfo('userid')],
+            namesForValues: true
+        );
+    }
+
+    public function testWrongCaseDoesNotBindMixedCaseQuotedMarker(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_MISSING_BIND_VALUE->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            ['foo' => 5],
+            [self::columnInfo('Foo')],
             namesForValues: true
         );
     }

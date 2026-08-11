@@ -1493,6 +1493,17 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $connection->query('SELECT * FROM quick');
     }
 
+    public function testZeroStringsAreAcceptedAsAuthenticationCredentials(): void {
+        $connection = $this->connect(
+            'authenticate-zero',
+            username: '0',
+            password: '0',
+        );
+
+        $this->assertTrue($connection->isConnected());
+        $connection->disconnect();
+    }
+
     /**
      * How many requests this connection has sent, counted through the stream id
      * pool: ids are handed out from a rising counter and only recycled once it
@@ -1515,6 +1526,8 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         float $receiveTimeoutSeconds = self::RECEIVE_TIMEOUT_SECONDS,
         int $maxOrphanedStreams = 24,
         bool $autoConnect = true,
+        string $username = '',
+        string $password = '',
     ): Connection {
         $port = $this->startServer($mode, $delaySeconds);
 
@@ -1530,6 +1543,8 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $node = new SocketNodeConfig(
             host: '127.0.0.1',
             port: $port,
+            username: $username,
+            password: $password,
             socketOptions: [
                 SO_RCVTIMEO => $transportTimeout,
                 SO_SNDTIMEO => $transportTimeout,

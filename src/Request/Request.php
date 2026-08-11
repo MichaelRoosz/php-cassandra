@@ -406,6 +406,7 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
+     * @param array<string, true> $exactValueNames
      *
      * @throws \Cassandra\Exception\RequestException
      */
@@ -414,7 +415,8 @@ abstract class Request implements Frame, Stringable {
         array $values = [],
         QueryOptions $options = new QueryOptions(),
         ProtocolVersion $version = ProtocolVersion::V3,
-        bool $namesAreExact = false
+        bool $namesAreExact = false,
+        array $exactValueNames = [],
     ): string {
 
         $flags = 0;
@@ -422,7 +424,12 @@ abstract class Request implements Frame, Stringable {
 
         if ($values) {
             $flags |= QueryFlag::VALUES;
-            $optional .= self::encodeQueryValuesAsBinary($values, $options->namesForValues === true, $namesAreExact);
+            $optional .= self::encodeQueryValuesAsBinary(
+                $values,
+                $options->namesForValues === true,
+                $namesAreExact,
+                $exactValueNames,
+            );
         }
 
         if (($options instanceof ExecuteOptions) && $options->skipMetadata) {
@@ -445,6 +452,7 @@ abstract class Request implements Frame, Stringable {
         }
 
         if ($options->defaultTimestamp !== null) {
+            self::assertValidDefaultTimestamp($options->defaultTimestamp, $version);
             $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP;
             $optional .= pack('J', $options->defaultTimestamp);
         }
@@ -503,10 +511,16 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
+     * @param array<string, true> $exactValueNames
      *
      * @throws \Cassandra\Exception\RequestException
      */
-    protected function encodeQueryValuesAsBinary(array $values, bool $namesForValues = false, bool $namesAreExact = false): string {
+    protected function encodeQueryValuesAsBinary(
+        array $values,
+        bool $namesForValues = false,
+        bool $namesAreExact = false,
+        array $exactValueNames = [],
+    ): string {
 
         $valueCount = count($values);
         if ($valueCount > self::MAX_SHORT_COUNT) {
@@ -620,10 +634,12 @@ abstract class Request implements Frame, Stringable {
                     // identifiers are case-sensitive. User-supplied names are
                     // lowercased, matching how the server stores unquoted
                     // identifiers.
-                    $encodedName = $namesAreExact ? $name : strtolower($name);
+                    $encodedName = $namesAreExact || isset($exactValueNames[$name])
+                        ? $name
+                        : strtolower($name);
                     self::assertShortString($encodedName, 'bound value name');
                     $valuesBinary .= pack('n', strlen($encodedName)) . $encodedName;
-                } elseif ($namesAreExact) {
+                } elseif ($namesAreExact || isset($exactValueNames[(string) $name])) {
                     // The names came from the server's bind marker metadata, so
                     // this is one of them and not a caller's mistake: PHP turns
                     // an array key that is a canonical decimal integer string
@@ -690,40 +706,22 @@ abstract class Request implements Frame, Stringable {
      */
     protected function encodeQueryValuesForBindMarkerTypes(array $values, array $bindMarkers, bool $namesForValues): array {
 
-        // Named values are matched to the server-reported bind marker names
-        // case-insensitively: unquoted identifiers are stored lowercase by the
-        // server, so a user-supplied key like "userId" must still bind to the
-        // marker "userid".
+        // Exact names always win. A case-insensitive fallback is only valid for
+        // a lowercase server name: an unquoted marker is normalized to lower
+        // case, while a mixed-case name can only have come from a quoted,
+        // case-sensitive identifier.
         $valuesByLowercaseName = [];
-        $originalNameByLowercaseName = [];
         if ($namesForValues) {
-            /** @psalm-suppress MixedAssignment */
-            foreach ($values as $name => $value) {
+            foreach ($values as $name => $_value) {
                 if (is_string($name)) {
                     $lowercaseName = strtolower($name);
-                    if (isset($originalNameByLowercaseName[$lowercaseName]) && $originalNameByLowercaseName[$lowercaseName] !== $name) {
-                        throw new RequestException(
-                            message: 'Multiple supplied value names differ only by case and cannot be bound unambiguously',
-                            code: ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value,
-                            context: ['stage' => 'values_encoding', 'names' => [$originalNameByLowercaseName[$lowercaseName], $name]]
-                        );
-                    }
-                    $originalNameByLowercaseName[$lowercaseName] = $name;
-                    $valuesByLowercaseName[$lowercaseName] = $value;
+                    $valuesByLowercaseName[$lowercaseName][] = $name;
                 }
             }
         }
 
         $encodedValues = [];
         $usedValueKeys = [];
-
-        $markerNamesByLowercaseName = [];
-        if ($namesForValues) {
-            foreach ($bindMarkers as $bindMarker) {
-                $lowercaseName = strtolower($bindMarker->name);
-                $markerNamesByLowercaseName[$lowercaseName][$bindMarker->name] = true;
-            }
-        }
 
         foreach ($bindMarkers as $index => $bindMarker) {
 
@@ -750,22 +748,27 @@ abstract class Request implements Frame, Stringable {
                     /** @psalm-suppress MixedAssignment */
                     $value = $values[$key];
                     $usedValueKeys[$key] = true;
-                } elseif (
-                    array_key_exists(strtolower($key), $valuesByLowercaseName)
-                    && count($markerNamesByLowercaseName[strtolower($key)]) > 1
-                ) {
-                    throw new RequestException(
-                        message: 'Bind marker names differ only by case; named values cannot be matched case-insensitively without ambiguity. Use positional binding.',
-                        code: ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value,
-                        context: [
-                            'stage' => 'values_encoding',
-                            'bind_markers' => array_keys($markerNamesByLowercaseName[strtolower($key)]),
-                        ]
-                    );
-                } elseif (array_key_exists(strtolower($key), $valuesByLowercaseName)) {
+                } elseif ($key === strtolower($key) && isset($valuesByLowercaseName[$key])) {
+                    $candidateNames = array_values(array_filter(
+                        $valuesByLowercaseName[$key],
+                        fn (string $candidate): bool => !isset($usedValueKeys[$candidate]),
+                    ));
+                    if (count($candidateNames) !== 1) {
+                        throw new RequestException(
+                            message: 'Multiple supplied value names match an unquoted bind marker case-insensitively',
+                            code: ExceptionCode::REQUEST_VALUES_DUPLICATE_BIND_MARKER->value,
+                            context: [
+                                'stage' => 'values_encoding',
+                                'bind_marker' => $key,
+                                'matching_names' => $candidateNames,
+                            ]
+                        );
+                    }
+
+                    $matchedName = $candidateNames[0];
                     /** @psalm-suppress MixedAssignment */
-                    $value = $valuesByLowercaseName[strtolower($key)];
-                    $usedValueKeys[$originalNameByLowercaseName[strtolower($key)]] = true;
+                    $value = $values[$matchedName];
+                    $usedValueKeys[$matchedName] = true;
                 } else {
                     throw $this->missingBindValueException($key);
                 }
@@ -854,6 +857,29 @@ abstract class Request implements Frame, Stringable {
             context: [
                 'request' => $this->opcode->name,
                 'protocol_version' => $this->version->inOptionFormat(),
+            ]
+        );
+    }
+
+    /**
+     * @throws \Cassandra\Exception\RequestException
+     */
+    private static function assertValidDefaultTimestamp(int $timestamp, ProtocolVersion $version): void {
+        $invalid = $version->supports(ProtocolVersion::V4)
+            ? $timestamp < 0
+            : PHP_INT_SIZE >= 8 && $timestamp === PHP_INT_MIN;
+
+        if (!$invalid) {
+            return;
+        }
+
+        throw new RequestException(
+            message: 'Invalid default timestamp for the selected protocol version',
+            code: ExceptionCode::REQUEST_INVALID_DEFAULT_TIMESTAMP->value,
+            context: [
+                'default_timestamp' => $timestamp,
+                'protocol_version' => $version->inOptionFormat(),
+                'minimum' => $version->supports(ProtocolVersion::V4) ? 0 : PHP_INT_MIN + 1,
             ]
         );
     }
