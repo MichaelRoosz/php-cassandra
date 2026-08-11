@@ -59,6 +59,16 @@ final class Connection {
         ConnectionOptions $options = new ConnectionOptions(),
     ) {
 
+        if ($nodes === []) {
+            throw new ConnectionException(
+                'No nodes were configured; a connection needs at least one NodeConfig to connect to',
+                ExceptionCode::CONNECTION_NO_NODES_CONFIGURED->value,
+                [
+                    'node_count' => 0,
+                ]
+            );
+        }
+
         foreach ($nodes as $index => $node) {
             if (!$node instanceof Connection\NodeConfig) {
                 throw new ConnectionException(

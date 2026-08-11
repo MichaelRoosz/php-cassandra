@@ -225,6 +225,28 @@ final class ConnectionOptions {
                 ]
             );
         }
+
+        if ($preparedResultCacheSize < 0) {
+            throw new ConnectionException(
+                'Invalid prepared result cache size: it must be zero or greater, where zero disables the cache',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'prepared_result_cache_size' => $preparedResultCacheSize,
+                    'minimum' => 0,
+                ]
+            );
+        }
+
+        if ($maxOrphanedStreams < 0) {
+            throw new ConnectionException(
+                'Invalid maximum orphaned streams: it must be zero or greater, where zero replaces the connection as soon as one stream id is held back',
+                ExceptionCode::CONNECTION_INVALID_OPTIONS->value,
+                [
+                    'max_orphaned_streams' => $maxOrphanedStreams,
+                    'minimum' => 0,
+                ]
+            );
+        }
     }
 
     /**

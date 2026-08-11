@@ -84,7 +84,7 @@ final class ConnectionBoundaryTest extends AbstractUnitTestCase {
      * @dataProvider statementListMethodProvider
      */
     public function testStatementListMethodsRejectNonStatementEntries(string $method): void {
-        $connection = new Connection([]);
+        $connection = new Connection([new FailingIoNodeConfig()]);
 
         $this->expectException(StatementException::class);
         $this->expectExceptionCode(ExceptionCode::STATEMENT_INVALID_LIST_ENTRY->value);
