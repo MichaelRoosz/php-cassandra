@@ -247,6 +247,57 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         }
     }
 
+    /**
+     * A parameter list is as long as the string says it is.
+     *
+     * The regression this exists for: the segment after the final "," was only
+     * emitted where it had something in it, so a list ending in a separator came
+     * back one parameter short.
+     */
+    public function testEmptyParameterIsRefused(): void {
+        $typeStrings = [
+            TypeName::LIST->value . '(' . TypeName::INT32->value . ',)',
+            TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ',)',
+            TypeName::TUPLE->value . '(' . TypeName::INT32->value . ',,' . TypeName::UTF8->value . ')',
+
+            // A UDT field written without a type, which used to disappear from
+            // the type altogether: the value read back would have had one field
+            // fewer than the schema declares.
+            TypeName::UDT->value . '(ks,6d7974797065,6669656c6431:' . TypeName::INT32->value . ',6669656c6432:)',
+        ];
+
+        foreach ($typeStrings as $typeString) {
+            try {
+                $this->parser->parse($typeString);
+                $this->fail('Expected an empty parameter to be refused: ' . $typeString);
+            } catch (TypeNameParserException $e) {
+                $this->assertSame(ExceptionCode::TYPENAMEPARSER_EMPTY_PARAM->value, $e->getCode(), $typeString);
+            }
+        }
+    }
+
+    /**
+     * The counterparts of the above that are well formed, so that refusing an
+     * empty parameter does not cost a type a real node can send.
+     */
+    public function testEmptyParameterRefusalKeepsWellFormedListsWorking(): void {
+        $typeStrings = [
+            TypeName::LIST->value . '(' . TypeName::INT32->value . ')' => ListCollectionInfo::class,
+            TypeName::MAP->value . '(' . TypeName::UTF8->value . ',' . TypeName::INT32->value . ')' => MapCollectionInfo::class,
+            TypeName::TUPLE->value . '(' . TypeName::INT32->value . ',' . TypeName::UTF8->value . ')' => TupleInfo::class,
+            TypeName::UDT->value . '(ks,6d7974797065,6669656c6431:' . TypeName::INT32->value . ',6669656c6432:' . TypeName::UTF8->value . ')' => UDTInfo::class,
+
+            // An empty parameter list is not an empty parameter: the type names
+            // no parameters at all, which is for the individual parsers to
+            // judge, and a custom type is entitled to it.
+            'org.apache.cassandra.db.marshal.SomeCustomType()' => CustomInfo::class,
+        ];
+
+        foreach ($typeStrings as $typeString => $expectedClass) {
+            $this->assertInstanceOf($expectedClass, $this->parser->parse($typeString), $typeString);
+        }
+    }
+
     // =============================================
     // ERROR CASES
     // =============================================

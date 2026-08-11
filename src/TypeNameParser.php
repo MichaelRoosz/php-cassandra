@@ -201,6 +201,8 @@ final class TypeNameParser {
 
                 $name = trim(substr($paramString, $startCurrentParam, $i - $startCurrentParam));
                 $startCurrentParam = $i + 1;
+                
+                continue;
             }
 
             if ($char === ',') {
@@ -211,6 +213,8 @@ final class TypeNameParser {
                 $name = null;
 
                 $startCurrentParam = $i + 1;
+
+                continue;
             }
         }
 
@@ -226,11 +230,26 @@ final class TypeNameParser {
             );
         }
 
-        if ($startCurrentParam < $length) {
-            $params[] = [
-                'name' => $name,
-                'value' => trim(substr($paramString, $startCurrentParam)),
-            ];
+        $params[] = [
+            'name' => $name,
+            'value' => trim(substr($paramString, $startCurrentParam)),
+        ];
+
+        foreach ($params as $index => $param) {
+            if ($param['value'] !== '') {
+                continue;
+            }
+
+            throw new TypeNameParserException(
+                'Invalid type string: parameter ' . $index . ' names no type',
+                ExceptionCode::TYPENAMEPARSER_EMPTY_PARAM->value,
+                [
+                    'param_string' => $paramString,
+                    'index' => $index,
+                    'param_name' => $param['name'],
+                    'reason' => 'empty_parameter',
+                ]
+            );
         }
 
         return $params;
