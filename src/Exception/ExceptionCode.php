@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1416
+ * Next free code: 1418
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -139,6 +139,7 @@ enum ExceptionCode: int {
     case RESPONSE_EVENT_TOPOLOGY_CHANGE_INVALID_TYPE = 1096;
     case RESPONSE_PREPARED_INVALID_BIND_MARKER_COUNT = 1393;
     case RESPONSE_PREPARED_INVALID_PK_COUNT = 1394;
+    case RESPONSE_PREPARED_INVALID_PK_INDEX = 1417;
     case RESPONSE_PREPARED_UNEXPECTED_KIND = 1097;
     case RESPONSE_RES_INVALID_COLUMNS_COUNT = 1392;
     case RESPONSE_RES_INVALID_KIND_VALUE = 1102;
@@ -392,6 +393,7 @@ enum ExceptionCode: int {
     case VALUEFACTORY_TYPEDEF_MISSING_TYPE = 1186;
     case VALUEFACTORY_TYPEDEF_TYPE_NOT_INSTANCE = 1187;
     case VALUEFACTORY_UNKNOWN_DATA_TYPE = 1188;
+    case VALUEFACTORY_VALUE_OBJECT_TYPE_MISMATCH = 1416;
 
     // VIntCodecException (VINTCODEC_)
     case VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE = 1296;

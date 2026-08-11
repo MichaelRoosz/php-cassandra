@@ -14,6 +14,7 @@ use Cassandra\Value;
 use Cassandra\ValueFactory;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 final class TypeSerializationTest extends AbstractUnitTestCase {
     /**
@@ -44,6 +45,54 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
             'tuple value' => [['type' => Type::TUPLE, 'valueTypes' => ['bad']]],
             'UDT field' => [['type' => Type::UDT, 'valueTypes' => ['field' => 'bad']]],
             'vector value' => [['type' => Type::VECTOR, 'valueType' => 'bad', 'dimensions' => 3]],
+        ];
+    }
+    /**
+     * @return iterable<string, array{callable(): string}>
+     */
+    public static function mismatchedNestedValueObjectProvider(): iterable {
+        yield 'list element' => [
+            static fn (): string => Value\ListCollection::fromValue(
+                [Value\Float32::fromValue(1.0)],
+                Type::INT,
+            )->getBinary(),
+        ];
+
+        yield 'set element' => [
+            static fn (): string => Value\SetCollection::fromValue(
+                [Value\Float32::fromValue(1.0)],
+                Type::INT,
+            )->getBinary(),
+        ];
+
+        yield 'map value' => [
+            static fn (): string => Value\MapCollection::fromValue(
+                ['key' => Value\Float32::fromValue(1.0)],
+                Type::VARCHAR,
+                Type::INT,
+            )->getBinary(),
+        ];
+
+        yield 'tuple value' => [
+            static fn (): string => Value\Tuple::fromValue(
+                [Value\Float32::fromValue(1.0)],
+                [Type::INT],
+            )->getBinary(),
+        ];
+
+        yield 'UDT value' => [
+            static fn (): string => Value\UDT::fromValue(
+                ['field' => Value\Float32::fromValue(1.0)],
+                ['field' => Type::INT],
+            )->getBinary(),
+        ];
+
+        yield 'vector element' => [
+            static fn (): string => Value\Vector::fromValue(
+                [Value\Float32::fromValue(1.0)],
+                Type::INT,
+                1,
+            )->getBinary(),
         ];
     }
 
@@ -110,6 +159,20 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
                 }
             }
         }
+    }
+
+    public function testComplexValueObjectMustMatchTheCompleteDestinationDefinition(): void {
+        $source = Value\ListCollection::fromValue([1.0], Type::FLOAT);
+        $target = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::LIST,
+            'valueType' => Type::INT,
+            'isFrozen' => false,
+        ]);
+
+        $this->expectException(ValueFactoryException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUEFACTORY_VALUE_OBJECT_TYPE_MISMATCH->value);
+
+        ValueFactory::getBinaryByTypeInfo($target, $source);
     }
 
     public function testCounter(): void {
@@ -847,6 +910,20 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testMapValueObjectKeyMustMatchTheCompleteDeclaredType(): void {
+        $key = Value\ListCollection::fromValue([1.0], Type::FLOAT, true);
+        $map = Value\MapCollection::fromEntries(
+            [new Value\MapEntry($key, 1)],
+            ['type' => Type::LIST, 'valueType' => Type::INT, 'isFrozen' => true],
+            Type::INT,
+        );
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_MAP_INVALID_MAP_KEY_TYPE->value);
+
+        $map->getBinary();
+    }
+
     public function testNested(): void {
         $value = [
             [
@@ -914,6 +991,14 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
                 ])
             )->getValue()
         );
+    }
+
+    #[DataProvider('mismatchedNestedValueObjectProvider')]
+    public function testNestedValueObjectsMustMatchTheirDeclaredType(callable $encode): void {
+        $this->expectException(ValueFactoryException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUEFACTORY_VALUE_OBJECT_TYPE_MISMATCH->value);
+
+        $encode();
     }
 
     public function testSetCollection(): void {
@@ -1017,6 +1102,25 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
         $int2 = -32124;
         $this->assertSame($int2, Value\Smallint::fromBinary((Value\Smallint::fromValue($int2))->getBinary())->getValue());
+    }
+
+    public function testTextAndVarcharValueObjectsRemainBinaryCompatibleAliases(): void {
+        $varchar = Value\Varchar::fromValue('value');
+        $textType = ValueFactory::getTypeInfoFromType(Type::TEXT);
+
+        $this->assertSame($varchar->getBinary(), ValueFactory::getBinaryByTypeInfo($textType, $varchar));
+
+        $textList = Value\ListCollection::fromValue(['value'], Type::TEXT);
+        $varcharListType = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::LIST,
+            'valueType' => Type::VARCHAR,
+            'isFrozen' => false,
+        ]);
+
+        $this->assertSame(
+            $textList->getBinary(),
+            ValueFactory::getBinaryByTypeInfo($varcharListType, $textList),
+        );
     }
 
     public function testTime(): void {

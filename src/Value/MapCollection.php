@@ -284,7 +284,7 @@ final class MapCollection extends ValueReadableWithoutLength implements ValueWit
             }
 
             if ($key instanceof ValueBase) {
-                if ($key->getType() !== $this->typeInfo->keyType->type) {
+                if (!$key->isBinaryCompatibleWith($this->typeInfo->keyType)) {
                     throw new ValueException(
                         'Map key value object does not match the declared key type',
                         ExceptionCode::VALUE_MAP_INVALID_MAP_KEY_TYPE->value,
@@ -300,9 +300,7 @@ final class MapCollection extends ValueReadableWithoutLength implements ValueWit
                 $keyPacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->keyType, $key);
             }
 
-            $valuePacked = $val instanceof ValueBase
-                ? $val->getBinary()
-                : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
+            $valuePacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
 
             $entries[] = [
                 'key' => $key,
@@ -364,6 +362,11 @@ final class MapCollection extends ValueReadableWithoutLength implements ValueWit
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    #[\Override]
+    protected function binaryTypeInfo(): TypeInfo {
+        return $this->typeInfo;
     }
 
     /**

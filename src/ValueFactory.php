@@ -35,12 +35,45 @@ final class ValueFactory {
     }
 
     /**
+     * Validate a pre-built value object without converting it, allowing callers
+     * to reuse its binary representation on the compatible fast path.
+     *
+     * @internal
+     *
+     * @throws \Cassandra\Exception\ValueFactoryException
+     */
+    public static function assertValueObjectCompatibleWithTypeInfo(
+        Values\ValueBase $value,
+        TypeInfo $typeInfo,
+    ): void {
+        if ($value->isBinaryCompatibleWith($typeInfo)) {
+            return;
+        }
+
+        throw new ValueFactoryException(
+            'Value object type does not match the destination type',
+            ExceptionCode::VALUEFACTORY_VALUE_OBJECT_TYPE_MISMATCH->value,
+            [
+                'value_class' => get_class($value),
+                'value_type' => $value->getType()->name,
+                'target_type' => $typeInfo->type->name,
+            ]
+        );
+    }
+
+    /**
      * @param mixed $value
      *
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ValueException
      */
     public static function getBinaryByTypeInfo(TypeInfo $typeInfo, mixed $value): string {
+        if ($value instanceof Values\ValueBase) {
+            self::assertValueObjectCompatibleWithTypeInfo($value, $typeInfo);
+
+            return $value->getBinary();
+        }
+
         $valueObject = self::getValueObjectFromValue($typeInfo, $value);
         if ($valueObject === null) {
             throw new ValueFactoryException('Cannot get type object for value', ExceptionCode::VALUEFACTORY_CANNOT_GET_TYPE_OBJECT_FOR_VALUE->value, [

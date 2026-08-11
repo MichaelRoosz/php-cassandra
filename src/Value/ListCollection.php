@@ -149,9 +149,7 @@ final class ListCollection extends ValueReadableWithoutLength {
                 );
             }
 
-            $itemPacked = $val instanceof ValueBase
-                ? $val->getBinary()
-                : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
+            $itemPacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
             $binary .= pack('N', strlen($itemPacked)) . $itemPacked;
         }
 
@@ -174,6 +172,11 @@ final class ListCollection extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    #[\Override]
+    protected function binaryTypeInfo(): TypeInfo {
+        return $this->typeInfo;
     }
 
     /**

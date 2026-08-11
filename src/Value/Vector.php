@@ -210,9 +210,7 @@ final class Vector extends ValueReadableWithoutLength {
                 );
             }
 
-            $valueBinary = $value[$i] instanceof ValueBase
-                ? $value[$i]->getBinary()
-                : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $value[$i]);
+            $valueBinary = ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $value[$i]);
 
             if ($isSerializedAsFixedLength) {
                 $binary .= $valueBinary;
@@ -242,5 +240,10 @@ final class Vector extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    #[\Override]
+    protected function binaryTypeInfo(): TypeInfo {
+        return $this->typeInfo;
     }
 }

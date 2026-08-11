@@ -167,9 +167,7 @@ final class Tuple extends ValueReadableWithoutLength {
             if (!array_key_exists($key, $value) || $value[$key] === null) {
                 $binary .= "\xff\xff\xff\xff";
             } else {
-                $valueBinary = $value[$key] instanceof ValueBase
-                    ? $value[$key]->getBinary()
-                    : ValueFactory::getBinaryByTypeInfo($type, $value[$key]);
+                $valueBinary = ValueFactory::getBinaryByTypeInfo($type, $value[$key]);
 
                 $binary .= pack('N', strlen($valueBinary)) . $valueBinary;
             }
@@ -194,5 +192,10 @@ final class Tuple extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    #[\Override]
+    protected function binaryTypeInfo(): TypeInfo {
+        return $this->typeInfo;
     }
 }

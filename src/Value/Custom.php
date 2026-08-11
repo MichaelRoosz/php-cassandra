@@ -111,4 +111,9 @@ class Custom extends ValueReadableWithLength {
     final public static function requiresDefinition(): bool {
         return true;
     }
+
+    #[\Override]
+    protected function binaryTypeInfo(): TypeInfo {
+        return $this->typeInfo;
+    }
 }

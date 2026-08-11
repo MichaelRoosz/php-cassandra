@@ -156,12 +156,10 @@ final class SetCollection extends ValueReadableWithoutLength {
                 );
             }
 
-            // Re-encode a value object against the set's declared type. Besides
-            // keeping raw and object inputs identical, this guarantees the
-            // comparator below never interprets one type's bytes as another.
-            $itemPacked = $val instanceof ValueBase
-                ? ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val->getValue())
-                : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
+            // Compatible value objects already carry exactly the bytes the set
+            // needs. Validate their complete definition, then reuse those bytes
+            // instead of decoding and re-encoding them.
+            $itemPacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
             $elements[] = ['index' => $index, 'binary' => $itemPacked];
         }
 
@@ -208,6 +206,11 @@ final class SetCollection extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    #[\Override]
+    protected function binaryTypeInfo(): TypeInfo {
+        return $this->typeInfo;
     }
 
     /**

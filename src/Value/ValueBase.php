@@ -91,6 +91,37 @@ abstract class ValueBase implements Stringable {
     abstract public static function hasFixedLength(): bool;
 
     /**
+     * Whether this object's existing bytes can be used for the destination type
+     * without converting the value.
+     *
+     * Simple values need only the same type discriminator. Values whose type is
+     * defined recursively expose that definition through
+     * {@see self::binaryTypeInfo()}; exact immutable TypeInfo trees take PHP's
+     * native structural-comparison path. The successful path can therefore reuse
+     * {@see self::getBinary()} instead of decoding and encoding the value again.
+     *
+     * @internal
+     */
+    final public function isBinaryCompatibleWith(TypeInfo $typeInfo): bool {
+        $valueType = $this->getType();
+        if (
+            $valueType !== $typeInfo->type
+            && !(
+                ($valueType === Type::TEXT && $typeInfo->type === Type::VARCHAR)
+                || ($valueType === Type::VARCHAR && $typeInfo->type === Type::TEXT)
+            )
+        ) {
+            return false;
+        }
+
+        $valueTypeInfo = $this->binaryTypeInfo();
+
+        return $valueTypeInfo === null
+            ? !static::requiresDefinition()
+            : $valueTypeInfo->isBinaryCompatibleWith($typeInfo);
+    }
+
+    /**
      * Whether an empty value of this type denotes null rather than a value of
      * its own.
      * 
@@ -106,6 +137,14 @@ abstract class ValueBase implements Stringable {
     abstract public static function isSerializedAsFixedLength(): bool;
 
     abstract public static function requiresDefinition(): bool;
+
+    /**
+     * The immutable type definition that determines this value's binary layout,
+     * or null for a simple type whose discriminator is the whole definition.
+     */
+    protected function binaryTypeInfo(): ?TypeInfo {
+        return null;
+    }
 
     /**
      * Whether an empty binary is this type's spelling of null, so that
