@@ -80,6 +80,32 @@ final class ConnectionBoundaryTest extends AbstractUnitTestCase {
         (new NodeConnector([new FailingIoNodeConfig()], $selector))->open();
     }
 
+    public function testNodeConnectorTriesNextNodeWhenPostConnectHandshakeFails(): void {
+        PassingIoNode::reset();
+        $first = new PassingIoNodeConfig(host: 'first');
+        $second = new PassingIoNodeConfig(host: 'second');
+        $selector = new class implements NodeSelector {
+            public function order(array $nodes): array {
+                return $nodes;
+            }
+        };
+
+        $node = (new NodeConnector([$first, $second], $selector))->open(
+            function (IoNode $node): void {
+                if ($node->getConfig()->host === 'first') {
+                    throw new ConnectionException(
+                        'handshake failed',
+                        ExceptionCode::CONNECTION_STARTUP_UNEXPECTED_RESPONSE->value,
+                    );
+                }
+            }
+        );
+
+        $this->assertSame('second', $node->getConfig()->host);
+        $this->assertSame(['first', 'second'], PassingIoNode::$connectedHosts);
+        $this->assertSame(['first'], PassingIoNode::$closedHosts);
+    }
+
     /**
      * @dataProvider statementListMethodProvider
      */
@@ -124,6 +150,58 @@ final class FailingIoNode implements IoNode {
 
     public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
         return '';
+    }
+
+    public function write(string $data): void {
+    }
+
+    public function writeRequest(Request $request): void {
+    }
+}
+
+final class PassingIoNodeConfig extends NodeConfig {
+    public function getNodeClass(): string {
+        return PassingIoNode::class;
+    }
+}
+
+final class PassingIoNode implements IoNode {
+    /** @var list<string> */
+    public static array $closedHosts = [];
+
+    /** @var list<string> */
+    public static array $connectedHosts = [];
+
+    public function __construct(private NodeConfig $config) {
+    }
+
+    public function close(): void {
+        self::$closedHosts[] = $this->config->host;
+    }
+
+    public function connect(): void {
+        self::$connectedHosts[] = $this->config->host;
+    }
+
+    public function getConfig(): NodeConfig {
+        return $this->config;
+    }
+
+    public function getReceivedByteCount(): int {
+        return 0;
+    }
+
+    public function read(int $length, ?float $readDeadline): string {
+        return '';
+    }
+
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
+        return '';
+    }
+
+    public static function reset(): void {
+        self::$closedHosts = [];
+        self::$connectedHosts = [];
     }
 
     public function write(string $data): void {

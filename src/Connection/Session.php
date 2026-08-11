@@ -214,17 +214,23 @@ final class Session {
 
         $this->resetSessionState();
 
-        $node = $this->node = $this->nodeConnector->open();
+        $this->nodeConnector->open(function (IoNode $node): void {
+            $this->node = $node;
+            $this->heartbeat->anchor();
 
-        $this->heartbeat->anchor();
+            try {
+                $this->completeHandshake($node);
+            } catch (Throwable $e) {
+                // NodeConnector closes the transport and tries its next
+                // candidate. Everything accumulated while handshaking belongs
+                // to this attempt and must not leak into the next one.
+                $this->node = null;
+                $this->resetSessionState();
+                $this->heartbeat->forgetProbe();
 
-        try {
-            $this->completeHandshake($node);
-        } catch (Throwable $e) {
-            $this->disconnect();
-
-            throw $e;
-        }
+                throw $e;
+            }
+        });
     }
 
     public function disconnect(): void {
@@ -1500,7 +1506,7 @@ final class Session {
         if ($response instanceof Response\Authenticate) {
             $nodeConfig = $node->getConfig();
 
-            if (!$nodeConfig->username || !$nodeConfig->password) {
+            if ($nodeConfig->username === '' || $nodeConfig->password === '') {
                 throw new ConnectionException('Username and password must not be empty.', ExceptionCode::CONNECTION_AUTH_MISSING_CREDENTIALS->value, [
                     'operation' => 'connect/authenticate',
                     'host' => $nodeConfig->host,

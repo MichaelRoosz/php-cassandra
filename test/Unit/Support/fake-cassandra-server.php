@@ -34,6 +34,9 @@
  *                   than going quiet
  *   refuse-startup  answer OPTIONS, then never answer the STARTUP, so that the
  *                   handshake fails part way through
+ *   authenticate-zero
+ *                   require a password handshake and only accept username
+ *                   "0" with password "0"
  *   always-unprepared
  *                   prepare happily, but answer every EXECUTE and every BATCH
  *                   with UNPREPARED, as a node that never keeps the prepared
@@ -101,6 +104,7 @@ declare(strict_types=1);
 const OPCODE_ERROR = 0x00;
 const OPCODE_STARTUP = 0x01;
 const OPCODE_READY = 0x02;
+const OPCODE_AUTHENTICATE = 0x03;
 const OPCODE_OPTIONS = 0x05;
 const OPCODE_SUPPORTED = 0x06;
 const OPCODE_QUERY = 0x07;
@@ -110,6 +114,8 @@ const OPCODE_EXECUTE = 0x0A;
 const OPCODE_REGISTER = 0x0B;
 const OPCODE_EVENT = 0x0C;
 const OPCODE_BATCH = 0x0D;
+const OPCODE_AUTH_RESPONSE = 0x0F;
+const OPCODE_AUTH_SUCCESS = 0x10;
 
 const PROTOCOL_VERSION = 0x04;
 
@@ -535,12 +541,31 @@ while (microtime(true) < $deadline) {
                 continue;
             }
 
+            if ($mode === 'authenticate-zero') {
+                writeFrame($client, $frame['stream'], OPCODE_AUTHENTICATE, cqlString('PasswordAuthenticator'));
+
+                continue;
+            }
+
             writeFrame($client, $frame['stream'], OPCODE_READY, '');
             $handshakeDone = true;
 
             if ($mode === 'event') {
                 $eventDueAt = microtime(true) + $delay;
             }
+
+            continue;
+        }
+
+        if ($frame['opcode'] === OPCODE_AUTH_RESPONSE && $mode === 'authenticate-zero') {
+            if ($frame['body'] !== pack('N', 4) . "\0" . '0' . "\0" . '0') {
+                fclose($client);
+
+                break;
+            }
+
+            writeFrame($client, $frame['stream'], OPCODE_AUTH_SUCCESS, pack('N', 0));
+            $handshakeDone = true;
 
             continue;
         }
