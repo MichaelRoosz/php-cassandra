@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1404
+ * Next free code: 1409
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -44,6 +44,7 @@ enum ExceptionCode: int {
     case CONNECTION_INVALID_WAIT_TIMEOUT = 1356;
     case CONNECTION_KEYSPACE_CANNOT_BE_CLEARED = 1352;
     case CONNECTION_LISTENER_FAILED = 1358;
+    case CONNECTION_NO_NODES_CONFIGURED = 1404;
     case CONNECTION_NOT_CONNECTED = 1013;
     case CONNECTION_OPTIONS_UNEXPECTED_RESPONSE = 1014;
     case CONNECTION_PREPARE_UNEXPECTED_RESPONSE = 1015;
@@ -327,13 +328,16 @@ enum ExceptionCode: int {
     case VALUE_INVALID_DATA_LENGTH = 1294;
     case VALUE_LIST_INVALID_TYPEINFO = 1147;
     case VALUE_LIST_INVALID_VALUE_TYPE = 1148;
+    case VALUE_LIST_NULL_ELEMENT = 1405;
     case VALUE_LIST_TYPEINFO_REQUIRED = 1149;
     case VALUE_MAP_INVALID_MAP_KEY_TYPE = 1301;
     case VALUE_MAP_INVALID_TYPEINFO = 1151;
     case VALUE_MAP_INVALID_VALUE_TYPE = 1152;
+    case VALUE_MAP_NULL_VALUE = 1406;
     case VALUE_MAP_TYPEINFO_REQUIRED = 1154;
     case VALUE_SET_INVALID_TYPEINFO = 1155;
     case VALUE_SET_INVALID_VALUE_TYPE = 1156;
+    case VALUE_SET_NULL_ELEMENT = 1407;
     case VALUE_SET_TYPEINFO_REQUIRED = 1157;
     case VALUE_SMALLINT_INVALID_VALUE_TYPE = 1197;
     case VALUE_SMALLINT_OUT_OF_RANGE = 1198;
@@ -370,6 +374,7 @@ enum ExceptionCode: int {
     case VALUE_VECTOR_DIMENSION_MISMATCH = 1333;
     case VALUE_VECTOR_INVALID_TYPEINFO = 1262;
     case VALUE_VECTOR_INVALID_VALUE_TYPE = 1263;
+    case VALUE_VECTOR_NULL_ELEMENT = 1408;
     case VALUE_VECTOR_TYPEINFO_REQUIRED = 1264;
 
     // ValueFactoryException (VALUEFACTORY_)
