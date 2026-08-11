@@ -44,7 +44,7 @@ abstract class Response implements Frame, Stringable {
 
     #[\Override]
     public function __toString(): string {
-        $body = $this->getBody();
+        $body = $this->stream->getData(includeExtraData: true);
 
         return pack(
             'CCnCN',
