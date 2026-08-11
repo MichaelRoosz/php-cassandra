@@ -236,7 +236,8 @@ final class Batch extends Request {
 
         $hash = $newRequest->getHash();
 
-        $replaced = 0;
+        /** @var array<int, string> $replacements */
+        $replacements = [];
 
         foreach ($this->preparedStatements as $index => $entry) {
             $request = $entry['result']->getRequest();
@@ -244,23 +245,23 @@ final class Batch extends Request {
                 continue;
             }
 
-            // Encoded before either array is touched, as in
-            // {@see self::appendPreparedStatement()}: a value the new bind
-            // marker types cannot take must not leave the batch holding a
-            // statement id whose values were encoded for another one.
-            $binary = $this->encodePreparedStatement($newResult, $entry['values']);
+            // Encode every matching entry before touching either array. A later
+            // value can still be incompatible with the new marker types, and a
+            // failure must leave all repeated entries on the old statement.
+            $replacements[$index] = $this->encodePreparedStatement($newResult, $entry['values']);
+        }
 
+        foreach ($replacements as $index => $binary) {
+            $entry = $this->preparedStatements[$index];
             $this->preparedStatements[$index] = [
                 'result' => $newResult,
                 'values' => $entry['values'],
             ];
 
             $this->queryArray[$index] = $binary;
-
-            $replaced++;
         }
 
-        return $replaced;
+        return count($replacements);
     }
 
     /**
@@ -289,6 +290,7 @@ final class Batch extends Request {
         }
 
         if ($options->defaultTimestamp !== null) {
+            self::assertValidDefaultTimestamp($options->defaultTimestamp, $version);
             $flags |= QueryFlag::WITH_DEFAULT_TIMESTAMP;
             $optional .= pack('J', $options->defaultTimestamp);
         }

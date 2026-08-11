@@ -134,10 +134,27 @@ class PreparedResult extends Result {
             }
 
             $pkIndex = [];
+            $seenPkIndexes = [];
 
             if ($pkCount > 0) {
                 for ($i = 0; $i < $pkCount; ++$i) {
-                    $pkIndex[] =  $this->stream->readShort();
+                    $index = $this->stream->readShort();
+                    if ($index >= $bindMarkersCount || isset($seenPkIndexes[$index])) {
+                        throw new ResponseException(
+                            'Invalid prepared metadata partition key index',
+                            ExceptionCode::RESPONSE_PREPARED_INVALID_PK_INDEX->value,
+                            [
+                                'operation' => 'PreparedResult::readPrepareMetadata',
+                                'pk_position' => $i,
+                                'pk_index' => $index,
+                                'bind_markers_count' => $bindMarkersCount,
+                                'duplicate' => isset($seenPkIndexes[$index]),
+                            ]
+                        );
+                    }
+
+                    $seenPkIndexes[$index] = true;
+                    $pkIndex[] = $index;
                 }
             }
         } else {

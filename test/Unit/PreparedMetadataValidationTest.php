@@ -56,6 +56,44 @@ final class PreparedMetadataValidationTest extends AbstractUnitTestCase {
         ];
     }
 
+    /**
+     * @return iterable<string, array{int, list<int>}>
+     */
+    public static function invalidPartitionKeyIndexes(): iterable {
+        yield 'index equals bind marker count' => [1, [1]];
+        yield 'duplicate index' => [2, [0, 0]];
+    }
+
+    /** @param list<int> $pkIndexes */
+    #[DataProvider('invalidPartitionKeyIndexes')]
+    public function testRejectsInvalidPreparedMetadataPartitionKeyIndexes(
+        int $bindMarkersCount,
+        array $pkIndexes,
+    ): void {
+        $metadata = pack('N', 0)
+            . pack('N', $bindMarkersCount)
+            . pack('N', count($pkIndexes));
+        foreach ($pkIndexes as $index) {
+            $metadata .= pack('n', $index);
+        }
+
+        $body = pack('N', 4)
+            . pack('n', 1) . 'x'
+            . $metadata;
+        $header = new Header(
+            version: ProtocolVersion::V4,
+            flags: 0,
+            stream: 0,
+            opcode: Opcode::RESPONSE_RESULT,
+            length: strlen($body),
+        );
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_PREPARED_INVALID_PK_INDEX->value);
+
+        new PreparedResult($header, new StreamReader($body));
+    }
+
     #[DataProvider('invalidCounts')]
     public function testRejectsNegativePreparedMetadataCounts(string $metadata, ExceptionCode $code): void {
         $body = pack('N', 4) // result kind: PREPARED

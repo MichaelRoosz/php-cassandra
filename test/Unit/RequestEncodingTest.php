@@ -8,6 +8,8 @@ use Cassandra\Consistency;
 use Cassandra\EventType;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\RequestException;
+use Cassandra\Exception\ValueException;
+use Cassandra\Exception\ValueFactoryException;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Batch;
 use Cassandra\Request\BatchType;
@@ -15,6 +17,7 @@ use Cassandra\Request\Execute;
 use Cassandra\Request\Options\BatchOptions;
 use Cassandra\Request\Options\ExecuteOptions;
 use Cassandra\Request\Options\QueryOptions;
+use Cassandra\Request\Prepare;
 use Cassandra\Request\Query;
 use Cassandra\Request\QueryFlag;
 use Cassandra\Request\Register;
@@ -23,11 +26,15 @@ use Cassandra\SerialConsistency;
 use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Response\Result\CachedPreparedResult;
+use Cassandra\Response\Result\ColumnInfo;
 use Cassandra\Response\Result\Data\PreparedData;
 use Cassandra\Response\Result\PrepareMetadata;
 use Cassandra\Response\Result\RowsMetadata;
 use Cassandra\Response\StreamReader;
 use Cassandra\Value\NotSet;
+use Cassandra\Value\Float32;
+use Cassandra\Type;
+use Cassandra\TypeInfo\SimpleTypeInfo;
 use DateTimeImmutable;
 use ReflectionClass;
 use ReflectionMethod;
@@ -97,6 +104,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
 
         $this->expectException(RequestException::class);
         $this->expectExceptionCode(ExceptionCode::REQUEST_BATCH_TOO_MANY_STATEMENTS->value);
+
+        $batch->getBody();
+    }
+
+    public function testBatchRejectsNegativeDefaultTimestampFromProtocolV4(): void {
+        $batch = new Batch(options: new BatchOptions(defaultTimestamp: -1));
+        $batch->appendQuery('SELECT * FROM t');
+        $batch->setVersion(ProtocolVersion::V4);
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_INVALID_DEFAULT_TIMESTAMP->value);
 
         $batch->getBody();
     }
@@ -289,6 +307,22 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testFailedBatchAppendDoesNotRetainNotSetState(): void {
+        $batch = new Batch();
+
+        try {
+            $batch->appendQuery('invalid', [new NotSet(), new \stdClass()]);
+            $this->fail('Expected the unsupported value after NotSet to fail');
+        } catch (RequestException $e) {
+            $this->assertSame(ExceptionCode::REQUEST_VALUES_UNSUPPORTED_VALUE_TYPE->value, $e->getCode());
+        }
+
+        $batch->appendQuery('valid', [1]);
+        $batch->setVersion(ProtocolVersion::V3);
+
+        $this->assertNotSame('', $batch->getBody());
+    }
+
     public function testMissingNamedBindValueThrows(): void {
         $this->expectException(RequestException::class);
         $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_MISSING_BIND_VALUE->value);
@@ -337,6 +371,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $request->setVersion(ProtocolVersion::V4);
 
         $this->assertStringEndsWith("\xff\xff\xff\xfe", $request->getBody());
+    }
+
+    public function testPreparedValueObjectMustMatchBindMarkerType(): void {
+        $this->expectException(ValueFactoryException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUEFACTORY_VALUE_OBJECT_TYPE_MISMATCH->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            [Float32::fromValue(1.0)],
+            [self::columnInfo('value')],
+            namesForValues: false,
+        );
     }
 
     public function testProtocolV3AllowsNegativeDefaultTimestampExceptMinimum(): void {
@@ -563,6 +608,26 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         (new ReflectionClass(Register::class))->newInstanceArgs([[EventType::SCHEMA_CHANGE, 'STATUS_CHANGE']]);
     }
 
+    public function testRepeatedPreparedStatementReplacementIsAtomic(): void {
+        $query = 'INSERT INTO ks.t (v) VALUES (?)';
+        $old = self::preparedResultWithMarker('old', Type::VARINT, $query);
+        $new = self::preparedResultWithMarker('new', Type::INT, $query);
+
+        $batch = new Batch();
+        $batch->appendPreparedStatement($old, [1]);
+        $batch->appendPreparedStatement($old, ['2']);
+
+        try {
+            $batch->replacePreparedStatement($new);
+            $this->fail('Expected the second value to be incompatible with the new int marker');
+        } catch (ValueException $e) {
+            $this->assertSame(ExceptionCode::VALUE_INTEGER_INVALID_VALUE_TYPE->value, $e->getCode());
+        }
+
+        $this->assertSame($old, $batch->findPreparedStatement('old'));
+        $this->assertNull($batch->findPreparedStatement('new'));
+    }
+
     public function testRequestRejectsFrameBodyPastProtocolMaximum(): void {
         $this->expectException(RequestException::class);
         $this->expectExceptionCode(ExceptionCode::REQUEST_FRAME_BODY_TOO_LARGE->value);
@@ -637,6 +702,27 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
                 rowsMetadataId: $rowsMetadataId,
             ),
         );
+    }
+
+    private static function preparedResultWithMarker(string $id, Type $type, string $query): CachedPreparedResult {
+        $result = new CachedPreparedResult(
+            new Header(version: ProtocolVersion::V4, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
+            new StreamReader(''),
+            new PreparedData(
+                id: $id,
+                prepareMetadata: new PrepareMetadata(
+                    flags: 0,
+                    bindMarkersCount: 1,
+                    bindMarkers: [new ColumnInfo('ks', 't', 'v', new SimpleTypeInfo($type))],
+                    pkCount: 0,
+                    pkIndex: [],
+                ),
+                rowsMetadata: new RowsMetadata(flags: 0, columnsCount: 0, pagingState: null, metadataId: null, columns: []),
+            ),
+        );
+        $result->setRequest(new Prepare($query));
+
+        return $result;
     }
 
     private static function testableRequest(): TestableBindMarkerRequest {

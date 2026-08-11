@@ -395,6 +395,29 @@ abstract class Request implements Frame, Stringable {
     }
 
     /**
+     * @throws \Cassandra\Exception\RequestException
+     */
+    protected static function assertValidDefaultTimestamp(int $timestamp, ProtocolVersion $version): void {
+        $invalid = $version->supports(ProtocolVersion::V4)
+            ? $timestamp < 0
+            : PHP_INT_SIZE >= 8 && $timestamp === PHP_INT_MIN;
+
+        if (!$invalid) {
+            return;
+        }
+
+        throw new RequestException(
+            message: 'Invalid default timestamp for the selected protocol version',
+            code: ExceptionCode::REQUEST_INVALID_DEFAULT_TIMESTAMP->value,
+            context: [
+                'default_timestamp' => $timestamp,
+                'protocol_version' => $version->inOptionFormat(),
+                'minimum' => $version->supports(ProtocolVersion::V4) ? 0 : PHP_INT_MIN + 1,
+            ]
+        );
+    }
+
+    /**
      * Whether the keyspace this request carries is one the connection put there,
      * see {@see self::$keyspaceIsConnectionDefault}. What
      * {@see self::clearDefaultKeyspace()} is allowed to take back.
@@ -536,6 +559,7 @@ abstract class Request implements Frame, Stringable {
         }
 
         $valuesBinary = pack('n', $valueCount);
+        $containsNotSet = false;
 
         /** @psalm-suppress MixedAssignment */
         foreach ($values as $name => $value) {
@@ -546,7 +570,7 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 case $value instanceof NotSet:
-                    $this->containsNotSet = true;
+                    $containsNotSet = true;
                     $binary = $value;
 
                     break;
@@ -692,6 +716,11 @@ abstract class Request implements Frame, Stringable {
             }
         }
 
+        // Commit request state only after every value has encoded. Batch is
+        // mutable, so a failed append must not make a later valid request look
+        // as though it contains a NotSet value that was never appended.
+        $this->containsNotSet = $this->containsNotSet || $containsNotSet;
+
         return $valuesBinary;
     }
 
@@ -784,11 +813,14 @@ abstract class Request implements Frame, Stringable {
                 $usedValueKeys[$key] = true;
             }
 
-            if (
-                $value === null
-                || ($value instanceof ValueBase)
-                || ($value instanceof NotSet)
-            ) {
+            if ($value === null || ($value instanceof NotSet)) {
+                $encodedValues[$key] = $value;
+            } elseif ($value instanceof ValueBase) {
+                // The marker type is known here, so an explicitly typed value
+                // must be binary-compatible with it. Compatibility validation
+                // reuses the object's existing bytes later instead of paying to
+                // decode and re-encode them.
+                ValueFactory::assertValueObjectCompatibleWithTypeInfo($value, $bindMarker->type);
                 $encodedValues[$key] = $value;
             } else {
                 $encodedValues[$key] = ValueFactory::getValueObjectFromValue($bindMarker->type, $value);
@@ -857,29 +889,6 @@ abstract class Request implements Frame, Stringable {
             context: [
                 'request' => $this->opcode->name,
                 'protocol_version' => $this->version->inOptionFormat(),
-            ]
-        );
-    }
-
-    /**
-     * @throws \Cassandra\Exception\RequestException
-     */
-    private static function assertValidDefaultTimestamp(int $timestamp, ProtocolVersion $version): void {
-        $invalid = $version->supports(ProtocolVersion::V4)
-            ? $timestamp < 0
-            : PHP_INT_SIZE >= 8 && $timestamp === PHP_INT_MIN;
-
-        if (!$invalid) {
-            return;
-        }
-
-        throw new RequestException(
-            message: 'Invalid default timestamp for the selected protocol version',
-            code: ExceptionCode::REQUEST_INVALID_DEFAULT_TIMESTAMP->value,
-            context: [
-                'default_timestamp' => $timestamp,
-                'protocol_version' => $version->inOptionFormat(),
-                'minimum' => $version->supports(ProtocolVersion::V4) ? 0 : PHP_INT_MIN + 1,
             ]
         );
     }
