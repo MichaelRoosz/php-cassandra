@@ -1088,7 +1088,7 @@ $conn->query('UPDATE ks.stats SET value = value + ? WHERE id = ?', [5, 1]);
 ```
 
 Special values:
-- `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET (distinct from NULL)
+- `new \Cassandra\Value\NotSet()` encodes a bind variable as NOT SET (distinct from NULL); this requires protocol v4 or newer
 
 Lightweight transactions (LWT)
 ------------------------------
@@ -1247,7 +1247,10 @@ while ($event = $conn->tryReadNextEvent()) {
 Tracing and custom payloads (advanced)
 -------------------------------------
 
-You can enable tracing and set a custom payload on any request:
+You can enable tracing on a request. Custom payloads require protocol v4 or
+newer and are supported by `Query`, `Prepare`, `Execute`, and `Batch` requests.
+The driver rejects other version/opcode combinations before sending them.
+
 ```php
 use Cassandra\Request\Query;
 
