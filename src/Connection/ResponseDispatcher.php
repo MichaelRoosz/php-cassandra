@@ -357,13 +357,23 @@ final class ResponseDispatcher {
         // else cannot carry a prepared statement at all, so an UNPREPARED for
         // one is not something to recover from and is handed to the caller.
         if ($request instanceof Request\Execute) {
-            $forgottenResult = $request->getPreviousResult();
+            $previousResult = $request->getPreviousResult();
 
-            if (!($forgottenResult instanceof Response\Result\PreparedResult)) {
+            // An EXECUTE is built either from the PREPARE's own result or, for
+            // the second and later pages of a result set, from the page before
+            // it ({@see Request\Execute::__construct()}). A page is not the
+            // prepared statement, but it carries the one it was executed
+            // against, which is what has to be prepared again; see
+            // {@see Response\Result::$lastPreparedResult}.
+            $forgottenResult = $previousResult instanceof Response\Result\PreparedResult
+                ? $previousResult
+                : $previousResult->getLastPreparedResult();
+
+            if ($forgottenResult === null) {
                 throw new ConnectionException('Unexpected previous result type for UNPREPARED error', ExceptionCode::CONNECTION_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE->value, [
                     'operation' => 'unprepared_error_handling',
                     'expected' => Response\Result\PreparedResult::class,
-                    'received' => get_class($forgottenResult),
+                    'received' => get_class($previousResult),
                 ]);
             }
 

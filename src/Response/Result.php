@@ -32,6 +32,23 @@ class Result extends Response implements IteratorAggregate {
     protected int $dataOffset;
     protected ResultKind $kind;
     protected ?PreparedData $lastPreparedData = null;
+
+    /**
+     * The prepared statement this result came from, carried alongside
+     * {@see self::$lastPreparedData} down the whole paging chain.
+     *
+     * The data is what a follow-up EXECUTE is built out of; this is what
+     * repreparing one needs, because only the {@see PreparedResult} carries the
+     * PREPARE that produced it ({@see self::$request}, set by
+     * {@see \Cassandra\Connection\ResponseDispatcher::handleResponsePrepareResult()}).
+     * A page's own request is the EXECUTE rather than that PREPARE, and the
+     * PreparedData rebuilt for each page below is a value object that has never
+     * heard of either — so without this a node answering UNPREPARED for the
+     * second or later page of a result set would leave
+     * {@see \Cassandra\Connection\ResponseDispatcher::handleResponseError()}
+     * with nothing to prepare again.
+     */
+    protected ?PreparedResult $lastPreparedResult = null;
     protected ?Request $request = null;
 
     /**
@@ -132,6 +149,14 @@ class Result extends Response implements IteratorAggregate {
         return $this->lastPreparedData;
     }
 
+    /**
+     * The prepared statement this result came from, see
+     * {@see self::$lastPreparedResult}.
+     */
+    public function getLastPreparedResult(): ?PreparedResult {
+        return $this->lastPreparedResult;
+    }
+
     public function getRequest(): ?Request {
         return $this->request;
     }
@@ -162,6 +187,7 @@ class Result extends Response implements IteratorAggregate {
 
         if ($previousResult instanceof PreparedResult) {
             $this->lastPreparedData = $previousResult->getPreparedData();
+            $this->lastPreparedResult = $previousResult;
 
             $lastRowsMetadata = $this->lastPreparedData->rowsMetadata;
 
@@ -189,6 +215,12 @@ class Result extends Response implements IteratorAggregate {
                 rowsMetadataId: $lastRowsMetadata->metadataId,
                 rowsMetadata: $lastRowsMetadata,
             );
+
+            // Handed on rather than rebuilt: every page of a result set was
+            // executed against the same prepared statement, so the one the
+            // previous page came from is the one this page came from too. It is
+            // what makes a page repreparable; see {@see self::$lastPreparedResult}.
+            $this->lastPreparedResult = $previousResult->getLastPreparedResult();
 
             $this->onPreviousRowsMetadataUpdated($lastRowsMetadata);
         }

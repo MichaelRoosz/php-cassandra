@@ -65,6 +65,17 @@
  *                   the ones the refused statement carried. Every EXECUTE is
  *                   reported on stdout as "execute <id> <hex values>", which is
  *                   how a test can tell which encoding it was sent with
+ *   unprepared-second-page
+ *                   answer the first EXECUTE with a page of rows that has more
+ *                   pages to come, then refuse the EXECUTE that asks for the
+ *                   next page with UNPREPARED naming the id it carries, and
+ *                   answer the one after that with the final page — as a node
+ *                   that forgets a prepared statement half way through a result
+ *                   set does. Each PREPARE hands out a fresh id, so a client
+ *                   that recovers has to prepare the statement again and ask
+ *                   for the same page with the new id. Every EXECUTE is
+ *                   reported on stdout as "execute <id> <paging state>", which
+ *                   is how a test can tell which page each one asked for
  *   refuse-use      report every QUERY on stdout as "query <cql>", and answer
  *                   the ones that switch keyspace with INVALID, as a node asked
  *                   for a keyspace that does not exist would
@@ -302,18 +313,22 @@ function batchPreparedIds(string $body): array {
 }
 
 /**
- * The statement id and the raw bound values an EXECUTE frame carries.
+ * The statement id, the raw bound values and the paging state an EXECUTE frame
+ * carries.
  *
  * The body is the statement id as [short bytes], then the query parameters: a
- * [short] consistency, a one-byte flag set, and — where the VALUES flag is set
- * — a [short] count followed by that many [bytes]. Nothing before the values is
- * of any interest here, but it all has to be walked to reach them.
+ * [short] consistency, a one-byte flag set, and then the fields the flags
+ * announce, in the order the protocol lists them — values, page size, paging
+ * state. Everything before a field of interest has to be walked to reach it.
  *
  * Reported so that a test can pin what the client actually put on the wire,
  * which is the whole of what re-encoding after a repreparation changes: the
  * same value bound to an int marker and to a bigint one is four bytes and eight.
+ * The paging state is what says which page an EXECUTE asked for, which is how a
+ * repreparation half way through a result set can be told from one that started
+ * the result set over.
  *
- * @return array{id: string, values: list<string>}
+ * @return array{id: string, values: list<string>, pagingState: ?string}
  */
 function executeIdAndValues(string $body): array {
 
@@ -353,7 +368,21 @@ function executeIdAndValues(string $body): array {
         }
     }
 
-    return ['id' => $id, 'values' => $values];
+    if (($flags & 0x04) !== 0) { // PAGE_SIZE
+        $offset += 4;
+    }
+
+    $pagingState = null;
+
+    if (($flags & 0x08) !== 0) { // WITH_PAGING_STATE
+        /** @var array{1: int} $unpacked */
+        $unpacked = unpack('N', substr($body, $offset, 4));
+        $offset += 4;
+
+        $pagingState = substr($body, $offset, $unpacked[1]);
+    }
+
+    return ['id' => $id, 'values' => $values, 'pagingState' => $pagingState];
 }
 
 /**
@@ -363,6 +392,32 @@ function executeIdAndValues(string $body): array {
 function invalidErrorBody(string $message): string {
     return pack('N', 0x2200)                               // error code = INVALID
         . cqlString($message);                             // message [string]
+}
+
+/**
+ * A ROWS RESULT carrying a single int column "id" and one row.
+ *
+ * $pagingState marks this as one page of several: a client walking the result
+ * set sends it back on the next EXECUTE, which is what makes the second and
+ * later pages of a paged statement reachable at all.
+ */
+function rowsResultBody(int $value, ?string $pagingState = null): string {
+
+    $flags = 0x01;                                         // GLOBAL_TABLES_SPEC
+    $pagingStateField = '';
+
+    if ($pagingState !== null) {
+        $flags |= 0x02;                                    // HAS_MORE_PAGES
+        $pagingStateField = pack('N', strlen($pagingState)) . $pagingState;
+    }
+
+    return pack('N', 2)                                    // kind = ROWS
+        . pack('N', $flags) . pack('N', 1)                 // flags, one column
+        . $pagingStateField                                // paging state [bytes]
+        . cqlString('ks') . cqlString('t')                 // global table spec
+        . cqlString('id') . pack('n', 0x0009)              // column "id", int
+        . pack('N', 1)                                     // one row
+        . pack('N', 4) . pack('N', $value);                // its only cell
 }
 
 /**
@@ -531,7 +586,9 @@ while (microtime(true) < $deadline) {
             }
 
             writeFrame($client, $frame['stream'], OPCODE_RESULT, preparedResultBody(
-                ($mode === 'unprepared-batch-once' || $mode === 'always-unprepared') ? 'pid' . $prepareCount : 'pid1'
+                in_array($mode, ['unprepared-batch-once', 'always-unprepared', 'unprepared-second-page'], true)
+                    ? 'pid' . $prepareCount
+                    : 'pid1'
             ));
 
             break;
@@ -564,6 +621,37 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_EXECUTE:
+            if ($mode === 'unprepared-second-page') {
+                $execute = executeIdAndValues($frame['body']);
+
+                // Reported so that a test can pin which statement id each page
+                // went out with, and which page each one asked for.
+                fwrite(STDOUT, 'execute ' . $execute['id'] . ' ' . ($execute['pagingState'] ?? '-') . "\n");
+                fflush(STDOUT);
+
+                if ($execute['pagingState'] === null) {
+                    // The first page, which every run gets: it is the page
+                    // after it that this mode is about.
+                    writeFrame($client, $frame['stream'], OPCODE_RESULT, rowsResultBody(1, 'page2'));
+
+                    break;
+                }
+
+                if (!$executeRefused) {
+                    // The statement was forgotten between two pages, as an
+                    // ALTER or a restarted coordinator does it.
+                    $executeRefused = true;
+
+                    writeFrame($client, $frame['stream'], OPCODE_ERROR, unpreparedErrorBody($execute['id']));
+
+                    break;
+                }
+
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, rowsResultBody(2));
+
+                break;
+            }
+
             if ($mode === 'unprepared-execute-retyped') {
                 $execute = executeIdAndValues($frame['body']);
 
