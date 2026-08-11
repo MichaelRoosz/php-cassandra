@@ -54,7 +54,10 @@ final class WriteTimeoutError extends Error {
             ], $e);
         }
 
-        if ($this->getProtocolVersion()->supports(ProtocolVersion::V5)) {
+        if (
+            $this->getProtocolVersion()->supports(ProtocolVersion::V5)
+            && $writeType === WriteType::CAS
+        ) {
             $contentions = $this->stream->readShort();
         } else {
             $contentions = null;
