@@ -140,7 +140,8 @@ final class SetCollection extends ValueReadableWithoutLength {
      */
     #[\Override]
     public function getBinary(): string {
-        $binary = pack('N', count($this->value));
+        /** @var list<array{index: int|string, binary: string}> $elements */
+        $elements = [];
 
         /** @var mixed $val */
         foreach ($this->value as $index => $val) {
@@ -155,10 +156,37 @@ final class SetCollection extends ValueReadableWithoutLength {
                 );
             }
 
+            // Re-encode a value object against the set's declared type. Besides
+            // keeping raw and object inputs identical, this guarantees the
+            // comparator below never interprets one type's bytes as another.
             $itemPacked = $val instanceof ValueBase
-                ? $val->getBinary()
+                ? ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val->getValue())
                 : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
-            $binary .= pack('N', strlen($itemPacked)) . $itemPacked;
+            $elements[] = ['index' => $index, 'binary' => $itemPacked];
+        }
+
+        usort($elements, $this->compareElements(...));
+
+        $binary = pack('N', count($elements));
+        $previous = null;
+        foreach ($elements as $element) {
+            if (
+                $previous !== null
+                && ValueComparator::compare($this->typeInfo->valueType, $previous['binary'], $element['binary']) === 0
+            ) {
+                throw new ValueException(
+                    'A set cannot contain the same CQL value more than once',
+                    ExceptionCode::VALUE_SET_DUPLICATE_ELEMENT->value,
+                    [
+                        'first_index' => $previous['index'],
+                        'duplicate_index' => $element['index'],
+                        'value_type' => $this->typeInfo->valueType->type->name,
+                    ]
+                );
+            }
+
+            $binary .= pack('N', strlen($element['binary'])) . $element['binary'];
+            $previous = $element;
         }
 
         return $binary;
@@ -180,5 +208,19 @@ final class SetCollection extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    /**
+     * @param array{index: int|string, binary: string} $left
+     * @param array{index: int|string, binary: string} $right
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private function compareElements(array $left, array $right): int {
+        return ValueComparator::compare(
+            $this->typeInfo->valueType,
+            $left['binary'],
+            $right['binary'],
+        );
     }
 }

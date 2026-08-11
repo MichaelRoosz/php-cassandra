@@ -170,7 +170,14 @@ final class MapCollection extends ValueReadableWithoutLength {
     #[\Override]
     public function getBinary(): string {
 
-        $binary = pack('N', count($this->value));
+        /**
+         * @var list<array{
+         *   key: int|string,
+         *   keyBinary: string,
+         *   valueBinary: string
+         * }> $entries
+         */
+        $entries = [];
 
         /** @var ValueBase|mixed $val */
         foreach ($this->value as $key => $val) {
@@ -191,8 +198,36 @@ final class MapCollection extends ValueReadableWithoutLength {
                 ? $val->getBinary()
                 : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
 
-            $binary .= pack('N', strlen($keyPacked)) . $keyPacked;
-            $binary .= pack('N', strlen($valuePacked)) . $valuePacked;
+            $entries[] = [
+                'key' => $key,
+                'keyBinary' => $keyPacked,
+                'valueBinary' => $valuePacked,
+            ];
+        }
+
+        usort($entries, $this->compareEntries(...));
+
+        $binary = pack('N', count($entries));
+        $previous = null;
+        foreach ($entries as $entry) {
+            if (
+                $previous !== null
+                && ValueComparator::compare($this->typeInfo->keyType, $previous['keyBinary'], $entry['keyBinary']) === 0
+            ) {
+                throw new ValueException(
+                    'A map cannot contain the same CQL key more than once',
+                    ExceptionCode::VALUE_MAP_DUPLICATE_KEY->value,
+                    [
+                        'first_key' => $previous['key'],
+                        'duplicate_key' => $entry['key'],
+                        'key_type' => $this->typeInfo->keyType->type->name,
+                    ]
+                );
+            }
+
+            $binary .= pack('N', strlen($entry['keyBinary'])) . $entry['keyBinary'];
+            $binary .= pack('N', strlen($entry['valueBinary'])) . $entry['valueBinary'];
+            $previous = $entry;
         }
 
         return $binary;
@@ -214,6 +249,20 @@ final class MapCollection extends ValueReadableWithoutLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return true;
+    }
+
+    /**
+     * @param array{key: int|string, keyBinary: string, valueBinary: string} $left
+     * @param array{key: int|string, keyBinary: string, valueBinary: string} $right
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private function compareEntries(array $left, array $right): int {
+        return ValueComparator::compare(
+            $this->typeInfo->keyType,
+            $left['keyBinary'],
+            $right['keyBinary'],
+        );
     }
 
     /**

@@ -31,6 +31,7 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
                 $v,
                 ['valueType' => Type::INT]
             );
+            sort($v);
             $this->assertSame($v, $obj->getValue());
         }
 

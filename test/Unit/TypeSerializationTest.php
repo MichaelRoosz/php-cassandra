@@ -697,6 +697,18 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame($binary, $decoded->getBinary());
     }
 
+    public function testMapCollectionRejectsComparatorEqualKeys(): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_MAP_DUPLICATE_KEY->value);
+
+        Value\MapCollection::fromValue(
+            ['1.0' => 'first', '1.00' => 'second'],
+            Type::DECIMAL,
+            Type::VARCHAR,
+            true,
+        )->getBinary();
+    }
+
     public function testMapCollectionRoundTripsSpecialFloatingPointKeys(): void {
         foreach ([Type::FLOAT, Type::DOUBLE] as $keyType) {
             $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
@@ -718,6 +730,35 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testMapCollectionSerializesKeysInCqlOrder(): void {
+        $ascending = Value\MapCollection::fromValue(
+            [-2 => 'a', -1 => 'b', 0 => 'c', 1 => 'd'],
+            Type::INT,
+            Type::VARCHAR,
+            true,
+        )->getBinary();
+        $descending = Value\MapCollection::fromValue(
+            [1 => 'd', 0 => 'c', -1 => 'b', -2 => 'a'],
+            Type::INT,
+            Type::VARCHAR,
+            true,
+        )->getBinary();
+
+        $this->assertSame($ascending, $descending);
+        $this->assertSame(
+            [-2, -1, 0, 1],
+            array_keys(Value\MapCollection::fromBinary(
+                $descending,
+                ValueFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::MAP,
+                    'keyType' => Type::INT,
+                    'valueType' => Type::VARCHAR,
+                    'isFrozen' => true,
+                ])
+            )->getValue())
+        );
+    }
+
     public function testMapCollectionWithBooleanKeys(): void {
         // A PHP array key is an int or a string and nothing else, so a boolean
         // key is folded to 1/0 by PHP itself on the way in, and by
@@ -735,17 +776,17 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
         $binary = (Value\MapCollection::fromValue([true => 'yes', false => 'no'], $keyDefinition, $valueDefinition))->getBinary();
 
-        // count, then (len, key, len, value) per entry, the boolean keys being
-        // the one-byte 0x01 and 0x00 the type serializes to.
+        // count, then (len, key, len, value) per entry, ordered false before
+        // true regardless of the PHP array's insertion order.
         $this->assertSame(
-            '00000002' . '00000001' . '01' . '00000003' . bin2hex('yes')
-                      . '00000001' . '00' . '00000002' . bin2hex('no'),
+            '00000002' . '00000001' . '00' . '00000002' . bin2hex('no')
+                      . '00000001' . '01' . '00000003' . bin2hex('yes'),
             bin2hex($binary)
         );
 
         $decoded = Value\MapCollection::fromBinary($binary, $typeInfo);
 
-        $this->assertSame([1 => 'yes', 0 => 'no'], $decoded->getValue());
+        $this->assertSame([0 => 'no', 1 => 'yes'], $decoded->getValue());
 
         // And a decoded map goes back out unchanged, which is what a read-modify-write
         // of a map<boolean, …> column comes down to.
@@ -893,6 +934,52 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
                     'valueType' => $definition,
                 ])
             )->getValue()
+        );
+    }
+
+    public function testSetCollectionRejectsDuplicateCqlValues(): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_SET_DUPLICATE_ELEMENT->value);
+
+        Value\SetCollection::fromValue(['1.0', '1.00'], Type::DECIMAL, true)->getBinary();
+    }
+
+    public function testSetCollectionSerializesUniqueValuesInCqlOrder(): void {
+        $ascending = Value\SetCollection::fromValue([-2, -1, 0, 1], Type::INT, true)->getBinary();
+        $descending = Value\SetCollection::fromValue([1, 0, -1, -2], Type::INT, true)->getBinary();
+
+        $this->assertSame($ascending, $descending);
+        $this->assertSame(
+            [-2, -1, 0, 1],
+            Value\SetCollection::fromBinary(
+                $descending,
+                ValueFactory::getTypeInfoFromTypeDefinition([
+                    'type' => Type::SET,
+                    'valueType' => Type::INT,
+                    'isFrozen' => true,
+                ])
+            )->getValue()
+        );
+    }
+
+    public function testSetCollectionUsesTimeuuidSignedTailOrdering(): void {
+        $signedNegativeTail = '00000000-0000-1000-8000-000000000000';
+        $signedPositiveTail = '00000000-0000-1000-7f00-000000000000';
+        $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
+            'type' => Type::SET,
+            'valueType' => Type::TIMEUUID,
+            'isFrozen' => true,
+        ]);
+
+        $binary = Value\SetCollection::fromValue(
+            [$signedPositiveTail, $signedNegativeTail],
+            Type::TIMEUUID,
+            true,
+        )->getBinary();
+
+        $this->assertSame(
+            [$signedNegativeTail, $signedPositiveTail],
+            Value\SetCollection::fromBinary($binary, $typeInfo)->getValue(),
         );
     }
 
