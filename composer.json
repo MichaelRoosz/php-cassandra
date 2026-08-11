@@ -38,17 +38,19 @@
         "php": ">=8.1"
     },
     "suggest": {
-        "ext-sockets": "Socket transport, required for connections configured with SocketNodeConfig; StreamNodeConfig connections need no extension",
-        "ext-openssl": "TLS/SSL encrypted connections, required for tls:// connections configured with StreamNodeConfig",
-        "ext-lz4": "Native LZ4 (de)compression, used automatically when present for much faster compressed connections; a pure-PHP implementation is the transparent fallback",
+        "ext-bcmath": "Faster large-integer math for the Varint and Decimal types, used when gmp is not present; a pure-PHP calculator is the fallback",
         "ext-gmp": "Faster large-integer math for the Varint and Decimal types, preferred over bcmath when both are present; a pure-PHP calculator is the fallback",
-        "ext-bcmath": "Faster large-integer math for the Varint and Decimal types, used when gmp is not present; a pure-PHP calculator is the fallback"
+        "ext-lz4": "Native LZ4 (de)compression, used automatically when present for much faster compressed connections; a pure-PHP implementation is the transparent fallback",
+        "ext-openssl": "TLS/SSL encrypted connections, required for tls:// connections configured with StreamNodeConfig",
+        "ext-sockets": "Socket transport, required for connections configured with SocketNodeConfig; StreamNodeConfig connections need no extension"
     },
     "require-dev": {
         "ext-bcmath": "*",
         "ext-gmp": "*",
-        "friendsofphp/php-cs-fixer": "^3.95.15",
-        "phpstan/phpstan": "^2.2.5",
+        "ext-openssl": "*",
+        "ext-sockets": "*",
+        "friendsofphp/php-cs-fixer": "^3.95.18",
+        "phpstan/phpstan": "^2.2.8",
         "phpunit/phpunit": "^10.5.64",
         "vimeo/psalm": "^7.0.0-beta19",
         "phpbench/phpbench": "^1.4.3",

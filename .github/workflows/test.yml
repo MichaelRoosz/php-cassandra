@@ -19,7 +19,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php }}
-        extensions: mbstring
+        extensions: bcmath, gmp, openssl, sockets
         tools: composer:v2
         coverage: pcov
 
@@ -68,7 +68,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php }}
-        extensions: mbstring, bcmath, gmp
+        extensions: bcmath, gmp, openssl, sockets
         tools: composer:v2
         coverage: pcov
 
@@ -108,7 +108,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php }}
-        extensions: mbstring, bcmath, gmp
+        extensions: bcmath, gmp, openssl, sockets
         tools: composer:v2
         coverage: pcov
 
@@ -156,7 +156,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php }}
-        extensions: mbstring, bcmath, gmp
+        extensions: bcmath, gmp, openssl, sockets
         tools: composer:v2
         coverage: pcov
 
@@ -196,7 +196,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php }}
-        extensions: mbstring, bcmath, gmp
+        extensions: bcmath, gmp, openssl, sockets
         tools: composer:v2
         coverage: pcov
 
@@ -229,7 +229,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: "8.1"
-        extensions: mbstring, bcmath, gmp, sqlite3
+        extensions: bcmath, gmp, openssl, sockets, sqlite3
         tools: composer:v2
 
     - name: Cache Composer packages
