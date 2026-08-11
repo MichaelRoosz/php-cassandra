@@ -122,7 +122,8 @@ final class ConnectionOptions {
             if (in_array(ProtocolVersion::V4, $allowedProtocolVersions, true)) {
                 $initialProtocolVersion = ProtocolVersion::V4;
             } else {
-                $initialProtocolVersion = $allowedProtocolVersions[0];
+                /** @var ProtocolVersion $initialProtocolVersion */
+                $initialProtocolVersion = reset($allowedProtocolVersions);
                 foreach ($allowedProtocolVersions as $version) {
                     if ($version->value < $initialProtocolVersion->value) {
                         $initialProtocolVersion = $version;
