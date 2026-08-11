@@ -1957,6 +1957,7 @@ $batchOptions = new BatchOptions(
 use Cassandra\Value\ValueEncodeConfig;
 use Cassandra\Value\EncodeOption\DateEncodeOption;
 use Cassandra\Value\EncodeOption\DurationEncodeOption;
+use Cassandra\Value\EncodeOption\MapEncodeOption;
 use Cassandra\Value\EncodeOption\TimeEncodeOption;
 use Cassandra\Value\EncodeOption\TimestampEncodeOption;
 use Cassandra\Value\EncodeOption\UuidEncodeOption;
@@ -1972,7 +1973,100 @@ $conn->configureValueEncoding(new ValueEncodeConfig(
     // skips hex formatting and is worth it for large UUID-keyed result sets.
     uuidEncodeOption: UuidEncodeOption::AS_STRING,
     varintEncodeOption: VarintEncodeOption::AS_STRING,
+    // AUTO keeps ordinary maps as PHP arrays and returns MapCollection when
+    // the configured key representation cannot be a PHP array key.
+    mapEncodeOption: MapEncodeOption::AUTO,
 ));
+```
+
+Map decoding defaults to `MapEncodeOption::AUTO`. Maps with losslessly
+representable scalar keys are returned as native PHP arrays, preserving the
+existing result shape. A map whose configured keys are objects or composites
+— for example a timestamp key decoded as `DateTimeImmutable`, or a tuple key —
+is returned as `Cassandra\Value\MapCollection`; inspect its ordered
+`MapEntry` values with `getEntries()`. The decision is based only on the
+declared key type and the active `ValueEncodeConfig`, never on the entries in a
+particular value. Given the same key type and configuration, the result type is
+stable across rows: empty and non-empty maps have the same PHP representation.
+For example, `map<text, …>` is an array in `AUTO` mode, while
+`map<timestamp, …>` is a `MapCollection` when timestamps are configured as
+`DateTimeImmutable` (and an array when configured as strings or integers). Use
+`AS_MAP_COLLECTION` to request `MapCollection` for every map, or `AS_ARRAY` to
+require an array and receive a `ValueException` when conversion would be lossy.
+
+Handling both results in `AUTO` mode:
+
+```php
+use Cassandra\Value\MapCollection;
+
+// Assume `attributes` is a map column in a row fetched from RowsResult:
+// - map<text, text> is a native array in AUTO mode.
+// - map<timestamp, text> is MapCollection when TimestampEncodeOption is
+//   AS_DATETIME_IMMUTABLE; AS_STRING or AS_INT makes it a native array.
+// The branch is useful in generic code that handles columns of different map
+// key types. Code for one known column can rely on its stable result type.
+$attributes = $row['attributes'];
+
+if ($attributes instanceof MapCollection) {
+    foreach ($attributes->getEntries() as $entry) {
+        // $entry->key retains its configured type, including objects and arrays.
+        var_dump($entry->key, $entry->value);
+    }
+} else {
+    // Scalar-keyed maps retain the familiar native PHP array representation.
+    foreach ($attributes as $key => $value) {
+        var_dump($key, $value);
+    }
+}
+```
+
+Force a stable representation for every map returned by the connection:
+
+```php
+use Cassandra\Value\EncodeOption\MapEncodeOption;
+use Cassandra\Value\ValueEncodeConfig;
+
+// Every map is returned as MapCollection.
+$conn->configureValueEncoding(new ValueEncodeConfig(
+    mapEncodeOption: MapEncodeOption::AS_MAP_COLLECTION,
+));
+
+// Alternatively, require native arrays. A map with an object or composite key
+// raises VALUE_MAP_CANNOT_CONVERT_TO_ARRAY instead of losing key information.
+$conn->configureValueEncoding(new ValueEncodeConfig(
+    mapEncodeOption: MapEncodeOption::AS_ARRAY,
+));
+```
+
+Create a map with timestamp object keys through the entry API:
+
+```php
+use Cassandra\Type;
+use Cassandra\Value\MapCollection;
+use Cassandra\Value\MapEntry;
+
+$deployments = MapCollection::fromEntries(
+    [
+        new MapEntry(new DateTimeImmutable('2026-08-12T09:00:00Z'), 'production'),
+        new MapEntry(new DateTimeImmutable('2026-08-11T16:30:00Z'), 'staging'),
+    ],
+    Type::TIMESTAMP,
+    Type::VARCHAR,
+);
+```
+
+Tuple keys use the same API:
+
+```php
+use Cassandra\Type;
+use Cassandra\Value\MapCollection;
+use Cassandra\Value\MapEntry;
+
+$map = MapCollection::fromEntries(
+    [new MapEntry([7, 'seven'], 'value')],
+    ['type' => Type::TUPLE, 'valueTypes' => [Type::INT, Type::VARCHAR]],
+    Type::VARCHAR,
+);
 ```
 
 #### Event Listeners

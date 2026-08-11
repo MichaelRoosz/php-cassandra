@@ -6,6 +6,7 @@ namespace Cassandra\Value;
 
 use Cassandra\Value\EncodeOption\DateEncodeOption;
 use Cassandra\Value\EncodeOption\DurationEncodeOption;
+use Cassandra\Value\EncodeOption\MapEncodeOption;
 use Cassandra\Value\EncodeOption\TimeEncodeOption;
 use Cassandra\Value\EncodeOption\TimestampEncodeOption;
 use Cassandra\Value\EncodeOption\UuidEncodeOption;
@@ -21,6 +22,7 @@ final class ValueEncodeConfig {
         public readonly TimestampEncodeOption $timestampEncodeOption = TimestampEncodeOption::AS_STRING,
         public readonly UuidEncodeOption $uuidEncodeOption = UuidEncodeOption::AS_STRING,
         public readonly VarintEncodeOption $varintEncodeOption = VarintEncodeOption::AS_STRING,
+        public readonly MapEncodeOption $mapEncodeOption = MapEncodeOption::AUTO,
     ) {
     }
 
