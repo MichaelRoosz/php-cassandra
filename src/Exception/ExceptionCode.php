@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1409
+ * Next free code: 1410
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -267,6 +267,7 @@ enum ExceptionCode: int {
     case TYPEINFO_VECTOR_MISSING_VALUETYPE = 1268;
 
     // TypeNameParserException (TYPENAMEPARSER_)
+    case TYPENAMEPARSER_EMPTY_PARAM = 1409;
     case TYPENAMEPARSER_FROZEN_INVALID_PARAM_COUNT = 1272;
     case TYPENAMEPARSER_INVALID_BRACKETS_CLOSING_WITHOUT_OPENING = 1273;
     case TYPENAMEPARSER_INVALID_BRACKETS_MISSING_CLOSING = 1274;
