@@ -174,6 +174,17 @@ final class MapCollection extends ValueReadableWithoutLength {
 
         /** @var ValueBase|mixed $val */
         foreach ($this->value as $key => $val) {
+            if ($val === null) {
+                throw new ValueException(
+                    'A map value cannot be null; CQL has no null inside a collection, so remove the entry instead',
+                    ExceptionCode::VALUE_MAP_NULL_VALUE->value,
+                    [
+                        'key' => $key,
+                        'value_type' => $this->typeInfo->valueType->type->name,
+                    ]
+                );
+            }
+
             $keyPacked = ValueFactory::getBinaryByTypeInfo($this->typeInfo->keyType, self::keyAsNativeValue($this->typeInfo->keyType, $key));
 
             $valuePacked = $val instanceof ValueBase

@@ -198,6 +198,18 @@ final class Vector extends ValueReadableWithoutLength {
         $vIntCodec = new VIntCodec();
 
         for ($i = 0; $i < $this->typeInfo->dimensions; ++$i) {
+            if ($value[$i] === null) {
+                throw new ValueException(
+                    'A vector element cannot be null; every one of the declared dimensions has to carry a value',
+                    ExceptionCode::VALUE_VECTOR_NULL_ELEMENT->value,
+                    [
+                        'index' => $i,
+                        'dimensions' => $this->typeInfo->dimensions,
+                        'value_type' => $this->typeInfo->valueType->type->name,
+                    ]
+                );
+            }
+
             $valueBinary = $value[$i] instanceof ValueBase
                 ? $value[$i]->getBinary()
                 : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $value[$i]);

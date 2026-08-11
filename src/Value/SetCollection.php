@@ -143,7 +143,18 @@ final class SetCollection extends ValueReadableWithoutLength {
         $binary = pack('N', count($this->value));
 
         /** @var mixed $val */
-        foreach ($this->value as $val) {
+        foreach ($this->value as $index => $val) {
+            if ($val === null) {
+                throw new ValueException(
+                    'A set element cannot be null; CQL has no null inside a collection, so leave the element out instead',
+                    ExceptionCode::VALUE_SET_NULL_ELEMENT->value,
+                    [
+                        'index' => $index,
+                        'value_type' => $this->typeInfo->valueType->type->name,
+                    ]
+                );
+            }
+
             $itemPacked = $val instanceof ValueBase
                 ? $val->getBinary()
                 : ValueFactory::getBinaryByTypeInfo($this->typeInfo->valueType, $val);
