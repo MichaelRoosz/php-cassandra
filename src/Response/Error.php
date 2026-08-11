@@ -52,7 +52,7 @@ class Error extends Response {
         ProtocolError::class => ServerException\ProtocolErrorException::class,
         ReadFailureError::class => ServerException\ReadFailureException::class,
         ReadTimeoutError::class => ServerException\ReadTimeoutException::class,
-        ServerError::class => ServerException::class,
+        ServerError::class => ServerException\ServerErrorException::class,
         SyntaxError::class => ServerException\SyntaxErrorException::class,
         TruncateError::class => ServerException\TruncateErrorException::class,
         UnauthorizedError::class => ServerException\UnauthorizedException::class,
