@@ -456,7 +456,7 @@ $r1 = $s1->getResult()->asRowsResult();
 
 Query options (`QueryOptions`):
 - `autoPrepare` (bool, default true): transparently prepare+execute when needed
-- `pageSize` (int, min 100 enforced by client)
+- `pageSize` (positive int up to 2,147,483,647; `null` uses the server default)
 - `pagingState` (string)
 - `serialConsistency` (`SerialConsistency::SERIAL` or `SerialConsistency::LOCAL_SERIAL`)
 - `defaultTimestamp` (microseconds since epoch)
@@ -1904,7 +1904,7 @@ use Cassandra\SerialConsistency;
 
 $queryOptions = new QueryOptions(
     autoPrepare: true,                    // Auto-prepare for type safety (default: true)
-    pageSize: 1000,                       // Page size (min 100, default: 5000)
+    pageSize: 1000,                       // Positive page size (default: null/server default)
     pagingState: $previousPagingState,    // For pagination (default: null)
     serialConsistency: SerialConsistency::SERIAL, // Serial consistency (default: null)
     defaultTimestamp: 1640995200000000,   // Default timestamp (microseconds, default: null)
@@ -2000,7 +2000,7 @@ $conn->registerWarningsListener(new class implements WarningsListener {
 Notes
 -----
 
-- `pageSize` is clamped to a minimum of 100 by the client for efficiency. Requests for smaller pages—including zero or negative values—are sent as `100`, so use `null` for the server default or a value of at least 100 when an exact page size matters.
+- `pageSize` is sent unchanged when it is between 1 and 2,147,483,647. Zero, negative values and larger values are rejected; use `null` for the server default.
 - If you supply non-`Value\*` PHP values with `QueryOptions(autoPrepare: true)`, the driver auto-prepares + executes for correct typing.
 - On `UNPREPARED` server errors, the driver transparently re-prepares and retries. This covers `execute()`/`executeAsync()` and batches: a node answers `UNPREPARED` for one statement at a time, so a batch is re-prepared one statement per round and re-sent carrying the new statement id, with a budget of `MAX_REPREPARATIONS` plus one round per distinct prepared statement it holds.
 - Always use fully-qualified table names in `PREPARE` statements.
