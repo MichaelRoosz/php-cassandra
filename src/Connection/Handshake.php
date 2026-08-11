@@ -89,7 +89,7 @@ final class Handshake {
         ) {
             $compressionAlgo = strtolower($startupOptions['COMPRESSION']);
 
-            if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'])) {
+            if (!in_array($compressionAlgo, $serverOptions['COMPRESSION'], true)) {
                 $nodeConfig = $node->getConfig();
 
                 throw new ConnectionException('Compression "' . $compressionAlgo . '" not supported by server.', ExceptionCode::CONNECTION_COMPRESSION_NOT_SUPPORTED->value, [
