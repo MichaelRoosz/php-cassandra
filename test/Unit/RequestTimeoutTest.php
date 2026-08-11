@@ -523,12 +523,23 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
     public function testAStatementNotBeingWaitedOnStillRunsOutOfTimeDuringAWait(): void {
         // Every request in flight keeps its own budget during any wait, not
         // just the ones the wait was handed. Bounding the read by the waited
-        // set alone would let the short statement below sit past its deadline —
-        // holding its stream id — for as long as the long one takes.
+        // set alone would let the two statements below sit past their deadlines
+        // — holding their stream ids — for as long as the long one takes.
+        //
+        // Two of them, with budgets well apart, because that is what makes the
+        // check below independent of the wall clock: what distinguishes the two
+        // implementations is not when either was parked but whether they were
+        // parked at *different* times. Held to its own budget each is given up
+        // on when that budget runs out, an interval apart; bounded by the waited
+        // set instead, neither is noticed until the wait itself ends and both
+        // are then parked in the same pass, microseconds apart. Comparing the
+        // two against each other rather than against the clock means a machine
+        // that stalls the process — which shifts both equally — cannot fail this.
         $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: null);
 
         $short = $connection->queryAsync('SELECT 1 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 0.5));
-        $long = $connection->queryAsync('SELECT 2 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 30.0));
+        $middle = $connection->queryAsync('SELECT 2 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 2.0));
+        $long = $connection->queryAsync('SELECT 3 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 30.0));
 
         $start = microtime(true);
 
@@ -541,17 +552,24 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $short->isTimedOut(),
             'a statement outside the waited set must still be given up on when its budget runs out'
         );
+        $this->assertTrue($middle->isTimedOut(), 'and so must the second one');
 
         $orphaned = $this->orphanedStreamsOf($connection);
-        $this->assertSame([$short->getStreamId()], array_keys($orphaned));
+        $parkedIds = array_keys($orphaned);
+        sort($parkedIds);
+        $expectedIds = [$short->getStreamId(), $middle->getStreamId()];
+        sort($expectedIds);
+        $this->assertSame($expectedIds, $parkedIds);
 
-        // The point of the test: it has to be noticed when its own budget ran
-        // out, not merely by the time the wait happens to end. Bounding the
-        // read by the waited set alone would park it at the 3s wait bound.
-        $this->assertLessThan(
-            ($waitEndedAt - $start) - 0.1,
-            $orphaned[$short->getStreamId()] - $start,
-            'the short budget must park the statement before the caller-supplied wait bound ends'
+        // The point of the test: each was noticed when its own budget ran out,
+        // not merely by the time the wait happened to end. The budgets are 1.5s
+        // apart, so anything approaching that gap can only have come from the
+        // two deadlines being kept separately; bounding the read by the waited
+        // set alone collapses it to the width of a single expire() pass.
+        $this->assertGreaterThan(
+            0.75,
+            $orphaned[$middle->getStreamId()] - $orphaned[$short->getStreamId()],
+            'the two statements must be parked on their own budgets, an interval apart, not together at the wait bound'
         );
 
         $this->assertFalse($long->isTimedOut(), 'the waited statement still has 30s to go');
