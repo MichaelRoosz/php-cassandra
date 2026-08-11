@@ -201,7 +201,7 @@ final class TypeNameParser {
 
                 $name = trim(substr($paramString, $startCurrentParam, $i - $startCurrentParam));
                 $startCurrentParam = $i + 1;
-                
+
                 continue;
             }
 
