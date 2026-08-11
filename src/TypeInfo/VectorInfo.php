@@ -10,6 +10,11 @@ use Cassandra\Type;
 use Cassandra\ValueFactory;
 
 final class VectorInfo extends TypeInfo {
+    /**
+     * Most dimensions a vector may declare.
+     * Cassandra caps it at 8K (2^13) dimensions.
+     * @see https://cassandra.apache.org/doc/latest/cassandra/reference/vector-data-type.html
+     */
     public const MAX_DIMENSIONS = 8192;
 
     /**
