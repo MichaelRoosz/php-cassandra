@@ -261,12 +261,16 @@ final class FrameCodec extends NodeImplementation {
      * Build the 8-byte compressed (protocol v5) frame header.
      *
      * Mirrors {@see decodeCompressedFrameHeader()}. The full value spans 35 bits,
-     * so it cannot be packed as a single 32-bit word on 32-bit PHP. Instead the
-     * low 32 bits are emitted with pack('V') and the remaining 3 bits go in a
-     * trailing byte. The low word only ever holds bits 0-31 (the uncompressed
-     * length is masked to its low 15 bits before shifting, so nothing shifts past
-     * bit 31), which keeps the intermediate within a signed 32-bit int; pack('V')
-     * then writes its low 32 bits regardless of sign.
+     * so it cannot be packed as a single 32-bit word. Instead the low 32 bits are
+     * emitted with pack('V') and the remaining 3 bits go in a trailing byte.
+     *
+     * The uncompressed length is masked to its low 15 bits before being shifted
+     * into bits 17-31, so nothing is shifted out of the low word — but bit 31 is
+     * reached, which on 32-bit PHP makes the intermediate a negative int rather
+     * than one above PHP_INT_MAX. That is what the mask is for: without it the
+     * shift would carry bits past the top of the word and lose them. pack('V')
+     * writes the low 32 bits of what it is given regardless of sign, so both
+     * builds emit the same four bytes.
      */
     private function encodeCompressedFrameHeader(int $payloadLength, int $uncompressedLength, bool $isSelfContained): string {
         $lowWord = $payloadLength | (($uncompressedLength & 0x7FFF) << 17);
