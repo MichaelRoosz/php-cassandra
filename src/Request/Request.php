@@ -370,11 +370,15 @@ abstract class Request implements Frame, Stringable {
     /**
      * @throws \Cassandra\Exception\RequestException
      */
-    protected static function assertShortCount(int $count, string $field): void {
+    protected static function assertShortCount(
+        int $count,
+        string $field,
+        ExceptionCode $exceptionCode = ExceptionCode::REQUEST_TOO_MANY_MAP_ENTRIES,
+    ): void {
         if ($count > self::MAX_SHORT_COUNT) {
             throw new RequestException(
                 message: ucfirst($field) . ' has too many entries for the protocol short-count encoding',
-                code: ExceptionCode::REQUEST_TOO_MANY_MAP_ENTRIES->value,
+                code: $exceptionCode->value,
                 context: ['field' => $field, 'count' => $count, 'maximum_count' => self::MAX_SHORT_COUNT]
             );
         }

@@ -59,6 +59,23 @@ final class ResponseFrameLimitTest extends AbstractUnitTestCase {
             $this->assertSame(ExceptionCode::CONNECTION_RESPONSE_BODY_TOO_LARGE->value, $e->getCode());
         }
     }
+
+    public function testCompressedBodyCannotDeclareAnOversizedDecompressedLength(): void {
+        $body = pack('N', 256 * 1024 * 1024 + 1);
+        $header = "\x84" . chr(Flag::COMPRESSION) . "\x00\x07"
+            . chr(Opcode::RESPONSE_RESULT->value) . pack('N', strlen($body));
+        $node = new FakeFrameNode($header . $body);
+
+        try {
+            (new ResponseReader())->readResponse($node, ProtocolVersion::V4, Node::DO_NOT_WAIT);
+            $this->fail('expected an oversized decompressed frame body to be refused');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_RESPONSE_BODY_TOO_LARGE->value, $e->getCode());
+            $this->assertSame(256 * 1024 * 1024 + 1, $e->getContext()['body_length'] ?? null);
+        }
+
+        $this->assertSame(13, $node->bytesRead, 'only the header and four-byte length prefix were buffered');
+    }
     public function testCompressedBodyShorterThanLengthPrefixIsRefusedWithoutNativeWarning(): void {
         $header = "\x84" . chr(Flag::COMPRESSION) . "\x00\x07"
             . chr(Opcode::RESPONSE_RESULT->value) . pack('N', 1);
@@ -75,6 +92,41 @@ final class ResponseFrameLimitTest extends AbstractUnitTestCase {
             $this->assertSame(ExceptionCode::CONNECTION_CANNOT_READ_DECOMPRESSED_FRAME_LENGTH->value, $e->getCode());
         } finally {
             restore_error_handler();
+        }
+    }
+    public function testEventFrameMustUseTheReservedNegativeStream(): void {
+        $node = new FakeFrameNode(pack(
+            'CCnCN',
+            0x84,
+            0,
+            7,
+            Opcode::RESPONSE_EVENT->value,
+            0,
+        ));
+
+        try {
+            (new ResponseReader())->readResponse($node, ProtocolVersion::V4, Node::DO_NOT_WAIT);
+            $this->fail('expected an event on a client request stream to be refused');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_EVENT_STREAM_ID_INVALID->value, $e->getCode());
+        }
+    }
+
+    public function testOrdinaryResponseCannotUseANegativeStream(): void {
+        $node = new FakeFrameNode(pack(
+            'CCnCN',
+            0x84,
+            0,
+            0xFFFF,
+            Opcode::RESPONSE_RESULT->value,
+            0,
+        ));
+
+        try {
+            (new ResponseReader())->readResponse($node, ProtocolVersion::V4, Node::DO_NOT_WAIT);
+            $this->fail('expected a request response on a negative stream to be refused');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_RESPONSE_STREAM_ID_INVALID->value, $e->getCode());
         }
     }
 

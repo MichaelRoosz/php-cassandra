@@ -13,6 +13,12 @@ use Cassandra\Value\SetCollection;
 use Cassandra\Value\Tuple;
 use Cassandra\Value\UDT;
 use Cassandra\Value\Vector;
+use Cassandra\Response\StreamReader;
+use Cassandra\TypeInfo\ListCollectionInfo;
+use Cassandra\TypeInfo\MapCollectionInfo;
+use Cassandra\TypeInfo\SetCollectionInfo;
+use Cassandra\TypeInfo\SimpleTypeInfo;
+use Cassandra\Value\ValueEncodeConfig;
 
 /**
  * CQL has no null inside a list, set, map or vector, so encoding one is refused
@@ -26,6 +32,15 @@ use Cassandra\Value\Vector;
  * to keep the two apart.
  */
 final class CollectionNullElementTest extends AbstractUnitTestCase {
+    public function testAListObjectCannotBeDecodedWithANullElement(): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_LIST_NULL_ELEMENT->value);
+
+        ListCollection::fromBinary(
+            pack('N', 1) . pack('N', -1),
+            new ListCollectionInfo(new SimpleTypeInfo(Type::INT), false),
+        );
+    }
     public function testAListWithANullElementIsRefusedAsSuch(): void {
 
         $list = ListCollection::fromValue(['a', null, 'c'], Type::VARCHAR);
@@ -40,6 +55,20 @@ final class CollectionNullElementTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testAMapObjectCannotBeDecodedWithANullValue(): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_MAP_NULL_VALUE->value);
+
+        MapCollection::fromBinary(
+            pack('N', 1) . pack('N', 4) . pack('N', 1) . pack('N', -1),
+            new MapCollectionInfo(
+                new SimpleTypeInfo(Type::INT),
+                new SimpleTypeInfo(Type::INT),
+                false,
+            ),
+        );
+    }
+
     public function testAMapWithANullValueIsRefusedAsSuch(): void {
 
         $map = MapCollection::fromValue(['a' => 1, 'b' => null], Type::VARCHAR, Type::INT);
@@ -51,6 +80,16 @@ final class CollectionNullElementTest extends AbstractUnitTestCase {
             $this->assertSame(ExceptionCode::VALUE_MAP_NULL_VALUE->value, $e->getCode());
             $this->assertSame('b', $e->getContext()['key'] ?? null);
         }
+    }
+
+    public function testASetObjectCannotBeDecodedWithANullElement(): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_SET_NULL_ELEMENT->value);
+
+        SetCollection::fromBinary(
+            pack('N', 1) . pack('N', -1),
+            new SetCollectionInfo(new SimpleTypeInfo(Type::INT), false),
+        );
     }
 
     public function testASetWithANullElementIsRefusedAsSuch(): void {
@@ -109,6 +148,32 @@ final class CollectionNullElementTest extends AbstractUnitTestCase {
         $this->assertSame(
             '00000001' . '00000001' . '61' . '00000004' . '00000001',
             bin2hex(MapCollection::fromValue(['a' => 1], Type::VARCHAR, Type::INT)->getBinary())
+        );
+    }
+
+    public function testTheFastListDecoderRejectsANullElement(): void {
+        $body = pack('N', 1) . pack('N', -1);
+        $reader = new StreamReader(pack('N', strlen($body)) . $body);
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_LIST_NULL_ELEMENT->value);
+
+        $reader->readValue(
+            new ListCollectionInfo(new SimpleTypeInfo(Type::INT), false),
+            ValueEncodeConfig::default(),
+        );
+    }
+
+    public function testTheFastSetDecoderRejectsANullElement(): void {
+        $body = pack('N', 1) . pack('N', -1);
+        $reader = new StreamReader(pack('N', strlen($body)) . $body);
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_SET_NULL_ELEMENT->value);
+
+        $reader->readValue(
+            new SetCollectionInfo(new SimpleTypeInfo(Type::INT), false),
+            ValueEncodeConfig::default(),
         );
     }
 }

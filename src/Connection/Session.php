@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 use Cassandra\Connection;
+use Cassandra\Exception\CompressionException;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Exception\RequestTimeoutException;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Exception\StatementException;
+use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request;
 use Cassandra\Response;
@@ -1594,6 +1597,29 @@ final class Session {
     private function dispatchResponse(Response\Response $response, Node $node): ?Response\Response {
 
         $streamId = $response->getStream();
+        $statement = $this->statements->get($streamId);
+        $isSyncWait = isset($this->syncWaitStreams[$streamId]);
+
+        if (
+            !$response instanceof Response\Event
+            && !$this->streamIds->isOrphaned($streamId)
+            && $statement === null
+            && !$isSyncWait
+        ) {
+            $nodeConfig = $node->getConfig();
+
+            throw new ConnectionException(
+                'The server answered on a stream id that has no outstanding request.',
+                ExceptionCode::CONNECTION_RESPONSE_STREAM_NOT_OUTSTANDING->value,
+                [
+                    'stream_id' => $streamId,
+                    'opcode' => $response->getOpcode()->name,
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
+                    'protocol_version' => $response->getProtocolVersion()->inOptionFormat(),
+                ]
+            );
+        }
 
         $this->heartbeat->recordResponse();
         $this->nodeConnector->recordSuccess($node->getConfig());
@@ -1611,9 +1637,7 @@ final class Session {
             $response->configureValueEncoding($this->valueEncodeConfig);
         }
 
-        $statement = $this->statements->get($streamId);
-
-        if ($statement === null && isset($this->syncWaitStreams[$streamId])) {
+        if ($statement === null && $isSyncWait) {
             // Nothing here can take delivery of it — the sync path registers no
             // statement — and the loop that is waiting for it may not be the one
             // that read it. Put aside for that loop to pick up on its next pass;
@@ -1675,7 +1699,7 @@ final class Session {
      * A reader failure normally leaves the connection alone: the frame was
      * consumed whole and only making sense of it went wrong, so the stream is
      * still in step and one bad answer costs one request — which is what
-     * {@see self::parkUnresolvedStream()} then tidies up after. A header the
+     * {@see self::finishFailedConsumedResponse()} tidies up. A header the
      * reader refused is the other kind. Its nine bytes are gone and the body
      * they announced is not, so every later response would be read at the wrong
      * offset: the connection is not slow or unlucky, it is unusable, and going
@@ -1750,6 +1774,43 @@ final class Session {
             ExceptionCode::CONNECTION_TOO_MANY_ORPHANED_STREAMS->value,
             $context
         );
+    }
+
+    /**
+     * Finish the owner of a frame that was completely consumed but could not
+     * be decoded into a response.
+     *
+     * No later answer can arrive on this stream: the malformed frame was that
+     * answer. An async statement is therefore abandoned and its id released,
+     * while a synchronous wait has its otherwise unregistered id released
+     * directly. A malformed late response likewise proves an orphaned id is
+     * free again.
+     */
+    private function finishFailedConsumedResponse(): void {
+        $header = $this->responseReader->takeFailedResponseHeader();
+        if ($header === null || $header->opcode === Opcode::RESPONSE_EVENT) {
+            return;
+        }
+
+        $streamId = $header->stream;
+
+        if ($this->streamIds->isOrphaned($streamId)) {
+            $this->streamIds->releaseParked($streamId);
+
+            return;
+        }
+
+        $statement = $this->statements->get($streamId);
+        if ($statement !== null) {
+            $this->statements->forget($streamId);
+            $this->statements->releaseAfterFailedResponseHandling($statement, $streamId);
+
+            return;
+        }
+
+        if (isset($this->syncWaitStreams[$streamId])) {
+            $this->streamIds->release($streamId, $this->streamIds->getGeneration());
+        }
     }
 
     /**
@@ -1907,7 +1968,12 @@ final class Session {
             // timeout that no wait was even attempted for.
             $response = null;
         } catch (ConnectionException $e) {
+            $this->finishFailedConsumedResponse();
             $this->dropConnectionIfFrameSyncLost();
+
+            throw $e;
+        } catch (CompressionException|ResponseException $e) {
+            $this->finishFailedConsumedResponse();
 
             throw $e;
         }
@@ -2007,7 +2073,12 @@ final class Session {
 
             $response = null;
         } catch (ConnectionException $e) {
+            $this->finishFailedConsumedResponse();
             $this->dropConnectionIfFrameSyncLost();
+
+            throw $e;
+        } catch (CompressionException|ResponseException $e) {
+            $this->finishFailedConsumedResponse();
 
             throw $e;
         }

@@ -107,7 +107,21 @@ final class SetCollection extends ValueReadableWithoutLength {
         }
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
-            $set[] = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
+            $value = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
+            if ($value === null) {
+                throw new ValueException(
+                    'A set element decoded from a response cannot be null',
+                    ExceptionCode::VALUE_SET_NULL_ELEMENT->value,
+                    [
+                        'index' => $i,
+                        'value_type' => $typeInfo->valueType->type->name,
+                        'offset' => $stream->pos(),
+                    ]
+                );
+            }
+
+            /** @psalm-suppress MixedAssignment */
+            $set[] = $value;
         }
 
         return new static($set, typeInfo: $typeInfo);

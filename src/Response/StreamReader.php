@@ -700,14 +700,24 @@ final class StreamReader {
                 // directly. Elements recurse through readValue, so they take
                 // these fast paths too.
                 if ($typeInfo instanceof ListCollectionInfo) {
-                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig, $length);
+                    return $this->readCollectionValues(
+                        $typeInfo->valueType,
+                        $valueEncodeConfig,
+                        $length,
+                        Type::LIST,
+                    );
                 }
 
                 break;
 
             case Type::SET:
                 if ($typeInfo instanceof SetCollectionInfo) {
-                    return $this->readCollectionValues($typeInfo->valueType, $valueEncodeConfig, $length);
+                    return $this->readCollectionValues(
+                        $typeInfo->valueType,
+                        $valueEncodeConfig,
+                        $length,
+                        Type::SET,
+                    );
                 }
 
                 break;
@@ -825,7 +835,12 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
      */
-    private function readCollectionValues(TypeInfo $elementType, ValueEncodeConfig $valueEncodeConfig, int $cellLength): array {
+    private function readCollectionValues(
+        TypeInfo $elementType,
+        ValueEncodeConfig $valueEncodeConfig,
+        int $cellLength,
+        Type $collectionType,
+    ): array {
         $count = $this->readInt();
 
         // Every element has at least its four-byte length prefix. Refusing an
@@ -850,7 +865,25 @@ final class StreamReader {
         $values = [];
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
-            $values[] = $this->readValue($elementType, $valueEncodeConfig);
+            $value = $this->readValue($elementType, $valueEncodeConfig);
+            if ($value === null) {
+                throw new ValueException(
+                    $collectionType === Type::LIST
+                        ? 'A list element decoded from a response cannot be null'
+                        : 'A set element decoded from a response cannot be null',
+                    ($collectionType === Type::LIST
+                        ? ExceptionCode::VALUE_LIST_NULL_ELEMENT
+                        : ExceptionCode::VALUE_SET_NULL_ELEMENT)->value,
+                    [
+                        'index' => $i,
+                        'value_type' => $elementType->type->name,
+                        'offset' => $this->pos(),
+                    ]
+                );
+            }
+
+            /** @psalm-suppress MixedAssignment */
+            $values[] = $value;
         }
 
         return $values;

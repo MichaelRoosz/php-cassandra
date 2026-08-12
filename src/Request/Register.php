@@ -26,7 +26,11 @@ final class Register extends Request {
      */
     #[\Override]
     public function getBody(): string {
-        self::assertShortCount(count($this->events), 'registered events');
+        self::assertShortCount(
+            count($this->events),
+            'registered events',
+            ExceptionCode::REQUEST_TOO_MANY_REGISTER_EVENTS,
+        );
         $body = pack('n', count($this->events));
 
         foreach ($this->events as $value) {

@@ -608,6 +608,15 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         (new ReflectionClass(Register::class))->newInstanceArgs([[EventType::SCHEMA_CHANGE, 'STATUS_CHANGE']]);
     }
 
+    public function testRegisterUsesADedicatedCodeWhenItsEventCountOverflows(): void {
+        $request = new Register(array_fill(0, 65536, EventType::SCHEMA_CHANGE));
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_TOO_MANY_REGISTER_EVENTS->value);
+
+        $request->getBody();
+    }
+
     public function testRepeatedPreparedStatementReplacementIsAtomic(): void {
         $query = 'INSERT INTO ks.t (v) VALUES (?)';
         $old = self::preparedResultWithMarker('old', Type::VARINT, $query);

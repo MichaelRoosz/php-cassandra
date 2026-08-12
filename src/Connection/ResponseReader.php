@@ -36,6 +36,17 @@ final class ResponseReader {
     private ?Header $currentHeader;
 
     /**
+     * Header of a frame whose complete body was consumed but whose response
+     * could not be constructed.
+     *
+     * The session needs the stream id to finish the request that owned the
+     * malformed answer. Without it an asynchronous statement stays registered
+     * forever even though no later answer can arrive for it. Taken and cleared
+     * by {@see self::takeFailedResponseHeader()} while the exception unwinds.
+     */
+    private ?Header $failedResponseHeader = null;
+
+    /**
      * Whether a failure left this reader out of step with the frame stream, so
      * that carrying on would read the next response at the wrong offset.
      *
@@ -45,8 +56,9 @@ final class ResponseReader {
      * that knows how long it is — the next read would take those bytes for a
      * header. Everything else that fails here has already consumed the whole
      * frame ({@see self::createResponse()}, and the decompression above it), so
-     * the stream is still in step and the connection is worth keeping: that is
-     * the case {@see Session::parkUnresolvedStream()} exists for.
+     * the stream is still in step and the connection is worth keeping. The
+     * owning request is finished through
+     * {@see Session::finishFailedConsumedResponse()} instead.
      *
      * Told apart because the two need opposite handling, and the exception
      * alone cannot say which is which. {@see Session::readResponse()} and
@@ -79,6 +91,8 @@ final class ResponseReader {
      */
     public function readResponse(Node $node, ProtocolVersion $version, ?float $readDeadline): ?Response {
 
+        $this->failedResponseHeader = null;
+
         if ($this->currentHeader === null) {
             $this->currentHeader = $this->readHeader($node, $version, $readDeadline);
             if ($this->currentHeader === null) {
@@ -91,7 +105,7 @@ final class ResponseReader {
         if ($header->length === 0) {
             $this->currentHeader = null;
 
-            return $this->createResponse($header, '');
+            return $this->createConsumedResponse($header, '');
         }
 
         // The deadline is absolute, so reading the body cannot hand the wait a
@@ -102,6 +116,7 @@ final class ResponseReader {
         }
 
         $this->currentHeader = null;
+        $this->failedResponseHeader = $header;
 
         if (
             $version->value < ProtocolVersion::V5->value
@@ -129,6 +144,21 @@ final class ResponseReader {
                 );
             }
 
+            if (
+                $uncompressedLength[1] < 0
+                || $uncompressedLength[1] > self::MAX_FRAME_BODY_LENGTH
+            ) {
+                throw new ConnectionException(
+                    'Decompressed response frame body exceeds the maximum length the protocol allows.',
+                    ExceptionCode::CONNECTION_RESPONSE_BODY_TOO_LARGE->value,
+                    [
+                        'compressed_body_length' => strlen($body),
+                        'body_length' => $uncompressedLength[1],
+                        'max_body_length' => self::MAX_FRAME_BODY_LENGTH,
+                    ]
+                );
+            }
+
             $this->lz4Decompressor->setInput(substr($body, 4));
             $body = $this->lz4Decompressor->decompressBlock($uncompressedLength[1]);
 
@@ -144,7 +174,7 @@ final class ResponseReader {
             }
         }
 
-        return $this->createResponse($header, $body);
+        return $this->createConsumedResponse($header, $body);
     }
 
     /**
@@ -165,7 +195,33 @@ final class ResponseReader {
      */
     public function reset(): void {
         $this->currentHeader = null;
+        $this->failedResponseHeader = null;
         $this->frameSyncLost = false;
+    }
+
+    /**
+     * Return and forget the last fully consumed frame that failed decoding.
+     */
+    public function takeFailedResponseHeader(): ?Header {
+        $header = $this->failedResponseHeader;
+        $this->failedResponseHeader = null;
+
+        return $header;
+    }
+
+    /**
+     * Construct a response after its entire frame has left the transport,
+     * retaining the header only if construction fails.
+     *
+     * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    private function createConsumedResponse(Header $header, string $body): Response {
+        $this->failedResponseHeader = $header;
+        $response = $this->createResponse($header, $body);
+        $this->failedResponseHeader = null;
+
+        return $response;
     }
 
     /**
@@ -342,6 +398,38 @@ final class ResponseReader {
                 'port' => $nodeConfig->port,
                 'protocol_version' => $version,
             ], $e);
+        }
+
+        if ($header->opcode === Opcode::RESPONSE_EVENT && $header->stream !== -1) {
+            $nodeConfig = $node->getConfig();
+
+            throw new ConnectionException(
+                'Server event response must use the reserved stream id -1.',
+                ExceptionCode::CONNECTION_EVENT_STREAM_ID_INVALID->value,
+                [
+                    'stream_id' => $header->stream,
+                    'opcode' => $header->opcode->name,
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
+                    'protocol_version' => $version->inOptionFormat(),
+                ]
+            );
+        }
+
+        if ($header->opcode !== Opcode::RESPONSE_EVENT && $header->stream < 0) {
+            $nodeConfig = $node->getConfig();
+
+            throw new ConnectionException(
+                'A response to a client request must use a non-negative stream id.',
+                ExceptionCode::CONNECTION_RESPONSE_STREAM_ID_INVALID->value,
+                [
+                    'stream_id' => $header->stream,
+                    'opcode' => $header->opcode->name,
+                    'host' => $nodeConfig->host,
+                    'port' => $nodeConfig->port,
+                    'protocol_version' => $version->inOptionFormat(),
+                ]
+            );
         }
 
         $this->frameSyncLost = false;

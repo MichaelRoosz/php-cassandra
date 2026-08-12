@@ -13,6 +13,7 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Exception\RequestException;
 use Cassandra\Exception\RequestTimeoutException;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Exception\StatementException;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Request\Query;
@@ -47,6 +48,26 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
     protected function tearDown(): void {
         $this->stopServer();
+    }
+
+    public function testACompleteUnknownAsyncResponseOpcodeAlsoReleasesItsStream(): void {
+        $connection = $this->connect('bad-response-opcode', requestTimeoutInSeconds: null);
+        $statement = $connection->queryAsync('SELECT malformed');
+
+        try {
+            $statement->getResult();
+            $this->fail('expected the unknown response opcode to be reported');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_UNKNOWN_RESPONSE_TYPE->value, $e->getCode());
+        }
+
+        $this->assertTrue($statement->isAbandoned());
+        $this->assertSame(0, self::statementsOf($connection)->getCount());
+        $this->assertSame([], $this->outstandingStreamsOf($connection));
+        $this->assertSame([], $this->orphanedStreamsOf($connection));
+        $this->assertTrue($connection->isConnected(), 'the whole malformed frame was consumed');
+
+        $this->assertInstanceOf(Result::class, $connection->query('SELECT valid'));
     }
 
     public function testAFailedHandshakeLeavesNoConnectionBehind(): void {
@@ -238,6 +259,16 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $connection->queryAsync('SELECT 3 FROM SLOW'),
         ];
 
+        // Sending is necessarily serial, and instrumentation can make the gap
+        // between these three calls large enough for the first deadline to
+        // pass before the last one does. This test is about one expiration pass
+        // finishing every request with the same deadline, so give them the
+        // first statement's actual send time explicitly.
+        $sharedSentAt = $statements[0]->getSentAt();
+        foreach ($statements as $statement) {
+            $statement->setSentAt($sharedSentAt);
+        }
+
         try {
             $connection->waitForStatements($statements);
             $this->fail('expected the requests to time out');
@@ -252,6 +283,26 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
             $this->assertCount(3, $this->orphanedStreamsOf($connection));
         }
+    }
+
+    public function testAMalformedAsyncResponseFinishesItsStatementAndReleasesItsStream(): void {
+        $connection = $this->connect('bad-result-kind', requestTimeoutInSeconds: null);
+        $statement = $connection->queryAsync('SELECT malformed');
+
+        try {
+            $statement->getResult();
+            $this->fail('expected the malformed result kind to be reported');
+        } catch (ResponseException $e) {
+            $this->assertSame(ExceptionCode::RESPONSE_RES_INVALID_KIND_VALUE->value, $e->getCode());
+        }
+
+        $this->assertTrue($statement->isAbandoned(), 'the malformed frame was the statement answer, so it cannot remain pending');
+        $this->assertSame(0, self::statementsOf($connection)->getCount());
+        $this->assertSame([], $this->outstandingStreamsOf($connection));
+        $this->assertSame([], $this->orphanedStreamsOf($connection), 'the complete answer was consumed, so its id need not be parked');
+        $this->assertTrue($connection->isConnected(), 'the complete malformed frame did not desynchronise the connection');
+
+        $this->assertInstanceOf(Result::class, $connection->query('SELECT valid'));
     }
 
     public function testAMalformedResponseHeaderDropsTheConnectionInsteadOfDesynchronisingIt(): void {

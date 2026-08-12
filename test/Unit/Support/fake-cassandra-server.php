@@ -23,6 +23,14 @@
  *                   refused, so the body they announce is left on the wire — a
  *                   client that keeps the connection would read the next
  *                   response at the wrong offset
+ *   bad-result-kind answer the first QUERY with a complete RESULT frame whose
+ *                   result-kind field is unknown, and every later query
+ *                   normally. The bad answer is fully consumed before it is
+ *                   rejected, so the connection remains frame-aligned
+ *   bad-response-opcode
+ *                   answer the first QUERY with a complete frame carrying a
+ *                   request-only opcode, and every later query normally. This
+ *                   reaches the connection-level malformed-response path
  *   idle            handshake, then never send anything unprompted
  *   slow-query      handshake, then answer every QUERY after [delaySeconds]
  *   defer-slow      answer QUERYs mentioning SLOW after [delaySeconds] and all
@@ -474,6 +482,7 @@ $handshakeDone = false;
 $eventDueAt = null;
 $prepareCount = 0;
 $badHeaderSent = false;
+$badResponseSent = false;
 $batchRefused = false;
 $executeRefused = false;
 $deadline = microtime(true) + 60;
@@ -719,6 +728,22 @@ while (microtime(true) < $deadline) {
                 $badHeaderSent = true;
 
                 writeFrame($client, $frame['stream'], OPCODE_RESULT, voidResultBody(), PROTOCOL_VERSION - 1);
+
+                break;
+            }
+
+            if ($mode === 'bad-result-kind' && !$badResponseSent) {
+                $badResponseSent = true;
+
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, pack('N', 0x7FFFFFFF));
+
+                break;
+            }
+
+            if ($mode === 'bad-response-opcode' && !$badResponseSent) {
+                $badResponseSent = true;
+
+                writeFrame($client, $frame['stream'], OPCODE_REGISTER, '');
 
                 break;
             }

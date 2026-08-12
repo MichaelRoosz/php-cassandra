@@ -220,6 +220,19 @@ final class MapCollection extends ValueReadableWithoutLength implements ValueWit
             }
 
             $value = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
+            if ($value === null) {
+                throw new ValueException(
+                    'A map value decoded from a response cannot be null',
+                    ExceptionCode::VALUE_MAP_NULL_VALUE->value,
+                    [
+                        'index' => $i,
+                        'key' => $key,
+                        'value_type' => $typeInfo->valueType->type->name,
+                        'offset' => $stream->pos(),
+                    ]
+                );
+            }
+
             $entries[] = new MapEntry($key, $value);
         }
 

@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace Cassandra\Test\Unit;
 
+use Cassandra\Connection;
+use Cassandra\Connection\Node;
+use Cassandra\Connection\NodeConfig;
+use Cassandra\Connection\Session;
+use Cassandra\Connection\SocketNodeConfig;
 use Cassandra\Consistency;
+use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\ResponseException;
 use Cassandra\Exception\ServerException\ServerErrorException;
@@ -20,6 +26,8 @@ use Cassandra\Response\Event\Data\TopologyChangeType;
 use Cassandra\Response\Event\TopologyChangeEvent;
 use Cassandra\Response\Ready;
 use Cassandra\Response\StreamReader;
+use Cassandra\Request\Request;
+use ReflectionMethod;
 
 final class ProtocolRegressionTest extends AbstractUnitTestCase {
     public function testMovedNodeTopologyEventIsRejectedAfterProtocolV3(): void {
@@ -34,6 +42,25 @@ final class ProtocolRegressionTest extends AbstractUnitTestCase {
             self::header(ProtocolVersion::V4, Opcode::RESPONSE_EVENT, strlen($body), stream: -1),
             new StreamReader($body),
         );
+    }
+    public function testResponseOnAStreamWithNoOutstandingRequestIsRejected(): void {
+        $connection = new Connection([new SocketNodeConfig(host: '127.0.0.1')]);
+        $response = new Ready(
+            self::header(ProtocolVersion::V4, Opcode::RESPONSE_READY, 0, stream: 123),
+            new StreamReader(''),
+        );
+
+        try {
+            (new ReflectionMethod(Session::class, 'dispatchResponse'))->invoke(
+                self::sessionOf($connection),
+                $response,
+                new ProtocolValidationNode(),
+            );
+            $this->fail('expected an unsolicited response stream to be refused');
+        } catch (ConnectionException $e) {
+            $this->assertSame(ExceptionCode::CONNECTION_RESPONSE_STREAM_NOT_OUTSTANDING->value, $e->getCode());
+            $this->assertSame(123, $e->getContext()['stream_id'] ?? null);
+        }
     }
 
     public function testServerErrorUsesDedicatedExceptionClass(): void {
@@ -130,5 +157,32 @@ final class ProtocolRegressionTest extends AbstractUnitTestCase {
             opcode: $opcode,
             length: $length,
         );
+    }
+}
+
+final class ProtocolValidationNode implements Node {
+    public function close(): void {
+    }
+
+    public function getConfig(): NodeConfig {
+        return new SocketNodeConfig(host: '127.0.0.1');
+    }
+
+    public function getReceivedByteCount(): int {
+        return 0;
+    }
+
+    public function read(int $length, ?float $readDeadline): string {
+        return '';
+    }
+
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
+        return '';
+    }
+
+    public function write(string $data): void {
+    }
+
+    public function writeRequest(Request $request): void {
     }
 }

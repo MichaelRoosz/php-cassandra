@@ -101,7 +101,21 @@ final class ListCollection extends ValueReadableWithoutLength {
         self::assertCountFits($count, $stream->remainingLength());
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
-            $list[] = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
+            $value = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
+            if ($value === null) {
+                throw new ValueException(
+                    'A list element decoded from a response cannot be null',
+                    ExceptionCode::VALUE_LIST_NULL_ELEMENT->value,
+                    [
+                        'index' => $i,
+                        'value_type' => $typeInfo->valueType->type->name,
+                        'offset' => $stream->pos(),
+                    ]
+                );
+            }
+
+            /** @psalm-suppress MixedAssignment */
+            $list[] = $value;
         }
 
         return new static($list, typeInfo: $typeInfo);
