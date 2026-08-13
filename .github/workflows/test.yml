@@ -49,6 +49,70 @@ jobs:
     - name: PHPUnit unit tests
       run: composer run test:unit
 
+  unit-test-32bit:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php: ["8.1", "8.2", "8.3", "8.4", "8.5"]
+
+    name: Unit test (32-bit) - PHP ${{ matrix.php }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # setup-php only ships 64-bit builds, so the toolchain lives in an i386
+    # container (x86-64 runs i386 code natively, no emulation involved) and
+    # every following step talks to it through docker exec.
+    - name: Setup 32-bit PHP
+      run: |
+        docker run -d --name php32 --platform linux/386 \
+          -v "$GITHUB_WORKSPACE":"$GITHUB_WORKSPACE" \
+          -w "$GITHUB_WORKSPACE" \
+          -e COMPOSER_ALLOW_SUPERUSER=1 \
+          i386/php:${{ matrix.php }}-cli sleep infinity
+        docker exec php32 bash -euxc '
+          apt-get update
+          apt-get install -y --no-install-recommends $PHPIZE_DEPS git unzip libgmp-dev
+          ln -sf "/usr/include/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/gmp.h" /usr/include/gmp.h
+          docker-php-ext-install -j"$(nproc)" bcmath gmp sockets
+          pecl install pcov
+          docker-php-ext-enable pcov
+          curl -sSL https://getcomposer.org/composer-stable.phar -o /usr/local/bin/composer
+          chmod +x /usr/local/bin/composer
+        '
+
+    - name: Check PHP version
+      run: |
+        docker exec php32 php -v
+        docker exec php32 php -r 'if (PHP_INT_SIZE !== 4) { fwrite(STDERR, "Expected 32-bit PHP, got PHP_INT_SIZE=" . PHP_INT_SIZE . PHP_EOL); exit(1); }'
+
+    - name: Cache Composer packages
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php32-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php32-${{ matrix.php }}-
+
+    - name: Install dependencies
+      run: docker exec php32 composer install --no-progress --prefer-dist --optimize-autoloader
+
+    - name: Lint
+      run: docker exec php32 composer run lint
+
+    - name: PHPStan
+      run: docker exec php32 composer run phpstan
+
+    - name: PHPStan tests
+      run: docker exec php32 composer run phpstan:tests
+
+    - name: Psalm
+      run: docker exec php32 composer run psalm
+
+    - name: PHPUnit unit tests
+      run: docker exec php32 composer run test:unit
+
   integration-test:
     runs-on: ubuntu-latest
 
