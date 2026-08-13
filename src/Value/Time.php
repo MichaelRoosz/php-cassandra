@@ -11,6 +11,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\TimeEncodeOption;
 use DateTimeImmutable;
 use DateTimeInterface;
+use DateTimeZone;
 use Exception as PhpException;
 
 final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodings {
@@ -101,12 +102,17 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
+     * Note that DateTimeImmutable carries microseconds and this type carries
+     * nanoseconds, so the last three digits are truncated towards zero here.
+     * Use {@see self::asString()}, which spells all nine, or
+     * {@see self::asInteger()} where no precision may be lost.
+     *
      * @throws \Cassandra\Exception\ValueException
      */
     public function asDateTime(): DateTimeImmutable {
 
         try {
-            return new DateTimeImmutable('1970-01-01 ' . $this->asString());
+            return new DateTimeImmutable('1970-01-01 ' . $this->asString(), new DateTimeZone('UTC'));
         } catch (PhpException $e) {
             throw new ValueException('Invalid time value; cannot create DateTimeImmutable', ExceptionCode::VALUE_TIME_INVALID_DATETIME_STRING->value, [
                 'value' => $this->value,
