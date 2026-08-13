@@ -78,6 +78,7 @@ final class Decimal extends ValueReadableWithLength {
         // could not read back is reported against the value that named it
         // instead of at the moment it is sent.
         self::assertScaleInRange($decimal);
+        self::assertUnscaledInRange($decimal);
 
         $this->value = $decimal;
     }
@@ -273,6 +274,49 @@ final class Decimal extends ValueReadableWithLength {
         throw new ValueException('Decimal scale is outside of the supported range', ExceptionCode::VALUE_DECIMAL_SCALE_OUT_OF_RANGE->value, [
             'scale' => $scale,
             'max_magnitude' => self::MAX_SCALE_MAGNITUDE,
+        ]);
+    }
+
+    /**
+     * Refuse an unscaled part {@see Varint} will not convert.
+     *
+     * {@see self::getBinary()} encodes the value as a scale and an unscaled
+     * varint, so a decimal is exactly as wide as that varint and inherits its
+     * bound; see {@see Varint::MAX_MAGNITUDE_DIGITS} for why there is one. This
+     * is the same division of labour as {@see self::MAX_SCALE_MAGNITUDE}: that
+     * bounds how far a value may be expanded, this bounds how long converting
+     * it may take.
+     *
+     * Applied at construction rather than at getBinary(), for the reason the
+     * scale check gives — a value this class cannot encode should be reported
+     * against whoever named it, not at the moment it is sent.
+     *
+     * The two bounds stay orthogonal, and deliberately so: a value like
+     * "1e-100000" has a scale of 100000 and an unscaled part of 1, so it is
+     * enormous to spell and trivial to convert, and only the scale bound has
+     * anything to say about it. "1e100000" is the other way about — no scale at
+     * all, and an unscaled part of 100001 digits — and only this one catches it.
+     * Which is why the count below is of significant digits: the leading zeros
+     * of the first are dropped by {@see Varint::__construct()} before anything
+     * is converted, and cost nothing.
+     *
+     * @param string $decimal a plain decimal string, as
+     * {@see self::normalizeNumericString()} and {@see self::floatToDecimalString()}
+     * produce
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function assertUnscaledInRange(string $decimal): void {
+
+        $digits = strlen(ltrim(str_replace(['-', '.'], '', $decimal), '0'));
+
+        if ($digits <= Varint::MAX_MAGNITUDE_DIGITS) {
+            return;
+        }
+
+        throw new ValueException('Decimal has more digits than the unscaled value can carry', ExceptionCode::VALUE_DECIMAL_UNSCALED_TOO_LARGE->value, [
+            'digits' => $digits,
+            'max_digits' => Varint::MAX_MAGNITUDE_DIGITS,
         ]);
     }
 
