@@ -116,6 +116,19 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
+     * Note that DateInterval carries microseconds and this type carries
+     * nanoseconds, so the last three digits are truncated towards zero here — a
+     * duration whose whole value is sub-microsecond therefore comes back as a
+     * zero interval. Use {@see self::asString()}, which spells all nine, or
+     * {@see self::asNativeValue()} where no precision may be lost. The
+     * counterpart of the note on {@see self::asDateIntervalString()}, which
+     * carries whole seconds only, and of the one on {@see Time::asDateTime()}.
+     *
+     * The months and days are kept apart from the time part rather than being
+     * folded into it, as they are on the wire: a month is not a fixed number of
+     * days and a day is not a fixed number of hours, which is the whole reason
+     * Cassandra's `duration` carries the three separately.
+     *
      * @throws \Cassandra\Exception\ValueException
      */
     public function asDateInterval(): DateInterval {
