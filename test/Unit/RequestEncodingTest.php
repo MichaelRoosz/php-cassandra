@@ -33,8 +33,13 @@ use Cassandra\Response\Result\RowsMetadata;
 use Cassandra\Response\StreamReader;
 use Cassandra\Value\NotSet;
 use Cassandra\Value\Float32;
+use Cassandra\Value\SetCollection;
+use Cassandra\Value\UDT;
 use Cassandra\Type;
+use Cassandra\TypeInfo\SetCollectionInfo;
 use Cassandra\TypeInfo\SimpleTypeInfo;
+use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\TypeInfo\UDTInfo;
 use DateTimeImmutable;
 use ReflectionClass;
 use ReflectionMethod;
@@ -321,6 +326,20 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $batch->setVersion(ProtocolVersion::V3);
 
         $this->assertNotSame('', $batch->getBody());
+    }
+
+    public function testFrozenCollectionValueObjectMatchesUnfrozenBindMarkerType(): void {
+        // The protocol never reports freezing: a frozen<set<varchar>> column
+        // arrives as a plain set<varchar>, so an explicitly frozen value object
+        // has to bind to the marker of the column it was built for.
+        $encoded = self::testableRequest()->encodeValuesForBindMarkers(
+            [SetCollection::fromValue(['php'], Type::VARCHAR, isFrozen: true)],
+            [self::columnInfo('tags', new SetCollectionInfo(new SimpleTypeInfo(Type::VARCHAR), isFrozen: false))],
+            namesForValues: false,
+        );
+
+        $this->assertInstanceOf(SetCollection::class, $encoded[0]);
+        $this->assertSame(['php'], $encoded[0]->getValue());
     }
 
     public function testMissingNamedBindValueThrows(): void {
@@ -720,6 +739,50 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         (new ReflectionClass(Startup::class))->newInstanceArgs([['name' => 1]]);
     }
 
+    public function testUdtValueObjectOfAnotherTypeIsRejected(): void {
+        // The keyspace and name are only skipped where the value leaves them
+        // unstated; a value that names a different type is still a mismatch.
+        $this->expectException(ValueFactoryException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUEFACTORY_VALUE_OBJECT_TYPE_MISMATCH->value);
+
+        self::testableRequest()->encodeValuesForBindMarkers(
+            [new UDT(
+                ['zip' => 1],
+                new UDTInfo(
+                    valueTypes: ['zip' => new SimpleTypeInfo(Type::INT)],
+                    isFrozen: false,
+                    keyspace: 'ks',
+                    name: 'postcode',
+                ),
+            )],
+            [self::columnInfo('address', new UDTInfo(
+                valueTypes: ['zip' => new SimpleTypeInfo(Type::INT)],
+                isFrozen: false,
+                keyspace: 'ks',
+                name: 'address',
+            ))],
+            namesForValues: false,
+        );
+    }
+
+    public function testUdtValueObjectWithoutTypeNameMatchesNamedBindMarkerType(): void {
+        // A UDT built from field types alone carries no keyspace or name, while
+        // the marker the server describes always names its type.
+        $encoded = self::testableRequest()->encodeValuesForBindMarkers(
+            [UDT::fromValue(['zip' => 1], ['zip' => Type::INT], isFrozen: true)],
+            [self::columnInfo('address', new UDTInfo(
+                valueTypes: ['zip' => new SimpleTypeInfo(Type::INT)],
+                isFrozen: false,
+                keyspace: 'ks',
+                name: 'address',
+            ))],
+            namesForValues: false,
+        );
+
+        $this->assertInstanceOf(UDT::class, $encoded[0]);
+        $this->assertSame(['zip' => 1], $encoded[0]->getValue());
+    }
+
     public function testUnknownNamedBindValueThrows(): void {
         $this->expectException(RequestException::class);
         $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_EXTRA_BIND_VALUE->value);
@@ -753,12 +816,12 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
     }
 
-    private static function columnInfo(string $name): \Cassandra\Response\Result\ColumnInfo {
+    private static function columnInfo(string $name, ?TypeInfo $type = null): \Cassandra\Response\Result\ColumnInfo {
         return new \Cassandra\Response\Result\ColumnInfo(
             keyspace: 'ks',
             tableName: 't',
             name: $name,
-            type: new \Cassandra\TypeInfo\SimpleTypeInfo(\Cassandra\Type::INT),
+            type: $type ?? new \Cassandra\TypeInfo\SimpleTypeInfo(\Cassandra\Type::INT),
         );
     }
 

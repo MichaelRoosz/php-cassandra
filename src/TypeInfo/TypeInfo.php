@@ -16,8 +16,22 @@ abstract class TypeInfo {
      * Whether the two immutable definitions describe the same binary layout.
      *
      * Exact definitions take the native object-comparison fast path. The
-     * recursive fallback exists for TEXT/VARCHAR, two protocol names for the
-     * same CQL type and encoding.
+     * recursive fallback exists for definitions that describe the same layout
+     * without being identical: TEXT/VARCHAR, two protocol names for the same
+     * CQL type and encoding, and the properties below that a definition may
+     * carry without them reaching the encoded bytes.
+     *
+     * Freezing is one of those: it decides how Cassandra stores a column, not
+     * how a value of it is serialized, and the protocol never reports it - a
+     * frozen<set<varchar>> column arrives as a plain set<varchar> in prepared
+     * and rows metadata (see {@see \Cassandra\Response\StreamReader}). Letting
+     * `isFrozen` decide would reject every explicitly frozen value object bound
+     * to the column it belongs to.
+     *
+     * A UDT's keyspace and name are compared only where both sides name them,
+     * for the same reason: {@see \Cassandra\Value\UDT::fromValue()} builds a
+     * definition out of field types alone, and its unnamed type is the one the
+     * server's named metadata describes as long as those fields line up.
      *
      * @internal
      */
@@ -34,21 +48,17 @@ abstract class TypeInfo {
             $this instanceof SimpleTypeInfo && $other instanceof SimpleTypeInfo => true,
             $this instanceof CustomInfo && $other instanceof CustomInfo => $this->javaClassName === $other->javaClassName,
             $this instanceof ListCollectionInfo && $other instanceof ListCollectionInfo =>
-                $this->isFrozen === $other->isFrozen
-                && $this->valueType->isBinaryCompatibleWith($other->valueType),
+                $this->valueType->isBinaryCompatibleWith($other->valueType),
             $this instanceof SetCollectionInfo && $other instanceof SetCollectionInfo =>
-                $this->isFrozen === $other->isFrozen
-                && $this->valueType->isBinaryCompatibleWith($other->valueType),
+                $this->valueType->isBinaryCompatibleWith($other->valueType),
             $this instanceof MapCollectionInfo && $other instanceof MapCollectionInfo =>
-                $this->isFrozen === $other->isFrozen
-                && $this->keyType->isBinaryCompatibleWith($other->keyType)
+                $this->keyType->isBinaryCompatibleWith($other->keyType)
                 && $this->valueType->isBinaryCompatibleWith($other->valueType),
             $this instanceof TupleInfo && $other instanceof TupleInfo =>
                 self::typeInfoListsAreBinaryCompatible($this->valueTypes, $other->valueTypes),
             $this instanceof UDTInfo && $other instanceof UDTInfo =>
-                $this->isFrozen === $other->isFrozen
-                && $this->keyspace === $other->keyspace
-                && $this->name === $other->name
+                self::optionalNamesAreBinaryCompatible($this->keyspace, $other->keyspace)
+                && self::optionalNamesAreBinaryCompatible($this->name, $other->name)
                 && array_keys($this->valueTypes) === array_keys($other->valueTypes)
                 && self::typeInfoListsAreBinaryCompatible(
                     array_values($this->valueTypes),
@@ -59,6 +69,15 @@ abstract class TypeInfo {
                 && $this->valueType->isBinaryCompatibleWith($other->valueType),
             default => false,
         };
+    }
+
+    /**
+     * Whether an optional name of a definition - one the client is not required
+     * to state - stands in the way of the two describing the same type; an
+     * unstated name on either side matches whatever the other one says.
+     */
+    protected static function optionalNamesAreBinaryCompatible(?string $left, ?string $right): bool {
+        return $left === null || $right === null || $left === $right;
     }
 
     /**
