@@ -369,6 +369,11 @@ final class Lz4Decompressor {
             || ($value >= self::MAGIC_SKIPPABLE_MIN && $value <= self::MAGIC_SKIPPABLE_MAX);
     }
 
+    private function isTruncatedLength(int $length): bool {
+
+        return $length < 0 || $this->inputOffset + $length > $this->inputLength;
+    }
+
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
@@ -418,20 +423,20 @@ final class Lz4Decompressor {
 
             $this->inputOffset += 4;
 
-            if ($blockSize > 0) {
-                if ($this->inputOffset + $blockSize > $this->inputLength) {
-                    throw new CompressionException(
-                        'invalid lz4 frame data - input overflow while reading block data',
-                        ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
-                        [
-                            'stage' => 'legacy_block_data',
-                            'inputOffset' => $this->inputOffset,
-                            'inputLength' => $this->inputLength,
-                            'blockSize' => $blockSize,
-                        ]
-                    );
-                }
+            if ($this->isTruncatedLength($blockSize)) {
+                throw new CompressionException(
+                    'invalid lz4 frame data - input overflow while reading block data',
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
+                    [
+                        'stage' => 'legacy_block_data',
+                        'inputOffset' => $this->inputOffset,
+                        'inputLength' => $this->inputLength,
+                        'blockSize' => $blockSize,
+                    ]
+                );
+            }
 
+            if ($blockSize > 0) {
                 $this->decompressBlockAtOffset($this->inputOffset, $this->inputOffset + $blockSize);
                 $this->inputOffset += $blockSize;
             }
@@ -536,7 +541,7 @@ final class Lz4Decompressor {
         $skipableFrameSize = $unpacked[1];
         $this->inputOffset += 4;
 
-        if ($this->inputOffset + $skipableFrameSize > $this->inputLength) {
+        if ($this->isTruncatedLength($skipableFrameSize)) {
             throw new CompressionException(
                 'invalid lz4 frame data - input overflow while reading skipable frame data',
                 ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
