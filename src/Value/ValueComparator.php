@@ -24,6 +24,8 @@ use Cassandra\TypeInfo\UDTInfo;
  * @internal
  */
 final class ValueComparator {
+    private const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
+
     /**
      * @throws \Cassandra\Exception\ValueException
      */
@@ -347,6 +349,8 @@ final class ValueComparator {
     }
 
     private static function readValue(string $binary, int &$offset): string {
+
+        // length is not allowed to be null
         /** @var array{1: int} $length */
         $length = unpack('N', substr($binary, $offset, 4));
         $offset += 4;
@@ -366,14 +370,21 @@ final class ValueComparator {
             /** @var array{1: int} $length */
             $length = unpack('N', substr($binary, $offset, 4));
             $offset += 4;
-            if ($length[1] === 0xffffffff) {
+
+            // length can be negative for null values, but unpack() returns an unsigned int,
+            // so we need to shift it back to a signed int.
+            $elementLength = $length[1]
+                << self::SIGNED_INT_SHIFT_BIT_SIZE
+                >> self::SIGNED_INT_SHIFT_BIT_SIZE;
+
+            if ($elementLength < 0) {
                 $values[] = null;
 
                 continue;
             }
 
-            $values[] = substr($binary, $offset, $length[1]);
-            $offset += $length[1];
+            $values[] = substr($binary, $offset, $elementLength);
+            $offset += $elementLength;
         }
 
         return $values;

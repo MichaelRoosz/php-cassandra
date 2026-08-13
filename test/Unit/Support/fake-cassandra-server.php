@@ -128,6 +128,13 @@ const OPCODE_AUTH_SUCCESS = 0x10;
 const PROTOCOL_VERSION = 0x04;
 
 /**
+ * How far a [bytes] length read with unpack('N') has to be shifted to bring its
+ * sign bit into the sign bit of a PHP int, and back again to extend it. Zero on
+ * a 32-bit build, where unpack('N') already hands back the negative.
+ */
+const SIGNED_INT_SHIFT_BIT_SIZE = (PHP_INT_SIZE * 8) - 32;
+
+/**
  * @param resource $client
  * @return array{stream: int, opcode: int, body: string}|null
  */
@@ -317,8 +324,9 @@ function batchPreparedIds(string $body): array {
 
             // null (-1) and "not set" (-2) are lengths with no bytes behind
             // them, and unpack('N') hands them back unsigned.
-            if ($unpacked[1] < 0x80000000) {
-                $offset += $unpacked[1];
+            $length = $unpacked[1] << SIGNED_INT_SHIFT_BIT_SIZE >> SIGNED_INT_SHIFT_BIT_SIZE;
+            if ($length > 0) {
+                $offset += $length;
             }
         }
     }
@@ -371,14 +379,15 @@ function executeIdAndValues(string $body): array {
 
             // null (-1) and "not set" (-2) are lengths with no bytes behind
             // them, and unpack('N') hands them back unsigned.
-            if ($unpacked[1] >= 0x80000000) {
+            $length = $unpacked[1] << SIGNED_INT_SHIFT_BIT_SIZE >> SIGNED_INT_SHIFT_BIT_SIZE;
+            if ($length < 0) {
                 $values[] = '';
 
                 continue;
             }
 
-            $values[] = substr($body, $offset, $unpacked[1]);
-            $offset += $unpacked[1];
+            $values[] = substr($body, $offset, $length);
+            $offset += $length;
         }
     }
 

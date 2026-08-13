@@ -337,7 +337,10 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         // the scale, so an absurd (positive or negative) scale — cheap to send,
         // expensive to expand — must be rejected rather than allocating gigabytes.
         foreach ([200000000, -200000000] as $scale) {
-            $binary = pack('N', $scale & 0xFFFFFFFF) . (new Value\Varint(1))->getBinary();
+            // pack('N', …) already keeps only the low four bytes, so a negative
+            // scale needs no masking — and 0xFFFFFFFF would be a float, and the
+            // mask a warning, on a 32-bit build.
+            $binary = pack('N', $scale) . (new Value\Varint(1))->getBinary();
 
             try {
                 Value\Decimal::fromBinary($binary);
@@ -349,8 +352,9 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testDecimalFromBinaryWithNegativeScale(): void {
-        // scale is a signed int32; -3 with unscaled 12 means 12 * 10^3.
-        $binary = pack('N', 0xFFFFFFFD) . (new Value\Varint(12))->getBinary();
+        // scale is a signed int32; -3 with unscaled 12 means 12 * 10^3. Written
+        // as -3 rather than as 0xFFFFFFFD, which is a float on a 32-bit build.
+        $binary = pack('N', -3) . (new Value\Varint(12))->getBinary();
         $this->assertSame('12000', Value\Decimal::fromBinary($binary)?->getValue());
     }
 

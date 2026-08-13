@@ -13,6 +13,7 @@ use Cassandra\Request\Request;
 final class FrameCodec extends NodeImplementation {
     final public const CRC24_INIT = 0x875060;
     final public const CRC24_POLYNOMIAL = 0x1974F0B;
+    final public const CRC32_PREFIX = "\xFA\x2D\x55\xCA";
     final public const PAYLOAD_MAX_SIZE = 131071;
 
     /**
@@ -31,8 +32,6 @@ final class FrameCodec extends NodeImplementation {
      * @var ?array<int, int>
      */
     private static ?array $crc24Table = null;
-
-    private string $crc32Prefix;
 
     /**
      * @var ?array{
@@ -64,8 +63,6 @@ final class FrameCodec extends NodeImplementation {
                 ]
             );
         }
-
-        $this->crc32Prefix = pack('N', 0xFA2D55CA);
 
         if ($compression) {
             $this->lz4Decompressor = new Lz4Decompressor();
@@ -329,13 +326,13 @@ final class FrameCodec extends NodeImplementation {
     private function payloadCrc32(string $payload): string {
         if (strlen($payload) >= self::PAYLOAD_CRC32_INCREMENTAL_THRESHOLD) {
             $context = hash_init('crc32b');
-            hash_update($context, $this->crc32Prefix);
+            hash_update($context, self::CRC32_PREFIX);
             hash_update($context, $payload);
 
             return hash_final($context, true);
         }
 
-        return hash('crc32b', $this->crc32Prefix . $payload, true);
+        return hash('crc32b', self::CRC32_PREFIX . $payload, true);
     }
 
     /**
