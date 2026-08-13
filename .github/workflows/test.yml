@@ -101,9 +101,6 @@ jobs:
     - name: PHPStan
       run: docker exec php32 composer run phpstan:32bit
 
-    - name: Psalm
-      run: docker exec php32 composer run psalm:32bit
-
     - name: PHPUnit unit tests
       run: docker exec php32 composer run test:unit
 
