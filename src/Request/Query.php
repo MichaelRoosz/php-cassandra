@@ -74,7 +74,9 @@ final class Query extends Request {
             $this->values,
             $this->options,
             $this->version,
-            exactValueNames: self::quotedBindMarkerNames($this->query),
+            exactValueNames: ($this->options->namesForValues === true && $this->values !== [])
+                ? self::quotedBindMarkerNames($this->query)
+                : [],
         );
 
         return $body;
@@ -117,6 +119,12 @@ final class Query extends Request {
 
         for ($offset = 0; $offset < $length; ++$offset) {
             $character = $query[$offset];
+
+            if ($character === '$' && ($query[$offset + 1] ?? '') === '$') {
+                self::skipDollarQuoted($query, $offset);
+
+                continue;
+            }
 
             if ($character === "'") {
                 self::skipQuoted($query, $offset, "'");
@@ -182,6 +190,11 @@ final class Query extends Request {
         }
 
         return $value;
+    }
+
+    private static function skipDollarQuoted(string $query, int &$offset): void {
+        $closing = strpos($query, '$$', $offset + 2);
+        $offset = $closing === false ? strlen($query) : $closing + 1;
     }
 
     private static function skipLineComment(string $query, int &$offset): void {
