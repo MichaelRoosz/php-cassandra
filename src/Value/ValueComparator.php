@@ -109,7 +109,7 @@ final class ValueComparator {
             return self::compareSequences(
                 self::collectionValues($left),
                 self::collectionValues($right),
-                array_fill(0, max(self::collectionCount($left), self::collectionCount($right)), $typeInfo->valueType),
+                $typeInfo->valueType,
             );
         }
 
@@ -183,11 +183,7 @@ final class ValueComparator {
         return self::compareSequences(
             self::collectionValues($left, 2),
             self::collectionValues($right, 2),
-            array_fill(
-                0,
-                max(self::collectionCount($left), self::collectionCount($right)) * 2,
-                null,
-            ),
+            [],
             [$typeInfo->keyType, $typeInfo->valueType],
         );
     }
@@ -195,15 +191,18 @@ final class ValueComparator {
     /**
      * @param list<?string> $left
      * @param list<?string> $right
-     * @param list<?TypeInfo> $types
-     * @param ?array{TypeInfo, TypeInfo} $alternatingTypes
+     * @param TypeInfo|list<?TypeInfo> $types the one type every position shares
+     * — a list's or set's element type — or one type per position, as a tuple
+     * and a UDT have. An empty list where $alternatingTypes settles it instead.
+     * @param ?array{TypeInfo, TypeInfo} $alternatingTypes the key and value
+     * types of a map, whose entries arrive as one flat alternating sequence
      *
      * @throws \Cassandra\Exception\ValueException
      */
     private static function compareSequences(
         array $left,
         array $right,
-        array $types,
+        TypeInfo|array $types,
         ?array $alternatingTypes = null,
     ): int {
         $common = min(count($left), count($right));
@@ -218,7 +217,14 @@ final class ValueComparator {
                 return $leftValue === null ? -1 : 1;
             }
 
-            $type = $alternatingTypes[$index % 2] ?? $types[$index] ?? null;
+            if ($alternatingTypes !== null) {
+                $type = $alternatingTypes[$index % 2];
+            } elseif ($types instanceof TypeInfo) {
+                $type = $types;
+            } else {
+                $type = $types[$index] ?? null;
+            }
+
             $comparison = $type === null
                 ? strcmp($leftValue, $rightValue)
                 : self::compare($type, $leftValue, $rightValue);
