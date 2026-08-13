@@ -23,7 +23,13 @@ final class TemporalDateTimeZoneTest extends AbstractUnitTestCase {
     private string $originalTimezone = 'UTC';
 
     protected function setUp(): void {
+        // Captured before the skip below, so tearDown puts back the zone this
+        // test found rather than the property's initialiser.
         $this->originalTimezone = date_default_timezone_get();
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Date, Time and Timestamp require 64-bit integer');
+        }
 
         // A zone with a large, non-zero offset, so a value that picked it up
         // instead of UTC cannot pass by coincidence.

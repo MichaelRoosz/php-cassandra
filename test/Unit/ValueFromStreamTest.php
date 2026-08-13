@@ -221,6 +221,10 @@ final class ValueFromStreamTest extends AbstractUnitTestCase {
      * so nothing downstream would put the config back.
      */
     public function testVectorFromStreamPassesTheEncodeConfigToContainerElements(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         $typeInfo = ValueFactory::getTypeInfoFromTypeDefinition([
             'type' => Type::VECTOR,
             'valueType' => ['type' => Type::LIST, 'valueType' => Type::TIMESTAMP],

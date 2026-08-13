@@ -404,14 +404,17 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
     }
 
     public function testProtocolV3AllowsNegativeDefaultTimestampExceptMinimum(): void {
+        // The default timestamp goes out as a signed 64-bit microsecond count,
+        // which pack('J', …) refuses to write on a 32-bit build — and a PHP int
+        // there could only ever express the first half hour of 1970 anyway.
+        if (PHP_INT_SIZE < 8) {
+            $this->markTestSkipped('a default timestamp needs 64-bit integers');
+        }
+
         $request = new Query('SELECT * FROM t', options: new QueryOptions(defaultTimestamp: -1));
         $request->setVersion(ProtocolVersion::V3);
 
         $this->assertStringEndsWith("\xff\xff\xff\xff\xff\xff\xff\xff", $request->getBody());
-
-        if (PHP_INT_SIZE < 8) {
-            return;
-        }
 
         $request = new Query('SELECT * FROM t', options: new QueryOptions(defaultTimestamp: PHP_INT_MIN));
         $request->setVersion(ProtocolVersion::V3);

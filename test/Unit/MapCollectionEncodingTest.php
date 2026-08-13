@@ -19,6 +19,10 @@ use DateTimeImmutable;
 
 final class MapCollectionEncodingTest extends AbstractUnitTestCase {
     public function testAutoReturnsMapCollectionForConfiguredObjectKeys(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         $typeInfo = $this->mapTypeInfo(Type::TIMESTAMP, Type::TIMESTAMP);
         $map = MapCollection::fromEntries(
             [new MapEntry(new DateTimeImmutable('@1'), new DateTimeImmutable('@2'))],
@@ -45,6 +49,10 @@ final class MapCollectionEncodingTest extends AbstractUnitTestCase {
     }
 
     public function testAutoReturnsNativeArrayForArraySafeTemporalConfiguration(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         $typeInfo = $this->mapTypeInfo(Type::TIMESTAMP, Type::INT);
         $map = MapCollection::fromEntries(
             [new MapEntry(new DateTimeImmutable('@1'), 2)],
@@ -68,6 +76,10 @@ final class MapCollectionEncodingTest extends AbstractUnitTestCase {
     }
 
     public function testForcedArrayRejectsConfiguredObjectKeysWithProjectException(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         $typeInfo = $this->mapTypeInfo(Type::TIMESTAMP, Type::INT);
         $map = MapCollection::fromEntries(
             [new MapEntry(new DateTimeImmutable('@1'), 2)],

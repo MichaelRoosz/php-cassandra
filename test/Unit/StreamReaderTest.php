@@ -39,7 +39,10 @@ final class StreamReaderTest extends AbstractUnitTestCase {
     public function testDecodeTruncatedVintThrows(): void {
         $codec = new VIntCodec();
 
-        $encoded = $codec->encodeUnsignedVint64(1 << 40);
+        // Any value wide enough to need several bytes will do; 1 << 40 is not
+        // representable on a 32-bit build, where it silently shifts out to 0 and
+        // encodes to a single byte, so the widest int there stands in for it.
+        $encoded = $codec->encodeUnsignedVint64($this->integerHasAtLeast64Bits() ? 1 << 40 : PHP_INT_MAX);
         $this->assertGreaterThan(2, strlen($encoded));
 
         $this->expectException(VIntCodecException::class);

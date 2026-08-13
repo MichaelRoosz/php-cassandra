@@ -235,6 +235,10 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testDateRejectsInvalidCalendarFields(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Date requires 64-bit integer');
+        }
+
         foreach (['2023-02-30', '2023-00-01'] as $date) {
             try {
                 Value\Date::fromValue($date);
@@ -619,6 +623,13 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
 
     #[\PHPUnit\Framework\Attributes\DataProvider('fixedLengthValueProvider')]
     public function testFixedLengthValuesRejectShortAndTrailingData(string $class, int $length): void {
+        // The temporal types refuse to be constructed at all on a 32-bit build,
+        // so they never get as far as reporting the length they were handed.
+        $requires64Bit = [Value\Date::class, Value\Time::class, Value\Timestamp::class];
+        if (!$this->integerHasAtLeast64Bits() && in_array($class, $requires64Bit, true)) {
+            $this->markTestSkipped($class . ' requires 64-bit integer');
+        }
+
         foreach ([str_repeat("\0", $length - 1), str_repeat("\0", $length + 1)] as $binary) {
             try {
                 $class::fromBinary($binary);
@@ -1153,6 +1164,10 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
     }
 
     public function testTimestampRejectsInvalidOrNonIsoStrings(): void {
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('Timestamp requires 64-bit integer');
+        }
+
         foreach (['2023-02-30', 'next Thursday'] as $timestamp) {
             try {
                 Value\Timestamp::fromValue($timestamp);
