@@ -298,6 +298,26 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         }
     }
 
+    public function testRewindOneRowCanBeCalledConsecutively(): void {
+        $result = self::rowsResultWithOneColumn(Type::INT, [
+            pack('N', 7),
+            pack('N', 8),
+            pack('N', 9),
+        ]);
+
+        $this->assertSame(['col' => 7], $result->fetch());
+        $this->assertSame(['col' => 8], $result->fetch());
+
+        $result->rewindOneRow();
+        $result->rewindOneRow();
+
+        $this->assertSame(
+            [['col' => 7], ['col' => 8], ['col' => 9]],
+            $result->fetchAll(),
+        );
+        $this->assertFalse($result->fetch());
+    }
+
     /**
      * @param callable(): mixed $fetch
      */

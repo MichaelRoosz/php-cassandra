@@ -17,7 +17,14 @@ use Cassandra\Value\ValueEncodeConfig;
 use Throwable;
 
 final class RowsResult extends Result {
-    private int $dataOffsetOfPreviousRow;
+    /**
+     * Start offset of every row this cursor has reached, keyed by its zero-based
+     * row index. Keeping the history lets rewindOneRow() be called repeatedly
+     * without letting the row counter and stream position disagree.
+     *
+     * @var array<int, int>
+     */
+    private array $dataOffsetsByRow = [];
 
     private int $fetchedRows = 0;
 
@@ -60,7 +67,7 @@ final class RowsResult extends Result {
         $this->assertRowCountFitsInBody();
 
         $this->dataOffset = $this->stream->pos();
-        $this->dataOffsetOfPreviousRow = $this->dataOffset;
+        $this->dataOffsetsByRow[0] = $this->dataOffset;
 
         $this->valueEncodeConfig = ValueEncodeConfig::default();
     }
@@ -119,7 +126,7 @@ final class RowsResult extends Result {
             throw $e;
         }
 
-        $this->dataOffsetOfPreviousRow = $previousOffset;
+        $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
         $this->fetchedRows++;
 
         return $row;
@@ -237,7 +244,7 @@ final class RowsResult extends Result {
                 }
             }
 
-            $this->dataOffsetOfPreviousRow = $previousOffset;
+            $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
             $this->fetchedRows++;
 
             if ($key === null) {
@@ -340,7 +347,7 @@ final class RowsResult extends Result {
             throw $e;
         }
 
-        $this->dataOffsetOfPreviousRow = $previousOffset;
+        $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
         $this->fetchedRows++;
 
         return $value;
@@ -407,7 +414,7 @@ final class RowsResult extends Result {
             }
         }
 
-        $this->dataOffsetOfPreviousRow = $previousOffset;
+        $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
         $this->fetchedRows++;
 
         if ($key === null) {
@@ -573,7 +580,7 @@ final class RowsResult extends Result {
         }
 
         $this->fetchedRows--;
-        $this->stream->offset($this->dataOffsetOfPreviousRow);
+        $this->stream->offset($this->dataOffsetsByRow[$this->fetchedRows]);
     }
 
     public function rowCount(): int {
