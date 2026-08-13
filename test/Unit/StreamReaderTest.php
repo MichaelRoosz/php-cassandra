@@ -252,6 +252,26 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $reader->readTypeInfo();
     }
 
+    public function testReadTypeInfoRejectsDuplicateUdtFieldNames(): void {
+        $field = 'duplicate';
+        $bin = pack('n', Type::UDT->value)
+            . pack('n', 2) . 'ks'
+            . pack('n', 4) . 'type'
+            . pack('n', 2)
+            . pack('n', strlen($field)) . $field . pack('n', Type::VARCHAR->value)
+            . pack('n', strlen($field)) . $field . pack('n', Type::INT->value);
+
+        $reader = new StreamReader($bin);
+
+        try {
+            $reader->readTypeInfo();
+            $this->fail('Expected duplicate UDT metadata fields to be rejected');
+        } catch (ResponseException $e) {
+            $this->assertSame(ExceptionCode::RESPONSE_SR_DUPLICATE_UDT_FIELD->value, $e->getCode());
+            $this->assertSame($field, $e->getContext()['field'] ?? null);
+        }
+    }
+
     public function testReadTypeInfoSimpleAndCollections(): void {
         // simple type: INT
         $bin = pack('n', Type::INT->value);

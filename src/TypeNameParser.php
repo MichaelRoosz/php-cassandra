@@ -582,7 +582,21 @@ final class TypeNameParser {
                 );
             }
 
-            $valueTypes[$this->decodeUdtName($param['name'])] = $this->parse($param['value']);
+            $fieldName = $this->decodeUdtName($param['name']);
+            if (array_key_exists($fieldName, $valueTypes)) {
+                throw new TypeNameParserException(
+                    'Invalid UDT type params: field names must be unique',
+                    ExceptionCode::TYPENAMEPARSER_UDT_DUPLICATE_FIELD->value,
+                    [
+                        'field' => $fieldName,
+                        'keyspace' => $keyspace,
+                        'udt_name' => $name,
+                        'reason' => 'udt_field_names_must_be_unique',
+                    ]
+                );
+            }
+
+            $valueTypes[$fieldName] = $this->parse($param['value']);
         }
 
         return new UDTInfo($valueTypes, $isFrozen, $keyspace, $name);

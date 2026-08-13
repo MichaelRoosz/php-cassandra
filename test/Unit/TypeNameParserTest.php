@@ -1018,6 +1018,23 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         $this->parser->parse(TypeName::UDT->value . '(ks,type)');
     }
 
+    public function testUDTTypeRejectsDuplicateFieldNames(): void {
+        $field = bin2hex('duplicate');
+        $typeString = TypeName::UDT->value
+            . '(ks,' . bin2hex('type')
+            . ',' . $field . ':' . TypeName::UTF8->value
+            . ',' . $field . ':' . TypeName::INT32->value
+            . ')';
+
+        try {
+            $this->parser->parse($typeString);
+            $this->fail('Expected duplicate UDT type fields to be rejected');
+        } catch (TypeNameParserException $e) {
+            $this->assertSame(ExceptionCode::TYPENAMEPARSER_UDT_DUPLICATE_FIELD->value, $e->getCode());
+            $this->assertSame('duplicate', $e->getContext()['field'] ?? null);
+        }
+    }
+
     public function testUDTTypes(): void {
         $testCases = [
             [

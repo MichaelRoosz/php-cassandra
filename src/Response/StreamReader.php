@@ -965,6 +965,18 @@ final class StreamReader {
                 $length = $this->readShort();
                 for ($i = 0; $i < $length; ++$i) {
                     $key = $this->readString();
+                    if (array_key_exists($key, $types)) {
+                        throw new ResponseException(
+                            message: 'Duplicate field name in UDT type metadata',
+                            code: ExceptionCode::RESPONSE_SR_DUPLICATE_UDT_FIELD->value,
+                            context: [
+                                'field' => $key,
+                                'keyspace' => $keyspace,
+                                'udt_name' => $name,
+                                'field_index' => $i,
+                            ]
+                        );
+                    }
                     $types[$key] = $this->readTypeInfoAtDepth($nestedDepth);
                 }
 
