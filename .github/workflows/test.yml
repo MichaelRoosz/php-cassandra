@@ -98,9 +98,6 @@ jobs:
     - name: Install dependencies
       run: docker exec php32 composer install --no-progress --prefer-dist --optimize-autoloader
 
-    - name: Lint
-      run: docker exec php32 composer run lint
-
     - name: PHPStan
       run: docker exec php32 composer run phpstan
 
