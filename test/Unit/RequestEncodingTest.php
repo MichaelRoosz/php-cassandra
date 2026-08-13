@@ -588,6 +588,68 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $request->getBody();
     }
 
+    public function testQuotedBindMarkerNameSurvivesADollarQuotedStringLiteral(): void {
+        // A `$$…$$` literal exists to carry apostrophes without escaping them.
+        // A scan that does not know the form takes the first of those
+        // apostrophes for the start of an ordinary string literal and runs to
+        // the end of the query looking for its partner, losing the marker
+        // below — which would then go out lowercased and be refused by the node.
+        $query = 'INSERT INTO t (a, b) VALUES ($$it\'s fine$$, :"MyCol")';
+        $request = new Query(
+            query: $query,
+            values: ['MyCol' => new \Cassandra\Value\Int32(1)],
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $valueSection = substr($request->getBody(), 4 + strlen($query) + 2 + 4);
+
+        $this->assertSame(
+            pack('n', 1)
+                . pack('n', strlen('MyCol')) . 'MyCol'
+                . pack('N', 4) . pack('N', 1),
+            $valueSection,
+        );
+    }
+
+    public function testQuotedMarkerTextInsideADollarQuotedStringIsIgnored(): void {
+        // The other half of knowing the form: what is inside one is a string
+        // and not a marker, so a caller's value of that spelling is an ordinary
+        // name and is lowercased like any other.
+        $query = 'INSERT INTO t (a, b) VALUES ($$:"Fake"$$, :fake)';
+        $request = new Query(
+            query: $query,
+            values: ['Fake' => new \Cassandra\Value\Int32(1)],
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $valueSection = substr($request->getBody(), 4 + strlen($query) + 2 + 4);
+
+        $this->assertSame(
+            pack('n', 1)
+                . pack('n', strlen('fake')) . 'fake'
+                . pack('N', 4) . pack('N', 1),
+            $valueSection,
+        );
+    }
+
+    public function testQuotedMarkerTextInsideAnUnterminatedDollarQuotedStringIsIgnored(): void {
+        $query = 'INSERT INTO t (a) VALUES ($$never closed :"MyCol"';
+        $request = new Query(
+            query: $query,
+            values: ['MyCol' => new \Cassandra\Value\Int32(1)],
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $valueSection = substr($request->getBody(), 4 + strlen($query) + 2 + 4);
+
+        $this->assertSame(
+            pack('n', 1)
+                . pack('n', strlen('mycol')) . 'mycol'
+                . pack('N', 4) . pack('N', 1),
+            $valueSection,
+        );
+    }
+
     public function testQuotedMarkerTextInsideStringsAndCommentsIsIgnored(): void {
         $query = "SELECT ':\"Fake\"' FROM t /* :\"AlsoFake\" */ WHERE id = :fake";
         $request = new Query(
