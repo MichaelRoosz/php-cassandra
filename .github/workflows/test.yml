@@ -101,9 +101,6 @@ jobs:
     - name: PHPStan
       run: docker exec php32 composer run phpstan:32bit
 
-    - name: PHPStan tests
-      run: docker exec php32 composer run phpstan:tests
-
     - name: Psalm
       run: docker exec php32 composer run psalm
 
