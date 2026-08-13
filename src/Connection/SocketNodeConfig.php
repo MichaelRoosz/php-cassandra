@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\SocketException;
+
 final class SocketNodeConfig extends NodeConfig {
     /**
      * Receive/send timeouts of the transport. Both are stall timeouts: they
@@ -41,16 +44,15 @@ final class SocketNodeConfig extends NodeConfig {
      * at all before that counts as a transport failure in its own right —
      * during a wait that has no deadline of its own and with the heartbeat
      * turned off, that is the only thing that would ever end the read.
+     *
+     * @throws \Cassandra\Exception\SocketException
      */
     public function __construct(
         string $host = 'localhost',
         int $port = 9042,
         string $username = '',
         string $password = '',
-        array $socketOptions = [
-            SO_RCVTIMEO => self::DEFAULT_SO_RCVTIMEO,
-            SO_SNDTIMEO => self::DEFAULT_SO_SNDTIMEO,
-        ],
+        array $socketOptions = [],
         /**
          * Timeout for establishing the connection, in seconds. Fractional
          * values are allowed; it must be greater than zero, as an unbounded
@@ -59,6 +61,17 @@ final class SocketNodeConfig extends NodeConfig {
          */
         public readonly float $connectTimeoutInSeconds = 5,
     ) {
+        if (!extension_loaded('sockets')) {
+            throw new SocketException(
+                'The sockets extension is required for SocketNodeConfig; use StreamNodeConfig when ext-sockets is unavailable',
+                ExceptionCode::SOCKET_EXTENSION_NOT_LOADED->value,
+                [
+                    'extension' => 'sockets',
+                    'alternative_config' => StreamNodeConfig::class,
+                ]
+            );
+        }
+
         parent::__construct(
             host: $host,
             port: $port,
