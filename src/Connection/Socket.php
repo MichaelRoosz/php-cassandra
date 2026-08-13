@@ -646,6 +646,25 @@ final class Socket extends NodeImplementation implements IoNode {
                             }
 
                             $stallWindowArmed = $appliedTimeout >= $this->receiveTimeout;
+                        } elseif (!$this->mayBlock($readDeadline)) {
+                            // The same question the branch above settles for a
+                            // blocking read, asked where there is no timeout to
+                            // re-arm: a non-blocking retry is bounded by nothing
+                            // but the checkForReceiveTimeout() above, and that
+                            // enforces the transport's stall window rather than
+                            // the caller's deadline — so a socket configured
+                            // without a stall window (SO_RCVTIMEO {0, 0}, which
+                            // {@see self::getTimeoutFromConfig()} reads as
+                            // NO_TIMEOUT) would have the retry bounded by
+                            // nothing at all.
+                            //
+                            // Defensive as things stand: recv() only reports
+                            // EINTR for a call that blocked, which a
+                            // non-blocking one never does, so this is here
+                            // because the branch it guards must not be the one
+                            // place a deadline stops being honoured — not
+                            // because a socket is known to reach it.
+                            return '';
                         }
 
                         continue;
