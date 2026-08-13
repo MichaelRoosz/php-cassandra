@@ -99,7 +99,7 @@ jobs:
       run: docker exec php32 composer install --no-progress --prefer-dist --optimize-autoloader
 
     - name: PHPStan
-      run: docker exec php32 composer run phpstan
+      run: docker exec php32 composer run phpstan:32bit
 
     - name: PHPStan tests
       run: docker exec php32 composer run phpstan:tests

@@ -1,0 +1,19 @@
+# PHPStan configuration for a 32-bit build, i.e. one where PHP_INT_SIZE is 4.
+#
+# Everything the 64-bit configuration checks, minus the three value types that
+# require 64-bit integers: Date, Duration and Time all open their constructor
+# with require64Bit() and are unusable here. Their bodies are written in
+# literals that need more than 31 bits (2147483648, 86399999999999,
+# 3600000000000), each of which is a float on a 32-bit build, so analysing
+# them here reports nothing but the float-ness of arithmetic that can never
+# run. The 64-bit job analyses these files in full.
+
+includes:
+    - phpstan.neon
+
+parameters:
+    excludePaths:
+        analyse:
+            - src/Value/Date.php
+            - src/Value/Duration.php
+            - src/Value/Time.php

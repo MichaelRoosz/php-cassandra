@@ -60,6 +60,7 @@
         "lint": "vendor/bin/php-cs-fixer check",
         "lint-fix": "vendor/bin/php-cs-fixer fix",
         "phpstan": "vendor/bin/phpstan analyse --memory-limit=1G",
+        "phpstan:32bit": "vendor/bin/phpstan analyse --memory-limit=1G --configuration phpstan.32bit.neon",
         "phpstan:tests": "vendor/bin/phpstan analyse --memory-limit=1G --configuration phpstan.tests.neon",
         "psalm": "vendor/bin/psalm --no-cache",
         "phpunit": "XDEBUG_MODE=coverage vendor/bin/phpunit $@",

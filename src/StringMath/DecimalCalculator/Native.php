@@ -23,8 +23,17 @@ final class Native extends DecimalCalculator {
      * 2^31 - 1 (~2.15e9) where it is four. Sixteen digits per chunk rather
      * than six means a third of the substr, str_pad and intdiv calls per
      * conversion wherever the platform can carry them.
+     *
+     * The width is read off PHP_INT_MAX - the bit above the 32-bit ceiling is
+     * set exactly where an int is eight bytes - rather than off the more
+     * obvious PHP_INT_SIZE, because static analysers resolve PHP_INT_SIZE to
+     * 4|8 whatever build they run on: that would fold {@see self::CHUNK_RADIX}
+     * to 10^6 *and* 10^16, and on a 32-bit analyser the second is past
+     * PHP_INT_MAX and comes out a float, which taints every intermediate
+     * computed from it. PHP_INT_MAX resolves to the one value the build in
+     * hand really has, so each build folds only the radix it can hold.
      */
-    private const CHUNK_DIGITS = 6 + (10 * (PHP_INT_SIZE >> 3));
+    private const CHUNK_DIGITS = 6 + (10 * ((PHP_INT_MAX >> 31) & 1));
 
     /**
      * The base of one working chunk, i.e. 10 ** {@see self::CHUNK_DIGITS}.
