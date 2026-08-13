@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="1"
+    resolveFromConfigFile="true"
+    findUnusedCode="false"
+    findUnusedBaselineEntry="true"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+>
+    <projectFiles>
+        <directory name="src" />
+        <ignoreFiles>
+            <directory name="vendor" />
+            <file name="src/Value/Date.php" />
+            <file name="src/Value/Duration.php" />
+            <file name="src/Value/Time.php" />
+        </ignoreFiles>
+    </projectFiles>
+
+    <stubs>
+        <file name="stubs/lz4.stub" />
+    </stubs>
+
+    <issueHandlers>
+        <MissingPureAnnotation errorLevel="suppress"/>
+        <MissingAbstractPureAnnotation errorLevel="suppress"/>
+        <MissingInterfaceImmutableAnnotation errorLevel="suppress"/>
+        <MissingImmutableAnnotation errorLevel="suppress"/>
+    </issueHandlers>
+</psalm>

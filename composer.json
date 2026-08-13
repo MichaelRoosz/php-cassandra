@@ -63,6 +63,7 @@
         "phpstan:32bit": "vendor/bin/phpstan analyse --memory-limit=1G --configuration phpstan.32bit.neon",
         "phpstan:tests": "vendor/bin/phpstan analyse --memory-limit=1G --configuration phpstan.tests.neon",
         "psalm": "vendor/bin/psalm --no-cache",
+        "psalm:32bit": "vendor/bin/psalm --no-cache --config=psalm.32bit.xml",
         "phpunit": "XDEBUG_MODE=coverage vendor/bin/phpunit $@",
         "test:unit": "vendor/bin/phpunit --testsuite unit",
         "test:integration:up": "docker compose up -d",
