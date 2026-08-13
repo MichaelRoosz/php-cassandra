@@ -97,6 +97,43 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         }
     }
 
+    /**
+     * The parameters are part of a custom type's class name — the name is the
+     * whole string, not the part before the first bracket — so they must
+     * survive the trimming, or two different types would look identical.
+     */
+    public function testCustomTypeKeepsItsParametersInTheClassName(): void {
+        $withParams = $this->parser->parse(' com.example.CustomType(param1) ');
+        $withoutParams = $this->parser->parse(' com.example.CustomType ');
+
+        if (!($withParams instanceof CustomInfo) || !($withoutParams instanceof CustomInfo)) {
+            $this->fail('Result is not a CustomInfo');
+        }
+
+        $this->assertSame('com.example.CustomType(param1)', $withParams->javaClassName);
+        $this->assertSame('com.example.CustomType', $withoutParams->javaClassName);
+        $this->assertFalse($withParams->isBinaryCompatibleWith($withoutParams));
+    }
+
+    /**
+     * A custom type is the one kind compared by name rather than by structure,
+     * so surrounding whitespace used to make the same type incompatible with
+     * itself. Every other branch of the parser already trims what it matches
+     * on, and the grammar treats space, tab and newline as separators.
+     */
+    public function testCustomTypeNamesAreTrimmedLikeEveryOtherTypeName(): void {
+        $bare = 'com.example.CustomType(param1,param2)';
+
+        foreach ([$bare, ' ' . $bare, $bare . ' ', "\t" . $bare . "\n", '   ' . $bare . '   '] as $typeString) {
+            $result = $this->parser->parse($typeString);
+            if (!($result instanceof CustomInfo)) {
+                $this->fail('Result is not a CustomInfo');
+            }
+
+            $this->assertSame($bare, $result->javaClassName, var_export($typeString, true));
+        }
+    }
+
     // =============================================
     // CUSTOM TYPE TESTS
     // =============================================
@@ -569,6 +606,23 @@ class TypeNameParserTest extends AbstractUnitTestCase {
             $this->assertEquals($expectedKeyType, $result->keyType->type);
             $this->assertEquals($expectedValueType, $result->valueType->type);
         }
+    }
+
+    /**
+     * The consequence the trimming is for: a padded type string and a bare one
+     * describe the same column and must be usable interchangeably.
+     */
+    public function testPaddedAndBareCustomTypesAreBinaryCompatible(): void {
+        $bare = $this->parser->parse('com.example.CustomType');
+        $padded = $this->parser->parse("  com.example.CustomType\t");
+
+        $this->assertTrue($bare->isBinaryCompatibleWith($padded));
+        $this->assertTrue($padded->isBinaryCompatibleWith($bare));
+
+        $this->assertFalse(
+            $bare->isBinaryCompatibleWith($this->parser->parse('com.example.OtherType')),
+            'trimming does not make two different custom types alike',
+        );
     }
 
     // =============================================

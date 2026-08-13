@@ -538,7 +538,7 @@ final class TypeNameParser {
         }
 
         return new CustomInfo(
-            javaClassName: $typeString,
+            javaClassName: trim($typeString),
         );
     }
 
