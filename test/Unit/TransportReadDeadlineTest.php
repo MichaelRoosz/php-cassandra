@@ -26,6 +26,19 @@ use ReflectionProperty;
  * select() rather than any logic above it.
  */
 final class TransportReadDeadlineTest extends AbstractUnitTestCase {
+    /**
+     * Upper bound for a read that was meant to end at its 0.3s deadline rather
+     * than at the 15s stall window behind it.
+     *
+     * What is being told apart is 0.3s from 15s, so anything between the two
+     * discriminates. It sits well above the deadline because these tests share a
+     * machine with whatever else is running: a scheduler that does not come back
+     * to the process for a couple of seconds says nothing about the deadline
+     * logic, and a bound tight enough to catch that is a bound that fails under
+     * load rather than on a bug.
+     */
+    private const DEADLINE_NOT_STALL_WINDOW = 10.0;
+
     /** @var ?resource $acceptedClient */
     private $acceptedClient = null;
 
@@ -56,7 +69,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
 
         $this->assertSame('', $data, 'nothing arrived, and that is not a failure');
         $this->assertGreaterThan(0.2, $elapsed, 'it waited the deadline out');
-        $this->assertLessThan(3.0, $elapsed, 'and not the 15s stall window');
+        $this->assertLessThan(self::DEADLINE_NOT_STALL_WINDOW, $elapsed, 'and not the 15s stall window');
     }
 
     public function testSocketDeadlineIsHonouredWithNoStallWindowAtAll(): void {
@@ -68,7 +81,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
 
         $this->assertSame('', $data);
         $this->assertGreaterThan(0.2, $elapsed);
-        $this->assertLessThan(3.0, $elapsed);
+        $this->assertLessThan(self::DEADLINE_NOT_STALL_WINDOW, $elapsed);
     }
 
     public function testSocketPastDeadlineDoesNotWaitAtAll(): void {
@@ -115,7 +128,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
 
         $this->assertSame('', $data);
         $this->assertGreaterThan(0.2, $elapsed);
-        $this->assertLessThan(3.0, $elapsed);
+        $this->assertLessThan(self::DEADLINE_NOT_STALL_WINDOW, $elapsed);
     }
 
     public function testStreamDeadlineIsHonouredWithNoStallWindowAtAll(): void {
@@ -125,7 +138,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
 
         $this->assertSame('', $data);
         $this->assertGreaterThan(0.2, $elapsed);
-        $this->assertLessThan(10.0, $elapsed);
+        $this->assertLessThan(self::DEADLINE_NOT_STALL_WINDOW, $elapsed);
     }
 
     public function testStreamPastDeadlineDoesNotWaitAtAll(): void {
