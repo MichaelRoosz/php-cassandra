@@ -150,6 +150,76 @@ jobs:
     - name: PHPUnit integration tests
       run: CASSANDRA_VERSION=${{ matrix.cassandra }} composer run test:integration
 
+  integration-test-32bit:
+    runs-on: ubuntu-latest
+
+    needs: unit-test-32bit
+
+    strategy:
+      matrix:
+        php: ["8.5"]
+        cassandra: ["5.0"]
+
+    name: Integration test (32-bit) - PHP ${{ matrix.php }} - Cassandra ${{ matrix.cassandra }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # setup-php only ships 64-bit builds, so the toolchain lives in an i386
+    # container (x86-64 runs i386 code natively, no emulation involved) and
+    # every following step talks to it through docker exec. Cassandra has no
+    # 32-bit build either, so it stays a plain 64-bit container started by
+    # docker compose next to it; --network host is what lets the tests reach it
+    # on 127.0.0.1:9142, the address the composer scripts connect to.
+    - name: Setup 32-bit PHP
+      run: |
+        docker run -d --name php32 --platform linux/386 --network host \
+          -v "$GITHUB_WORKSPACE":"$GITHUB_WORKSPACE" \
+          -w "$GITHUB_WORKSPACE" \
+          -e COMPOSER_ALLOW_SUPERUSER=1 \
+          i386/php:${{ matrix.php }}-cli sleep infinity
+        docker exec php32 bash -euxc '
+          apt-get update
+          apt-get install -y --no-install-recommends $PHPIZE_DEPS git unzip libgmp-dev
+          ln -sf "/usr/include/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/gmp.h" /usr/include/gmp.h
+          docker-php-ext-install -j"$(nproc)" bcmath gmp sockets
+          pecl install pcov
+          docker-php-ext-enable pcov
+          curl -sSL https://getcomposer.org/composer-stable.phar -o /usr/local/bin/composer
+          chmod +x /usr/local/bin/composer
+        '
+
+    - name: Check PHP version
+      run: |
+        docker exec php32 php -v
+        docker exec php32 php -r 'if (PHP_INT_SIZE !== 4) { fwrite(STDERR, "Expected 32-bit PHP, got PHP_INT_SIZE=" . PHP_INT_SIZE . PHP_EOL); exit(1); }'
+
+    - name: Cache Composer packages
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php32-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php32-${{ matrix.php }}-
+
+    - name: Install dependencies
+      run: docker exec php32 composer install --no-progress --prefer-dist --optimize-autoloader
+
+    # The compose lifecycle stays on the 64-bit host, so only the PHPUnit run
+    # itself goes through the 32-bit container.
+    - name: Start Cassandra
+      run: CASSANDRA_VERSION=${{ matrix.cassandra }} docker compose up -d
+
+    - name: Wait for Cassandra
+      run: bash .docker/wait-for-cassandra.sh
+
+    - name: PHPUnit integration tests
+      run: docker exec php32 composer run test:integration:run
+
+    - name: Stop Cassandra
+      if: always()
+      run: CASSANDRA_VERSION=${{ matrix.cassandra }} docker compose down -v
+
   integration-test-cassandra-old:
     runs-on: ubuntu-latest
 
