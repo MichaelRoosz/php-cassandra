@@ -11,24 +11,25 @@ use Cassandra\StringUtil;
 
 final class Native extends DecimalCalculator {
     /**
-     * The base of one working chunk, i.e. 10 ** {@see self::CHUNK_DIGITS}.
-     */
-    private const CHUNK_BASE = 10 ** self::CHUNK_DIGITS;
-
-    /**
      * How many decimal digits are carried in a single PHP int while
      * multiplying, dividing or adding.
      *
-     * The widest chunk for which every intermediate below stays inside a
-     * signed platform integer. Both the largest product formed here
-     * ((CHUNK_BASE - 1) * 256 + 255) and the largest dividend
-     * (255 * CHUNK_BASE + CHUNK_BASE - 1) come to 256 * CHUNK_BASE - 1, so the
-     * bound is that alone: 2.56e18 against 2^63 - 1 (~9.22e18) on a 64-bit
-     * build, 2.56e8 against 2^31 - 1 (~2.15e9) on a 32-bit one. Sixteen digits
-     * per chunk rather than six means a third of the substr, str_pad and
-     * intdiv calls per conversion where the platform can carry them.
+     * Sixteen on a 64-bit build and six on a 32-bit one: the widest chunk for
+     * which every intermediate below stays inside a signed platform integer.
+     * Both the largest product formed here ((CHUNK_RADIX - 1) * 256 + 255) and
+     * the largest dividend (255 * CHUNK_RADIX + CHUNK_RADIX - 1) come to
+     * 256 * CHUNK_RADIX - 1, so that alone is the bound: 2.56e18 against
+     * 2^63 - 1 (~9.22e18) where an int is eight bytes, 2.56e8 against
+     * 2^31 - 1 (~2.15e9) where it is four. Sixteen digits per chunk rather
+     * than six means a third of the substr, str_pad and intdiv calls per
+     * conversion wherever the platform can carry them.
      */
-    private const CHUNK_DIGITS = PHP_INT_SIZE >= 8 ? 16 : 6;
+    private const CHUNK_DIGITS = 6 + (10 * (PHP_INT_SIZE >> 3));
+
+    /**
+     * The base of one working chunk, i.e. 10 ** {@see self::CHUNK_DIGITS}.
+     */
+    private const CHUNK_RADIX = 10 ** self::CHUNK_DIGITS;
 
     /**
      * @throws \Cassandra\Exception\StringMathException
@@ -152,7 +153,7 @@ final class Native extends DecimalCalculator {
         $quotient = '';
 
         for ($start = 0; $start < $length; $start += self::CHUNK_DIGITS) {
-            $acc = ($carry * self::CHUNK_BASE) + (int) substr($decimal, $start, self::CHUNK_DIGITS);
+            $acc = ($carry * self::CHUNK_RADIX) + (int) substr($decimal, $start, self::CHUNK_DIGITS);
             $quotient .= str_pad((string) intdiv($acc, 256), self::CHUNK_DIGITS, '0', STR_PAD_LEFT);
             $carry = $acc % 256;
         }
@@ -192,8 +193,8 @@ final class Native extends DecimalCalculator {
         for ($end = strlen($decimal); $end > 0; $end -= self::CHUNK_DIGITS) {
             $start = max(0, $end - self::CHUNK_DIGITS);
             $product = ((int) substr($decimal, $start, $end - $start) * 256) + $carry;
-            $chunks[] = str_pad((string) ($product % self::CHUNK_BASE), self::CHUNK_DIGITS, '0', STR_PAD_LEFT);
-            $carry = intdiv($product, self::CHUNK_BASE);
+            $chunks[] = str_pad((string) ($product % self::CHUNK_RADIX), self::CHUNK_DIGITS, '0', STR_PAD_LEFT);
+            $carry = intdiv($product, self::CHUNK_RADIX);
         }
 
         if ($carry > 0) {
