@@ -11,6 +11,26 @@ use Cassandra\StringUtil;
 
 final class Native extends DecimalCalculator {
     /**
+     * The base of one working chunk, i.e. 10 ** {@see self::CHUNK_DIGITS}.
+     */
+    private const CHUNK_BASE = 10 ** self::CHUNK_DIGITS;
+
+    /**
+     * How many decimal digits are carried in a single PHP int while
+     * multiplying, dividing or adding.
+     *
+     * The widest chunk for which every intermediate below stays inside a
+     * signed platform integer. Both the largest product formed here
+     * ((CHUNK_BASE - 1) * 256 + 255) and the largest dividend
+     * (255 * CHUNK_BASE + CHUNK_BASE - 1) come to 256 * CHUNK_BASE - 1, so the
+     * bound is that alone: 2.56e18 against 2^63 - 1 (~9.22e18) on a 64-bit
+     * build, 2.56e8 against 2^31 - 1 (~2.15e9) on a 32-bit one. Sixteen digits
+     * per chunk rather than six means a third of the substr, str_pad and
+     * intdiv calls per conversion where the platform can carry them.
+     */
+    private const CHUNK_DIGITS = PHP_INT_SIZE >= 8 ? 16 : 6;
+
+    /**
      * @throws \Cassandra\Exception\StringMathException
      */
     #[\Override]
@@ -73,22 +93,26 @@ final class Native extends DecimalCalculator {
             );
         }
 
+        // Only the digits the carry actually reaches are rewritten; an addend of
+        // at most 255 stops within the first few of them, so the rest of the
+        // number is left where it is instead of being rebuilt digit by digit.
+        // That is what makes this O(1) work on top of the one string copy,
+        // rather than O(digits) — and this is called once per byte by
+        // {@see DecimalCalculator::fromBinary()}.
+        $result = $decimal;
         $carry = $addend;
-        $out = [];
-        $length = strlen($decimal);
-        for ($i = $length - 1; $i >= 0; $i--) {
-            $digit = ord($decimal[$i]) - 48;
-            $sum = $digit + $carry;
-            $out[] = chr(48 + ($sum % 10));
+
+        for ($i = strlen($result) - 1; $i >= 0 && $carry > 0; $i--) {
+            $sum = (ord($result[$i]) - 48) + $carry;
+            $result[$i] = chr(48 + ($sum % 10));
             $carry = intdiv($sum, 10);
         }
 
         while ($carry > 0) {
-            $out[] = chr(48 + ($carry % 10));
+            $result = chr(48 + ($carry % 10)) . $result;
             $carry = intdiv($carry, 10);
         }
 
-        $result = strrev(implode('', $out));
         $result = ltrim($result, '0');
 
         return $result === '' ? '0' : $result;
@@ -115,31 +139,28 @@ final class Native extends DecimalCalculator {
             );
         }
 
-        $carry = 0;
-        $out = [];
-        $started = false;
+        // Padded up to a whole number of chunks so every step below divides the
+        // same width, which is what lets the chunk base be a constant.
         $length = strlen($decimal);
+        $remainderDigits = $length % self::CHUNK_DIGITS;
+        if ($remainderDigits !== 0) {
+            $decimal = str_repeat('0', self::CHUNK_DIGITS - $remainderDigits) . $decimal;
+            $length += self::CHUNK_DIGITS - $remainderDigits;
+        }
 
-        for ($i = 0; $i < $length; $i++) {
-            $digit = ord($decimal[$i]) - 48;
-            $acc = ($carry * 10) + $digit;
-            $q = intdiv($acc, 256);
+        $carry = 0;
+        $quotient = '';
+
+        for ($start = 0; $start < $length; $start += self::CHUNK_DIGITS) {
+            $acc = ($carry * self::CHUNK_BASE) + (int) substr($decimal, $start, self::CHUNK_DIGITS);
+            $quotient .= str_pad((string) intdiv($acc, 256), self::CHUNK_DIGITS, '0', STR_PAD_LEFT);
             $carry = $acc % 256;
-            if ($q !== 0 || $started) {
-                $out[] = chr((48 + $q) & 0xFF);
-                $started = true;
-            }
         }
 
-        if (!$started) {
-            return [
-                'quotient' => '0',
-                'remainder' => $carry,
-            ];
-        }
+        $quotient = ltrim($quotient, '0');
 
         return [
-            'quotient' => implode('', $out),
+            'quotient' => $quotient === '' ? '0' : $quotient,
             'remainder' => $carry,
         ];
     }
@@ -161,25 +182,25 @@ final class Native extends DecimalCalculator {
             );
         }
 
-        $multiplier = 256;
-
+        // The chunks are produced least-significant first and collected in an
+        // array rather than being prepended to a string: a prepend copies
+        // everything accumulated so far, which would make one multiplication
+        // quadratic in its own length and the conversion above it cubic.
         $carry = 0;
-        $out = [];
-        $length = strlen($decimal);
-        for ($i = $length - 1; $i >= 0; $i--) {
-            $digit = ord($decimal[$i]) - 48;
-            $product = ($digit * $multiplier) + $carry;
-            $out[] = chr(48 + ($product % 10));
-            $carry = intdiv($product, 10);
+        $chunks = [];
+
+        for ($end = strlen($decimal); $end > 0; $end -= self::CHUNK_DIGITS) {
+            $start = max(0, $end - self::CHUNK_DIGITS);
+            $product = ((int) substr($decimal, $start, $end - $start) * 256) + $carry;
+            $chunks[] = str_pad((string) ($product % self::CHUNK_BASE), self::CHUNK_DIGITS, '0', STR_PAD_LEFT);
+            $carry = intdiv($product, self::CHUNK_BASE);
         }
 
-        while ($carry > 0) {
-            $out[] = chr(48 + ($carry % 10));
-            $carry = intdiv($carry, 10);
+        if ($carry > 0) {
+            $chunks[] = (string) $carry;
         }
 
-        $result = strrev(implode('', $out));
-        $result = ltrim($result, '0');
+        $result = ltrim(implode('', array_reverse($chunks)), '0');
 
         return $result === '' ? '0' : $result;
     }
