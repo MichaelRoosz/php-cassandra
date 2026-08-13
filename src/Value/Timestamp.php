@@ -183,7 +183,17 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
      */
     #[\Override]
     public function getValue(): string {
-        return $this->asDateTime()->format('Y-m-d H:i:s.vO');
+        $formatted = $this->asDateTime()->format('Y-m-d H:i:s.vO');
+
+        if ($formatted[0] === '-' || $formatted[0] === '+') {
+            return $formatted;
+        }
+
+        $yearLength = strpos($formatted, '-');
+
+        return $yearLength !== false && $yearLength > 4
+            ? '+' . $formatted
+            : $formatted;
     }
 
     #[\Override]
