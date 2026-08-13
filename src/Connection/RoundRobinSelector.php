@@ -15,7 +15,9 @@ final class RoundRobinSelector implements NodeSelector {
         }
 
         $index = $this->counter % $count;
-        $this->counter++;
+        $this->counter = $this->counter === PHP_INT_MAX
+            ? ($index + 1) % $count
+            : $this->counter + 1;
 
         return array_merge(array_slice($nodes, $index), array_slice($nodes, 0, $index));
     }
