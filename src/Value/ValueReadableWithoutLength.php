@@ -25,6 +25,9 @@ abstract class ValueReadableWithoutLength extends ValueBase {
         return false;
     }
 
+    /**
+     * @param positive-int $minimumBytesPerEntry
+     */
     final protected static function maximumCollectionEntryCount(
         int $remainingLength,
         ?int $declaredLength,
