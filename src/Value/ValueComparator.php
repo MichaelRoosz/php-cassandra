@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\Value;
 
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ValueException;
 use Cassandra\Type;
 use Cassandra\TypeInfo\ListCollectionInfo;
 use Cassandra\TypeInfo\MapCollectionInfo;
@@ -82,7 +84,57 @@ final class ValueComparator {
         };
     }
 
+    /**
+     * Refuse a value whose binary is not the width its type is serialized at.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function assertFixedWidth(string $left, string $right, int $width): void {
+
+        if (strlen($left) === $width && strlen($right) === $width) {
+            return;
+        }
+
+        throw new ValueException(
+            'Cannot compare values of a fixed-width type whose binary is not that width',
+            ExceptionCode::VALUE_COMPARATOR_INVALID_LENGTH->value,
+            [
+                'expected_length' => $width,
+                'left_length' => strlen($left),
+                'right_length' => strlen($right),
+            ]
+        );
+    }
+
+    /**
+     * Refuse a read that would run past the end of the binary it walks.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function assertHasBytes(string $binary, int $offset, int $length, string $field): void {
+
+        if ($length >= 0 && $offset + $length <= strlen($binary)) {
+            return;
+        }
+
+        throw new ValueException(
+            'Cannot compare values: the serialized value ends before its ' . $field . ' does',
+            ExceptionCode::VALUE_COMPARATOR_TRUNCATED_BINARY->value,
+            [
+                'field' => $field,
+                'offset' => $offset,
+                'required_length' => $length,
+                'binary_length' => strlen($binary),
+            ]
+        );
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     private static function collectionCount(string $binary): int {
+        self::assertHasBytes($binary, 0, 4, 'element count');
+
         /** @var array{1: int} $count */
         $count = unpack('N', substr($binary, 0, 4));
 
@@ -91,6 +143,8 @@ final class ValueComparator {
 
     /**
      * @return list<string>
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     private static function collectionValues(string $binary, int $valuesPerEntry = 1): array {
         $count = self::collectionCount($binary) * $valuesPerEntry;
@@ -148,7 +202,12 @@ final class ValueComparator {
         return $leftNegative ? -$comparison : $comparison;
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     private static function compareFloat(string $left, string $right, bool $singlePrecision): int {
+        self::assertFixedWidth($left, $right, $singlePrecision ? 4 : 8);
+
         /** @var array{1: float} $leftUnpacked */
         $leftUnpacked = unpack($singlePrecision ? 'G' : 'E', $left);
         /** @var array{1: float} $rightUnpacked */
@@ -238,7 +297,13 @@ final class ValueComparator {
         return count($left) <=> count($right);
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     private static function compareSignedBinary(string $left, string $right): int {
+        self::assertHasBytes($left, 0, 1, 'sign byte');
+        self::assertHasBytes($right, 0, 1, 'sign byte');
+
         $leftNegative = (ord($left[0]) & 0x80) !== 0;
         $rightNegative = (ord($right[0]) & 0x80) !== 0;
 
@@ -249,7 +314,12 @@ final class ValueComparator {
         return strcmp($left, $right);
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     private static function compareTimeUuid(string $left, string $right, bool $signedTail): int {
+        self::assertFixedWidth($left, $right, 16);
+
         // UUID v1 stores its timestamp least-significant group first. Compare
         // the high 12, middle 16 and low 32 bits in chronological order, then
         // the clock sequence and node bytes as the tie-breaker.
@@ -320,7 +390,12 @@ final class ValueComparator {
         );
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     private static function compareUuid(string $left, string $right): int {
+        self::assertFixedWidth($left, $right, 16);
+
         $leftVersion = ord($left[6]) >> 4;
         $rightVersion = ord($right[6]) >> 4;
         $versionComparison = $leftVersion <=> $rightVersion;
@@ -348,30 +423,47 @@ final class ValueComparator {
         ];
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     private static function readValue(string $binary, int &$offset): string {
 
-        // length is not allowed to be null
+        self::assertHasBytes($binary, $offset, 4, 'element length');
+
         /** @var array{1: int} $length */
         $length = unpack('N', substr($binary, $offset, 4));
         $offset += 4;
-        $value = substr($binary, $offset, $length[1]);
-        $offset += $length[1];
+
+        // length can be negative, but unpack() returns an unsigned int,
+        // so we need to shift it back to a signed int.
+        $elementLength = $length[1]
+            << self::SIGNED_INT_SHIFT_BIT_SIZE
+            >> self::SIGNED_INT_SHIFT_BIT_SIZE;
+
+        self::assertHasBytes($binary, $offset, $elementLength, 'element');
+
+        $value = substr($binary, $offset, $elementLength);
+        $offset += $elementLength;
 
         return $value;
     }
 
     /**
      * @return list<?string>
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     private static function tupleValues(string $binary, int $count): array {
         $offset = 0;
         $values = [];
         for ($index = 0; $index < $count; ++$index) {
+            self::assertHasBytes($binary, $offset, 4, 'element length');
+
             /** @var array{1: int} $length */
             $length = unpack('N', substr($binary, $offset, 4));
             $offset += 4;
 
-            // length can be negative for null values, but unpack() returns an unsigned int,
+            // length can be negative, but unpack() returns an unsigned int,
             // so we need to shift it back to a signed int.
             $elementLength = $length[1]
                 << self::SIGNED_INT_SHIFT_BIT_SIZE
@@ -382,6 +474,8 @@ final class ValueComparator {
 
                 continue;
             }
+
+            self::assertHasBytes($binary, $offset, $elementLength, 'element');
 
             $values[] = substr($binary, $offset, $elementLength);
             $offset += $elementLength;
