@@ -43,7 +43,12 @@ final class SetCollection extends ValueReadableWithoutLength {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+        return self::fromStream(
+            new StreamReader($binary),
+            length: strlen($binary),
+            typeInfo: $typeInfo,
+            valueEncodeConfig: $valueEncodeConfig
+        );
     }
 
     /**
@@ -97,12 +102,17 @@ final class SetCollection extends ValueReadableWithoutLength {
 
         $set = [];
         $count = $stream->readInt();
-        $maximumCount = intdiv(max(0, $stream->remainingLength()), 4);
+        $maximumCount = self::maximumCollectionEntryCount($stream->remainingLength(), $length, 4);
         if ($count < 0 || $count > $maximumCount) {
             throw new ValueException(
                 'Set element count does not fit in the available value data',
                 ExceptionCode::VALUE_SET_INVALID_VALUE_TYPE->value,
-                ['count' => $count, 'maximum_count' => $maximumCount]
+                [
+                    'count' => $count,
+                    'maximum_count' => $maximumCount,
+                    'declared_length' => $length,
+                    'remaining_length' => $stream->remainingLength(),
+                ]
             );
         }
         for ($i = 0; $i < $count; ++$i) {

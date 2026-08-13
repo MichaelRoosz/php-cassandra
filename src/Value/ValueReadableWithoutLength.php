@@ -24,4 +24,19 @@ abstract class ValueReadableWithoutLength extends ValueBase {
     final public static function isSerializedAsFixedLength(): bool {
         return false;
     }
+
+    final protected static function maximumCollectionEntryCount(
+        int $remainingLength,
+        ?int $declaredLength,
+        int $minimumBytesPerEntry,
+    ): int {
+
+        $available = max(0, $remainingLength);
+
+        if ($declaredLength !== null) {
+            $available = min($available, max(0, $declaredLength - 4));
+        }
+
+        return intdiv($available, $minimumBytesPerEntry);
+    }
 }

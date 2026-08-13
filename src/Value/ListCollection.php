@@ -42,7 +42,12 @@ final class ListCollection extends ValueReadableWithoutLength {
         ?TypeInfo $typeInfo = null,
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+        return self::fromStream(
+            new StreamReader($binary),
+            length: strlen($binary),
+            typeInfo: $typeInfo,
+            valueEncodeConfig: $valueEncodeConfig
+        );
     }
 
     /**
@@ -98,7 +103,7 @@ final class ListCollection extends ValueReadableWithoutLength {
 
         $list = [];
         $count = $stream->readInt();
-        self::assertCountFits($count, $stream->remainingLength());
+        self::assertCountFits($count, $stream->remainingLength(), $length);
         for ($i = 0; $i < $count; ++$i) {
             /** @psalm-suppress MixedAssignment */
             $value = $stream->readValue($typeInfo->valueType, $valueEncodeConfig);
@@ -194,15 +199,22 @@ final class ListCollection extends ValueReadableWithoutLength {
     }
 
     /**
+     * @param ?int $declaredLength see {@see ValueReadableWithoutLength::maximumCollectionEntryCount()}
+     *
      * @throws \Cassandra\Exception\ValueException
      */
-    private static function assertCountFits(int $count, int $remainingLength): void {
-        $maximumCount = intdiv(max(0, $remainingLength), 4);
+    private static function assertCountFits(int $count, int $remainingLength, ?int $declaredLength): void {
+        $maximumCount = self::maximumCollectionEntryCount($remainingLength, $declaredLength, 4);
         if ($count < 0 || $count > $maximumCount) {
             throw new ValueException(
                 'List element count does not fit in the available value data',
                 ExceptionCode::VALUE_LIST_INVALID_VALUE_TYPE->value,
-                ['count' => $count, 'maximum_count' => $maximumCount]
+                [
+                    'count' => $count,
+                    'maximum_count' => $maximumCount,
+                    'declared_length' => $declaredLength,
+                    'remaining_length' => $remainingLength,
+                ]
             );
         }
     }
