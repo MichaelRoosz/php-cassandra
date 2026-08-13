@@ -98,6 +98,11 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     }
 
     public function testBatchWithDefaultTimestamp(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('A default timestamp requires 64-bit integer');
+        }
+
         $table = "{$this->keyspace}.cql_writetime";
         $timestamp = 1700000000000000;
 
@@ -241,11 +246,16 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
         sort($cks);
         $this->assertSame([1, 3], $cks);
 
-        $tokens = $this->connection->query("SELECT pk, token(pk) AS tk FROM {$table} LIMIT 1")
-            ->asRowsResult()->fetch();
+        // token() hashes into the full bigint range, so its result only fits
+        // into a PHP int on a 64-bit build. The IN predicate above is checked
+        // either way.
+        if ($this->integerHasAtLeast64Bits()) {
+            $tokens = $this->connection->query("SELECT pk, token(pk) AS tk FROM {$table} LIMIT 1")
+                ->asRowsResult()->fetch();
 
-        $this->assertIsArray($tokens);
-        $this->assertIsInt($tokens['tk'], 'token() returns a bigint');
+            $this->assertIsArray($tokens);
+            $this->assertIsInt($tokens['tk'], 'token() returns a bigint');
+        }
     }
 
     public function testStaticColumnIsSharedAcrossPartition(): void {
@@ -309,6 +319,11 @@ final class CqlFeaturesTest extends AbstractIntegrationTestCase {
     }
 
     public function testTtlAndWriteTime(): void {
+
+        if (!$this->integerHasAtLeast64Bits()) {
+            $this->markTestSkipped('A write timestamp requires 64-bit integer');
+        }
+
         $table = "{$this->keyspace}.cql_writetime";
         $timestamp = 1600000000000000;
 

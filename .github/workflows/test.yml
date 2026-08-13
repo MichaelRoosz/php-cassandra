@@ -165,16 +165,20 @@ jobs:
     # 32-bit build either, so it stays a plain 64-bit container started by
     # docker compose next to it; --network host is what lets the tests reach it
     # on 127.0.0.1:9142, the address the composer scripts connect to.
+    # The cqlsh comparison tests shell out to "docker exec php-cassandra-test-db
+    # cqlsh", so the container also needs a docker client and the host's docker
+    # socket to reach the daemon that runs the Cassandra container.
     - name: Setup 32-bit PHP
       run: |
         docker run -d --name php32 --platform linux/386 --network host \
           -v "$GITHUB_WORKSPACE":"$GITHUB_WORKSPACE" \
+          -v /var/run/docker.sock:/var/run/docker.sock \
           -w "$GITHUB_WORKSPACE" \
           -e COMPOSER_ALLOW_SUPERUSER=1 \
           i386/php:${{ matrix.php }}-cli sleep infinity
         docker exec php32 bash -euxc '
           apt-get update
-          apt-get install -y --no-install-recommends $PHPIZE_DEPS git unzip libgmp-dev
+          apt-get install -y --no-install-recommends $PHPIZE_DEPS git unzip libgmp-dev docker-cli
           ln -sf "/usr/include/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/gmp.h" /usr/include/gmp.h
           docker-php-ext-install -j"$(nproc)" bcmath gmp sockets
           pecl install pcov
