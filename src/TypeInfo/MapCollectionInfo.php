@@ -73,11 +73,7 @@ final class MapCollectionInfo extends TypeInfo {
         }
         $valueType = ValueFactory::getTypeInfoFromUnvalidatedDefinition($typeDefinition['valueType']);
 
-        if (isset($typeDefinition['isFrozen']) && $typeDefinition['isFrozen'] === true) {
-            $isFrozen = true;
-        } else {
-            $isFrozen = false;
-        }
+        $isFrozen = self::isFrozenFromTypeDefinition($typeDefinition);
 
         return new self($keyType, $valueType, $isFrozen);
     }

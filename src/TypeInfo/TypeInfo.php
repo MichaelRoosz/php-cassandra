@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cassandra\TypeInfo;
 
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\TypeInfoException;
 use Cassandra\Type;
 
 abstract class TypeInfo {
@@ -69,6 +71,32 @@ abstract class TypeInfo {
                 && $this->valueType->isBinaryCompatibleWith($other->valueType),
             default => false,
         };
+    }
+
+    /**
+     * Read the optional frozen marker at the runtime-validation boundary used
+     * by complex type definitions.
+     *
+     * @param array<mixed> $typeDefinition
+     * @throws \Cassandra\Exception\TypeInfoException
+     */
+    final protected static function isFrozenFromTypeDefinition(array $typeDefinition): bool {
+        if (!array_key_exists('isFrozen', $typeDefinition)) {
+            return false;
+        }
+
+        if (!is_bool($typeDefinition['isFrozen'])) {
+            throw new TypeInfoException(
+                "Invalid type definition: 'isFrozen' must be a boolean",
+                ExceptionCode::TYPEINFO_INVALID_IS_FROZEN->value,
+                [
+                    'actual_type' => get_debug_type($typeDefinition['isFrozen']),
+                    'expected_type' => 'bool',
+                ]
+            );
+        }
+
+        return $typeDefinition['isFrozen'];
     }
 
     /**

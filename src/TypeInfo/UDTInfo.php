@@ -88,27 +88,47 @@ final class UDTInfo extends TypeInfo {
             $valueTypes[$key] = ValueFactory::getTypeInfoFromUnvalidatedDefinition($valueTypeDefinition);
         }
 
-        /** @psalm-suppress RedundantConditionGivenDocblockType */
-        if (isset($typeDefinition['keyspace']) && is_string($typeDefinition['keyspace'])) {
-            $keyspace = $typeDefinition['keyspace'];
-        } else {
-            $keyspace = null;
-        }
-
-        /** @psalm-suppress RedundantConditionGivenDocblockType */
-        if (isset($typeDefinition['name']) && is_string($typeDefinition['name'])) {
-            $name = $typeDefinition['name'];
-        } else {
-            $name = null;
-        }
-
-        if (isset($typeDefinition['isFrozen']) && $typeDefinition['isFrozen'] === true) {
-            $isFrozen = true;
-        } else {
-            $isFrozen = false;
-        }
+        $keyspace = self::optionalStringFromTypeDefinition(
+            $typeDefinition,
+            'keyspace',
+            ExceptionCode::TYPEINFO_UDT_INVALID_KEYSPACE,
+        );
+        $name = self::optionalStringFromTypeDefinition(
+            $typeDefinition,
+            'name',
+            ExceptionCode::TYPEINFO_UDT_INVALID_NAME,
+        );
+        $isFrozen = self::isFrozenFromTypeDefinition($typeDefinition);
 
         return new self($valueTypes, $isFrozen, $keyspace, $name);
+    }
+
+    /**
+     * @param array<mixed> $typeDefinition
+     * @throws \Cassandra\Exception\TypeInfoException
+     */
+    private static function optionalStringFromTypeDefinition(
+        array $typeDefinition,
+        string $property,
+        ExceptionCode $exceptionCode,
+    ): ?string {
+        if (!array_key_exists($property, $typeDefinition) || $typeDefinition[$property] === null) {
+            return null;
+        }
+
+        if (!is_string($typeDefinition[$property])) {
+            throw new TypeInfoException(
+                "Invalid UDT type definition: '{$property}' must be a string or null",
+                $exceptionCode->value,
+                [
+                    'property' => $property,
+                    'actual_type' => get_debug_type($typeDefinition[$property]),
+                    'expected_types' => ['string', 'null'],
+                ]
+            );
+        }
+
+        return $typeDefinition[$property];
     }
 
     /**
