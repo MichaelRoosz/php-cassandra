@@ -15,8 +15,24 @@ use DateInterval;
 use Exception as PhpException;
 
 final class Duration extends ValueReadableWithoutLength implements ValueWithMultipleEncodings {
+    private const DIGITS = '0123456789';
     private const INT32_MAX = 2147483647;
     private const INT32_MIN = -2147483647 - 1;
+
+    /** Digit count of both bounds below. */
+    private const INT_DIGIT_COUNT = 19;
+
+    /**
+     * PHP's int bounds as digit strings, for the width check in
+     * {@see self::accumulateComponent()}. Spelled out rather than derived:
+     * constant expressions cannot cast, and deriving them per call was the
+     * costliest part of that check. 64-bit only, which
+     * {@see self::require64Bit()} guarantees on every path that reaches them.
+     */
+    private const INT_MAX_DIGITS = '9223372036854775807';
+
+    /** Magnitude of PHP_INT_MIN, one larger than {@see self::INT_MAX_DIGITS}. */
+    private const INT_MIN_MAGNITUDE_DIGITS = '9223372036854775808';
 
     private const PATTERN_COMPONENTS = [
         'years', 'months', 'weeks', 'days', 'hours',
@@ -75,6 +91,15 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             . '(?:(?<nanoseconds>\d+)ns)?'
             . '$/',
     ];
+
+    /**
+     * Widest a component may be and still skip the checks in
+     * {@see self::accumulateComponent()}: below 10^6, and the largest factor
+     * being 3.6e12 (nanoseconds per hour), the product stays under 3.6e18
+     * against an int reaching 9.2e18, and the cast cannot saturate. Only the
+     * running sum can still overflow.
+     */
+    private const UNCHECKED_DIGIT_COUNT = 6;
 
     /**
      * @var array{ months: int, days: int, nanoseconds: int } $value
@@ -535,6 +560,149 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
+     * Add one component of a parsed duration to its total, keeping every step
+     * inside PHP's int.
+     *
+     * Each step fails differently. (int) does not overflow a digit string wider
+     * than an int, it saturates at PHP_INT_MAX, so the width is checked as a
+     * string beforehand — otherwise "99999999999999999999ns" silently becomes a
+     * duration of PHP_INT_MAX nanoseconds. The multiplication and the addition
+     * do overflow, producing a float that {@see self::validateValue()} would
+     * then reject as a type error rather than as the out-of-range it is; both
+     * are bounded against what is left of the range. The bound follows the
+     * component's sign, so PHP_INT_MIN stays reachable.
+     *
+     * Narrow components skip all of it; see {@see self::UNCHECKED_DIGIT_COUNT}.
+     *
+     * @param string $digits plain decimal digits, unsigned. Guaranteed by both
+     * callers — the string parser captures with `\d+`, and
+     * {@see self::dateIntervalField()} validates — which keeps that check off
+     * this path.
+     * @param positive-int $factor value of one of this component in the total's
+     * unit. Narrowed because the checks below divide the bound by it.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function accumulateComponent(
+        int $total,
+        string $digits,
+        bool $isNegative,
+        int $factor,
+        ExceptionCode $outOfRange,
+        string $component,
+    ): int {
+
+        $length = strlen($digits);
+        if ($length === 0) {
+            return $total;
+        }
+
+        if ($length <= self::UNCHECKED_DIGIT_COUNT) {
+            // The common case: no bound below can be reached, and the cast reads
+            // through any leading zeros exactly.
+            $value = $isNegative ? -(int) $digits : (int) $digits;
+        } else {
+            // Normalised so the width tested is the number's, not its spelling's.
+            if ($digits[0] === '0') {
+                $digits = ltrim($digits, '0');
+                $length = strlen($digits);
+
+                if ($length === 0) {
+                    return $total;
+                }
+            }
+
+            // Before the cast, which saturates rather than overflowing. Equal
+            // widths make a byte comparison a numeric one, both sides being
+            // plain digit strings.
+            $bound = $isNegative ? self::INT_MIN_MAGNITUDE_DIGITS : self::INT_MAX_DIGITS;
+
+            if (
+                $length > self::INT_DIGIT_COUNT
+                || ($length === self::INT_DIGIT_COUNT && strcmp($digits, $bound) > 0)
+            ) {
+                throw self::componentOutOfRange($outOfRange, $component, $digits);
+            }
+
+            // Only a magnitude at the bound's full width must be cast negative;
+            // PHP_INT_MIN has no positive counterpart to negate.
+            if ($isNegative) {
+                $value = $length === self::INT_DIGIT_COUNT ? (int) ('-' . $digits) : -(int) $digits;
+            } else {
+                $value = (int) $digits;
+            }
+
+            if (
+                $isNegative
+                    ? $value < intdiv(PHP_INT_MIN, $factor)
+                    : $value > intdiv(PHP_INT_MAX, $factor)
+            ) {
+                throw self::componentOutOfRange($outOfRange, $component, $digits);
+            }
+        }
+
+        $scaled = $value * $factor;
+
+        // The one step no narrow component makes safe: the total carries
+        // everything accumulated before it.
+        if (
+            $isNegative
+                ? $total < PHP_INT_MIN - $scaled
+                : $total > PHP_INT_MAX - $scaled
+        ) {
+            throw self::componentOutOfRange($outOfRange, $component, $digits);
+        }
+
+        return $total + $scaled;
+    }
+
+    /**
+     * A component PHP's int cannot hold; see {@see self::accumulateComponent()}.
+     * The digits are reported by count rather than in full, an arbitrarily long
+     * string having no place in an exception context.
+     */
+    private static function componentOutOfRange(ExceptionCode $code, string $component, string $magnitude): ValueException {
+
+        return new ValueException(
+            'Invalid duration value - "' . $component . '" is outside the range this type can carry',
+            $code->value,
+            [
+                'component' => $component,
+                'digit_count' => strlen($magnitude),
+                'min' => PHP_INT_MIN,
+                'max' => PHP_INT_MAX,
+            ]
+        );
+    }
+
+    /**
+     * One DateInterval field as the digits and sign
+     * {@see self::accumulateComponent()} takes.
+     *
+     * format('%r%y') is the only spelling of a field together with the
+     * interval's invert flag, and the two can contradict each other: a negative
+     * field inside an inverted interval yields "--5", which is not a number and
+     * contributes nothing — as the (int) cast this replaces also made of it.
+     * Validated here rather than in the accumulator because this is the only
+     * caller whose input can be anything but digits.
+     *
+     * @return array{string, bool} the digits, and whether they are negative
+     */
+    private static function dateIntervalField(DateInterval $value, string $format): array {
+
+        $field = $value->format($format);
+
+        $isNegative = $field !== '' && $field[0] === '-';
+        $digits = $isNegative ? substr($field, 1) : $field;
+
+        if (strspn($digits, self::DIGITS) !== strlen($digits)) {
+            return ['', false];
+        }
+
+        return [$digits, $isNegative];
+    }
+
+    /**
      * The patterns consist of optional components only, so they can match
      * without capturing anything (e.g. an arbitrary garbage string against the
      * sign-prefixed pattern). A match counts only if at least one component
@@ -554,24 +722,61 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
     /**
      * @return array{ months: int, days: int, nanoseconds: int }
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     private function nativeValueFromDateInterval(DateInterval $value): array {
 
-        $months = ((int) $value->format('%r%y') * 12) + (int) $value->format('%r%m');
-        $days = (int) $value->format('%r%d');
+        $months = 0;
+        foreach ([
+            '%r%y' => 12,
+            '%r%m' => 1,
+        ] as $format => $factor) {
+            [$digits, $isNegative] = self::dateIntervalField($value, $format);
 
-        $hoursInNanoseconds = (int) $value->format('%r%h') * 3600000000000;
-        $minutesInNanoseconds = (int) $value->format('%r%i') * 60000000000;
-        $secondsInNanoseconds = (int) $value->format('%r%s') * 1000000000;
-        $microsecondsInNanoseconds = (int) $value->format('%r%f') * 1000;
+            $months = self::accumulateComponent(
+                $months,
+                $digits,
+                $isNegative,
+                $factor,
+                ExceptionCode::VALUE_DURATION_MONTHS_OUT_OF_RANGE,
+                'months',
+            );
+        }
 
-        $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds
-            + $secondsInNanoseconds + $microsecondsInNanoseconds;
+        [$dayDigits, $daysAreNegative] = self::dateIntervalField($value, '%r%d');
+        $days = self::accumulateComponent(
+            0,
+            $dayDigits,
+            $daysAreNegative,
+            1,
+            ExceptionCode::VALUE_DURATION_DAYS_OUT_OF_RANGE,
+            'days',
+        );
+
+        $nanoseconds = 0;
+        foreach ([
+            '%r%h' => 3600000000000,
+            '%r%i' => 60000000000,
+            '%r%s' => 1000000000,
+            '%r%f' => 1000,
+        ] as $format => $factor) {
+            [$digits, $isNegative] = self::dateIntervalField($value, $format);
+
+            $nanoseconds = self::accumulateComponent(
+                $nanoseconds,
+                $digits,
+                $isNegative,
+                $factor,
+                ExceptionCode::VALUE_DURATION_NANOSECONDS_OUT_OF_RANGE,
+                'nanoseconds',
+            );
+        }
 
         return [
             'months' => $months,
             'days' => $days,
-            'nanoseconds' => $totalNanoseconds,
+            'nanoseconds' => $nanoseconds,
         ];
     }
 
@@ -610,13 +815,19 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             'years' => 12,
             'months' => 1,
         ] as $key => $factor) {
-            if (isset($matches[$key])) {
-                if ($isNegative) {
-                    $months += (int) ('-' . $matches[$key]) * $factor;
-                } else {
-                    $months += (int) $matches[$key] * $factor;
-                }
+            $digits = $matches[$key] ?? '';
+            if ($digits === '') {
+                continue;
             }
+
+            $months = self::accumulateComponent(
+                $months,
+                $digits,
+                $isNegative,
+                $factor,
+                ExceptionCode::VALUE_DURATION_MONTHS_OUT_OF_RANGE,
+                'months',
+            );
         }
 
         $days = 0;
@@ -624,13 +835,19 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             'weeks' => 7,
             'days' => 1,
         ] as $key => $factor) {
-            if (isset($matches[$key])) {
-                if ($isNegative) {
-                    $days += (int) ('-' . $matches[$key]) * $factor;
-                } else {
-                    $days += (int) $matches[$key] * $factor;
-                }
+            $digits = $matches[$key] ?? '';
+            if ($digits === '') {
+                continue;
             }
+
+            $days = self::accumulateComponent(
+                $days,
+                $digits,
+                $isNegative,
+                $factor,
+                ExceptionCode::VALUE_DURATION_DAYS_OUT_OF_RANGE,
+                'days',
+            );
         }
 
         $nanoseconds = 0;
@@ -643,13 +860,19 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             'nanoseconds' => 1,
 
         ] as $key => $factor) {
-            if (isset($matches[$key])) {
-                if ($isNegative) {
-                    $nanoseconds += (int) ('-' . $matches[$key]) * $factor;
-                } else {
-                    $nanoseconds += (int) $matches[$key] * $factor;
-                }
+            $digits = $matches[$key] ?? '';
+            if ($digits === '') {
+                continue;
             }
+
+            $nanoseconds = self::accumulateComponent(
+                $nanoseconds,
+                $digits,
+                $isNegative,
+                $factor,
+                ExceptionCode::VALUE_DURATION_NANOSECONDS_OUT_OF_RANGE,
+                'nanoseconds',
+            );
         }
 
         return [

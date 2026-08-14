@@ -61,6 +61,45 @@ final class VarintMagnitudeBoundTest extends AbstractUnitTestCase {
         $this->assertSame(1, strlen(ltrim(str_replace(['-', '.'], '', $value->getValue()), '0')));
     }
 
+    public function testANegativeScaleAtTheDigitBoundIsAccepted(): void {
+        // A negative scale multiplies the value up, so its zeros are significant
+        // digits of the unscaled varint: the widest such value is one whose
+        // digits together reach the digit bound exactly.
+        $atLimit = Decimal::fromBinary(pack('N', -(Varint::MAX_MAGNITUDE_DIGITS - 1)) . chr(1));
+
+        $this->assertNotNull($atLimit);
+        $this->assertSame('1' . str_repeat('0', Varint::MAX_MAGNITUDE_DIGITS - 1), $atLimit->getValue());
+
+        // And it survives the trip back out, which is why the decode side is
+        // held to the encode side's bound.
+        $this->assertSame($atLimit->getValue(), Decimal::fromBinary($atLimit->getBinary())?->getValue());
+    }
+
+    public function testANegativeScaleNeverWidensZero(): void {
+        // Zero times any power of ten is zero, so even the most extreme scale
+        // the field can carry stays readable.
+        $zero = Decimal::fromBinary(pack('N', -100_000) . chr(0));
+
+        $this->assertNotNull($zero);
+        $this->assertSame('0', $zero->getValue());
+    }
+
+    public function testANegativeScalePastTheDigitBoundIsReportedAsAScaleFailure(): void {
+        // The regression this exists for: a negative scale hits the varint digit
+        // bound long before MAX_SCALE_MAGNITUDE, and the expansion used to run
+        // first — so the failure surfaced as a digit count the peer never sent
+        // rather than against the scale it declared.
+        foreach ([-Varint::MAX_MAGNITUDE_DIGITS, -5_000, -100_000] as $scale) {
+            try {
+                Decimal::fromBinary(pack('N', $scale) . chr(1));
+                $this->fail('expected a scale of ' . $scale . ' to be refused');
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_DECIMAL_SCALE_OUT_OF_RANGE->value, $e->getCode(), (string) $scale);
+                $this->assertSame($scale, $e->getContext()['scale'] ?? null, (string) $scale);
+            }
+        }
+    }
+
     public function testAVarintAtTheDigitBoundIsAccepted(): void {
         $atLimit = str_repeat('9', Varint::MAX_MAGNITUDE_DIGITS);
 

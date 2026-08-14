@@ -42,6 +42,13 @@ final class Decimal extends ValueReadableWithLength {
      * from the fraction it was given, and without the same bound this class
      * would encode values it then refuses to decode — a decimal that can be
      * written to a node and never read back from one.
+     *
+     * This is the whole of the bound for a positive scale, which spends itself
+     * on fraction digits the unscaled varint never sees. A negative scale
+     * multiplies the value up instead, so the zeros it appends are significant
+     * digits of that varint and {@see Varint::MAX_MAGNITUDE_DIGITS} becomes the
+     * tighter of the two. {@see fromBinary()} therefore checks the expansion
+     * against that bound as well, reporting it as the scale it came from.
      */
     private const MAX_SCALE_MAGNITUDE = 100_000;
 
@@ -153,7 +160,30 @@ final class Decimal extends ValueReadableWithLength {
             $value = $unscaled;
         } elseif ($scale < 0) {
             // Negative scale: value = unscaled * 10^(-scale), i.e. append zeros.
-            $value = ($unscaled === '0') ? '0' : $unscaled . str_repeat('0', -$scale);
+            // No power of ten widens zero, so it needs no bound.
+            if ($unscaled === '0') {
+                $value = '0';
+            } else {
+                // Those zeros are significant digits of the varint this value is
+                // encoded back into, so the scale answers to
+                // Varint::MAX_MAGNITUDE_DIGITS too; see MAX_SCALE_MAGNITUDE.
+                // Checked before str_repeat() allocates towards it, and so that
+                // the failure names the scale rather than a digit count the peer
+                // never sent.
+                $digits = strlen(ltrim(str_replace('-', '', $unscaled), '0')) - $scale;
+
+                if ($digits > Varint::MAX_MAGNITUDE_DIGITS) {
+                    throw new ValueException('Decimal scale is outside of the supported range', ExceptionCode::VALUE_DECIMAL_SCALE_OUT_OF_RANGE->value, [
+                        'scale' => $scale,
+                        'max_magnitude' => self::MAX_SCALE_MAGNITUDE,
+                        'digits' => $digits,
+                        'max_digits' => Varint::MAX_MAGNITUDE_DIGITS,
+                        'binary_length' => $length,
+                    ]);
+                }
+
+                $value = $unscaled . str_repeat('0', -$scale);
+            }
         } else {
             $isNegative = str_starts_with($unscaled, '-');
             $absUnscaled = $isNegative ? substr($unscaled, 1) : $unscaled;
@@ -249,9 +279,12 @@ final class Decimal extends ValueReadableWithLength {
      * Only a positive scale can be reached from here — a plain decimal string
      * has as many fraction digits as it has, and nothing on the encode side
      * produces a negative scale — so this is the encode-side half of the bound
-     * fromBinary() applies to both signs. The two meet exactly: a value decoded
-     * at the limit is constructed with a fraction of the same length and passes
-     * this on its way back out.
+     * fromBinary() applies to a positive one. The two meet exactly there: a
+     * value decoded at the limit is constructed with a fraction of the same
+     * length and passes this on its way back out. A negative scale never
+     * reaches this, having been spent on integer digits that
+     * {@see self::assertUnscaledInRange()} bounds instead; see
+     * {@see self::MAX_SCALE_MAGNITUDE}.
      *
      * @param string $decimal a plain decimal string, as
      * {@see self::normalizeNumericString()} and {@see self::floatToDecimalString()}

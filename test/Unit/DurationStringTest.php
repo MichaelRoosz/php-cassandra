@@ -23,6 +23,56 @@ class DurationStringTest extends AbstractUnitTestCase {
         Duration::fromValue(DateInterval::createFromDateString('-1 month +5 days'));
     }
 
+    public function testConstructionFromDateIntervalReportsOverflowAsOutOfRange(): void {
+        // The DateInterval path shares the same arithmetic. PHP caps the
+        // interval's own fields, so reaching the overflow takes a large factor:
+        // 10^13 hours is a valid interval and more nanoseconds than an int holds.
+        $this->skipWithout64BitIntegers();
+
+        $interval = DateInterval::createFromDateString('999999999999999999999 hours');
+        $this->assertNotFalse($interval);
+
+        try {
+            Duration::fromValue($interval);
+            $this->fail('expected an interval of more nanoseconds than an int holds to be refused');
+        } catch (ValueException $e) {
+            $this->assertSame(ExceptionCode::VALUE_DURATION_NANOSECONDS_OUT_OF_RANGE->value, $e->getCode());
+        }
+    }
+
+    public function testConstructionFromStringKeepsTheWholeOfTheIntRange(): void {
+        // The bounds follow the component's sign, so neither end is given up.
+        // PHP_INT_MIN is the one worth asserting: its magnitude is one larger
+        // than PHP_INT_MAX, so a check against the positive bound alone would
+        // refuse it.
+        $this->skipWithout64BitIntegers();
+
+        $this->assertSame(
+            ['months' => 0, 'days' => 0, 'nanoseconds' => PHP_INT_MAX],
+            Duration::fromValue(PHP_INT_MAX . 'ns')->asNativeValue()
+        );
+
+        $this->assertSame(
+            ['months' => 0, 'days' => 0, 'nanoseconds' => PHP_INT_MIN],
+            Duration::fromValue(PHP_INT_MIN . 'ns')->asNativeValue()
+        );
+    }
+
+    public function testConstructionFromStringRejectsDigitsWiderThanAnInt(): void {
+        // The regression this exists for: (int) saturates a digit string wider
+        // than an int at PHP_INT_MAX rather than overflowing, so with a factor
+        // of 1 nothing downstream noticed and this was accepted as a duration of
+        // PHP_INT_MAX nanoseconds — not the value that was written.
+        $this->skipWithout64BitIntegers();
+
+        try {
+            Duration::fromValue('99999999999999999999ns');
+            $this->fail('expected a duration wider than an int to be refused, not saturated');
+        } catch (ValueException $e) {
+            $this->assertSame(ExceptionCode::VALUE_DURATION_NANOSECONDS_OUT_OF_RANGE->value, $e->getCode());
+        }
+    }
+
     public function testConstructionFromStringRejectsOutOfInt32Range(): void {
         // "months" is an int32 on the wire. Unchecked, this was accepted here
         // and only failed later inside getBinary(), as a VIntCodecException from
@@ -33,6 +83,30 @@ class DurationStringTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::VALUE_DURATION_MONTHS_OUT_OF_RANGE->value);
 
         Duration::fromValue('999999999999y');
+    }
+
+    public function testConstructionFromStringReportsOverflowAsOutOfRange(): void {
+        // An integer overflow yields a float, which used to leave the parser
+        // (whose contract says int) and be refused by validateValue() as a type
+        // error — telling a caller who passed a string that "months" had to be
+        // an int.
+        $this->skipWithout64BitIntegers();
+
+        $overflowing = [
+            'P9999999999999999999999Y' => ExceptionCode::VALUE_DURATION_MONTHS_OUT_OF_RANGE,
+            'P9999999999999999999999D' => ExceptionCode::VALUE_DURATION_DAYS_OUT_OF_RANGE,
+            'PT9999999999999999999S' => ExceptionCode::VALUE_DURATION_NANOSECONDS_OUT_OF_RANGE,
+            '9999999999999999999h' => ExceptionCode::VALUE_DURATION_NANOSECONDS_OUT_OF_RANGE,
+        ];
+
+        foreach ($overflowing as $value => $expectedCode) {
+            try {
+                Duration::fromValue($value);
+                $this->fail('expected ' . $value . ' to be refused as out of range');
+            } catch (ValueException $e) {
+                $this->assertSame($expectedCode->value, $e->getCode(), $value);
+            }
+        }
     }
 
     public function testDateIntervalIsZeroForADurationWithNothingToCarry(): void {
