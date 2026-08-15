@@ -61,6 +61,54 @@ final class EmptyValueConformanceTest extends AbstractUnitTestCase {
     }
 
     /**
+     * The two predicates, spelled out per type rather than derived.
+     *
+     * The tests above ask each type what it declares and then hold both decoders
+     * to that answer, which pins them to each other but not to Cassandra: a type
+     * whose declaration is wrong is still self-consistent, and the drift shows up
+     * only as `Cassandra\Value\Smallint::fromBinary('')` refusing an empty value
+     * where `Int32` reports null. So the matrix itself is written out here, and a
+     * type added later has to be added to it.
+     *
+     * Which entry a type gets follows its Cassandra serializer, not its
+     * AbstractType: `ShortSerializer::validate()` demands exactly two bytes and
+     * `SimpleDateSerializer::validate()` exactly four, while
+     * `Int32Serializer::validate()` takes four *or none*.
+     */
+    public function testTheDeclaredMatrixIsTheOneCassandraUses(): void {
+        $admitEmpty = [
+            Type::ASCII, Type::BIGINT, Type::BLOB, Type::BOOLEAN, Type::COUNTER,
+            Type::CUSTOM, Type::DECIMAL, Type::DOUBLE, Type::FLOAT, Type::INET,
+            Type::INT, Type::TEXT, Type::TIMESTAMP, Type::TIMEUUID, Type::TUPLE,
+            Type::UDT, Type::UUID, Type::VARCHAR, Type::VARINT,
+        ];
+
+        // An accepted empty value that is a value of its own rather than null.
+        $emptyIsAValue = [
+            Type::ASCII, Type::BLOB, Type::CUSTOM, Type::TEXT, Type::TUPLE,
+            Type::UDT, Type::VARCHAR,
+        ];
+
+        foreach (Type::cases() as $type) {
+            $this->assertSame(
+                in_array($type, $admitEmpty, true),
+                ValueFactory::allowsEmptyValue($type),
+                $type->name . ': allowsEmpty()'
+            );
+
+            if (!ValueFactory::allowsEmptyValue($type)) {
+                continue;
+            }
+
+            $this->assertSame(
+                !in_array($type, $emptyIsAValue, true),
+                ValueFactory::isEmptyValueMeaningless($type),
+                $type->name . ': isEmptyValueMeaningless()'
+            );
+        }
+    }
+
+    /**
      * A type that does not admit an empty value refuses one from the direct
      * decoder — Cassandra's own serializers do, `ShortSerializer::validate()`
      * demanding "2 bytes for a smallint" and `CollectionType::validate()`
@@ -94,6 +142,7 @@ final class EmptyValueConformanceTest extends AbstractUnitTestCase {
             $type->name . ': the value after an empty cell must still decode'
         );
     }
+
     /**
      * @return array<string, array{Type}>
      *

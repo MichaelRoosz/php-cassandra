@@ -12,10 +12,12 @@ use Cassandra\TypeInfo\ListCollectionInfo;
 use Cassandra\TypeInfo\MapCollectionInfo;
 use Cassandra\TypeInfo\SetCollectionInfo;
 use Cassandra\TypeInfo\SimpleTypeInfo;
+use Cassandra\TypeInfo\VectorInfo;
 use Cassandra\Value\ListCollection;
 use Cassandra\Value\MapCollection;
 use Cassandra\Value\SetCollection;
 use Cassandra\Value\ValueEncodeConfig;
+use Cassandra\Value\Vector;
 
 /**
  * A collection body is held to the length its own cell declares, not to what is
@@ -108,5 +110,67 @@ final class CollectionCountBoundTest extends AbstractUnitTestCase {
             pack('N', 1000) . pack('N', 4) . pack('N', 7),
             new ListCollectionInfo(new SimpleTypeInfo(Type::INT), false),
         );
+    }
+
+    public function testAStandaloneVectorBinaryIsBoundedByItself(): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_VECTOR_TRUNCATED_VALUE->value);
+
+        Vector::fromBinary(
+            pack('G', 1.0) . pack('G', 2.0),
+            new VectorInfo(new SimpleTypeInfo(Type::FLOAT), 3),
+        );
+    }
+
+    /**
+     * A vector carries no count at all — the dimensions come from its type — so
+     * a cell that stops short of them is the one case the count bound above
+     * cannot catch. It used to be read on into whatever followed, which
+     * {@see \Cassandra\Response\StreamReader::resyncAfterValue()} then reported
+     * as a value that overran its cell: true, but saying nothing about the
+     * vector it was, and only after the following cells had been consumed.
+     */
+    public function testAVectorOfFixedLengthElementsIsHeldToItsDeclaredCellLength(): void {
+        // Two floats' worth of cell for a vector that declares three.
+        $stream = new StreamReader(pack('G', 1.0) . pack('G', 2.0) . pack('N', 4) . pack('N', 4242));
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_VECTOR_TRUNCATED_VALUE->value);
+
+        Vector::fromStream(
+            $stream,
+            length: 8,
+            typeInfo: new VectorInfo(new SimpleTypeInfo(Type::FLOAT), 3),
+            valueEncodeConfig: ValueEncodeConfig::default(),
+        );
+    }
+
+    public function testAVectorOfVariableLengthElementsIsHeldToItsDeclaredCellLength(): void {
+        // One element's worth of cell for a vector that declares two.
+        $stream = new StreamReader(chr(1) . 'a' . pack('N', 4) . pack('N', 4242));
+
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_VECTOR_TRUNCATED_VALUE->value);
+
+        Vector::fromStream(
+            $stream,
+            length: 2,
+            typeInfo: new VectorInfo(new SimpleTypeInfo(Type::VARCHAR), 2),
+            valueEncodeConfig: ValueEncodeConfig::default(),
+        );
+    }
+
+    public function testAVectorThatFitsItsDeclaredCellLengthIsStillRead(): void {
+        $body = pack('G', 1.0) . pack('G', 2.0);
+        $stream = new StreamReader($body . str_repeat("\x00", 512));
+
+        $vector = Vector::fromStream(
+            $stream,
+            length: strlen($body),
+            typeInfo: new VectorInfo(new SimpleTypeInfo(Type::FLOAT), 2),
+            valueEncodeConfig: ValueEncodeConfig::default(),
+        );
+
+        $this->assertSame([1.0, 2.0], $vector->getValue());
     }
 }
