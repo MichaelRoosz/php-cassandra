@@ -264,7 +264,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
         fwrite($this->acceptedClient, $data);
         fflush($this->acceptedClient);
 
-        usleep(200_000);
+        self::sleepAtLeast(0.2);
     }
 
     /**
