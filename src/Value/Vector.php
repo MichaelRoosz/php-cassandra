@@ -61,7 +61,12 @@ final class Vector extends ValueReadableWithoutLength {
         ?ValueEncodeConfig $valueEncodeConfig = null
     ): static {
 
-        return self::fromStream(new StreamReader($binary), typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
+        return self::fromStream(
+            new StreamReader($binary),
+            length: strlen($binary),
+            typeInfo: $typeInfo,
+            valueEncodeConfig: $valueEncodeConfig
+        );
     }
 
     /**
@@ -119,6 +124,14 @@ final class Vector extends ValueReadableWithoutLength {
 
         $valueType = $typeInfo->valueType;
 
+        // A vector carries no count of its own: the dimensions come from the
+        // type, so a cell that stops short would otherwise be read on into
+        // whatever follows it. {@see \Cassandra\Response\StreamReader::resyncAfterValue()}
+        // catches that afterwards, but only as a value that overran its cell —
+        // which says nothing about the vector it was. Bounded here so the
+        // failure names the dimension the data ran out at.
+        $endOffset = $length === null ? null : $stream->pos() + $length;
+
         // The element framing is decided by whether Cassandra treats the element
         // type as fixed length (isValueLengthFixed()). This must match the write
         // side in getBinary(); note that smallint/tinyint have a positive
@@ -133,6 +146,8 @@ final class Vector extends ValueReadableWithoutLength {
 
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
 
+                self::assertDimensionFits($stream, $endOffset, $serializedLength, $i, $typeInfo);
+
                 $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream, $valueEncodeConfig);
 
                 if ($valueObject instanceof ValueWithMultipleEncodings) {
@@ -146,7 +161,13 @@ final class Vector extends ValueReadableWithoutLength {
         } else {
             for ($i = 0; $i < $typeInfo->dimensions; ++$i) {
 
+                // One byte at least, for the length that precedes the element.
+                self::assertDimensionFits($stream, $endOffset, 1, $i, $typeInfo);
+
                 $serializedLength = $stream->readUnsignedVint32();
+
+                self::assertDimensionFits($stream, $endOffset, $serializedLength, $i, $typeInfo);
+
                 $valueObject = ValueFactory::getValueObjectFromStream($valueType, $serializedLength, $stream, $valueEncodeConfig);
 
                 if ($valueObject instanceof ValueWithMultipleEncodings) {
@@ -245,5 +266,39 @@ final class Vector extends ValueReadableWithoutLength {
     #[\Override]
     protected function binaryTypeInfo(): TypeInfo {
         return $this->typeInfo;
+    }
+
+    /**
+     * Refuse a dimension the declared value length has no room left for.
+     *
+     * @param ?int $endOffset where this value ends, or null where the caller
+     * named no length and the reader is the whole of the bound.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function assertDimensionFits(
+        StreamReader $stream,
+        ?int $endOffset,
+        int $requiredLength,
+        int $dimension,
+        VectorInfo $typeInfo,
+    ): void {
+
+        if ($endOffset === null || $stream->pos() + $requiredLength <= $endOffset) {
+            return;
+        }
+
+        throw new ValueException(
+            'Vector value ends before its declared number of dimensions does',
+            ExceptionCode::VALUE_VECTOR_TRUNCATED_VALUE->value,
+            [
+                'dimension' => $dimension,
+                'dimensions' => $typeInfo->dimensions,
+                'value_type' => $typeInfo->valueType->type->name,
+                'required_length' => $requiredLength,
+                'remaining_length' => $endOffset - $stream->pos(),
+                'offset' => $stream->pos(),
+            ]
+        );
     }
 }
