@@ -181,7 +181,7 @@ final class TypeNameParser {
                 continue;
             }
 
-            if ($bracketsOpened > 0 && $char !== ')') {
+            if ($bracketsOpened > 0) {
                 continue;
             }
 
