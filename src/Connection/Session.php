@@ -109,6 +109,26 @@ final class Session {
     private StreamIdPool $streamIds;
 
     /**
+     * Failures that finished a stream id the sync path is waiting on, kept
+     * until that wait picks them up; the counterpart of
+     * {@see self::$syncWaitResponses} for a frame that was consumed whole but
+     * could not be made sense of.
+     *
+     * Such a frame was that request's answer, so no later one can arrive on the
+     * id — but the failure is raised to whoever happened to be reading, which on
+     * a nested read is not the wait it belongs to. Put aside here so that the
+     * owner reports the real failure instead of waiting out its budget for an
+     * answer that has already come and gone; see
+     * {@see self::finishFailedConsumedResponse()}.
+     *
+     * It is also what tells that wait, as it unwinds, that its id may go
+     * straight back into circulation rather than being parked.
+     *
+     * @var array<int, CompressionException|ConnectionException|ResponseException>
+     */
+    private array $syncWaitFailures = [];
+
+    /**
      * Answers that arrived for a stream id the sync path is waiting on, kept
      * until that wait picks them up; see {@see self::$syncWaitStreams}.
      *
@@ -136,7 +156,13 @@ final class Session {
      * whichever loop happens to read it. The wait picks it up on its next pass.
      * The answer is still returned to that reader as well, exactly as an async
      * statement's is: putting it aside is about it reaching its owner, not about
-     * taking it away from whoever was reading.
+     * taking it away from whoever was reading. A frame that could not be decoded
+     * is put aside the same way, see {@see self::$syncWaitFailures}.
+     *
+     * Being announced here is also what makes the id the wait's own: nothing
+     * else may dispose of a number a wait is still watching, since the pool
+     * would hand it to another request whose answer this loop would then take
+     * for its own.
      *
      * @var array<int, true>
      */
@@ -579,6 +605,19 @@ final class Session {
 
                         return $deposited;
                     }
+
+                    // Our answer came and could not be decoded. The read that
+                    // took it off the wire raised that failure at whoever was
+                    // reading — which, nested, is somebody else's request — so
+                    // it is put aside for us instead; see
+                    // {@see self::$syncWaitFailures}. Reported after the answer
+                    // above, so a frame that did decode always wins, and before
+                    // the deadline below, so this is never reported as the
+                    // timeout it is not.
+                    $failure = $this->syncWaitFailures[$streamId] ?? null;
+                    if ($failure !== null) {
+                        throw $failure;
+                    }
                 }
 
                 if ($deadlineExceeded) {
@@ -627,7 +666,24 @@ final class Session {
             }
         } finally {
             if ($statement === null) {
-                unset($this->syncWaitStreams[$streamId], $this->syncWaitResponses[$streamId]);
+                // A frame of ours was consumed and refused, which is this
+                // request's answer however this wait ends: nothing can arrive on
+                // the id any more, so it goes straight back into circulation
+                // rather than being parked by the parkUnresolvedStream() that
+                // {@see RequestExecutor::sendSyncRequest()} runs on the way out.
+                // Done here rather than where the frame was refused because
+                // until this wait unwinds the id is still ours, and a nested
+                // read has no way of telling that; see
+                // {@see self::finishFailedConsumedResponse()}.
+                if (isset($this->syncWaitFailures[$streamId])) {
+                    $this->streamIds->release($streamId, $streamGeneration);
+                }
+
+                unset(
+                    $this->syncWaitStreams[$streamId],
+                    $this->syncWaitResponses[$streamId],
+                    $this->syncWaitFailures[$streamId],
+                );
             }
         }
     }
@@ -1781,12 +1837,21 @@ final class Session {
      * be decoded into a response.
      *
      * No later answer can arrive on this stream: the malformed frame was that
-     * answer. An async statement is therefore abandoned and its id released,
-     * while a synchronous wait has its otherwise unregistered id released
-     * directly. A malformed late response likewise proves an orphaned id is
-     * free again.
+     * answer. An async statement is therefore abandoned and its id released, and
+     * a malformed late response likewise proves an orphaned id is free again.
+     *
+     * A synchronous wait is the one owner this cannot finish on the spot. Its id
+     * is registered nowhere but in the wait itself, and the wait this runs
+     * inside is not necessarily that one: a listener issuing a request of its
+     * own reads from inside somebody else's wait, and a frame refused there may
+     * name any of the ids being waited on ({@see self::$syncWaitStreams} holds
+     * one per nesting level). Disposing of the id from here would put a number
+     * its owner is still watching back into circulation, so that a later request
+     * given the same number would have its answer returned as the waiting
+     * caller's. The failure is put aside for that owner instead, which reports
+     * it and gives the id back as it unwinds; see {@see self::$syncWaitFailures}.
      */
-    private function finishFailedConsumedResponse(): void {
+    private function finishFailedConsumedResponse(CompressionException|ConnectionException|ResponseException $failure): void {
         $header = $this->responseReader->takeFailedResponseHeader();
         if ($header === null || $header->opcode === Opcode::RESPONSE_EVENT) {
             return;
@@ -1809,7 +1874,10 @@ final class Session {
         }
 
         if (isset($this->syncWaitStreams[$streamId])) {
-            $this->streamIds->release($streamId, $this->streamIds->getGeneration());
+            // Only the first: a wait unwinds on the one it is told about, so a
+            // second would be describing a frame that arrived after its owner
+            // had already been finished by the first.
+            $this->syncWaitFailures[$streamId] ??= $failure;
         }
     }
 
@@ -1968,12 +2036,12 @@ final class Session {
             // timeout that no wait was even attempted for.
             $response = null;
         } catch (ConnectionException $e) {
-            $this->finishFailedConsumedResponse();
+            $this->finishFailedConsumedResponse($e);
             $this->dropConnectionIfFrameSyncLost();
 
             throw $e;
         } catch (CompressionException|ResponseException $e) {
-            $this->finishFailedConsumedResponse();
+            $this->finishFailedConsumedResponse($e);
 
             throw $e;
         }
@@ -2073,12 +2141,12 @@ final class Session {
 
             $response = null;
         } catch (ConnectionException $e) {
-            $this->finishFailedConsumedResponse();
+            $this->finishFailedConsumedResponse($e);
             $this->dropConnectionIfFrameSyncLost();
 
             throw $e;
         } catch (CompressionException|ResponseException $e) {
-            $this->finishFailedConsumedResponse();
+            $this->finishFailedConsumedResponse($e);
 
             throw $e;
         }
@@ -2140,12 +2208,12 @@ final class Session {
         $this->responseReader->reset();
         $this->streamIds->reset();
 
-        // An answer put aside for a sync wait belongs to the connection it
-        // arrived on. Kept, it would be handed to a wait on the same number on
-        // the connection that replaces this one — the stream ids start over, so
-        // the number says nothing across the two. The waits themselves clear
-        // their own entry as they unwind; this is for one that was deposited and
-        // never picked up.
+        // An answer put aside for a sync wait — or the failure that finished one
+        // — belongs to the connection it arrived on. Kept, it would be handed to
+        // a wait on the same number on the connection that replaces this one —
+        // the stream ids start over, so the number says nothing across the two.
+        // The waits themselves clear their own entry as they unwind; this is for
+        // one that was deposited and never picked up.
         //
         // The announcements go with them, for the same reason: an id announced
         // by a wait on the connection that is going away says nothing on the
@@ -2155,6 +2223,7 @@ final class Session {
         // stack is on a stream generation that is about to be stale, so each of
         // them unwinds through the generation check rather than being waited out,
         // and a wait started on the new connection announces itself afresh.
+        $this->syncWaitFailures = [];
         $this->syncWaitResponses = [];
         $this->syncWaitStreams = [];
     }
