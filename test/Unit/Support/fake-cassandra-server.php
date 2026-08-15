@@ -97,6 +97,12 @@
  *                   request of its own is still inside that nested request's
  *                   wait when the first query's answer arrives, and it is the
  *                   nested read that takes it off the wire
+ *   event-then-bad-result
+ *                   the same ordering, except that the answer to the SLOW query
+ *                   is a complete RESULT frame whose result-kind field is
+ *                   unknown. So the nested read consumes and then refuses a
+ *                   frame belonging to the wait it is nested inside — an id that
+ *                   wait still owns, and a failure only that wait can report
  *   trickle-result  answer every QUERY with one large RESULT written in pieces
  *                   over [delaySeconds], as a node streaming a wide page over a
  *                   slow link does. Bytes arrive the whole time but no frame is
@@ -496,14 +502,14 @@ $batchRefused = false;
 $executeRefused = false;
 $deadline = microtime(true) + 60;
 
-/** @var list<array{dueAt: float, stream: int}> $deferredAnswers */
+/** @var list<array{dueAt: float, stream: int, body?: string}> $deferredAnswers */
 $deferredAnswers = [];
 
 while (microtime(true) < $deadline) {
 
     foreach ($deferredAnswers as $index => $deferred) {
         if (microtime(true) >= $deferred['dueAt']) {
-            writeFrame($client, $deferred['stream'], OPCODE_RESULT, voidResultBody());
+            writeFrame($client, $deferred['stream'], OPCODE_RESULT, $deferred['body'] ?? voidResultBody());
             unset($deferredAnswers[$index]);
         }
     }
@@ -801,6 +807,27 @@ while (microtime(true) < $deadline) {
                 // after the one that is already outstanding rather than before
                 // it: the nested wait is still reading when the first answer
                 // comes, and so is the one that reads it.
+                $deferredAnswers[] = ['dueAt' => microtime(true) + 2 * $delay, 'stream' => $frame['stream']];
+
+                break;
+            }
+
+            if ($mode === 'event-then-bad-result') {
+                if (str_contains($frame['body'], 'SLOW')) {
+                    // As in event-then-reorder, but the answer this query
+                    // eventually gets is one the client cannot decode, so the
+                    // nested read is the one that has to refuse a frame
+                    // belonging to the wait it is nested inside.
+                    $eventDueAt = microtime(true);
+                    $deferredAnswers[] = [
+                        'dueAt' => microtime(true) + $delay,
+                        'stream' => $frame['stream'],
+                        'body' => pack('N', 0x7FFFFFFF),
+                    ];
+
+                    break;
+                }
+
                 $deferredAnswers[] = ['dueAt' => microtime(true) + 2 * $delay, 'stream' => $frame['stream']];
 
                 break;

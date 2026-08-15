@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Cassandra\Test\Unit;
 
 use Cassandra\Connection;
+use Closure;
 use Cassandra\EventListener as EventListenerInterface;
 use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Exception\CassandraException;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
@@ -172,7 +174,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         // Long enough for the probe to fall due, so it is outstanding when the
         // transfer begins.
-        usleep(300_000);
+        self::sleepAtLeast(0.3);
 
         $start = microtime(true);
 
@@ -360,7 +362,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         );
 
         $statement = $connection->queryAsync('SELECT * FROM SLOW');
-        usleep(1_000_000);
+        self::sleepAtLeast(1.0);
 
         $start = microtime(true);
 
@@ -446,7 +448,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $this->assertNull($statement->tryGetResult(), 'nothing has arrived yet');
 
-        usleep(1_000_000);
+        self::sleepAtLeast(1.0);
 
         try {
             $statement->tryGetResult();
@@ -542,7 +544,12 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $elapsed = microtime(true) - $start;
 
             $this->assertGreaterThan(0.4, $elapsed, 'it must still wait its budget out');
-            $this->assertLessThan(4.0, $elapsed, 'and not a moment of the 15s stall window beyond it');
+
+            // Comfortably under the stall window rather than close to the
+            // budget: what is being pinned is that the window was not waited
+            // out, and a bound near 0.5s would instead be pinning how long a
+            // loaded machine may take to get back to the clock.
+            $this->assertLessThan(10.0, $elapsed, 'and not a moment of the 15s stall window beyond it');
         }
     }
 
@@ -666,7 +673,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         );
 
         $statement = $connection->queryAsync('SELECT * FROM system.local');
-        usleep(2_800_000);
+        self::sleepAtLeast(2.8);
 
         $start = microtime(true);
 
@@ -842,12 +849,12 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertTrue($statement->isResultReady());
 
         // Long enough for the probe to fall due, and for a read to send it.
-        usleep(300_000);
+        self::sleepAtLeast(0.3);
         $connection->tryReadNextResponse();
         $this->assertNotNull($this->pendingHeartbeatOf($connection), 'the probe should be outstanding by now');
 
         // Past the heartbeat timeout, with its answer left unread.
-        usleep(600_000);
+        self::sleepAtLeast(0.6);
 
         // Neither of these reads — every statement they were given is resolved,
         // and a limit of zero forbids it outright — so neither may declare the
@@ -926,7 +933,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $statement = $connection->queryAsync('SELECT * FROM system.local');
 
-        usleep(800_000);
+        self::sleepAtLeast(0.8);
 
         $ready = $connection->waitForAnyStatement([$statement], timeoutInSeconds: 0.0);
 
@@ -1163,6 +1170,8 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $connection->queryAsync('SELECT 2 FROM SLOW'),
         ];
 
+        self::waitOutTheBudgetOf($connection, $statements);
+
         try {
             $connection->waitForStatements($statements);
             $this->fail('expected the connection to be replaced');
@@ -1189,6 +1198,8 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $connection->queryAsync('SELECT 1 FROM SLOW'),
             $connection->queryAsync('SELECT 2 FROM SLOW'),
         ];
+
+        self::waitOutTheBudgetOf($connection, $statements);
 
         try {
             $connection->waitForStatements($statements);
@@ -1392,7 +1403,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         // Wait past the server's delay, then read: the late answer must be
         // discarded and its stream id handed back to the pool.
-        usleep(2_500_000);
+        self::sleepAtLeast(2.5);
         $connection->query('SELECT * FROM quick');
 
         $this->assertSame([], $this->orphanedStreamsOf($connection), 'the late answer should have released the stream id');
@@ -1472,13 +1483,88 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $this->assertLessThan(3.0, $elapsed, 'the answer was there; the wait must not have run to its budget');
     }
 
+    public function testSyncWaitOwnsItsStreamIdWhileANestedReadRefusesItsAnswer(): void {
+        // Regression: a frame consumed whole and then refused finishes the
+        // request it belongs to, but the read that refuses it can be a nested
+        // one — an event listener issuing a request of its own — and the id it
+        // names then belongs to a wait that is still running. Disposing of it
+        // there put a number its owner was still watching back into circulation,
+        // so a later request handed the same number would have had its answer
+        // returned as the waiting caller's; and the owner, told nothing, waited
+        // out its whole budget for an answer that had already come and gone.
+        //
+        // The listener swallows what it is handed, which is what leaves the
+        // owning wait to notice for itself.
+        $connection = $this->connect('event-then-bad-result', delaySeconds: 0.3, requestTimeoutInSeconds: 10.0);
+
+        $outstandingInsideListener = null;
+        $recordOutstanding = function () use ($connection, &$outstandingInsideListener): void {
+            $outstandingInsideListener = $this->outstandingStreamsOf($connection);
+        };
+
+        $connection->registerEventListener(new class($connection, $recordOutstanding) implements EventListenerInterface {
+            /** @param \Closure(): void $recordOutstanding */
+            public function __construct(
+                private Connection $connection,
+                private Closure $recordOutstanding,
+            ) {
+            }
+
+            public function onEvent(Event $event): void {
+                try {
+                    $this->connection->query('SELECT 1');
+                } catch (CassandraException $e) {
+                    // The nested read refused the outer wait's answer, so this
+                    // is where the outer query's id must still be outstanding.
+                    ($this->recordOutstanding)();
+                }
+            }
+        });
+
+        try {
+            $connection->query('SELECT * FROM SLOW');
+            $this->fail('expected the undecodable answer to be reported');
+        } catch (ResponseException $e) {
+            // The frame the node sent, and not the RequestTimeoutException the
+            // wait used to report once it had run out its whole budget for an
+            // answer it had already been handed. Which exception arrives is what
+            // tells the two apart, so nothing here has to be timed.
+            $this->assertSame(ExceptionCode::RESPONSE_RES_INVALID_KIND_VALUE->value, $e->getCode());
+        }
+
+        // The outer wait's, and only it: the nested request's own id was parked
+        // as that call unwound, its answer being still to come.
+        $this->assertCount(
+            1,
+            $outstandingInsideListener ?? [],
+            'the outer wait still owned its stream id while the nested read refused its answer'
+        );
+
+        // And gave it back on the way out rather than parking it: the refused
+        // frame was that request's answer, so nothing can arrive on the id any
+        // more and it is free to be handed out again.
+        $outerStreamId = ($outstandingInsideListener ?? [])[0] ?? -1;
+        $this->assertNotContains($outerStreamId, $this->outstandingStreamsOf($connection));
+        $this->assertArrayNotHasKey($outerStreamId, $this->orphanedStreamsOf($connection));
+
+        $this->assertTrue($connection->isConnected(), 'a refused frame that was consumed whole keeps the connection');
+    }
+
     public function testTimingOutOneAsyncStatementLeavesTheConnectionAndItsOtherStatementsIntact(): void {
         // The slow statement gives up after 1s; the fast one was answered long
         // before that and must still be readable, on the same connection.
-        $connection = $this->connect('defer-slow', delaySeconds: 4.0, requestTimeoutInSeconds: 1.0);
+        //
+        // The server holds the slow answer far longer than the budget, rather
+        // than just longer: a wait is told about an answer that arrives in the
+        // very pass its deadline runs out, and rightly so, so a delay the
+        // machine can stall its way past would make this return the answer
+        // instead of the timeout it is about. The fast statement is given a
+        // budget it cannot run out of for the same reason — it is here to be
+        // untouched, not to race the wait.
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 1.0);
 
         $slow = $connection->queryAsync('SELECT * FROM SLOW');
-        $fast = $connection->queryAsync('SELECT * FROM quick');
+        $fast = $connection->queryAsync('SELECT * FROM quick', requestTimeoutInSeconds: 30.0);
 
         try {
             $connection->waitForStatements([$slow]);
@@ -1652,7 +1738,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
                 return;
             }
 
-            usleep(20_000);
+            self::sleepAtLeast(0.02);
         } while (microtime(true) < $deadline);
     }
 
@@ -1787,5 +1873,37 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $pool = (new ReflectionProperty(Session::class, 'streamIds'))->getValue(self::sessionOf($connection));
 
         return $pool;
+    }
+
+    /**
+     * Sleep until every one of these statements is past its budget, so that the
+     * wait which follows finds them all overdue in its first pass.
+     *
+     * Without it the test would be relying on that happening by itself, which is
+     * a race: each statement's deadline runs from its own send, so a wait comes
+     * up for air at the earliest of them and only the statements overdue at that
+     * instant are given up on together. The ones sent after it are usually
+     * overdue by then too — a send is microseconds and the clock is read a few
+     * instructions later — but on a loaded machine the gap between two sends can
+     * be milliseconds, and then the first pass gives up on one statement rather
+     * than both. Which changes what the caller is told: one held id is within
+     * {@see \Cassandra\Connection\ConnectionOptions::$maxOrphanedStreams} here,
+     * so the pass reports a RequestTimeoutException instead of replacing the
+     * connection.
+     *
+     * @param array<Statement> $statements
+     */
+    private static function waitOutTheBudgetOf(Connection $connection, array $statements): void {
+        $connectionDefault = $connection->getRequestTimeout() ?? 0.0;
+
+        $deadline = 0.0;
+        foreach ($statements as $statement) {
+            $deadline = max($deadline, $statement->getSentAt() + ($statement->getRequestTimeout() ?? $connectionDefault));
+        }
+
+        $remaining = $deadline - microtime(true);
+        if (is_finite($remaining) && $remaining > 0.0) {
+            self::sleepAtLeast($remaining);
+        }
     }
 }

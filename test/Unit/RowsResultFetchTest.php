@@ -31,6 +31,20 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->assertSame([true, false, true, false], $result->fetchAllColumns());
     }
 
+    public function testFetchAllColumnsRejectsIndexOutsideTheResultEvenWithNoRowsLeft(): void {
+        // The index used to be checked only by the fetchColumn() calls this
+        // makes, which a consumed cursor never reaches: naming a column the
+        // result does not have then came back as an empty array, which is
+        // indistinguishable from a result that really had no rows left.
+        $result = self::rowsResultWithOneColumn(Type::INT, [pack('N', 7)]);
+        $result->fetchAllColumns();
+
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionCode(ExceptionCode::RESPONSE_ROWS_INVALID_COLUMN_INDEX->value);
+
+        $result->fetchAllColumns(99);
+    }
+
     public function testFetchAllColumnsReturnsEveryRow(): void {
         $result = self::rowsResultWithOneColumn(Type::INT, [
             pack('N', 7),

@@ -57,6 +57,32 @@ abstract class AbstractUnitTestCase extends TestCase {
     }
 
     /**
+     * Sleep for at least $seconds of wall clock, however often the sleep is
+     * interrupted.
+     *
+     * PHP's usleep() does not resume after a signal: it returns early and says
+     * nothing about it, so a bare usleep(1_000_000) can come back a third of a
+     * second later. A test process running fake servers takes signals routinely
+     * — SIGCHLD from every one it starts and reaps — and the tests that sleep do
+     * it to put a deadline in the past before looking at what the driver made of
+     * it, so a short sleep does not slow such a test down but makes it assert
+     * the opposite of what it means: that a budget which has not run out yet has
+     * been enforced.
+     */
+    protected static function sleepAtLeast(float $seconds): void {
+        $until = microtime(true) + $seconds;
+
+        while (true) {
+            $remaining = $until - microtime(true);
+            if ($remaining <= 0.0) {
+                return;
+            }
+
+            usleep((int) ceil($remaining * 1_000_000));
+        }
+    }
+
+    /**
      * The requests a connection has in flight.
      */
     protected static function statementsOf(Connection $connection): StatementRegistry {

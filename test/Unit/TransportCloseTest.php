@@ -316,7 +316,7 @@ final class TransportCloseTest extends AbstractUnitTestCase {
                 return;
             }
 
-            usleep(50_000);
+            self::sleepAtLeast(0.05);
         }
 
         $this->fail('the connection reset never surfaced as a transport failure');
@@ -347,6 +347,6 @@ final class TransportCloseTest extends AbstractUnitTestCase {
         // read can still see a plain end of file, which the transports report
         // just as accurately but by a path that never had a warning to raise —
         // leaving the test passing without having exercised anything.
-        usleep(200_000);
+        self::sleepAtLeast(0.2);
     }
 }
