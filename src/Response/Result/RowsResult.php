@@ -170,6 +170,17 @@ final class RowsResult extends Result {
      * @throws \Cassandra\Exception\ValueFactoryException
      */
     public function fetchAllColumns(int $index = 0): array {
+
+        $columns = $this->rowsMetadata->columns;
+        if ($columns === null) {
+            throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
+                'operation' => 'RowsResult::fetchAllColumns',
+                'result_kind' => $this->kind->name,
+            ]);
+        }
+
+        self::assertColumnIndex($index, count($columns), 'index', 'RowsResult::fetchAllColumns');
+
         $values = [];
         while ($this->fetchedRows < $this->rowCount) {
             /** @psalm-suppress MixedAssignment */
