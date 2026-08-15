@@ -743,20 +743,21 @@ final class StreamReader {
      * AbstractType answers two separate questions, and this mirrors both:
      *
      * allowsEmpty() says whether a zero-length value is accepted at all. It is
-     * false by default, and stays false for the collections — CollectionType
-     * refuses one outright ("Not enough bytes to read a list") — as well as for
-     * duration and vector. Cassandra therefore never sends an empty cell for
-     * those; the entries below are leniency towards a peer that does, not a
-     * reading of a value it could have meant.
+     * false by default, and stays false wherever Cassandra's serializer demands
+     * an exact width: the collections — CollectionType refuses one outright
+     * ("Not enough bytes to read a list") — as well as date, time, smallint,
+     * tinyint, duration and vector. Cassandra therefore never sends an empty
+     * cell for those, so what this method reports for them is leniency towards a
+     * peer that does, not a reading of a value it could have meant.
      *
      * isEmptyValueMeaningless() says what an accepted empty value denotes. The
-     * fixed-length scalars — int, bigint, varint, decimal, float, double,
-     * boolean, timestamp, date, time, uuid, timeuuid, inet, counter, smallint,
-     * tinyint — all override it to true, and their serializers deserialize an
-     * empty value to null, which is what they are reported as here. The string
-     * family is the other way about: StringType and BytesType allow empty and
-     * leave isEmptyValueMeaningless() at false, so for ascii, text, varchar and
-     * blob the empty string is the value rather than a spelling of null.
+     * scalars whose serializer does deserialize an empty value — int, bigint,
+     * varint, decimal, float, double, boolean, timestamp, uuid, timeuuid, inet
+     * and counter — all override it to true, and null is what they are reported
+     * as here. The string family is the other way about: StringType and
+     * BytesType allow empty and leave isEmptyValueMeaningless() at false, so for
+     * ascii, text, varchar and blob the empty string is the value rather than a
+     * spelling of null.
      *
      * Reporting null also keeps the reader honest about the cell length, which
      * is the property the rest of the row depends on: a fixed-length decoder
