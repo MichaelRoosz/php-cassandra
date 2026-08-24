@@ -12,6 +12,7 @@
 
 - Add regression tests for every bug fix.
 - Run the focused PHPUnit tests, PHPStan, Psalm, PHP CS Fixer, and `git diff --check` before handing off changes. In restricted environments, run tools sequentially when their default parallel workers require local sockets.
+- Unit and Integration tests take a few minutes to run, use them wisely.
 
 ## Comments
 
