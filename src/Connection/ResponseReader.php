@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 use Cassandra\Compression\Lz4Decompressor;
+use Cassandra\Exception\CompressionException;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Flag;
@@ -114,7 +115,7 @@ final class ResponseReader {
 
         // The deadline is absolute, so reading the body cannot hand the wait a
         // second full budget on top of the one the header already spent.
-        $body = $node->read($header->length, $readDeadline);
+        $body = $this->readFromNode($node, $header->length, $readDeadline);
         if ($body === '') {
             return null;
         }
@@ -311,12 +312,44 @@ final class ResponseReader {
     }
 
     /**
+     * Take bytes from the transport, treating a decompression failure as a loss
+     * of frame sync.
+     *
+     * Only the v5 framing can raise one from a read, and there it always means
+     * bytes that are gone rather than a value that could not be made sense of:
+     * {@see FrameCodec} verifies the payload CRC32 and consumes the whole outer
+     * frame before it decompresses, so a payload it then refuses was a slice of
+     * the envelope stream this reader walks. Carrying on would assemble every
+     * later envelope from the wrong bytes — the same predicament a refused
+     * header leaves, and the reason both are reported through
+     * {@see self::$frameSyncLost}.
+     *
+     * The v3/v4 decompression is a different matter and is not routed through
+     * here: it runs on a body this reader has already taken whole, so a payload
+     * refused there costs one response and leaves the stream in step.
+     *
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    private function readFromNode(Node $node, int $length, ?float $readDeadline): string {
+
+        try {
+            return $node->read($length, $readDeadline);
+        } catch (CompressionException $e) {
+            $this->frameSyncLost = true;
+
+            throw $e;
+        }
+    }
+
+    /**
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\CompressionException
      */
     private function readHeader(Node $node, ProtocolVersion $version, ?float $readDeadline): ?Header {
 
-        $headerBytes = $node->read(9, $readDeadline);
+        $headerBytes = $this->readFromNode($node, 9, $readDeadline);
         if ($headerBytes === '') {
             return null;
         }
