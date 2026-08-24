@@ -54,6 +54,8 @@ class Custom extends ValueReadableWithLength {
 
     /**
      * @param mixed $value
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
