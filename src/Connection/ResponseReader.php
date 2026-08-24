@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 use Cassandra\Compression\Lz4Decompressor;
+use Cassandra\Exception\CompressionException;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Flag;
@@ -50,12 +51,16 @@ final class ResponseReader {
      * Whether a failure left this reader out of step with the frame stream, so
      * that carrying on would read the next response at the wrong offset.
      *
-     * Only {@see self::readHeader()} can do that. It consumes the nine header
-     * bytes and only then passes judgement on them, so a header it refuses
-     * leaves the body of that frame in the transport's buffer with nothing left
-     * that knows how long it is — the next read would take those bytes for a
-     * header. Everything else that fails here has already consumed the whole
-     * frame ({@see self::createResponse()}, and the decompression above it), so
+     * Two things can do that. {@see self::readHeader()} consumes the nine
+     * header bytes and only then passes judgement on them, so a header it
+     * refuses leaves the body of that frame in the transport's buffer with
+     * nothing left that knows how long it is — the next read would take those
+     * bytes for a header. And the transport itself can lose bytes it has
+     * already taken off the wire, which on the v5 framing is what a refused
+     * decompression is; see {@see self::readFromNode()}.
+     *
+     * Everything else that fails here has already consumed the whole frame
+     * ({@see self::createResponse()}, and the v3/v4 decompression above it), so
      * the stream is still in step and the connection is worth keeping. The
      * owning request is finished through
      * {@see Session::finishFailedConsumedResponse()} instead.
@@ -110,7 +115,7 @@ final class ResponseReader {
 
         // The deadline is absolute, so reading the body cannot hand the wait a
         // second full budget on top of the one the header already spent.
-        $body = $node->read($header->length, $readDeadline);
+        $body = $this->readFromNode($node, $header->length, $readDeadline);
         if ($body === '') {
             return null;
         }
@@ -307,12 +312,44 @@ final class ResponseReader {
     }
 
     /**
+     * Take bytes from the transport, treating a decompression failure as a loss
+     * of frame sync.
+     *
+     * Only the v5 framing can raise one from a read, and there it always means
+     * bytes that are gone rather than a value that could not be made sense of:
+     * {@see FrameCodec} verifies the payload CRC32 and consumes the whole outer
+     * frame before it decompresses, so a payload it then refuses was a slice of
+     * the envelope stream this reader walks. Carrying on would assemble every
+     * later envelope from the wrong bytes — the same predicament a refused
+     * header leaves, and the reason both are reported through
+     * {@see self::$frameSyncLost}.
+     *
+     * The v3/v4 decompression is a different matter and is not routed through
+     * here: it runs on a body this reader has already taken whole, so a payload
+     * refused there costs one response and leaves the stream in step.
+     *
+     * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    private function readFromNode(Node $node, int $length, ?float $readDeadline): string {
+
+        try {
+            return $node->read($length, $readDeadline);
+        } catch (CompressionException $e) {
+            $this->frameSyncLost = true;
+
+            throw $e;
+        }
+    }
+
+    /**
      * @throws \Cassandra\Exception\NodeException
      * @throws \Cassandra\Exception\ConnectionException
+     * @throws \Cassandra\Exception\CompressionException
      */
     private function readHeader(Node $node, ProtocolVersion $version, ?float $readDeadline): ?Header {
 
-        $headerBytes = $node->read(9, $readDeadline);
+        $headerBytes = $this->readFromNode($node, 9, $readDeadline);
         if ($headerBytes === '') {
             return null;
         }

@@ -1755,13 +1755,15 @@ final class Session {
      * A reader failure normally leaves the connection alone: the frame was
      * consumed whole and only making sense of it went wrong, so the stream is
      * still in step and one bad answer costs one request — which is what
-     * {@see self::finishFailedConsumedResponse()} tidies up. A header the
-     * reader refused is the other kind. Its nine bytes are gone and the body
-     * they announced is not, so every later response would be read at the wrong
-     * offset: the connection is not slow or unlucky, it is unusable, and going
-     * on with it would at best fail every request from here and at worst parse
-     * the drift into a well-formed frame and hand somebody another request's
-     * answer. See {@see ResponseReader::$frameSyncLost}.
+     * {@see self::finishFailedConsumedResponse()} tidies up. The other kind is
+     * a failure that took bytes with it: a header the reader refused, whose
+     * nine bytes are gone while the body they announced is not, and on the v5
+     * framing a payload the transport could not decompress, which was a slice
+     * of the envelope stream. Either way every later response would be read at
+     * the wrong offset: the connection is not slow or unlucky, it is unusable,
+     * and going on with it would at best fail every request from here and at
+     * worst parse the drift into a well-formed frame and hand somebody another
+     * request's answer. See {@see ResponseReader::$frameSyncLost}.
      *
      * Dropped rather than blamed on the node, as the other paths that replace a
      * connection do ({@see self::enforceOrphanedStreamLimit()},
@@ -2035,13 +2037,9 @@ final class Session {
             // over a quiet moment would be the worst possible reading of a
             // timeout that no wait was even attempted for.
             $response = null;
-        } catch (ConnectionException $e) {
+        } catch (CompressionException|ConnectionException|ResponseException $e) {
             $this->finishFailedConsumedResponse($e);
             $this->dropConnectionIfFrameSyncLost();
-
-            throw $e;
-        } catch (CompressionException|ResponseException $e) {
-            $this->finishFailedConsumedResponse($e);
 
             throw $e;
         }
@@ -2140,13 +2138,9 @@ final class Session {
             }
 
             $response = null;
-        } catch (ConnectionException $e) {
+        } catch (CompressionException|ConnectionException|ResponseException $e) {
             $this->finishFailedConsumedResponse($e);
             $this->dropConnectionIfFrameSyncLost();
-
-            throw $e;
-        } catch (CompressionException|ResponseException $e) {
-            $this->finishFailedConsumedResponse($e);
 
             throw $e;
         }

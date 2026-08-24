@@ -11,6 +11,8 @@ use Cassandra\Connection\Node;
 use Cassandra\Connection\NodeConfig;
 use Cassandra\Connection\ResponseReader;
 use Cassandra\Connection\SocketNodeConfig;
+use Cassandra\Exception\CompressionException;
+use Cassandra\Exception\ExceptionCode;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\Request;
@@ -49,6 +51,49 @@ final class ResponseReaderResetTest extends AbstractUnitTestCase {
 
         $this->assertNotNull($response, 'the fresh connection is read from its first byte');
         $this->assertSame(5, $response->getStream());
+    }
+
+    /**
+     * Regression: the reader treated a decompression failure like any other
+     * reader failure — one bad answer on a stream that is still in step — and
+     * left the connection in use. On the v5 framing it is the other kind:
+     * {@see \Cassandra\Connection\FrameCodec} verifies the payload CRC32 and
+     * consumes the whole outer frame before it decompresses, so a payload it
+     * then refuses was a slice of the envelope stream, and every later envelope
+     * would be assembled from the wrong bytes.
+     */
+    public function testATransportDecompressionFailureOnTheBodyLosesFrameSync(): void {
+        $reader = new ResponseReader();
+
+        // The header is read whole; the body read is the one that fails.
+        $node = new FakeDecompressionFailureNode(self::truncatedFrame(), failAfterReads: 1);
+
+        try {
+            $reader->readResponse($node, ProtocolVersion::V4, Node::DO_NOT_WAIT);
+            $this->fail('expected the decompression failure to be reported');
+        } catch (CompressionException) {
+            $this->assertTrue($reader->hasLostFrameSync());
+        }
+    }
+
+    public function testATransportDecompressionFailureOnTheHeaderLosesFrameSync(): void {
+        $reader = new ResponseReader();
+
+        $node = new FakeDecompressionFailureNode('', failAfterReads: 0);
+
+        try {
+            $reader->readResponse($node, ProtocolVersion::V4, Node::DO_NOT_WAIT);
+            $this->fail('expected the decompression failure to be reported');
+        } catch (CompressionException) {
+            $this->assertTrue($reader->hasLostFrameSync());
+        }
+
+        // And a reset puts the reader back into service, as it does for a
+        // refused header: the frames it was out of step with went away with the
+        // socket.
+        $reader->reset();
+
+        $this->assertFalse($reader->hasLostFrameSync());
     }
 
     public function testDisconnectDropsAHalfReadFrame(): void {
@@ -119,6 +164,61 @@ final class ResponseReaderResetTest extends AbstractUnitTestCase {
      */
     private static function truncatedFrame(): string {
         return self::header(Opcode::RESPONSE_RESULT, stream: 7, bodyLength: 10);
+    }
+}
+
+/**
+ * A node that replays a fixed buffer and then fails the way {@see \Cassandra\Connection\FrameCodec}
+ * does when a payload it has already taken off the wire will not decompress.
+ */
+final class FakeDecompressionFailureNode implements Node {
+    private int $reads = 0;
+
+    private int $receivedByteCount = 0;
+
+    public function __construct(private string $buffer, private int $failAfterReads) {
+    }
+
+    public function close(): void {
+    }
+
+    public function getConfig(): NodeConfig {
+        return new SocketNodeConfig(host: '127.0.0.1');
+    }
+
+    public function getReceivedByteCount(): int {
+        return $this->receivedByteCount;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    public function read(int $length, ?float $readDeadline): string {
+        if ($this->reads++ >= $this->failAfterReads) {
+            throw new CompressionException(
+                'invalid lz4 block data - input overflow while reading literals',
+                ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
+            );
+        }
+
+        $data = substr($this->buffer, 0, $length);
+        $this->buffer = substr($this->buffer, $length);
+        $this->receivedByteCount += strlen($data);
+
+        return $data;
+    }
+
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    public function readAvailableDataFromSource(int $expectedLength, int $upperBoundaryLength, ?float $readDeadline): string {
+        return $this->read($expectedLength, $readDeadline);
+    }
+
+    public function write(string $data): void {
+    }
+
+    public function writeRequest(Request $request): void {
     }
 }
 
