@@ -60,7 +60,7 @@ final class Inet extends ValueReadableWithLength {
                 ]
             );
         }
- 
+
         $this->binary = $binary;
     }
 
