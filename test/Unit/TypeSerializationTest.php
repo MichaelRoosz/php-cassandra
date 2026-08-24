@@ -657,13 +657,31 @@ final class TypeSerializationTest extends AbstractUnitTestCase {
         $this->assertSame($ipv6, Value\Inet::fromBinary((Value\Inet::fromValue($ipv6))->getBinary())?->getValue());
     }
 
-    public function testInetWrapsNativeEncodingErrors(): void {
-        try {
-            Value\Inet::fromValue("bad\0address")->getBinary();
-            $this->fail('Expected a ValueException');
-        } catch (ValueException $e) {
-            $this->assertSame(ExceptionCode::VALUE_INET_TO_BINARY_FAILED->value, $e->getCode());
-            $this->assertNull($e->getPrevious());
+    /**
+     * Regression: an address this type cannot encode was accepted at
+     * construction and only refused at getBinary(), which for a bound value is
+     * several calls later and for a collection element is under a failure that
+     * names the collection. It is reported against the value that named it now,
+     * as Decimal and Varint report their own bounds.
+     */
+    public function testInetRefusesAnInvalidAddressWhereItIsNamed(): void {
+        foreach ([
+            'definitely not an ip',
+            '',
+            '256.0.0.1',
+            '1.2.3',
+            'fe80::1::2',
+            // inet_pton() raises a native ValueError for a null byte rather
+            // than reporting an invalid address, so it takes its own guard.
+            "bad\0address",
+        ] as $invalid) {
+            try {
+                Value\Inet::fromValue($invalid);
+                $this->fail('Expected a ValueException for ' . var_export($invalid, true));
+            } catch (ValueException $e) {
+                $this->assertSame(ExceptionCode::VALUE_INET_INVALID_ADDRESS->value, $e->getCode());
+                $this->assertNull($e->getPrevious());
+            }
         }
     }
 
