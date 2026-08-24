@@ -464,6 +464,7 @@ final class FrameCodec extends NodeImplementation {
      * }
      * 
      * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
      */
     private function readFrameHeader(?float $readDeadline): ?array {
         if ($this->compression) {

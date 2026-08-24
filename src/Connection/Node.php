@@ -55,6 +55,7 @@ interface Node {
      * gone quiet for too long, and that is what raises.
      *
      * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
      */
     public function read(int $length, ?float $readDeadline): string;
 

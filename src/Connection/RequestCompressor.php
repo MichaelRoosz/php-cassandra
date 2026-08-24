@@ -85,6 +85,7 @@ final class RequestCompressor extends NodeImplementation {
      * reads, but it too takes its input through the wrapped node's read().
      *
      * @throws \Cassandra\Exception\NodeException
+     * @throws \Cassandra\Exception\CompressionException
      */
     #[\Override]
     public function read(int $length, ?float $readDeadline): string {
