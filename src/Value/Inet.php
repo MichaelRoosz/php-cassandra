@@ -40,22 +40,28 @@ final class Inet extends ValueReadableWithLength {
 
         // inet_pton() raises a native ValueError for a null byte rather than
         // reporting an invalid address with false, so that one is settled here.
-        if (!str_contains($value, "\0")) {
-            $binary = inet_pton($value);
-            if ($binary !== false) {
-                $this->binary = $binary;
-
-                return;
-            }
+        if (str_contains($value, "\0")) {
+            throw new ValueException(
+                'Invalid inet value; expected an IPv4 or IPv6 address',
+                ExceptionCode::VALUE_INET_INVALID_ADDRESS->value,
+                [
+                    'value' => $value,
+                ]
+            );
         }
 
-        throw new ValueException(
-            'Invalid inet value; expected an IPv4 or IPv6 address',
-            ExceptionCode::VALUE_INET_INVALID_ADDRESS->value,
-            [
-                'value' => $value,
-            ]
-        );
+        $binary = inet_pton($value);
+        if ($binary === false) {
+            throw new ValueException(
+                'Invalid inet value; expected an IPv4 or IPv6 address',
+                ExceptionCode::VALUE_INET_INVALID_ADDRESS->value,
+                [
+                    'value' => $value,
+                ]
+            );
+        }
+ 
+        $this->binary = $binary;
     }
 
     #[\Override]
@@ -142,6 +148,9 @@ final class Inet extends ValueReadableWithLength {
         return Type::INET;
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     #[\Override]
     public function getValue(): string {
         $inet = inet_ntop($this->binary);
