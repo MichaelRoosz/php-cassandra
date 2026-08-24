@@ -11,6 +11,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\TimestampEncodeOption;
 use DateTimeImmutable;
 use DateTimeInterface;
+use DateTimeZone;
 use Exception as PhpException;
 
 final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleEncodings {
@@ -31,7 +32,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
             }
 
             try {
-                $date = new DateTimeImmutable($value);
+                $date = new DateTimeImmutable($value, new DateTimeZone('UTC'));
                 $parseErrors = DateTimeImmutable::getLastErrors();
                 if ($parseErrors !== false && ($parseErrors['warning_count'] > 0 || $parseErrors['error_count'] > 0)) {
                     self::throwInvalidTimestamp($value);
