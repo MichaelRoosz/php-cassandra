@@ -43,7 +43,7 @@ final class ResultIterator implements Iterator {
             $row = $this->rowsResult->fetch();
         }
 
-        $this->needToRewindRow = true;
+        $this->needToRewindRow = $row !== false;
 
         return $row;
     }
