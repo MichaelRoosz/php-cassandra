@@ -332,6 +332,96 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->assertFalse($result->fetch());
     }
 
+    public function testRewindOneRowWalksBackPastTheRememberedWindow(): void {
+        // The offsets of the rows already read used to be remembered one per
+        // row, which cost a walk over a large page several times the memory of
+        // the frame it was reading. Only a window of them is kept now, so a
+        // rewind reaching past it has to work the position out again — and this
+        // is the case that proves it does.
+        $rowCount = 500;
+        $cells = [];
+        for ($value = 0; $value < $rowCount; ++$value) {
+            $cells[] = pack('N', $value);
+        }
+
+        $result = self::rowsResultWithOneColumn(Type::INT, $cells);
+        $this->assertCount($rowCount, $result->fetchAll());
+
+        // Every row back to the first, which is far more than the window holds.
+        for ($step = 0; $step < $rowCount; ++$step) {
+            $result->rewindOneRow();
+        }
+
+        $this->assertSame(['col' => 0], $result->fetch());
+        $this->assertSame(['col' => 1], $result->fetch());
+
+        $result->rewindOneRow();
+        $this->assertSame(['col' => 1], $result->fetch());
+    }
+
+    public function testRewindOneRowWalksBackPastTheWindowOverVariableWidthRows(): void {
+        // The walk steps over a row on its cell lengths alone, so it has to
+        // read a row whose width is not the same for every one of them — and a
+        // null cell, which occupies only its length.
+        $cells = [];
+        for ($value = 0; $value < 300; ++$value) {
+            $cells[] = $value % 5 === 0 ? null : str_repeat('x', $value % 17);
+        }
+
+        $result = self::rowsResultWithOneColumn(Type::VARCHAR, $cells);
+        $expected = $result->fetchAll();
+        $this->assertCount(300, $expected);
+
+        for ($step = 0; $step < 300; ++$step) {
+            $result->rewindOneRow();
+        }
+
+        $this->assertSame($expected, $result->fetchAll());
+    }
+
+    public function testStreamingFetchDoesNotRetainOneOffsetPerRow(): void {
+        // The regression this exists for: the cursor kept the start offset of
+        // every row it had reached, so streaming a large page with fetch() —
+        // the very thing that exists to avoid holding the rows at once — grew
+        // by several times the size of the frame being read.
+        $rowCount = 20000;
+        $cells = [];
+        for ($value = 0; $value < $rowCount; ++$value) {
+            $cells[] = pack('N', $value);
+        }
+
+        $result = self::rowsResultWithOneColumn(Type::INT, $cells);
+
+        $rowsRead = 0;
+        while ($result->fetch() !== false) {
+            ++$rowsRead;
+        }
+
+        $this->assertSame($rowCount, $rowsRead);
+
+        $offsets = new \ReflectionProperty(RowsResult::class, 'dataOffsetsByRow');
+        /** @var array<int, int> $remembered */
+        $remembered = $offsets->getValue($result);
+
+        $window = new \ReflectionClassConstant(RowsResult::class, 'REWIND_HISTORY_ROWS');
+        /** @var int $windowSize */
+        $windowSize = $window->getValue();
+
+        $this->assertLessThanOrEqual($windowSize, count($remembered));
+
+        // The checkpoints that keep a deep rewind from walking the whole page
+        // are bounded too, or they would be the per-row cost over again.
+        $checkpoints = new \ReflectionProperty(RowsResult::class, 'checkpointOffsetsByRow');
+        /** @var array<int, int> $recordedCheckpoints */
+        $recordedCheckpoints = $checkpoints->getValue($result);
+
+        $maximum = new \ReflectionClassConstant(RowsResult::class, 'REWIND_CHECKPOINT_ROWS');
+        /** @var int $maximumCheckpoints */
+        $maximumCheckpoints = $maximum->getValue();
+
+        $this->assertLessThanOrEqual($maximumCheckpoints + 1, count($recordedCheckpoints));
+    }
+
     /**
      * @param callable(): mixed $fetch
      */
@@ -393,7 +483,8 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
     /**
      * A ROWS result of one column, with one cell per row.
      *
-     * @param array<string> $cells one serialized value per row
+     * @param array<?string> $cells one serialized value per row, null for a
+     * null cell
      *
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
@@ -411,7 +502,9 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
             . pack('N', count($cells));
 
         foreach ($cells as $cell) {
-            $body .= pack('N', strlen($cell)) . $cell;
+            $body .= $cell === null
+                ? "\xff\xff\xff\xff"
+                : pack('N', strlen($cell)) . $cell;
         }
 
         $header = new Header(

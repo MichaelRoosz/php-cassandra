@@ -18,9 +18,63 @@ use Throwable;
 
 final class RowsResult extends Result {
     /**
-     * Start offset of every row this cursor has reached, keyed by its zero-based
-     * row index. Keeping the history lets rewindOneRow() be called repeatedly
-     * without letting the row counter and stream position disagree.
+     * Most rows {@see self::$checkpointOffsetsByRow} holds, which together with
+     * the row count fixes the stride between them; see
+     * {@see self::$checkpointStride}.
+     */
+    private const REWIND_CHECKPOINT_ROWS = 256;
+    /**
+     * How many of the most recently reached rows {@see self::$dataOffsetsByRow}
+     * remembers the start offset of.
+     *
+     * Deep enough that no plausible use of {@see self::rewindOneRow()} reaches
+     * past it — the driver's own callers rewind by exactly one — and small
+     * enough that the map costs a few kilobytes whatever the page holds. A
+     * rewind past it is served by {@see self::seekToRow()} instead, so the
+     * window bounds the memory rather than the behaviour.
+     */
+    private const REWIND_HISTORY_ROWS = 64;
+
+    /**
+     * Start offsets of every {@see self::$checkpointStride}-th row, so that
+     * {@see self::seekToRow()} can start its walk near the row it wants instead
+     * of at the first one.
+     *
+     * Without them a rewind past the window would walk from the start every
+     * time, which makes stepping back through a large page quadratic in its
+     * length. The stride is worked out from the row count rather than fixed, so
+     * this holds at most {@see self::REWIND_CHECKPOINT_ROWS} entries however
+     * many rows the page has.
+     *
+     * @var array<int, int>
+     */
+    private array $checkpointOffsetsByRow = [];
+
+    /**
+     * How many rows apart the entries of {@see self::$checkpointOffsetsByRow}
+     * are, and so the longest walk {@see self::seekToRow()} can be left with.
+     *
+     * At least one, which is what the arithmetic it divides depends on: a
+     * stride of zero would make {@see self::recordRowOffset()} and
+     * {@see self::seekToRow()} raise a native DivisionByZeroError from inside
+     * the library.
+     *
+     * @var positive-int
+     */
+    private int $checkpointStride = 1;
+
+    /**
+     * Start offsets of the {@see self::REWIND_HISTORY_ROWS} most recently
+     * reached rows, keyed by zero-based row index. Lets
+     * {@see self::rewindOneRow()} put the reader back where a row began without
+     * letting the row counter and the stream position disagree.
+     *
+     * Deliberately a window rather than the whole history: an entry costs some
+     * tens of bytes, so keeping one per row made a walk over a large page cost
+     * several times the frame it was reading — and paid it on the streaming
+     * path, which exists precisely so that the rows need not be held at once.
+     * What the window cannot answer is worked out again by
+     * {@see self::seekToRow()}.
      *
      * @var array<int, int>
      */
@@ -67,7 +121,10 @@ final class RowsResult extends Result {
         $this->assertRowCountFitsInBody();
 
         $this->dataOffset = $this->stream->pos();
-        $this->dataOffsetsByRow[0] = $this->dataOffset;
+
+        $this->checkpointStride = max(1, (int) ceil($this->rowCount / self::REWIND_CHECKPOINT_ROWS));
+
+        $this->recordRowOffset(0, $this->dataOffset);
 
         $this->valueEncodeConfig = ValueEncodeConfig::default();
     }
@@ -126,7 +183,7 @@ final class RowsResult extends Result {
             throw $e;
         }
 
-        $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
+        $this->recordRowOffset($this->fetchedRows, $previousOffset);
         $this->fetchedRows++;
 
         return $row;
@@ -255,7 +312,7 @@ final class RowsResult extends Result {
                 }
             }
 
-            $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
+            $this->recordRowOffset($this->fetchedRows, $previousOffset);
             $this->fetchedRows++;
 
             if ($key === null) {
@@ -358,7 +415,7 @@ final class RowsResult extends Result {
             throw $e;
         }
 
-        $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
+        $this->recordRowOffset($this->fetchedRows, $previousOffset);
         $this->fetchedRows++;
 
         return $value;
@@ -425,7 +482,7 @@ final class RowsResult extends Result {
             }
         }
 
-        $this->dataOffsetsByRow[$this->fetchedRows] = $previousOffset;
+        $this->recordRowOffset($this->fetchedRows, $previousOffset);
         $this->fetchedRows++;
 
         if ($key === null) {
@@ -582,6 +639,14 @@ final class RowsResult extends Result {
     }
 
     /**
+     * Put the cursor back at the start of the row it last read.
+     *
+     * May be called repeatedly, walking back one row each time. Only the last
+     * {@see self::REWIND_HISTORY_ROWS} of them are remembered outright; going
+     * back further costs a walk from the start of the rows
+     * ({@see self::seekToRow()}) rather than the memory of remembering every
+     * row a page ever reached.
+     *
      * @throws \Cassandra\Exception\ResponseException
      */
     public function rewindOneRow(): void {
@@ -590,8 +655,17 @@ final class RowsResult extends Result {
             return;
         }
 
-        $this->fetchedRows--;
-        $this->stream->offset($this->dataOffsetsByRow[$this->fetchedRows]);
+        $target = $this->fetchedRows - 1;
+
+        $offset = $this->dataOffsetsByRow[$target] ?? null;
+        if ($offset === null) {
+            $this->seekToRow($target);
+
+            return;
+        }
+
+        $this->fetchedRows = $target;
+        $this->stream->offset($offset);
     }
 
     public function rowCount(): int {
@@ -765,5 +839,93 @@ final class RowsResult extends Result {
         }
 
         return $row;
+    }
+
+    /**
+     * Remember where a row began, dropping the entry that falls out of the
+     * window; see {@see self::$dataOffsetsByRow}.
+     *
+     * The rows are recorded in ascending order by every path that reaches this,
+     * so dropping the one $window back is what keeps the map to that many
+     * entries.
+     */
+    private function recordRowOffset(int $rowIndex, int $offset): void {
+
+        $this->dataOffsetsByRow[$rowIndex] = $offset;
+
+        unset($this->dataOffsetsByRow[$rowIndex - self::REWIND_HISTORY_ROWS]);
+
+        if ($rowIndex % $this->checkpointStride === 0) {
+            $this->checkpointOffsetsByRow[$rowIndex] = $offset;
+        }
+    }
+
+    /**
+     * Put the cursor at the start of $rowIndex by walking there, for a row
+     * whose offset the window no longer holds.
+     *
+     * The walk starts at the nearest checkpoint at or before $rowIndex, so it
+     * is bounded by {@see self::$checkpointStride} rather than by how far into
+     * the page the row is. Every row on the way is recorded, so the window
+     * comes out holding the rows immediately before $rowIndex: a run of
+     * {@see self::rewindOneRow()} calls therefore pays for one walk per
+     * window's worth of rows rather than one per row.
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    private function seekToRow(int $rowIndex): void {
+
+        $row = intdiv($rowIndex, $this->checkpointStride) * $this->checkpointStride;
+
+        $offset = $this->checkpointOffsetsByRow[$row] ?? null;
+        if ($offset === null) {
+            // No checkpoint has been reached yet, which leaves the first row as
+            // the only offset known to be right.
+            $row = 0;
+            $offset = $this->dataOffset;
+        }
+
+        $this->stream->offset($offset);
+
+        for (; $row < $rowIndex; ++$row) {
+            $this->recordRowOffset($row, $this->stream->pos());
+            $this->skipRow();
+        }
+
+        $this->recordRowOffset($rowIndex, $this->stream->pos());
+        $this->fetchedRows = $rowIndex;
+    }
+
+    /**
+     * Step over the row the cursor is on without decoding it.
+     *
+     * Every cell is a four-byte length followed by exactly that many bytes —
+     * {@see \Cassandra\Response\StreamReader::readValue()} holds its decoders to
+     * it — so the row can be walked on the lengths alone. That is what makes
+     * {@see self::seekToRow()} cheap enough to stand in for remembering every
+     * row: no value is built, and nothing here can fail on a cell that a
+     * decoder would have refused.
+     *
+     * A negative length is a null cell and occupies no bytes of its own, which
+     * is the same reading readValue() gives it.
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    private function skipRow(): void {
+
+        $columns = $this->rowsMetadata->columns;
+        if ($columns === null) {
+            throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
+                'operation' => 'RowsResult::skipRow',
+                'result_kind' => $this->kind->name,
+            ]);
+        }
+
+        foreach ($columns as $_column) {
+            $length = $this->stream->readInt();
+            if ($length > 0) {
+                $this->stream->offset($this->stream->pos() + $length);
+            }
+        }
     }
 }
