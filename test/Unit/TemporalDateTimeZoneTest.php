@@ -75,6 +75,31 @@ final class TemporalDateTimeZoneTest extends AbstractUnitTestCase {
         $this->assertSame('1970-01-01 12:34:56', $dateTime->format('Y-m-d H:i:s'));
     }
 
+    /**
+     * Regression: a timestamp string that names an offset keeps it, so the
+     * fallback zone above really is only a fallback.
+     */
+    public function testTimestampStringWithExplicitOffsetKeepsIt(): void {
+        // 12:34:56 at +02:00 is 10:34:56 UTC, i.e. two hours less than the
+        // zoneless spelling of the same wall clock.
+        $this->assertSame(38096000, (new Timestamp('1970-01-01T12:34:56+02:00'))->asInteger());
+        $this->assertSame(45296000, (new Timestamp('1970-01-01T12:34:56Z'))->asInteger());
+    }
+
+    /**
+     * Regression: a timestamp string that names no offset was read in the
+     * ambient default timezone, so the same literal meant a different instant
+     * on every machine that sent it — while getValue() spelled the value back
+     * out in UTC regardless, and `date` and `time` were anchored at UTC on both
+     * sides. setUp() has put the process on America/New_York, five hours off.
+     */
+    public function testTimestampStringWithoutZoneIsReadAsUtc(): void {
+        $value = new Timestamp('1970-01-01 12:34:56');
+
+        $this->assertSame(45296000, $value->asInteger());
+        $this->assertSame('1970-01-01 12:34:56.000+0000', $value->getValue());
+    }
+
     public function testTimeTruncatesBelowMicrosecondPrecision(): void {
         // DateTimeImmutable carries microseconds; the type carries nanoseconds.
         $value = new Time(45296123456789);
