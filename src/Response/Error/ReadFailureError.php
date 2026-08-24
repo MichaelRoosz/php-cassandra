@@ -48,7 +48,7 @@ final class ReadFailureError extends Error {
             $numFailures = $this->stream->readInt();
         }
 
-        $dataPresent = $this->stream->readByte();
+        $dataPresent = $this->stream->readByte() !== 0;
 
         return new ReadFailureContext(
             consistency: $consistency,

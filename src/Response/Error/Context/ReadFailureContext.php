@@ -16,7 +16,7 @@ final class ReadFailureContext extends ErrorContext {
         public readonly int $nodesRequired,
         public readonly ?array $reasonMap,
         public readonly ?int $numFailures,
-        public readonly int $dataPresent
+        public readonly bool $dataPresent
     ) {
     }
 
@@ -25,7 +25,7 @@ final class ReadFailureContext extends ErrorContext {
      *   consistency: int,
      *   nodes_answered: int,
      *   nodes_required: int,
-     *   data_present: int,
+     *   data_present: bool,
      *   reasonmap: array<string, int>|null,
      *   num_failures: int|null,
      * }
