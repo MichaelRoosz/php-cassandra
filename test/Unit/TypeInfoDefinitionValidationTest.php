@@ -77,6 +77,7 @@ final class TypeInfoDefinitionValidationTest extends AbstractUnitTestCase {
 
     public function testSimpleTypeDefinitionRejectsANonTypeDiscriminator(): void {
         try {
+            /** @phpstan-ignore argument.type */
             SimpleTypeInfo::fromTypeDefinition(['type' => 'text']);
             $this->fail('Expected the invalid simple type discriminator to be rejected');
         } catch (TypeInfoException $e) {

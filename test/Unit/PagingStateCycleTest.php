@@ -18,9 +18,6 @@ final class PagingStateCycleTest extends AbstractUnitTestCase {
     /** @var ?resource $serverProcess */
     private $serverProcess = null;
 
-    /** @var ?resource $serverStdout */
-    private $serverStdout = null;
-
     protected function tearDown(): void {
         $this->stopServer();
     }
@@ -110,7 +107,6 @@ final class PagingStateCycleTest extends AbstractUnitTestCase {
         }
 
         stream_set_blocking($pipes[1], false);
-        $this->serverStdout = $pipes[1];
 
         return (int) $matches[1];
     }
@@ -123,6 +119,5 @@ final class PagingStateCycleTest extends AbstractUnitTestCase {
         proc_terminate($this->serverProcess);
         proc_close($this->serverProcess);
         $this->serverProcess = null;
-        $this->serverStdout = null;
     }
 }
