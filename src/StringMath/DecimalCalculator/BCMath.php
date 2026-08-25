@@ -109,6 +109,9 @@ final class BCMath extends DecimalCalculator {
         ];
     }
 
+    /**
+     * @throws \Cassandra\Exception\StringMathException
+     */
     #[\Override]
     public function multiplyBy256(string $decimal): string {
         if ($decimal === '0') {
