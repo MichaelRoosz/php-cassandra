@@ -36,6 +36,17 @@ final class SimpleTypeInfo extends TypeInfo {
             );
         }
 
+        if (!$typeDefinition['type'] instanceof Type) {
+            throw new TypeInfoException(
+                "Invalid simple type definition: 'type' must be an instance of Type",
+                ExceptionCode::TYPEINFO_SIMPLE_TYPE_NOT_INSTANCE->value,
+                [
+                    'actual_type' => get_debug_type($typeDefinition['type']),
+                    'expected_type' => Type::class,
+                ]
+            );
+        }
+
         if (!ValueFactory::isSimpleType($typeDefinition['type'])) {
             throw new TypeInfoException(
                 'Invalid simple type definition: type must be a simple (non-complex) type',
