@@ -26,6 +26,7 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         [TypeName::BYTE, Type::TINYINT],
         [TypeName::BYTES, Type::BLOB],
         [TypeName::COUNTER_COLUMN, Type::COUNTER],
+        [TypeName::DATE, Type::TIMESTAMP],
         [TypeName::DECIMAL, Type::DECIMAL],
         [TypeName::DOUBLE, Type::DOUBLE],
         [TypeName::DURATION, Type::DURATION],
@@ -33,6 +34,8 @@ class TypeNameParserTest extends AbstractUnitTestCase {
         [TypeName::INET_ADDRESS, Type::INET],
         [TypeName::INT32, Type::INT],
         [TypeName::INTEGER, Type::VARINT],
+        [TypeName::LEGACY_TIME_UUID, Type::TIMEUUID],
+        [TypeName::LEXICAL_UUID, Type::UUID],
         [TypeName::LONG, Type::BIGINT],
         [TypeName::SHORT, Type::SMALLINT],
         [TypeName::SIMPLE_DATE, Type::DATE],
@@ -889,6 +892,29 @@ class TypeNameParserTest extends AbstractUnitTestCase {
             $result = $this->parser->parse($typeString);
             $this->assertInstanceOf(SimpleTypeInfo::class, $result);
             $this->assertEquals(Type::VARCHAR, $result->type);
+        }
+    }
+
+    /**
+     * The marshallers that stay opaque, and why: a composite carries several
+     * values in one cell with no CQL type to decode it as, EmptyType admits
+     * nothing but the empty value, and PartitionerDefinedOrder orders partition
+     * keys rather than describing a column. Reading any of them as some other
+     * type would claim a shape the bytes do not have.
+     */
+    public function testTheMarshallersWithNoCqlEquivalentStayCustom(): void {
+        $opaque = [
+            'org.apache.cassandra.db.marshal.CompositeType(org.apache.cassandra.db.marshal.UTF8Type,org.apache.cassandra.db.marshal.Int32Type)',
+            'org.apache.cassandra.db.marshal.DynamicCompositeType(s=>org.apache.cassandra.db.marshal.UTF8Type)',
+            'org.apache.cassandra.db.marshal.EmptyType',
+            'org.apache.cassandra.db.marshal.PartitionerDefinedOrder(org.apache.cassandra.dht.Murmur3Partitioner)',
+        ];
+
+        foreach ($opaque as $typeString) {
+            $result = $this->parser->parse($typeString);
+            $this->assertInstanceOf(CustomInfo::class, $result, $typeString);
+            $this->assertSame(Type::CUSTOM, $result->type);
+            $this->assertSame($typeString, $result->javaClassName, 'the class name is kept, so a caller can tell what it was');
         }
     }
 

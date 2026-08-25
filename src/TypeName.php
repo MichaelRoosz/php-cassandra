@@ -10,6 +10,7 @@ enum TypeName: string {
     case BYTE = 'org.apache.cassandra.db.marshal.ByteType';
     case BYTES = 'org.apache.cassandra.db.marshal.BytesType';
     case COUNTER_COLUMN = 'org.apache.cassandra.db.marshal.CounterColumnType';
+    case DATE = 'org.apache.cassandra.db.marshal.DateType';
     case DECIMAL = 'org.apache.cassandra.db.marshal.DecimalType';
     case DOUBLE = 'org.apache.cassandra.db.marshal.DoubleType';
     case DURATION = 'org.apache.cassandra.db.marshal.DurationType';
@@ -18,6 +19,8 @@ enum TypeName: string {
     case INET_ADDRESS = 'org.apache.cassandra.db.marshal.InetAddressType';
     case INT32 = 'org.apache.cassandra.db.marshal.Int32Type';
     case INTEGER = 'org.apache.cassandra.db.marshal.IntegerType';
+    case LEGACY_TIME_UUID = 'org.apache.cassandra.db.marshal.LegacyTimeUUIDType';
+    case LEXICAL_UUID = 'org.apache.cassandra.db.marshal.LexicalUUIDType';
     case LIST = 'org.apache.cassandra.db.marshal.ListType';
     case LONG = 'org.apache.cassandra.db.marshal.LongType';
     case MAP = 'org.apache.cassandra.db.marshal.MapType';
