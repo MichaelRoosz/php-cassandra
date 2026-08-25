@@ -77,7 +77,7 @@ final class Vector extends ValueReadableWithoutLength {
     #[\Override]
     public static function fromMixedValue(mixed $value, ?TypeInfo $typeInfo = null): static {
         if (!is_array($value)) {
-            throw new ValueException('Invalid tuple value; expected array', ExceptionCode::VALUE_VECTOR_INVALID_VALUE_TYPE->value, [
+            throw new ValueException('Invalid vector value; expected array', ExceptionCode::VALUE_VECTOR_INVALID_VALUE_TYPE->value, [
                 'value_type' => gettype($value),
             ]);
         }
