@@ -8,6 +8,8 @@ use Cassandra\Exception\CassandraException;
 use Cassandra\Response\StreamReader;
 use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
+use Cassandra\Value\EncodeOption\MapEncodeOption;
+use Cassandra\Value\MapCollection;
 use Cassandra\Value\ValueEncodeConfig;
 use Cassandra\ValueFactory;
 
@@ -58,6 +60,34 @@ final class EmptyValueConformanceTest extends AbstractUnitTestCase {
             self::readEmptyCell($typeInfo),
             $type->name . ': the row path and fromBinary() must agree on an empty value'
         );
+    }
+
+    /**
+     * A map is the one collection whose representation the caller chooses, and
+     * MapEncodeOption::AS_MAP_COLLECTION asks for a MapCollection for every map
+     * cell. The empty cell used to be answered with a bare array from the row
+     * path's own match, so a caller who had asked for objects got one array
+     * among them — the single value in a result set that did not have the type
+     * they configured for.
+     *
+     * Cassandra sends no such cell (an empty collection comes back as null, and
+     * a collection of no elements is its four-byte count), so this is about a
+     * peer that does: whatever it sends, the option holds.
+     */
+    public function testEmptyMapCellHonoursTheConfiguredMapRepresentation(): void {
+        $typeInfo = self::typeInfoFor(Type::MAP);
+
+        $asCollection = (new StreamReader(pack('N', 0)))->readValue(
+            $typeInfo,
+            new ValueEncodeConfig(mapEncodeOption: MapEncodeOption::AS_MAP_COLLECTION),
+        );
+
+        $this->assertInstanceOf(MapCollection::class, $asCollection);
+        $this->assertSame([], $asCollection->getEntries());
+
+        // AUTO has no key it cannot represent here, so the empty map is still
+        // the array it always was.
+        $this->assertSame([], self::readEmptyCell($typeInfo));
     }
 
     /**

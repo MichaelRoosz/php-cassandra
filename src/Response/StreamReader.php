@@ -19,6 +19,7 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeNameParser;
 use Cassandra\Value\EncodeOption\UuidEncodeOption;
+use Cassandra\Value\MapCollection;
 use Cassandra\Value\ValueEncodeConfig;
 use Cassandra\Value\ValueWithMultipleEncodings;
 use TypeError;
@@ -570,7 +571,7 @@ final class StreamReader {
         // A tuple or UDT reads its own empty cell rather than being reported by
         // emptyValue()
         if ($length === 0 && !($typeInfo instanceof TupleInfo) && !($typeInfo instanceof UDTInfo)) {
-            return $this->emptyValue($typeInfo);
+            return $this->emptyValue($typeInfo, $valueEncodeConfig);
         }
 
         $startOffset = $this->offset;
@@ -768,8 +769,15 @@ final class StreamReader {
      * empty value is both allowed and meaningful, and their decoders are bounded
      * by the declared length rather than by their own idea of a size, so
      * {@see self::readValue()} hands them the empty cell to read for themselves.
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
-    private function emptyValue(TypeInfo $typeInfo): mixed {
+    private function emptyValue(TypeInfo $typeInfo, ValueEncodeConfig $valueEncodeConfig): mixed {
+
+        if ($typeInfo instanceof MapCollectionInfo) {
+            return (new MapCollection([], $typeInfo))->asConfigured($valueEncodeConfig);
+        }
+
         return match ($typeInfo->type) {
             Type::ASCII, Type::BLOB, Type::CUSTOM, Type::TEXT, Type::VARCHAR => '',
             Type::LIST, Type::MAP, Type::SET => [],
