@@ -206,6 +206,45 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         (new Lz4Decompressor(pack('V', self::MAGIC_LEGACY) . pack('V', 9999) . 'short'))->decompress();
     }
 
+    public function testSetInputCutsALengthPastTheEndOfTheStringBackToIt(): void {
+        // A length reaching past the string used to leave the decoder reading
+        // off the end of it, which is a PHP warning and a zero byte rather than
+        // the truncated input it is.
+        $plain = str_repeat('hello world ', 20);
+        $block = (new Lz4Compressor(false))->compressBlock($plain);
+
+        $decompressor = new Lz4Decompressor(preferExtension: false);
+        $decompressor->setInput(substr($block, 0, -1), 0, strlen($block));
+
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value);
+
+        $decompressor->decompressBlock(strlen($plain));
+    }
+
+    public function testSetInputTakesALengthCountedFromTheOffset(): void {
+        // The regression this exists for: the length was used as an absolute
+        // end offset, so a block preceded by anything at all was cut short by
+        // exactly the offset it started at.
+        $plain = str_repeat('hello world ', 20);
+        $block = (new Lz4Compressor(false))->compressBlock($plain);
+        $prefix = 'XXXXX';
+
+        $decompressor = new Lz4Decompressor(preferExtension: false);
+        $decompressor->setInput($prefix . $block, strlen($prefix), strlen($block));
+
+        $this->assertSame($plain, $decompressor->decompressBlock(strlen($plain)));
+
+        $viaConstructor = new Lz4Decompressor(
+            $prefix . $block,
+            strlen($prefix),
+            strlen($block),
+            preferExtension: false,
+        );
+
+        $this->assertSame($plain, $viaConstructor->decompressBlock(strlen($plain)));
+    }
+
     /**
      * A pre-1.4 "legacy" frame: the magic number, then one length-prefixed raw
      * LZ4 block per entry.
