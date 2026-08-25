@@ -81,8 +81,12 @@ final class VIntCodec {
             ]);
         }
 
+        $dataLength = count($data);
+
         $firstByte = $data[1];
         if ($firstByte <= 0x7F) {
+            $this->assertNoTrailingData($dataLength, 1);
+
             return $firstByte;
         }
 
@@ -96,12 +100,13 @@ final class VIntCodec {
 
         // The vint consists of one leading byte plus the extra (continuation) bytes.
         $requiredByteCount = $extraBytesCount + 1;
-        if (count($data) < $requiredByteCount) {
+        if ($dataLength < $requiredByteCount) {
             throw new VIntCodecException('Truncated vint binary data', ExceptionCode::VINTCODEC_VINT64_UNPACK_FAILED->value, [
                 'binary_length' => strlen($binary),
                 'required_length' => $requiredByteCount,
             ]);
         }
+        $this->assertNoTrailingData($dataLength, $requiredByteCount);
 
         // $data is 1-indexed; index 1 is the leading byte, so continuation bytes start at index 2.
         for ($i = 2; $i <= $requiredByteCount; $i++) {
@@ -267,5 +272,24 @@ final class VIntCodec {
 
     final public function zigZagEncode(int $number): int {
         return ($number << 1) ^ ($number >> self::INT_BIT_SIZE_MINUS_1);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\VIntCodecException
+     */
+    private function assertNoTrailingData(int $actualByteCount, int $requiredByteCount): void {
+        if ($actualByteCount === $requiredByteCount) {
+            return;
+        }
+
+        throw new VIntCodecException(
+            'Binary vint data contains trailing bytes',
+            ExceptionCode::VINTCODEC_TRAILING_DATA->value,
+            [
+                'binary_length' => $actualByteCount,
+                'required_length' => $requiredByteCount,
+                'trailing_length' => $actualByteCount - $requiredByteCount,
+            ]
+        );
     }
 }

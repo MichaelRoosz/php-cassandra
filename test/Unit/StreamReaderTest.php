@@ -49,6 +49,42 @@ final class StreamReaderTest extends AbstractUnitTestCase {
         $codec->decodeUnsignedVint64(substr($encoded, 0, -1));
     }
 
+    public function testDirectVintDecodersRejectTrailingData(): void {
+        $codec = new VIntCodec();
+
+        foreach (
+            [
+                'decodeSignedVint32',
+                'decodeSignedVint64',
+                'decodeUnsignedVint32',
+                'decodeUnsignedVint64',
+            ] as $method
+        ) {
+            try {
+                $codec->$method("\x01\xff");
+                $this->fail($method . ' accepted bytes after the vint');
+            } catch (VIntCodecException $e) {
+                $this->assertSame(ExceptionCode::VINTCODEC_TRAILING_DATA->value, $e->getCode());
+                $this->assertSame(
+                    [
+                        'binary_length' => 2,
+                        'required_length' => 1,
+                        'trailing_length' => 1,
+                    ],
+                    $e->getContext()
+                );
+            }
+        }
+
+        try {
+            $codec->decodeUnsignedVint64("\x80\x01\xff");
+            $this->fail('A multi-byte vint accepted trailing data');
+        } catch (VIntCodecException $e) {
+            $this->assertSame(ExceptionCode::VINTCODEC_TRAILING_DATA->value, $e->getCode());
+            $this->assertSame(2, $e->getContext()['required_length'] ?? null);
+        }
+    }
+
     public function testOffsetsOutsideAvailableDataAreRefused(): void {
         foreach (
             [
