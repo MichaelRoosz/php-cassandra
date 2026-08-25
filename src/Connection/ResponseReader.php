@@ -8,6 +8,7 @@ use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Exception\CompressionException;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\Flag;
 use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
@@ -17,6 +18,7 @@ use Cassandra\Response\Event;
 use Cassandra\Response\Response;
 use Cassandra\Response\Result;
 use Cassandra\Response\StreamReader;
+use Throwable;
 use TypeError;
 use ValueError;
 
@@ -308,7 +310,24 @@ final class ResponseReader {
             $streamReader->offset(0);
         }
 
-        return new $responseClass($header, $streamReader);
+        try {
+            return new $responseClass($header, $streamReader);
+        } catch (ResponseException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw new ResponseException(
+                'The response could not be decoded',
+                ExceptionCode::RESPONSE_DECODE_FAILED->value,
+                [
+                    'response_class' => $responseClass,
+                    'opcode' => $header->opcode->name,
+                    'stream_id' => $header->stream,
+                    'protocol_version' => $header->version->inOptionFormat(),
+                    'cause_class' => get_class($e),
+                ],
+                $e,
+            );
+        }
     }
 
     /**

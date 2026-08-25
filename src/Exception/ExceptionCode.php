@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1438
+ * Next free code: 1439
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -134,6 +134,7 @@ enum ExceptionCode: int {
     case REQUESTTIMEOUT_WAITING_FOR_STATEMENTS = 1339;
 
     // ResponseException (RESPONSE_)
+    case RESPONSE_DECODE_FAILED = 1438;
     case RESPONSE_ERROR_CONTEXT_INVALID_TYPE = 1310;
     case RESPONSE_ERROR_INVALID_TYPE = 1090;
     case RESPONSE_EVENT_INVALID_TYPE = 1091;
