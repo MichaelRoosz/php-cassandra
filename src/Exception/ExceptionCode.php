@@ -8,7 +8,7 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1435
+ * Next free code: 1438
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
@@ -159,6 +159,7 @@ enum ExceptionCode: int {
     case RESPONSE_ROWS_INVALID_KEY_TYPE = 1111;
     case RESPONSE_ROWS_INVALID_ROWCLASS = 1112;
     case RESPONSE_ROWS_NO_COLUMN_METADATA = 1113;
+    case RESPONSE_ROWS_PAGING_STATE_CYCLE = 1436;
     case RESPONSE_ROWS_ROW_COUNT_OUT_OF_RANGE = 1367;
     case RESPONSE_ROWS_ROWCLASS_CONSTRUCTION_FAILED = 1384;
     case RESPONSE_ROWS_ROWCLASS_NOT_SUBCLASS = 1114;
@@ -260,6 +261,7 @@ enum ExceptionCode: int {
     case TYPEINFO_SET_MISSING_VALUETYPE = 1236;
     case TYPEINFO_SIMPLE_MISSING_TYPE = 1241;
     case TYPEINFO_SIMPLE_NOT_SIMPLE_TYPE = 1242;
+    case TYPEINFO_SIMPLE_TYPE_NOT_INSTANCE = 1435;
     case TYPEINFO_TUPLE_INVALID_TYPE = 1243;
     case TYPEINFO_TUPLE_INVALID_VALUETYPE = 1380;
     case TYPEINFO_TUPLE_MISSING_TYPE = 1244;
@@ -412,6 +414,7 @@ enum ExceptionCode: int {
 
     // VIntCodecException (VINTCODEC_)
     case VINTCODEC_SIGNED_VINT32_OUT_OF_RANGE = 1296;
+    case VINTCODEC_TRAILING_DATA = 1437;
     case VINTCODEC_UNSIGNED_VINT32_OUT_OF_RANGE = 1297;
     case VINTCODEC_VINT64_UNPACK_FAILED = 1298;
 }

@@ -8,6 +8,7 @@ use Cassandra\Connection\ConnectionOptions;
 use Cassandra\Connection\Session;
 use Cassandra\Exception\ConnectionException;
 use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\ResponseException;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Request\BatchType;
 use Cassandra\Request\Options\BatchOptions;
@@ -315,6 +316,9 @@ final class Connection {
         $responses[] = $response;
 
         $pagingState = $response->getRowsMetadata()->pagingState;
+        $seenPagingStates = [];
+        self::rememberPagingState($pagingState, $seenPagingStates, 'executeAll', 1);
+
         while ($pagingState !== null) {
             $response = $this->execute(
                 // The page just read rather than the prepared result this
@@ -338,9 +342,10 @@ final class Connection {
                 requestTimeoutInSeconds: $requestTimeoutInSeconds,
             )->asRowsResult();
 
-            $responses[] = $response;
-
             $pagingState = $response->getRowsMetadata()->pagingState;
+            self::rememberPagingState($pagingState, $seenPagingStates, 'executeAll', count($responses) + 1);
+
+            $responses[] = $response;
         }
 
         return $responses;
@@ -629,6 +634,9 @@ final class Connection {
         $responses[] = $response;
 
         $pagingState = $response->getRowsMetadata()->pagingState;
+        $seenPagingStates = [];
+        self::rememberPagingState($pagingState, $seenPagingStates, 'queryAll', 1);
+
         while ($pagingState !== null) {
             $response = $this->query(
                 query: $query,
@@ -640,9 +648,10 @@ final class Connection {
                 requestTimeoutInSeconds: $requestTimeoutInSeconds,
             )->asRowsResult();
 
-            $responses[] = $response;
-
             $pagingState = $response->getRowsMetadata()->pagingState;
+            self::rememberPagingState($pagingState, $seenPagingStates, 'queryAll', count($responses) + 1);
+
+            $responses[] = $response;
         }
 
         return $responses;
@@ -1274,6 +1283,36 @@ final class Connection {
         $this->setKeyspace($keyspace);
 
         return $this;
+    }
+
+    /**
+     * @param array<string, true> $seenPagingStates
+     *
+     * @throws \Cassandra\Exception\ResponseException
+     */
+    private static function rememberPagingState(
+        ?string $pagingState,
+        array &$seenPagingStates,
+        string $operation,
+        int $pagesReceived,
+    ): void {
+        if ($pagingState === null) {
+            return;
+        }
+
+        if (isset($seenPagingStates[$pagingState])) {
+            throw new ResponseException(
+                'Server returned a paging state that was already used while fetching this result set',
+                ExceptionCode::RESPONSE_ROWS_PAGING_STATE_CYCLE->value,
+                [
+                    'operation' => $operation,
+                    'pages_received' => $pagesReceived,
+                    'paging_state_length' => strlen($pagingState),
+                ]
+            );
+        }
+
+        $seenPagingStates[$pagingState] = true;
     }
 
 }
