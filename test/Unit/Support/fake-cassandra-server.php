@@ -87,6 +87,10 @@
  *                   for the same page with the new id. Every EXECUTE is
  *                   reported on stdout as "execute <id> <paging state>", which
  *                   is how a test can tell which page each one asked for
+ *   repeat-paging-state
+ *                   answer every QUERY and EXECUTE with a page carrying the same
+ *                   non-null paging state. A client that does not detect the cycle
+ *                   asks for and retains that page forever
  *   refuse-use      report every QUERY on stdout as "query <cql>", and answer
  *                   the ones that switch keyspace with INVALID, as a node asked
  *                   for a keyspace that does not exist would
@@ -670,6 +674,12 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_EXECUTE:
+            if ($mode === 'repeat-paging-state') {
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, rowsResultBody(1, 'same-page'));
+
+                break;
+            }
+
             if ($mode === 'unprepared-second-page') {
                 $execute = executeIdAndValues($frame['body']);
 
@@ -736,6 +746,12 @@ while (microtime(true) < $deadline) {
             break;
 
         case OPCODE_QUERY:
+            if ($mode === 'repeat-paging-state') {
+                writeFrame($client, $frame['stream'], OPCODE_RESULT, rowsResultBody(1, 'same-page'));
+
+                break;
+            }
+
             if ($mode === 'bad-response-header' && !$badHeaderSent) {
                 // Deliberately not $badHeaderSent per connection: the client is
                 // expected to drop this one, and the next has to be served

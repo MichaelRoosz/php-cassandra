@@ -7,6 +7,7 @@ namespace Cassandra\Test\Unit;
 use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\TypeInfoException;
 use Cassandra\Type;
+use Cassandra\TypeInfo\SimpleTypeInfo;
 use Cassandra\ValueFactory;
 
 final class TypeInfoDefinitionValidationTest extends AbstractUnitTestCase {
@@ -71,6 +72,22 @@ final class TypeInfoDefinitionValidationTest extends AbstractUnitTestCase {
         } catch (TypeInfoException $e) {
             $this->assertSame(ExceptionCode::TYPEINFO_UDT_INVALID_NAME->value, $e->getCode());
             $this->assertSame('name', $e->getContext()['property'] ?? null);
+        }
+    }
+
+    public function testSimpleTypeDefinitionRejectsANonTypeDiscriminator(): void {
+        try {
+            SimpleTypeInfo::fromTypeDefinition(['type' => 'text']);
+            $this->fail('Expected the invalid simple type discriminator to be rejected');
+        } catch (TypeInfoException $e) {
+            $this->assertSame(ExceptionCode::TYPEINFO_SIMPLE_TYPE_NOT_INSTANCE->value, $e->getCode());
+            $this->assertSame(
+                [
+                    'actual_type' => 'string',
+                    'expected_type' => Type::class,
+                ],
+                $e->getContext()
+            );
         }
     }
 }
