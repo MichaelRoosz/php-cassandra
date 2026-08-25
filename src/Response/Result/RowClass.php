@@ -25,4 +25,8 @@ class RowClass implements RowClassInterface {
     public function __get(string $name): mixed {
         return $this->rowData[$name] ?? null;
     }
+
+    public function __isset(string $name): bool {
+        return isset($this->rowData[$name]);
+    }
 }

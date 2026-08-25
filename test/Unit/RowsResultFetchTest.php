@@ -10,6 +10,7 @@ use Cassandra\Protocol\Header;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Protocol\ProtocolVersion;
 use Cassandra\Response\Result\FetchType;
+use Cassandra\Response\Result\RowClass;
 use Cassandra\Response\Result\RowClassInterface;
 use Cassandra\Response\Result\RowsResult;
 use Cassandra\Response\StreamReader;
@@ -217,6 +218,33 @@ class RowsResultFetchTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::RESPONSE_ROWS_INVALID_COLUMN_INDEX->value);
 
         $result->fetchKeyPair(0, 99);
+    }
+
+    public function testFetchObjectDefaultRowClassAnswersIssetForItsColumns(): void {
+        // The regression this exists for: RowClass exposes its columns through
+        // __get() alone, so isset() and empty() were decided by PHP's own
+        // property lookup and came back false and true for every column
+        // whatever it held — while `??`, which falls back to __get() when there
+        // is no __isset(), answered correctly. The two disagreed.
+        $result = self::rowsResultWithOneColumn(Type::INT, [pack('N', 7), null]);
+        $result->configureFetchObject(RowClass::class);
+
+        $row = $result->fetchObject();
+        $this->assertInstanceOf(RowClass::class, $row);
+        $this->assertSame(7, $row->col ?? null);
+        $this->assertTrue(isset($row->col));
+        $this->assertFalse(empty($row->col));
+
+        $nullRow = $result->fetchObject();
+        $this->assertInstanceOf(RowClass::class, $nullRow);
+
+        // A null column and a name this row does not carry are the same thing
+        // through __get(), so isset() cannot tell them apart either — and `??`
+        // still answers as it did before there was an __isset() at all.
+        $this->assertFalse(isset($nullRow->col));
+        $this->assertFalse(isset($nullRow->missing));
+        $this->assertSame('fallback', $nullRow->col ?? 'fallback');
+        $this->assertSame('fallback', $nullRow->missing ?? 'fallback');
     }
 
     public function testFetchObjectWrapsRowConstructorFailure(): void {
