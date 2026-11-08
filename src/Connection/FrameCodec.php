@@ -416,20 +416,7 @@ final class FrameCodec extends NodeImplementation {
             );
         }
 
-        if ($this->compression) {
-            if ($this->lz4Decompressor === null) {
-                throw new NodeException(
-                    message: 'Decompression failed: LZ4 decompressor not initialized',
-                    code: ExceptionCode::NODE_DECOMPRESSOR_NOT_INITIALIZED->value,
-                    context: [
-                        'host' => $this->getConfig()->host,
-                        'port' => $this->getConfig()->port,
-                        'stage' => 'decompress_payload_init',
-                        'compression' => $this->compression,
-                    ]
-                );
-            }
-
+        if ($this->lz4Decompressor !== null) {
             if ($uncompressedLength > 0) {
                 $compressedLength = $payloadLength;
                 $this->lz4Decompressor->setInput($payload, 0, $payloadLength);
@@ -512,27 +499,11 @@ final class FrameCodec extends NodeImplementation {
     }
 
     /**
+     * @param int $payloadLength at most {@see self::PAYLOAD_MAX_SIZE}, which writeRequest() splits on
+     *
      * @throws \Cassandra\Exception\NodeException
      */
-    private function writeFrame(string $outputData, bool $isSelfContained, int $dataOffset = 0, int $payloadLength = 0): void {
-        if ($payloadLength < 1) {
-            $payloadLength = strlen($outputData);
-        }
-
-        if ($payloadLength > self::PAYLOAD_MAX_SIZE) {
-            throw new NodeException(
-                message: 'Output data exceeds frame payload maximum size',
-                code: ExceptionCode::NODE_PAYLOAD_EXCEEDS_MAX->value,
-                context: [
-                    'host' => $this->getConfig()->host,
-                    'port' => $this->getConfig()->port,
-                    'stage' => 'write_frame_size_check',
-                    'payload_length' => $payloadLength,
-                    'payload_max' => self::PAYLOAD_MAX_SIZE,
-                ]
-            );
-        }
-
+    private function writeFrame(string $outputData, bool $isSelfContained, int $dataOffset, int $payloadLength): void {
         $payload = substr($outputData, $dataOffset, $payloadLength);
 
         if ($this->compression) {

@@ -255,15 +255,8 @@ final class ResponseReader {
                 $result = new Result($header, $streamReader);
                 $resultKind = $result->getKind();
 
-                $resultClassMap = Result::getResultClassMap();
-                if (isset($resultClassMap[$resultKind->value])) {
-                    $responseClass = $resultClassMap[$resultKind->value];
-                } else {
-                    throw new ConnectionException('Unknown result kind: ' . $resultKind->value, ExceptionCode::CONNECTION_UNKNOWN_RESULT_KIND->value, [
-                        'expected' => array_keys($resultClassMap),
-                        'received' => $resultKind->value,
-                    ]);
-                }
+                // Covers every case of the enum, which the constructor above has already enforced.
+                $responseClass = Result::getResultClassMap()[$resultKind->value];
 
                 break;
 
@@ -271,15 +264,8 @@ final class ResponseReader {
                 $result = new Event($header, $streamReader);
                 $eventType = $result->getType();
 
-                $eventClassMap = Event::getEventClassMap();
-                if (isset($eventClassMap[$eventType->value])) {
-                    $responseClass = $eventClassMap[$eventType->value];
-                } else {
-                    throw new ConnectionException('Unknown event type: ' . $eventType->value, ExceptionCode::CONNECTION_UNKNOWN_EVENT_TYPE->value, [
-                        'expected' => array_keys($eventClassMap),
-                        'received' => $eventType->value,
-                    ]);
-                }
+                // Covers every case of the enum, which the constructor above has already enforced.
+                $responseClass = Event::getEventClassMap()[$eventType->value];
 
                 break;
 
@@ -287,15 +273,8 @@ final class ResponseReader {
                 $result = new Error($header, $streamReader);
                 $errorCode = $result->getCode();
 
-                $errorClassMap = Error::getErrorClassMap();
-                if (isset($errorClassMap[$errorCode])) {
-                    $responseClass = $errorClassMap[$errorCode];
-                } else {
-                    throw new ConnectionException('Unknown error code: ' . $errorCode, ExceptionCode::CONNECTION_UNKNOWN_ERROR_CODE->value, [
-                        'expected' => array_keys($errorClassMap),
-                        'received' => $errorCode,
-                    ]);
-                }
+                // Covers every case of the enum, which the constructor above has already enforced.
+                $responseClass = Error::getErrorClassMap()[$errorCode];
 
                 break;
 

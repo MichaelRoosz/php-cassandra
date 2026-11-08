@@ -167,7 +167,7 @@ final class Batch extends Request {
 
         return chr($this->type->value)
             . pack('n', $statementCount) . implode('', $this->queryArray)
-            . self::encodeBatchParametersAsBinary($this->consistency, [], $this->options, $this->version);
+            . self::encodeBatchParametersAsBinary($this->consistency, $this->options, $this->version);
     }
 
     /**
@@ -265,24 +265,16 @@ final class Batch extends Request {
     }
 
     /**
-     * @param array<mixed> $values
-     *
      * @throws \Cassandra\Exception\RequestException
      */
     private function encodeBatchParametersAsBinary(
         Consistency $consistency,
-        array $values = [],
         BatchOptions $options = new BatchOptions(),
         ProtocolVersion $version = ProtocolVersion::V3
     ): string {
 
         $flags = 0;
         $optional = '';
-
-        if ($values) {
-            $flags |= QueryFlag::VALUES;
-            $optional .= self::encodeQueryValuesAsBinary($values, namesForValues: false);
-        }
 
         if ($options->serialConsistency !== null) {
             $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY;

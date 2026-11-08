@@ -304,9 +304,10 @@ final class ValueComparator {
     /**
      * @param list<?string> $left
      * @param list<?string> $right
-     * @param TypeInfo|list<?TypeInfo> $types the one type every position shares
+     * @param TypeInfo|list<TypeInfo> $types the one type every position shares
      * — a list's or set's element type — or one type per position, as a tuple
-     * and a UDT have. An empty list where $alternatingTypes settles it instead.
+     * and a UDT have, which read no more positions than they declare. An empty
+     * list where $alternatingTypes settles it instead.
      * @param ?array{TypeInfo, TypeInfo} $alternatingTypes the key and value
      * types of a map, whose entries arrive as one flat alternating sequence
      *
@@ -335,12 +336,10 @@ final class ValueComparator {
             } elseif ($types instanceof TypeInfo) {
                 $type = $types;
             } else {
-                $type = $types[$index] ?? null;
+                $type = $types[$index];
             }
 
-            $comparison = $type === null
-                ? strcmp($leftValue, $rightValue)
-                : self::compare($type, $leftValue, $rightValue);
+            $comparison = self::compare($type, $leftValue, $rightValue);
             if ($comparison !== 0) {
                 return $comparison;
             }

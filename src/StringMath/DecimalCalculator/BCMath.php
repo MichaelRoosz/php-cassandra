@@ -10,8 +10,6 @@ use Cassandra\StringMath\DecimalCalculator;
 use Cassandra\StringUtil;
 use DivisionByZeroError;
 
-use function bcadd, bcdiv, bcmod, bcmul, bcsub;
-
 final class BCMath extends DecimalCalculator {
     /**
      * @throws \Cassandra\Exception\StringMathException

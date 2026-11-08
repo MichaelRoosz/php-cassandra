@@ -179,11 +179,7 @@ final class Socket extends NodeImplementation implements IoNode {
      *
      * @throws \Cassandra\Exception\SocketException
      */
-    private function applyReceiveTimeout(?float $readDeadline): ?float {
-
-        if ($this->socket === null) {
-            return null;
-        }
+    private function applyReceiveTimeout(PhpSocket $socket, ?float $readDeadline): ?float {
 
         $remaining = $this->narrowToReadDeadline($this->receiveTimeout, $readDeadline);
         if ($remaining === null) {
@@ -207,7 +203,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
         // A null seconds value means "no timeout", which the socket option
         // spells as zero.
-        $this->setSocketOption($this->socket, SOL_SOCKET, SO_RCVTIMEO, [
+        $this->setSocketOption($socket, SOL_SOCKET, SO_RCVTIMEO, [
             'sec' => $seconds ?? 0,
             'usec' => $seconds === null ? 0 : $microseconds,
         ]);
@@ -607,7 +603,7 @@ final class Socket extends NodeImplementation implements IoNode {
         } else {
             // Blocking fallback: the deadline is enforced by SO_RCVTIMEO
             // rather than by select().
-            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
+            $appliedTimeout = $this->applyReceiveTimeout($socket, $readDeadline);
             if ($appliedTimeout === null) {
                 // The deadline passed between mayBlock() and here.
                 return '';
@@ -640,7 +636,7 @@ final class Socket extends NodeImplementation implements IoNode {
                             // budget a second time. Re-narrowed against the
                             // deadline instead, so that a stream of signals
                             // cannot add up to a multiple of it.
-                            $appliedTimeout = $this->applyReceiveTimeout($readDeadline);
+                            $appliedTimeout = $this->applyReceiveTimeout($socket, $readDeadline);
                             if ($appliedTimeout === null) {
                                 return '';
                             }
