@@ -20,6 +20,12 @@ use TypeError;
 use ValueError;
 
 final class ResponseReader {
+    /**
+     * The protocol's limit on a frame body (256 MiB), checked before anything
+     * is buffered or decompressed towards a length the peer declared.
+     */
+    private const MAX_FRAME_BODY_LENGTH = 256 * 1024 * 1024;
+
     private ?Header $currentHeader;
     private Lz4Decompressor $lz4Decompressor;
 
@@ -69,6 +75,18 @@ final class ResponseReader {
                     'Cannot read uncompressed length from compressed frame',
                     ExceptionCode::CONNECTION_CANNOT_READ_DECOMPRESSED_FRAME_LENGTH->value,
                     []
+                );
+            }
+
+            if ($uncompressedLength[1] < 0 || $uncompressedLength[1] > self::MAX_FRAME_BODY_LENGTH) {
+                throw new ConnectionException(
+                    'Decompressed response frame body exceeds the maximum length the protocol allows.',
+                    ExceptionCode::CONNECTION_RESPONSE_BODY_TOO_LARGE->value,
+                    [
+                        'compressed_body_length' => strlen($body),
+                        'body_length' => $uncompressedLength[1],
+                        'max_body_length' => self::MAX_FRAME_BODY_LENGTH,
+                    ]
                 );
             }
 
@@ -213,6 +231,20 @@ final class ResponseReader {
                 'host' => $nodeConfig->host,
                 'port' => $nodeConfig->port,
                 'protocol_version' => $version,
+            ]);
+        }
+
+        // Negative as well as too large: on 32-bit PHP unpack('N') returns a
+        // length past 2 GiB as a negative int.
+        if ($headerData['length'] < 0 || $headerData['length'] > self::MAX_FRAME_BODY_LENGTH) {
+            $nodeConfig = $node->getConfig();
+
+            throw new ConnectionException('Response frame body exceeds the maximum length the protocol allows.', ExceptionCode::CONNECTION_RESPONSE_BODY_TOO_LARGE->value, [
+                'host' => $nodeConfig->host,
+                'port' => $nodeConfig->port,
+                'protocol_version' => $version->value,
+                'body_length' => $headerData['length'],
+                'max_body_length' => self::MAX_FRAME_BODY_LENGTH,
             ]);
         }
 
