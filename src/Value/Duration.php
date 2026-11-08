@@ -574,8 +574,8 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      *
      * Narrow components skip all of it; see {@see self::UNCHECKED_DIGIT_COUNT}.
      *
-     * @param string $digits plain decimal digits, unsigned. Guaranteed by both
-     * callers — the string parser captures with `\d+`, and
+     * @param string $digits plain decimal digits, unsigned; empty adds nothing.
+     * Guaranteed by both callers — the string parser captures with `\d+`, and
      * {@see self::dateIntervalField()} validates — which keeps that check off
      * this path.
      * @param positive-int $factor value of one of this component in the total's
@@ -593,10 +593,6 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     ): int {
 
         $length = strlen($digits);
-        if ($length === 0) {
-            return $total;
-        }
-
         if ($length <= self::UNCHECKED_DIGIT_COUNT) {
             // The common case: no bound below can be reached, and the cast reads
             // through any leading zeros exactly.
@@ -680,26 +676,28 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      * {@see self::accumulateComponent()} takes.
      *
      * format('%r%y') is the only spelling of a field together with the
-     * interval's invert flag, and the two can contradict each other: a negative
-     * field inside an inverted interval yields "--5", which is not a number and
-     * contributes nothing — as the (int) cast this replaces also made of it.
-     * Validated here rather than in the accumulator because this is the only
-     * caller whose input can be anything but digits.
+     * interval's invert flag, and both can carry a sign: a negative field inside
+     * an inverted interval yields "--5", which PHP applies as +5.
      *
      * @return array{string, bool} the digits, and whether they are negative
+     *
+     * @throws \Cassandra\Exception\ValueException
      */
     private static function dateIntervalField(DateInterval $value, string $format): array {
 
         $field = $value->format($format);
 
-        $isNegative = $field !== '' && $field[0] === '-';
-        $digits = $isNegative ? substr($field, 1) : $field;
+        $signs = strspn($field, '-');
+        $digits = substr($field, $signs);
 
-        if (strspn($digits, self::DIGITS) !== strlen($digits)) {
-            return ['', false];
+        if ($digits === '' || strspn($digits, self::DIGITS) !== strlen($digits)) {
+            throw new ValueException('Cannot read a DateInterval field', ExceptionCode::VALUE_DURATION_INVALID_DATEINTERVAL_FIELD->value, [
+                'format' => $format,
+                'field' => $field,
+            ]);
         }
 
-        return [$digits, $isNegative];
+        return [$digits, $signs % 2 === 1];
     }
 
     /**
