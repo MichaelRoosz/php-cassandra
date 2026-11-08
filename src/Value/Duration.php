@@ -468,13 +468,20 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
      */
     private function nativeValueFromDateInterval(DateInterval $value): array {
 
-        $months = ((int) $value->format('%r%y') * 12) + (int) $value->format('%r%m');
-        $days = (int) $value->format('%r%d');
+        // Each field carries its own sign besides the interval's invert flag: a
+        // negative field inside an inverted interval is positive, as PHP
+        // applies it. Spelled through format('%r…') the two signs read "--5",
+        // which an (int) cast turns into nothing.
+        $sign = $value->invert === 1 ? -1 : 1;
+        $field = static fn (string $format): int => $sign * (int) $value->format($format);
 
-        $hoursInNanoseconds = (int) $value->format('%r%h') * 3600000000000;
-        $minutesInNanoseconds = (int) $value->format('%r%i') * 60000000000;
-        $secondsInNanoseconds = (int) $value->format('%r%s') * 1000000000;
-        $microsecondsInNanoseconds = (int) $value->format('%r%f') * 1000;
+        $months = ($field('%y') * 12) + $field('%m');
+        $days = $field('%d');
+
+        $hoursInNanoseconds = $field('%h') * 3600000000000;
+        $minutesInNanoseconds = $field('%i') * 60000000000;
+        $secondsInNanoseconds = $field('%s') * 1000000000;
+        $microsecondsInNanoseconds = $field('%f') * 1000;
 
         $totalNanoseconds = $hoursInNanoseconds + $minutesInNanoseconds
             + $secondsInNanoseconds + $microsecondsInNanoseconds;
