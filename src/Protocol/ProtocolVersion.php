@@ -84,7 +84,10 @@ enum ProtocolVersion: int {
             }
         }
 
+        // Unreachable: PREFERRED_ORDER lists every version.
+        // @codeCoverageIgnoreStart
         return null;
+        // @codeCoverageIgnoreEnd
     }
 
     public function inOptionFormat(): string {

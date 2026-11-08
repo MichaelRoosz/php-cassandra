@@ -103,10 +103,13 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
                 $valueAsDate = $baseDate
                     ->setDate((int) $value->format('Y'), (int) $value->format('n'), (int) $value->format('j'))
                     ->setTime(0, 0, 0);
+                // Unreachable: setDate() accepts any int, and the range is checked before.
+                // @codeCoverageIgnoreStart
             } catch (PhpException $e) {
                 throw new ValueException('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
                     'value' => $value->format('Y-m-d'),
                 ], $e);
+                // @codeCoverageIgnoreEnd
             }
             $valueAsInt = self::VALUE_2_31 + self::daysSinceEpoch($valueAsDate);
 
@@ -147,11 +150,14 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
         try {
             $interval = new DateInterval('P' . abs($daysSinceBaseDate) . 'D');
+            // Unreachable: a day count of at most 2^31 is always a valid interval.
+            // @codeCoverageIgnoreStart
         } catch (PhpException $e) {
             throw new ValueException('Invalid date value; cannot create DateInterval', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',
             ], $e);
+            // @codeCoverageIgnoreEnd
         }
 
         try {
@@ -160,11 +166,14 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             } else {
                 return $baseDate->add($interval);
             }
+            // Unreachable: every date of the CQL range fits a DateTimeImmutable.
+            // @codeCoverageIgnoreStart
         } catch (PhpException $e) {
             throw new ValueException('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the date is out of range for DateTimeImmutable',
             ], $e);
+            // @codeCoverageIgnoreEnd
         }
     }
 

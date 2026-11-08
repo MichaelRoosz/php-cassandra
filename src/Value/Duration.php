@@ -237,6 +237,8 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
 
         try {
             $interval = DateInterval::createFromDateString($duration);
+            // Unreachable: the string above is built from plain integer components PHP always parses.
+            // @codeCoverageIgnoreStart
         } catch (PhpException $e) {
             throw new ValueException(
                 'Cannot convert Duration to DateInterval',
@@ -246,9 +248,12 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
                 ],
                 $e
             );
+            // @codeCoverageIgnoreEnd
         }
 
         if ($interval === false) {
+            // Unreachable: PHP returns false only for a string it cannot parse.
+            // @codeCoverageIgnoreStart
             throw new ValueException(
                 'Cannot convert Duration to DateInterval',
                 ExceptionCode::VALUE_DURATION_TO_DATEINTERVAL_FAILED->value, [
@@ -256,6 +261,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
                     'value' => $this->value,
                 ]
             );
+            // @codeCoverageIgnoreEnd
         }
 
         return $interval;
@@ -691,10 +697,13 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         $digits = substr($field, $signs);
 
         if ($digits === '' || strspn($digits, self::DIGITS) !== strlen($digits)) {
+            // @codeCoverageIgnoreStart
+            // Unreachable: DateInterval prints each field as an integer.
             throw new ValueException('Cannot read a DateInterval field', ExceptionCode::VALUE_DURATION_INVALID_DATEINTERVAL_FIELD->value, [
                 'format' => $format,
                 'field' => $field,
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         return [$digits, $signs % 2 === 1];

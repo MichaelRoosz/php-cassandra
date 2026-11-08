@@ -154,11 +154,14 @@ final class ResponseDispatcher {
         }
 
         if (!($originalRequest instanceof Request\Query)) {
+            // Unreachable: auto-preparation is only ever started for a Query
+            // @codeCoverageIgnoreStart
             throw new ConnectionException('Original request is not an query request', ExceptionCode::CONNECTION_AUTO_PREPARE_ORIGINAL_NOT_QUERY->value, [
                 'operation' => 'auto_prepare_execute',
                 'request_class' => $originalRequest ? get_class($originalRequest) : null,
                 'expected' => Request\Query::class,
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         $newExecuteRequest = new Request\Execute(
@@ -285,11 +288,14 @@ final class ResponseDispatcher {
         }
 
         if (!($originalRequest instanceof Request\Execute)) {
+            // Unreachable: repreparation is only ever started for an Execute or a Batch
+            // @codeCoverageIgnoreStart
             throw new ConnectionException('Original request is not an execute request', ExceptionCode::CONNECTION_REPREPARE_ORIGINAL_NOT_EXECUTE->value, [
                 'operation' => 'reprepare_execute',
                 'request_class' => $originalRequest ? get_class($originalRequest) : null,
                 'expected' => Request\Execute::class,
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         // The values as the caller passed them, not the ones the refused EXECUTE
@@ -370,11 +376,14 @@ final class ResponseDispatcher {
                 : $previousResult->getLastPreparedResult();
 
             if ($forgottenResult === null) {
+                // Unreachable: Result sets the last prepared data and result together, and Execute refuses a page without them
+                // @codeCoverageIgnoreStart
                 throw new ConnectionException('Unexpected previous result type for UNPREPARED error', ExceptionCode::CONNECTION_UNPREPARED_UNEXPECTED_PREV_RESULT_TYPE->value, [
                     'operation' => 'unprepared_error_handling',
                     'expected' => Response\Result\PreparedResult::class,
                     'received' => get_class($previousResult),
                 ]);
+                // @codeCoverageIgnoreEnd
             }
 
             $repreparationLimit = self::MAX_REPREPARATIONS;
@@ -595,6 +604,8 @@ final class ResponseDispatcher {
             // answer always belongs to one; nothing matching means the batch was
             // changed under the repreparation, and re-sending it would send the
             // statement id the node has already refused.
+            // Unreachable: the PREPARE is built from an entry of this batch, so its answer always matches one
+            // @codeCoverageIgnoreStart
             throw new ConnectionException(
                 'The reprepared statement does not belong to any entry of this batch, so the batch cannot be sent again',
                 ExceptionCode::CONNECTION_REPREPARE_BATCH_STATEMENT_NOT_REPLACED->value,
@@ -604,6 +615,7 @@ final class ResponseDispatcher {
                     'prepared_statements_in_batch' => $batch->getDistinctPreparedStatementCount(),
                 ]
             );
+            // @codeCoverageIgnoreEnd
         }
 
         if ($statement !== null) {

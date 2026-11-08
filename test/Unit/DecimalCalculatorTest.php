@@ -206,6 +206,7 @@ class DecimalCalculatorTest extends AbstractUnitTestCase {
         $this->assertSame($expected, $calc->addUnsignedInt8($in, $addend), "impl={$impl}");
     }
 
+    #[\PHPUnit\Framework\Attributes\RequiresPhpExtension('bcmath')]
     public function testBcmathInvalidDecimalThrows(): void {
 
         $calc = new BcCalculator();
@@ -294,12 +295,14 @@ class DecimalCalculatorTest extends AbstractUnitTestCase {
         $calculators = [];
 
         // GMP
-        $gmp = new GmpCalculator();
-        $calculators[] = ['gmp', $gmp];
+        if (extension_loaded('gmp')) {
+            $calculators[] = ['gmp', new GmpCalculator()];
+        }
 
         // BCMath
-        $bcm = new BcCalculator();
-        $calculators[] = ['bcmath', $bcm];
+        if (extension_loaded('bcmath')) {
+            $calculators[] = ['bcmath', new BcCalculator()];
+        }
 
         // Native
         $calculators[] = ['native', new NativeCalculator()];

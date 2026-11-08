@@ -49,16 +49,18 @@ abstract class ValueWithFixedLength extends ValueBase {
 
         $value = static::fromBinary($binary, typeInfo: $typeInfo, valueEncodeConfig: $valueEncodeConfig);
 
-        // Unreachable as things stand — the guard above admits only the type's
-        // own fixed length, which is never zero, so the binary read here is
-        // never the empty value fromBinary() reports null for.
         if ($value === null) {
+            // Unreachable: the guard above admits only the type's own fixed
+            // length, which is never zero, so this is never the empty value
+            // fromBinary() reports null for.
+            // @codeCoverageIgnoreStart
             throw new ValueException('Invalid data length for fixed-length type', ExceptionCode::VALUE_INVALID_DATA_LENGTH->value, [
                 'class' => static::class,
                 'length' => $length,
                 'expected_length' => static::fixedLength(),
                 'note' => 'an empty value of this type denotes null and has no value object',
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         return $value;

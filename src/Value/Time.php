@@ -113,12 +113,15 @@ final class Time extends ValueWithFixedLength implements ValueWithMultipleEncodi
 
         try {
             return new DateTimeImmutable('1970-01-01 ' . $this->asString(), new DateTimeZone('UTC'));
+            // Unreachable: asString() always spells a valid time of day.
+            // @codeCoverageIgnoreStart
         } catch (PhpException $e) {
             throw new ValueException('Invalid time value; cannot create DateTimeImmutable', ExceptionCode::VALUE_TIME_INVALID_DATETIME_STRING->value, [
                 'value' => $this->value,
                 'note' => 'This may happen if the time is out of range for DateTimeImmutable',
                 'error' => $e->getMessage(),
             ], $e);
+            // @codeCoverageIgnoreEnd
         }
     }
 

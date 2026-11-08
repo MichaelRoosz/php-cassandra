@@ -121,6 +121,8 @@ final class RequestExecutor {
             // with its connection anyway, so it could never be resolved.
             $node = $this->session->getNode();
             if ($node === null) {
+                // Unreachable: closing a connection starts the stream ids over, which the generation check above catches.
+                // @codeCoverageIgnoreStart
                 throw new ConnectionException(
                     'The connection this statement was sent on was closed before its follow-up request could be sent, so the request was given up on. Send it again.',
                     ExceptionCode::CONNECTION_CHAINED_REQUEST_CONNECTION_GONE->value,
@@ -130,6 +132,7 @@ final class RequestExecutor {
                         'request_class' => get_class($request),
                     ]
                 );
+                // @codeCoverageIgnoreEnd
             }
 
             $request->setVersion($this->session->getProtocolVersion());
@@ -480,7 +483,10 @@ final class RequestExecutor {
                     // that answer resolve somebody else's request. Held back
                     // instead, and released once the answer proves the node is
                     // done with it, as {@see StatementRegistry::expire()} does.
+                    // Unreachable: nothing between the write and registering the statement can fail
+                    // @codeCoverageIgnoreStart
                     $this->streamIds->park($streamId, $streamGeneration);
+                    // @codeCoverageIgnoreEnd
                 } else {
                     // Claimed, and then something on the way to sending failed
                     // without the request ever reaching the node — an
@@ -548,10 +554,13 @@ final class RequestExecutor {
 
             $response = $this->dispatcher->handleAutoPrepareResult($prepareResponse, originalRequest: $request, requestTimeoutInSeconds: $requestTimeoutInSeconds, repreparationDepth: $repreparationDepth);
             if ($response === null) {
+                // Unreachable: only a chained async request yields no response, and this path has no statement
+                // @codeCoverageIgnoreStart
                 throw new ConnectionException('Unexpected null response during autoPrepare', ExceptionCode::CONNECTION_AUTO_PREPARE_UNEXPECTED_RESPONSE->value, [
                     'expected' => Response\Result::class,
                     'received' => 'null',
                 ]);
+                // @codeCoverageIgnoreEnd
             }
 
             return $response;
@@ -605,7 +614,10 @@ final class RequestExecutor {
             $this->session->recordNodeSuccess($node->getConfig());
         } catch (NodeException $e) {
             if ($this->session->getNode() === $node) {
+                // Unreachable: every NodeException from the wait or the handling has already replaced the node.
+                // @codeCoverageIgnoreStart
                 $this->session->handleNodeException($node);
+                // @codeCoverageIgnoreEnd
             }
 
             throw $e;
@@ -628,10 +640,13 @@ final class RequestExecutor {
         $this->session->getListeners()->throwDeferred();
 
         if ($response === null) {
+            // Unreachable: only a chained async request yields no response, and this path has no statement
+            // @codeCoverageIgnoreStart
             throw new ConnectionException('Received unexpected null response from server.', ExceptionCode::CONNECTION_SYNC_NULL_RESPONSE->value, [
                 'operation' => 'syncRequest',
                 'request_class' => get_class($request),
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         if ($response instanceof Response\Error) {

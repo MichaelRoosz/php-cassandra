@@ -176,7 +176,10 @@ final class VIntCodec {
             }
 
             if ($extraBytesCount === 8) {
+                // Unreachable: eight bytes shift a 64-bit value down to 0, which the check above ends on.
+                // @codeCoverageIgnoreStart
                 break;
+                // @codeCoverageIgnoreEnd
             }
 
             $extraBytes[] = $cur;

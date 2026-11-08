@@ -328,9 +328,12 @@ final class Session {
 
             $node = $this->node;
             if ($node === null) {
+                // Unreachable: connect() either sets the node or throws
+                // @codeCoverageIgnoreStart
                 throw new ConnectionException('Client is not connected to any node. This should never happen.', ExceptionCode::CONNECTION_NOT_CONNECTED->value, [
                     'operation' => 'getConnectedNode',
                 ]);
+                // @codeCoverageIgnoreEnd
             }
         }
 
@@ -488,6 +491,8 @@ final class Session {
                     // begins: which side of a read the budget ran out on is timing,
                     // not a difference the caller should have to tell apart.
                     if ($statement->isTimedOut()) {
+                        // Unreachable: every path that gives a statement up raises on its own first
+                        // @codeCoverageIgnoreStart
                         throw new RequestTimeoutException(
                             'This request timed out and was given up on while its answer was outstanding, so it can no longer be resolved. Send it again.',
                             ExceptionCode::REQUESTTIMEOUT_WAITING_FOR_STATEMENTS->value,
@@ -498,6 +503,7 @@ final class Session {
                             ],
                             timedOutStatements: [$statement],
                         );
+                        // @codeCoverageIgnoreEnd
                     }
 
                     // Abandoned, on the other hand, means the statement was given up
@@ -511,6 +517,8 @@ final class Session {
                     // method that ends up in syncRequest(), for a failure none of
                     // them can produce.
                     if ($statement->isAbandoned()) {
+                        // Unreachable: every path that gives a statement up raises on its own first
+                        // @codeCoverageIgnoreStart
                         throw new ConnectionException(
                             'The statement being waited on was given up on while its answer was outstanding, so this connection can no longer resolve it',
                             ExceptionCode::CONNECTION_STATEMENT_NO_LONGER_RESOLVABLE->value,
@@ -521,6 +529,7 @@ final class Session {
                                 'abandoned' => true,
                             ]
                         );
+                        // @codeCoverageIgnoreEnd
                     }
                 }
 
@@ -2241,7 +2250,10 @@ final class Session {
             // ({@see StatementRegistry::assertResolvable()}) while its response
             // sits on it. The caller is handed the answer before this is
             // reached, so this is the braces to that belt.
+            // Unreachable: the caller is handed an answered statement before this is reached
+            // @codeCoverageIgnoreStart
             $statement->setStatus(StatementStatus::TIMED_OUT);
+            // @codeCoverageIgnoreEnd
         }
 
         $this->enforceOrphanedStreamLimit();

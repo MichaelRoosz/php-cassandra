@@ -102,11 +102,14 @@ final class ValueFactory {
         $typeClassMap = self::getTypeToValueClassMap();
 
         if (!isset($typeClassMap[$type->value])) {
+            // Unreachable: the class map has an entry for every Type.
+            // @codeCoverageIgnoreStart
             throw new ValueFactoryException('Unknown data type', ExceptionCode::VALUEFACTORY_UNKNOWN_DATA_TYPE->value, [
                 'type' => $type->value,
                 'type_name' => $type->name,
                 'supported_types' => array_keys($typeClassMap),
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         if (!self::isSimpleType($type)) {
@@ -296,11 +299,14 @@ final class ValueFactory {
         $typeClassMap = self::getTypeToValueClassMap();
 
         if (!isset($typeClassMap[$type->value])) {
+            // Unreachable: the class map has an entry for every Type.
+            // @codeCoverageIgnoreStart
             throw new ValueFactoryException('Unknown data type', ExceptionCode::VALUEFACTORY_CLASS_UNKNOWN_DATA_TYPE->value, [
                 'type' => $type->value,
                 'type_name' => $type->name,
                 'supported_types' => array_keys($typeClassMap),
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         return $typeClassMap[$type->value];

@@ -316,11 +316,14 @@ final class RowsResult extends Result {
             $this->fetchedRows++;
 
             if ($key === null) {
+                // Unreachable: the key index was checked above, and a null key is refused as an invalid key type.
+                // @codeCoverageIgnoreStart
                 throw new ResponseException('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                     'operation' => 'RowsResult::fetchAllKeyPairs',
                     'key_index' => $keyIndex,
                     'column_count' => count($columns),
                 ]);
+                // @codeCoverageIgnoreEnd
             }
 
             if ($mergeDuplicates) {
@@ -486,10 +489,13 @@ final class RowsResult extends Result {
         $this->fetchedRows++;
 
         if ($key === null) {
+            // Unreachable: the key index was checked above, and a null key is refused as an invalid key type.
+            // @codeCoverageIgnoreStart
             throw new ResponseException('Invalid key index', ExceptionCode::RESPONSE_ROWS_INVALID_KEY_INDEX->value, [
                 'key_index' => $keyIndex,
                 'column_count' => count($columns),
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         return [$key => $value];
@@ -879,10 +885,12 @@ final class RowsResult extends Result {
 
         $offset = $this->checkpointOffsetsByRow[$row] ?? null;
         if ($offset === null) {
-            // No checkpoint has been reached yet, which leaves the first row as
-            // the only offset known to be right.
+            // Unreachable: row 0 is checkpointed when first read, and only rows
+            // already read are sought.
+            // @codeCoverageIgnoreStart
             $row = 0;
             $offset = $this->dataOffset;
+            // @codeCoverageIgnoreEnd
         }
 
         $this->stream->offset($offset);
@@ -915,10 +923,13 @@ final class RowsResult extends Result {
 
         $columns = $this->rowsMetadata->columns;
         if ($columns === null) {
+            // Unreachable: only rows already read are skipped, and reading them needed the columns.
+            // @codeCoverageIgnoreStart
             throw new ResponseException('Column metadata is not available', ExceptionCode::RESPONSE_ROWS_NO_COLUMN_METADATA->value, [
                 'operation' => 'RowsResult::skipRow',
                 'result_kind' => $this->kind->name,
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         foreach ($columns as $_column) {

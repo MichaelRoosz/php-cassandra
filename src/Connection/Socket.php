@@ -484,7 +484,10 @@ final class Socket extends NodeImplementation implements IoNode {
         $value = $this->config->socketOptions[$option] ?? null;
 
         if ($value === null) {
+            // Unreachable: SocketNodeConfig always sets both timeouts.
+            // @codeCoverageIgnoreStart
             return $default;
+            // @codeCoverageIgnoreEnd
         }
 
         if (!is_array($value)) {

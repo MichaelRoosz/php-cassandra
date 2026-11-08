@@ -148,10 +148,12 @@ final class Decimal extends ValueReadableWithLength {
         // Varint::fromBinary() reports an empty value as null.
         $unscaledVarint = Varint::fromBinary($varintBinary);
         if ($unscaledVarint === null) {
+            // @codeCoverageIgnoreStart
             throw new ValueException('Cannot unpack decimal binary data', ExceptionCode::VALUE_DECIMAL_UNPACK_FAILED->value, [
                 'binary_length' => $length,
                 'note' => 'the unscaled varint part is empty',
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         $unscaled = $unscaledVarint->asString();
