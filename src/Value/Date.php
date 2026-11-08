@@ -65,10 +65,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
                 ], $e);
             }
 
-            $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
-            $interval = $baseDate->diff($valueAsDate);
-
-            $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
+            $valueAsInt = self::VALUE_2_31 + self::daysSinceEpoch($valueAsDate);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
                 throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
@@ -85,11 +82,18 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
             // Anchor both ends at UTC midnight so the day count is exact and
             // independent of the ambient timezone. The value's own calendar date
             // (as it presents in its timezone) is what the user means by "date".
-            $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
-            $valueAsDate = new DateTimeImmutable($value->format('Y-m-d'), new DateTimeZone('UTC'));
-            $interval = $baseDate->diff($valueAsDate);
+            // The calendar fields are carried over numerically: re-parsing a
+            // formatted string would read a year beyond 9999 as a shorter one.
+            try {
+                $valueAsDate = (new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC')))
+                    ->setDate((int) $value->format('Y'), (int) $value->format('n'), (int) $value->format('j'));
+            } catch (PhpException $e) {
+                throw new ValueException('Invalid date value; cannot create DateTimeImmutable', ExceptionCode::VALUE_DATE_OUT_OF_RANGE->value, [
+                    'value' => $value->format('Y-m-d'),
+                ], $e);
+            }
 
-            $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
+            $valueAsInt = self::VALUE_2_31 + self::daysSinceEpoch($valueAsDate);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
                 throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
@@ -262,24 +266,12 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Exception\ValueException
+     * Counted from the timestamp, because DateInterval holds days in 32 bits and
+     * wraps for the far ends of the range. The value is a UTC midnight, so the
+     * division is exact.
      */
-    private function getDayCountFromInterval(DateInterval $interval): int {
-        $dayCount = $interval->format('%r%a');
-
-        if (str_starts_with($dayCount, '--')) {
-            if ($dayCount === '--2147483648') {
-                $dayCount = '-2147483648'; // Special case for minimum date
-            } else {
-                throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
-                    'value' => $dayCount,
-                    'min' => self::VALUE_INT_MIN,
-                    'max' => self::VALUE_INT_MAX,
-                ]);
-            }
-        }
-
-        return (int) $dayCount;
+    private static function daysSinceEpoch(DateTimeImmutable $midnight): int {
+        return intdiv($midnight->getTimestamp(), 86400);
     }
 
 }
