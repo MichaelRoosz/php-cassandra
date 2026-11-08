@@ -201,7 +201,6 @@ final class Session {
             $this->dispatcher,
             $this->statements,
             $this->streamIds,
-            $this->deadlines,
             $this->preparedResultCache,
         );
     }

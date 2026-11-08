@@ -15,14 +15,9 @@ final class BatchOptions extends RequestOptions {
         public readonly ?int $defaultTimestamp = null,
         public readonly ?string $keyspace = null,
         public readonly ?int $nowInSeconds = null,
-
-        /**
-         * How long to wait for the server to answer this request, in seconds,
-         * overriding the connection default. Null uses the connection default.
-         */
-        public readonly ?float $requestTimeoutInSeconds = null,
+        ?float $requestTimeoutInSeconds = null,
     ) {
-        self::assertValidRequestTimeout($requestTimeoutInSeconds);
+        parent::__construct($requestTimeoutInSeconds);
         self::assertValidNowInSeconds($nowInSeconds);
     }
 

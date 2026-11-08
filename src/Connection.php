@@ -87,14 +87,8 @@ final class Connection {
     }
 
     /**
-     * Send a request the caller built; see {@see self::syncRequest()} for what
-     * the connection fills in on the way out.
-     *
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this statement only. The counterpart of the argument
-     * {@see self::syncRequest()} takes; the budget runs from now, when the
-     * request is written, not from whenever the caller starts waiting for it.
+     * Send a request the caller built without waiting for its answer; see
+     * {@see self::syncRequest()}. Its budget runs from now.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -106,16 +100,11 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function asyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Statement {
-        return $this->session->sendAsyncRequest($request, requestTimeoutInSeconds: $requestTimeoutInSeconds);
+    public function asyncRequest(Request\Request $request): Statement {
+        return $this->session->sendAsyncRequest($request);
     }
 
     /**
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this call only; see {@see self::syncRequest()}, whose argument this is the
-     * counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -126,8 +115,8 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function batch(Request\Batch $batchRequest, ?float $requestTimeoutInSeconds = null): Response\Result {
-        $response = $this->syncRequest($batchRequest, $requestTimeoutInSeconds);
+    public function batch(Request\Batch $batchRequest): Response\Result {
+        $response = $this->syncRequest($batchRequest);
 
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during batch', ExceptionCode::CONNECTION_UNEXPECTED_RESPONSE_BATCH_SYNC->value, [
@@ -141,11 +130,6 @@ final class Connection {
     }
 
     /**
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this statement only; see {@see self::asyncRequest()}, whose argument this
-     * is the counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -156,8 +140,8 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function batchAsync(Request\Batch $batchRequest, ?float $requestTimeoutInSeconds = null): Statement {
-        return $this->asyncRequest($batchRequest, $requestTimeoutInSeconds);
+    public function batchAsync(Request\Batch $batchRequest): Statement {
+        return $this->asyncRequest($batchRequest);
     }
 
     public function configureValueEncoding(ValueEncodeConfig $config): void {
@@ -255,11 +239,6 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this call only; see {@see self::syncRequest()}, whose argument this is the
-     * counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -270,13 +249,13 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions(), ?float $requestTimeoutInSeconds = null): Response\Result {
+    public function execute(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Response\Result {
 
         $consistency = $consistency ?? $this->consistency;
 
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
-        $response = $this->syncRequest($request, $requestTimeoutInSeconds);
+        $response = $this->syncRequest($request);
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during execute', ExceptionCode::CONNECTION_EXECUTE_UNEXPECTED_RESPONSE->value, [
                 'operation' => 'execute',
@@ -292,11 +271,6 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this call only. It bounds each page request, not the call as a whole, so
-     * fetching a paged result can take a multiple of it before giving up.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -307,11 +281,11 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function executeAll(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions(), ?float $requestTimeoutInSeconds = null): array {
+    public function executeAll(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): array {
 
         $responses = [];
 
-        $response = $this->execute($previousResult, $values, $consistency, $options, $requestTimeoutInSeconds)->asRowsResult();
+        $response = $this->execute($previousResult, $values, $consistency, $options)->asRowsResult();
 
         $responses[] = $response;
 
@@ -321,25 +295,16 @@ final class Connection {
 
         while ($pagingState !== null) {
             $response = $this->execute(
-                // The page just read rather than the prepared result this
-                // started from, so that each page is asked for with the result
-                // metadata id the previous one carried. From v5 that id can
-                // change mid-paging — an ALTER while the result set is being
-                // walked — and a request naming the old one makes the node
-                // resend the whole metadata with every remaining page. See
-                // {@see \Cassandra\Request\Execute::__construct()}, which is
-                // what reads it back off a RowsResult.
+                // The page just read, because from v5 an ALTER can change the
+                // result metadata id mid-paging, and naming the old one makes
+                // the node resend the metadata with every remaining page.
                 previousResult: $response,
                 values: $values,
                 consistency: $consistency,
 
-                // Still set explicitly, rather than left to be picked up off the
-                // page above: Execute only takes the paging state from the
-                // previous result where the options carry none, so a caller who
-                // passed one of their own would have every page ask for that
-                // same first page again.
+                // Explicit, because Execute prefers the options' paging state to
+                // the previous result's: a caller's own would repeat the first page.
                 options: $options->withPagingState($pagingState),
-                requestTimeoutInSeconds: $requestTimeoutInSeconds,
             )->asRowsResult();
 
             $pagingState = $response->getRowsMetadata()->pagingState;
@@ -354,11 +319,6 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this statement only; see {@see self::asyncRequest()}, whose argument this
-     * is the counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -369,95 +329,55 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions(), ?float $requestTimeoutInSeconds = null): Statement {
+    public function executeAsync(Result $previousResult, array $values = [], ?Consistency $consistency = null, ExecuteOptions $options = new ExecuteOptions()): Statement {
 
         $consistency = $consistency ?? $this->consistency;
 
         $request = new Request\Execute($previousResult, $values, $consistency, $options);
 
-        $statement = $this->asyncRequest($request, $requestTimeoutInSeconds);
+        $statement = $this->asyncRequest($request);
 
         return $statement;
     }
 
     /**
-     * The consistency level this connection fills into the requests it builds
-     * where a call names none, see {@see self::setConsistency()}.
-     *
-     * It is only a default for the requests built here. One built by hand
-     * carries the consistency it was constructed with, and reaches the node
-     * with it whether or not it matches this.
+     * The default for requests built by this connection; a request built by hand
+     * keeps the consistency it was constructed with.
      */
     public function getConsistency(): Consistency {
         return $this->consistency;
     }
 
     /**
-     * The keyspace this connection's requests run against, or an empty string
-     * when it was given none.
-     *
-     * What was passed to the constructor or to {@see self::setKeyspace()}, which
-     * is what {@see self::query()} and the rest fill into the requests they
-     * build. Readable so that a request built by hand and sent with
-     * {@see self::syncRequest()} can be given the same one.
+     * The keyspace this connection's requests run against, or an empty string when
+     * there is none.
      */
     public function getKeyspace(): string {
         return $this->session->getKeyspace();
     }
 
     /**
-     * The transport of the current connection, or null when there is none.
+     * The current transport, possibly wrapped in a framing or compression decorator,
+     * or null when there is none.
      *
-     * Not the socket or stream itself once the handshake is through: from v5
-     * that is wrapped in {@see \Cassandra\Connection\FrameCodec}, and on a
-     * compressed v3/v4 connection in
-     * {@see \Cassandra\Connection\RequestCompressor}, so what comes back is
-     * whichever decorator the negotiated options called for.
-     *
-     * @deprecated The transport is the session's, not the caller's: writing to
-     * it, or closing it, behind the session's back desynchronises the response
-     * reader and strands every request in flight on a socket nothing is going to
-     * answer on. Use {@see self::isConnected()} for whether there is a
-     * connection, and {@see \Cassandra\Connection\NodeConfig} for what it was
-     * opened with.
+     * @deprecated The transport belongs to the session: writing to it or closing it
+     * strands every request in flight. Use {@see self::isConnected()}.
      */
     public function getNode(): ?Connection\Node {
         return $this->session->getNode();
     }
 
     /**
-     * Returns the protocol version used by this connection.
-     * Before connecting, it will return the initial protocol version,
-     * as set in the connection options.
-     *
-     * "Before connecting" includes after {@see self::disconnect()}, and after
-     * any failure that dropped the connection: the negotiated version belongs to
-     * the connection that is gone, and the next one negotiates again from the
-     * initial version rather than from what the last one settled on. So this,
-     * and {@see self::supportsKeyspaceRequestOption()} and
-     * {@see self::supportsNowInSecondsRequestOption()} with it, only report a
-     * negotiated version while {@see self::isConnected()} is true.
+     * The negotiated protocol version while connected, otherwise the initial one from
+     * the connection options; a later connection negotiates afresh.
      */
     public function getProtocolVersion(): ProtocolVersion {
         return $this->session->getProtocolVersion();
     }
 
     /**
-     * How long the server may take to answer a request that asks for no timeout
-     * of its own, in seconds, or null where such a request waits indefinitely.
-     *
-     * INF is returned as it was set and means the same unbounded wait null
-     * does; both are accepted, here and on a request's own options, and the
-     * driver treats them alike. Only this getter tells them apart, so a caller
-     * comparing what it reads back with what it set gets its own spelling
-     * rather than a normalised one.
-     *
-     * The connection default, i.e. what {@see self::setRequestTimeout()} last
-     * set or what {@see ConnectionOptions::$requestTimeoutInSeconds} started it
-     * at. It says nothing about any particular request: one sent with a timeout
-     * of its own — from its options, or from the argument
-     * {@see self::syncRequest()} and {@see self::asyncRequest()} take — is held
-     * to that instead, and is unaffected by this.
+     * The connection's default request timeout in seconds; null and INF both wait
+     * indefinitely. Requests with a timeout in their own options are unaffected.
      */
     public function getRequestTimeout(): ?float {
         return $this->session->getRequestTimeout();
@@ -520,11 +440,6 @@ final class Connection {
     }
 
     /**
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this call only; see {@see self::syncRequest()}, whose argument this is the
-     * counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -535,9 +450,9 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function prepare(string $query, PrepareOptions $options = new PrepareOptions(), ?float $requestTimeoutInSeconds = null): Response\Result\PreparedResult {
+    public function prepare(string $query, PrepareOptions $options = new PrepareOptions()): Response\Result\PreparedResult {
 
-        $response = $this->syncRequest(new Request\Prepare($query, $options), $requestTimeoutInSeconds);
+        $response = $this->syncRequest(new Request\Prepare($query, $options));
         if (!($response instanceof Response\Result\PreparedResult)) {
             throw new ConnectionException('Unexpected response type during prepare', ExceptionCode::CONNECTION_PREPARE_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result\PreparedResult::class,
@@ -549,11 +464,6 @@ final class Connection {
     }
 
     /**
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this statement only; see {@see self::asyncRequest()}, whose argument this
-     * is the counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -564,21 +474,16 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions(), ?float $requestTimeoutInSeconds = null): Statement {
+    public function prepareAsync(string $query, PrepareOptions $options = new PrepareOptions()): Statement {
 
         $request = new Request\Prepare($query, $options);
 
-        return $this->asyncRequest($request, $requestTimeoutInSeconds);
+        return $this->asyncRequest($request);
     }
 
     /**
      * @param array<mixed> $values
      *
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this call only; see {@see self::syncRequest()}, whose argument this is the
-     * counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -589,13 +494,13 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions(), ?float $requestTimeoutInSeconds = null): Response\Result {
+    public function query(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Response\Result {
 
         $consistency = $consistency ?? $this->consistency;
 
         $request = new Request\Query($query, $values, $consistency, $options);
 
-        $response = $this->syncRequest($request, $requestTimeoutInSeconds);
+        $response = $this->syncRequest($request);
         if (!($response instanceof Response\Result)) {
             throw new ConnectionException('Unexpected response type during query', ExceptionCode::CONNECTION_QUERY_UNEXPECTED_RESPONSE->value, [
                 'expected' => Response\Result::class,
@@ -610,11 +515,6 @@ final class Connection {
      * @param array<mixed> $values
      * @return array<\Cassandra\Response\Result\RowsResult>
      *
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this call only. It bounds each page request, not the call as a whole, so
-     * fetching a paged result can take a multiple of it before giving up.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -625,11 +525,11 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function queryAll(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions(), ?float $requestTimeoutInSeconds = null): array {
+    public function queryAll(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): array {
 
         $responses = [];
 
-        $response = $this->query($query, $values, $consistency, $options, $requestTimeoutInSeconds)->asRowsResult();
+        $response = $this->query($query, $values, $consistency, $options)->asRowsResult();
 
         $responses[] = $response;
 
@@ -645,7 +545,6 @@ final class Connection {
                 options: $options->withPagingState(
                     $pagingState
                 ),
-                requestTimeoutInSeconds: $requestTimeoutInSeconds,
             )->asRowsResult();
 
             $pagingState = $response->getRowsMetadata()->pagingState;
@@ -660,11 +559,6 @@ final class Connection {
     /**
      * @param array<mixed> $values
      *
-     * @param ?float $requestTimeoutInSeconds how long the server may take to
-     * answer, overriding the request's and the connection's request timeout for
-     * this statement only; see {@see self::asyncRequest()}, whose argument this
-     * is the counterpart of.
-     *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      * @throws \Cassandra\Exception\NodeException
@@ -675,45 +569,32 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
     */
-    public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions(), ?float $requestTimeoutInSeconds = null): Statement {
+    public function queryAsync(string $query, array $values = [], ?Consistency $consistency = null, QueryOptions $options = new QueryOptions()): Statement {
 
         $consistency = $consistency ?? $this->consistency;
 
         $request = new Request\Query($query, $values, $consistency, $options);
 
-        return $this->asyncRequest($request, $requestTimeoutInSeconds);
+        return $this->asyncRequest($request);
     }
 
     /**
-     * Be told about the events this connection is sent.
+     * Be told about the events this connection receives.
      *
-     * Registering a listener does not ask for any: which events a node pushes
-     * is settled by a REGISTER request, which this does not send. Send one —
-     * {@see \Cassandra\Request\Register}, through {@see self::syncRequest()} —
-     * naming the {@see EventType}s wanted, or nothing will ever arrive for the
-     * listener to be told about.
+     * This does not subscribe to any: send a {@see \Cassandra\Request\Register} through
+     * {@see self::syncRequest()}, and again after a reconnect, since the node's
+     * registration ends with the socket.
      *
-     * The registration is the connection's rather than the socket's, so it
-     * outlives a reconnect while the node's does not: a connection that was
-     * replaced has to be sent the REGISTER again.
-     *
-     * Listeners are called from inside whichever read took the event off the
-     * wire, so one that issues a request of its own is doing so from within
-     * another call's wait. That is supported — the connection puts an answer
-     * aside for the wait it belongs to rather than losing it to the nested read
-     * — but a listener that blocks holds up the call it was invoked from.
+     * Listeners run inside the read that received the event, so one that blocks holds
+     * up the call it was invoked from. A listener may issue requests of its own.
      */
     public function registerEventListener(EventListener $eventListener): void {
         $this->session->getListeners()->registerEventListener($eventListener);
     }
 
     /**
-     * Be told about the warnings a response carries alongside its result.
-     *
-     * Nothing has to be asked of the node for these: a warning arrives with the
-     * response that provoked it. As with {@see self::registerEventListener()},
-     * the listener is called from inside the read that took that response off
-     * the wire.
+     * Be told about the warnings a response carries. Listeners run inside the read
+     * that received the response, as in {@see self::registerEventListener()}.
      */
     public function registerWarningsListener(WarningsListener $warningsListener): void {
         $this->session->getListeners()->registerWarningsListener($warningsListener);
@@ -824,72 +705,31 @@ final class Connection {
     }
 
     /**
-     * Whether requests on this connection can carry a keyspace of their own.
-     *
-     * Reports the negotiated protocol version, which before connecting is only
-     * the initial one from the connection options — what this connection will
-     * open with, not what it will settle on, since the node may not offer it.
-     * Call {@see self::connect()} first for the settled answer; see
-     * {@see self::getProtocolVersion()}.
+     * Whether requests can carry their own keyspace. Before connecting this reports
+     * the initial protocol version, not the one that will be negotiated.
      */
     public function supportsKeyspaceRequestOption(): bool {
         return $this->session->getProtocolVersion()->value >= ProtocolVersion::V5->value;
     }
 
     /**
-     * Whether requests on this connection can carry a `now_in_seconds` of their
-     * own; see {@see self::supportsKeyspaceRequestOption()} for what it reports
-     * before connecting.
+     * Whether requests can carry their own `now_in_seconds`. Before connecting this
+     * reports the initial protocol version, not the one that will be negotiated.
      */
     public function supportsNowInSecondsRequestOption(): bool {
         return $this->session->getProtocolVersion()->value >= ProtocolVersion::V5->value;
     }
 
     /**
-     * Send a request the caller built.
+     * Send a request the caller built and wait for its answer.
      *
-     * The request is sent as it stands, bar the addressing the connection owns:
-     * its stream id, its protocol version, and — where the request names none of
-     * its own — the connection's keyspace, which from v5 travels with each
-     * request rather than being a property of the node's session. A keyspace the
-     * request does carry is left alone, so a single request can be pointed
-     * somewhere else without going through {@see self::setKeyspace()}.
+     * The connection fills in the stream id, the protocol version and, where the
+     * request names none, its keyspace. The timeout comes from the request's options,
+     * then {@see self::setRequestTimeout()}. It bounds each request sent, so a
+     * statement that has to be prepared first can take a multiple of it.
      *
-     * @param ?float $requestTimeoutInSeconds how long to wait for the server's
-     * answer, overriding the request's and the connection's request timeout for this call only.
-     * Pass a larger value for operations Cassandra itself allows more time for,
-     * such as TRUNCATE.
-     *
-     * It bounds each request this call sends, not the call as a whole: when the
-     * driver has to prepare or reprepare the statement first, the PREPARE and
-     * the request it precedes each get the full budget, so the call can take a
-     * multiple of it before giving up — a multiple bounded in turn by the
-     * driver's repreparation limit, since a node can answer the re-executed
-     * statement with UNPREPARED all over again.
-     *
-     * The wait for a free stream id, on a connection that has handed out every
-     * one of them, is held to it separately as well, and running out of it
-     * raises RequestTimeoutException like any other budget that expires — the
-     * request never reached the node, and the connection is left alone: every
-     * other request on it is still being waited for, which is why there was no
-     * id to be had.
-     *
-     * That wait keeps the other requests' budgets as it goes, though, so it can
-     * end in the one failure that is not this request's: giving up on enough of
-     * them reaches {@see ConnectionOptions::$maxOrphanedStreams}, and that
-     * replaces the connection and raises a ConnectionException in place of the
-     * timeout, as it does in {@see self::waitForNextResponse()}.
-     *
-     * A connection replaced while this call is waiting for its answer is
-     * likewise reported rather than resumed, with a ConnectionException of its
-     * own: the stream id this request went out on says nothing on the
-     * connection that took over, which is free to hand the same number to
-     * somebody else, so waiting on it any longer could return their answer as
-     * this one's. Every failure inside the driver that replaces a connection
-     * raises on its own account, so what reaches this is the one that does not
-     * — an event or warnings listener, running from inside this very wait,
-     * calling {@see self::disconnect()} itself. The request has to be sent
-     * again; whether the node acted on it is not knowable from here.
+     * A connection replaced during the wait raises a ConnectionException; whether the
+     * node acted on the request is then unknown.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -901,15 +741,13 @@ final class Connection {
      * @throws \Cassandra\Exception\ValueFactoryException
      * @throws \Cassandra\Exception\ServerException
      */
-    public function syncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Response\Response {
+    public function syncRequest(Request\Request $request): Response\Response {
 
-        return $this->session->sendSyncRequest($request, $requestTimeoutInSeconds);
+        return $this->session->sendSyncRequest($request);
     }
 
     /**
-     * Non-blocking: attempt to read and return the next event, or null if none is available.
-     *
-     * Opens the connection first if there is none yet; see
+     * Non-blocking: return the next event, or null if none is available. See
      * {@see self::drainAvailableResponses()}.
      *
      * @throws \Cassandra\Exception\CompressionException

@@ -19,6 +19,19 @@ class RequestOptions {
     final protected const INT32_MIN = -2147483647 - 1;
 
     /**
+     * @param ?float $requestTimeoutInSeconds how long the server may take to
+     * answer this request; null falls back to {@see \Cassandra\Connection::setRequestTimeout()},
+     * then to {@see \Cassandra\Connection\ConnectionOptions::$requestTimeoutInSeconds}.
+     *
+     * @throws \Cassandra\Exception\RequestException
+     */
+    public function __construct(
+        public readonly ?float $requestTimeoutInSeconds = null,
+    ) {
+        self::assertValidRequestTimeout($requestTimeoutInSeconds);
+    }
+
+    /**
      * Reject a "now in seconds" the protocol cannot carry.
      *
      * The option goes out as a signed 32-bit `[int]`, and pack('N', …) takes the

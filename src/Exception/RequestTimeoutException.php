@@ -18,9 +18,8 @@ use Throwable;
  * cannot push a healthy node out of rotation.
  *
  * Raise the request timeout (`ConnectionOptions::$requestTimeoutInSeconds`,
- * `Connection::setRequestTimeout()`, the `requestTimeoutInSeconds` option of the
- * request itself, or the per-call argument of `Connection::syncRequest()`) for
- * operations that are legitimately slow, such as TRUNCATE, which Cassandra
+ * `Connection::setRequestTimeout()` or the `requestTimeoutInSeconds` option of
+ * the request itself) for operations that are legitimately slow, such as TRUNCATE, which Cassandra
  * allows 60s for by default.
  */
 final class RequestTimeoutException extends CassandraException {

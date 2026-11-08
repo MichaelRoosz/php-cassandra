@@ -42,8 +42,7 @@ final class Deadline {
      * carries. Without this the value would be normalised away by
      * {@see self::at()} and silently expire every request it applies to, which
      * through {@see self::setRequestTimeout()} includes the ones already in
-     * flight. "Use the connection default" is spelled null for the per-call
-     * argument, and an unbounded wait is null on the connection.
+     * flight. An unbounded wait is null.
      *
      * @throws \Cassandra\Exception\ConnectionException
      */

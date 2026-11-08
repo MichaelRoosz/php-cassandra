@@ -34,8 +34,6 @@ use Cassandra\StatementStatus;
  * @internal this is not part of the public API and may change at any time
  */
 final class RequestExecutor {
-    private Deadline $deadlines;
-
     private ResponseDispatcher $dispatcher;
 
     private PreparedResultCache $preparedResultCache;
@@ -51,14 +49,12 @@ final class RequestExecutor {
         ResponseDispatcher $dispatcher,
         StatementRegistry $statements,
         StreamIdPool $streamIds,
-        Deadline $deadlines,
         PreparedResultCache $preparedResultCache,
     ) {
         $this->session = $session;
         $this->dispatcher = $dispatcher;
         $this->statements = $statements;
         $this->streamIds = $streamIds;
-        $this->deadlines = $deadlines;
         $this->preparedResultCache = $preparedResultCache;
     }
 
@@ -223,7 +219,8 @@ final class RequestExecutor {
      * The body of {@see \Cassandra\Connection::syncRequest()}, carrying the repreparation depth
      * of the chain this call belongs to.
      *
-     * @param ?float $requestTimeoutInSeconds see {@see \Cassandra\Connection::syncRequest()}
+     * @param ?float $requestTimeoutInSeconds the original request's timeout on
+     * a follow-up the driver sends for it; null reads the request's options
      * @param int $repreparationDepth how many repreparations this call is
      * already nested inside, the counterpart of
      * {@see Statement::getRepreparationCount()} for requests that have no
@@ -322,8 +319,6 @@ final class RequestExecutor {
      */
     private function executeAsyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null): Statement {
 
-        $this->deadlines->assertValidRequestTimeout($requestTimeoutInSeconds, 'asyncRequest');
-
         $node = $this->session->getConnectedNode();
 
         $request->setVersion($this->session->getProtocolVersion());
@@ -345,8 +340,8 @@ final class RequestExecutor {
         }
 
         // Resolved once, here, rather than separately for the wait below and
-        // for the statement: an explicit argument wins over what the request's
-        // options asked for, and only then does the connection default apply
+        // for the statement: a repreparation hands down the original's timeout,
+        // then the request's options apply, and only then the connection default
         // (null all the way through, which is what {@see Deadline} reads as
         // "use the connection's"). The auto-prepared PREPARE is consulted last
         // because it stands in for the query and inherits its timeout, so it
@@ -518,12 +513,10 @@ final class RequestExecutor {
      */
     private function executeSyncRequest(Request\Request $request, ?float $requestTimeoutInSeconds = null, int $repreparationDepth = 0): Response\Response {
 
-        $this->deadlines->assertValidRequestTimeout($requestTimeoutInSeconds, 'syncRequest');
-
         $node = $this->session->getConnectedNode();
 
-        // An explicit argument wins over what the request's options asked for,
-        // which in turn wins over the connection default.
+        // A repreparation hands down the original request's timeout; otherwise
+        // the request's options apply, then the connection default.
         $requestTimeoutInSeconds ??= $request->getRequestTimeout();
 
         $request->setVersion($this->session->getProtocolVersion());

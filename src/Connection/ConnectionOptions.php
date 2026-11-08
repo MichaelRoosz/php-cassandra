@@ -45,8 +45,8 @@ final class ConnectionOptions {
          * timeouts, which only bound how long a connection may be completely
          * silent. Operations that are legitimately slower than this default,
          * TRUNCATE above all (60s server-side), need a larger value; see
-         * {@see \Cassandra\Connection::setRequestTimeout()} and the per-call
-         * argument of {@see \Cassandra\Connection::syncRequest()}.
+         * {@see \Cassandra\Connection::setRequestTimeout()} and
+         * {@see \Cassandra\Request\Options\RequestOptions::$requestTimeoutInSeconds}.
          */
         public readonly ?float $requestTimeoutInSeconds = 30,
 
@@ -155,8 +155,7 @@ final class ConnectionOptions {
         // clock ever compares greater than, i.e. a request that silently waits
         // for good — and it would be the one way to get that past
         // {@see Deadline::assertValidRequestTimeout()}, which refuses it for
-        // {@see \Cassandra\Connection::setRequestTimeout()} and for the per-call
-        // arguments.
+        // {@see \Cassandra\Connection::setRequestTimeout()}.
         if ($requestTimeoutInSeconds !== null && is_nan($requestTimeoutInSeconds)) {
             throw new ConnectionException(
                 'Invalid request timeout: it must be a number greater than zero, or null to wait indefinitely',

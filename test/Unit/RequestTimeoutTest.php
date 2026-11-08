@@ -686,14 +686,12 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
-    public function testAsyncRequestTakesAPerCallTimeoutOverride(): void {
-        // The counterpart of the argument syncRequest() takes: the connection
-        // would allow 30s, the call asks for 1s for this statement alone.
+    public function testAsyncRequestHonoursTheRequestOptionsTimeout(): void {
+        // The connection would allow 30s, the request asks for 1s for itself.
         $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
 
         $statement = $connection->asyncRequest(
-            new Query('SELECT * FROM SLOW'),
-            requestTimeoutInSeconds: 1.0,
+            new Query('SELECT * FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 1.0)),
         );
 
         $this->assertSame(1.0, $statement->getRequestTimeout(), 'the override must win over the connection default');
@@ -702,7 +700,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         try {
             $connection->waitForStatements([$statement]);
-            $this->fail('expected the per-call timeout to fire');
+            $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
             $this->assertSame([$statement], $e->getTimedOutStatements());
             $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the statement must be held to the overridden budget');
@@ -745,7 +743,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             }
         });
 
-        $statement = $connection->queryAsync('SELECT * FROM SLOW', requestTimeoutInSeconds: 0.75);
+        $statement = $connection->queryAsync('SELECT * FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 0.75));
 
         $result = $statement->getResult();
 
@@ -1222,54 +1220,6 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         }
     }
 
-    public function testPerCallTimeoutArgumentBoundsTheHighLevelAsyncHelpers(): void {
-        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
-
-        $statement = $connection->queryAsync('SELECT * FROM SLOW', requestTimeoutInSeconds: 1.0);
-
-        $this->assertSame(1.0, $statement->getRequestTimeout(), 'the override must win over the connection default');
-
-        $start = \Cassandra\Connection\Clock::now();
-
-        try {
-            $connection->waitForStatements([$statement]);
-            $this->fail('expected the per-call timeout to fire');
-        } catch (RequestTimeoutException $e) {
-            $elapsed = \Cassandra\Connection\Clock::now() - $start;
-            $this->assertLessThan(10.0, $elapsed, 'the statement must be held to its own budget');
-        }
-    }
-
-    public function testPerCallTimeoutArgumentBoundsTheHighLevelHelpers(): void {
-        // The same override syncRequest()/asyncRequest() take, without having
-        // to build an options object for it.
-        $connection = $this->connect('slow-query', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
-
-        $start = \Cassandra\Connection\Clock::now();
-
-        try {
-            $connection->query('SELECT * FROM system.local', requestTimeoutInSeconds: 1.0);
-            $this->fail('expected the per-call timeout to fire');
-        } catch (RequestTimeoutException $e) {
-            $elapsed = \Cassandra\Connection\Clock::now() - $start;
-            $this->assertLessThan(10.0, $elapsed, 'the request option must win over the connection default');
-        }
-    }
-
-    public function testPerCallTimeoutArgumentOutranksTheRequestsOwnOptions(): void {
-        // Precedence runs argument, then request options, then connection: the
-        // request asks for 1s but the call overrules it with room to spare.
-        $connection = $this->connect('slow-query', delaySeconds: 1.0, requestTimeoutInSeconds: 1.0);
-
-        $result = $connection->query(
-            'SELECT * FROM system.local',
-            options: new QueryOptions(requestTimeoutInSeconds: 1.0),
-            requestTimeoutInSeconds: 30.0,
-        );
-
-        $this->assertInstanceOf(Result::class, $result);
-    }
-
     public function testPerRequestTimeoutFromOptionsBoundsAnAsyncStatement(): void {
         $connection = $this->connect('slow-query', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
 
@@ -1286,8 +1236,8 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $connection->waitForStatements([$statement]);
             $this->fail('expected the per-request timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $this->assertSame([$statement], $e->getTimedOutStatements());
-            $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the statement must be held to the overridden budget');
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
+            $this->assertLessThan(10.0, $elapsed, 'the statement must be held to its own budget');
         }
     }
 
@@ -1303,6 +1253,38 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
                 options: new QueryOptions(requestTimeoutInSeconds: 1.0),
             );
             $this->fail('expected the per-request timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
+            $this->assertLessThan(10.0, $elapsed, 'the request option must win over the connection default');
+        }
+    }
+
+    public function testRequestOptionsTimeoutBoundsTheHighLevelAsyncHelpers(): void {
+        $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
+
+        $statement = $connection->queryAsync('SELECT * FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 1.0));
+
+        $this->assertSame(1.0, $statement->getRequestTimeout(), 'the override must win over the connection default');
+
+        $start = \Cassandra\Connection\Clock::now();
+
+        try {
+            $connection->waitForStatements([$statement]);
+            $this->fail('expected the request timeout to fire');
+        } catch (RequestTimeoutException $e) {
+            $this->assertSame([$statement], $e->getTimedOutStatements());
+            $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the statement must be held to the overridden budget');
+        }
+    }
+
+    public function testRequestOptionsTimeoutBoundsTheHighLevelHelpers(): void {
+        $connection = $this->connect('slow-query', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
+
+        $start = \Cassandra\Connection\Clock::now();
+
+        try {
+            $connection->query('SELECT * FROM system.local', options: new QueryOptions(requestTimeoutInSeconds: 1.0));
+            $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
             $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the option must win over the connection default');
         }
@@ -1425,7 +1407,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $connection = $this->connect('defer-slow', delaySeconds: $delaySeconds, requestTimeoutInSeconds: 30.0);
 
         try {
-            $connection->query('SELECT * FROM SLOW', requestTimeoutInSeconds: 0.25);
+            $connection->query('SELECT * FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 0.25));
             $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
         }
@@ -1564,7 +1546,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $connection = $this->connect('defer-slow', delaySeconds: 30.0, requestTimeoutInSeconds: 1.0);
 
         $slow = $connection->queryAsync('SELECT * FROM SLOW');
-        $fast = $connection->queryAsync('SELECT * FROM quick', requestTimeoutInSeconds: 30.0);
+        $fast = $connection->queryAsync('SELECT * FROM quick', options: new QueryOptions(requestTimeoutInSeconds: 30.0));
 
         try {
             $connection->waitForStatements([$slow]);
