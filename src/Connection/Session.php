@@ -1563,8 +1563,9 @@ final class Session {
 
         if ($response instanceof Response\Authenticate) {
             $nodeConfig = $node->getConfig();
+            $authenticator = $nodeConfig->getAuthenticator();
 
-            if ($nodeConfig->username === '' || $nodeConfig->password === '') {
+            if ($authenticator === null) {
                 throw new ConnectionException('Username and password must not be empty.', ExceptionCode::CONNECTION_AUTH_MISSING_CREDENTIALS->value, [
                     'operation' => 'connect/authenticate',
                     'host' => $nodeConfig->host,
@@ -1577,28 +1578,10 @@ final class Session {
             // just agreed, the AUTH_RESPONSE below included.
             $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
 
-            $authResult = $this->sendSyncRequest(new Request\AuthResponse($nodeConfig->username, $nodeConfig->password));
+            $authResult = $this->sendSyncRequest(new Request\AuthResponse($authenticator->initialResponse($response->getData())));
 
-            if ($authResult instanceof Response\AuthChallenge) {
-                // The node asked for another round of the SASL exchange. Only
-                // the single-round password authenticators are implemented here
-                // — the driver has one credential pair and no way to answer a
-                // challenge with anything derived from it — so this is reported
-                // for the unsupported authenticator it is rather than as the
-                // rejected password it is not. Told apart from a failure so that
-                // nobody goes looking for a typo in credentials the node never
-                // passed judgement on.
-                throw new ConnectionException(
-                    'The node answered with an authentication challenge, which needs a multi-round SASL exchange this driver does not implement. Only single-round password authentication is supported.',
-                    ExceptionCode::CONNECTION_AUTH_CHALLENGE_UNSUPPORTED->value,
-                    [
-                        'operation' => 'connect/authenticate',
-                        'host' => $nodeConfig->host,
-                        'port' => $nodeConfig->port,
-                        'username' => $nodeConfig->username,
-                        'authenticator' => $response->getData(),
-                    ]
-                );
+            while ($authResult instanceof Response\AuthChallenge) {
+                $authResult = $this->sendSyncRequest(new Request\AuthResponse($authenticator->evaluateChallenge($authResult->getData())));
             }
 
             if (!($authResult instanceof Response\AuthSuccess)) {
@@ -1610,6 +1593,8 @@ final class Session {
                     'received' => get_class($authResult),
                 ]);
             }
+
+            $authenticator->authenticationSucceeded($authResult->getData());
         } elseif ($response instanceof Response\Ready) {
             $this->node = $this->handshake->wrapNode($node, $this->version, $startupOptions);
         } else {

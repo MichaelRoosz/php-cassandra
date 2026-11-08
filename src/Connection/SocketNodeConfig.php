@@ -51,6 +51,7 @@ final class SocketNodeConfig extends NodeConfig {
         string $host = 'localhost',
         int $port = 9042,
         string $username = '',
+        #[\SensitiveParameter]
         string $password = '',
         array $socketOptions = [],
         /**
@@ -60,6 +61,7 @@ final class SocketNodeConfig extends NodeConfig {
          * as the kernel keeps retrying.
          */
         public readonly float $connectTimeoutInSeconds = 5,
+        ?Authenticator $authenticator = null,
     ) {
         if (!extension_loaded('sockets')) {
             throw new SocketException(
@@ -77,6 +79,7 @@ final class SocketNodeConfig extends NodeConfig {
             port: $port,
             username: $username,
             password: $password,
+            authenticator: $authenticator,
         );
 
         if (!isset($socketOptions[SO_RCVTIMEO])) {

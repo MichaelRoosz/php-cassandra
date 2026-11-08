@@ -45,6 +45,10 @@
  *   authenticate-zero
  *                   require a password handshake and only accept username
  *                   "0" with password "0"
+ *   authenticate-challenge
+ *                   answer every AUTH_RESPONSE with the challenge
+ *                   "server-challenge", except "client-final", which succeeds
+ *                   with the token "server-final"
  *   always-unprepared
  *                   prepare happily, but answer every EXECUTE and every BATCH
  *                   with UNPREPARED, as a node that never keeps the prepared
@@ -132,6 +136,7 @@ const OPCODE_EXECUTE = 0x0A;
 const OPCODE_REGISTER = 0x0B;
 const OPCODE_EVENT = 0x0C;
 const OPCODE_BATCH = 0x0D;
+const OPCODE_AUTH_CHALLENGE = 0x0E;
 const OPCODE_AUTH_RESPONSE = 0x0F;
 const OPCODE_AUTH_SUCCESS = 0x10;
 
@@ -575,12 +580,31 @@ while (microtime(true) < $deadline) {
                 continue;
             }
 
+            if ($mode === 'authenticate-challenge') {
+                writeFrame($client, $frame['stream'], OPCODE_AUTHENTICATE, cqlString('ChallengingAuthenticator'));
+
+                continue;
+            }
+
             writeFrame($client, $frame['stream'], OPCODE_READY, '');
             $handshakeDone = true;
 
             if ($mode === 'event') {
                 $eventDueAt = microtime(true) + $delay;
             }
+
+            continue;
+        }
+
+        if ($frame['opcode'] === OPCODE_AUTH_RESPONSE && $mode === 'authenticate-challenge') {
+            if ($frame['body'] === pack('N', 12) . 'client-final') {
+                writeFrame($client, $frame['stream'], OPCODE_AUTH_SUCCESS, pack('N', 12) . 'server-final');
+                $handshakeDone = true;
+
+                continue;
+            }
+
+            writeFrame($client, $frame['stream'], OPCODE_AUTH_CHALLENGE, pack('N', 16) . 'server-challenge');
 
             continue;
         }

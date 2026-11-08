@@ -8,19 +8,14 @@ use Cassandra\Protocol\Opcode;
 
 final class AuthResponse extends Request {
     public function __construct(
-        private string $username,
-        private string $password
+        #[\SensitiveParameter]
+        private string $token,
     ) {
         parent::__construct(Opcode::REQUEST_AUTH_RESPONSE);
     }
 
     #[\Override]
     public function getBody(): string {
-        $body = chr(0);
-        $body .= $this->username;
-        $body .= chr(0);
-        $body .= $this->password;
-
-        return pack('N', strlen($body)) . $body;
+        return pack('N', strlen($this->token)) . $this->token;
     }
 }

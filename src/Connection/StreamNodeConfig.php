@@ -9,6 +9,7 @@ final class StreamNodeConfig extends NodeConfig {
         string $host = 'localhost',
         int $port = 9042,
         string $username = '',
+        #[\SensitiveParameter]
         string $password = '',
         public readonly float $connectTimeoutInSeconds = 5,
 
@@ -49,13 +50,28 @@ final class StreamNodeConfig extends NodeConfig {
          * plaintext unless the host itself carries a "tls://"/"ssl://" scheme.
          */
         public readonly array $sslOptions = [],
+        ?Authenticator $authenticator = null,
     ) {
         parent::__construct(
             host: $host,
             port: $port,
             username: $username,
             password: $password,
+            authenticator: $authenticator,
         );
+    }
+
+    /**
+     * Hides the TLS key passphrase along with the password.
+     *
+     * @return array<mixed>
+     */
+    #[\Override]
+    public function __debugInfo(): array {
+        $properties = parent::__debugInfo();
+        $properties['sslOptions'] = array_diff_key($this->sslOptions, ['passphrase' => true]);
+
+        return $properties;
     }
 
     #[\Override]
