@@ -96,6 +96,28 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testBatchMapsAssociativePreparedValuesIntoMarkerOrder(): void {
+        $prepared = self::preparedResultWithMarkers('id', [
+            self::columnInfo('age'),
+            self::columnInfo('id'),
+        ]);
+
+        $batch = new Batch();
+        $batch->appendPreparedStatement($prepared, ['id' => 7, 'age' => 5]);
+        $batch->setVersion(ProtocolVersion::V4);
+
+        $this->assertSame(
+            chr(BatchType::LOGGED->value)
+                . pack('n', 1)
+                . chr(1) . pack('n', 2) . 'id'
+                . pack('n', 2)
+                . pack('N', 4) . pack('N', 5)
+                . pack('N', 4) . pack('N', 7)
+                . pack('n', Consistency::ONE->value) . chr(0),
+            $batch->getBody(),
+        );
+    }
+
     public function testBatchRejectsMoreStatementsThanTheCountCanExpress(): void {
         // The statement count goes out as a [short]. pack('n', …) takes the low
         // two bytes without complaint, so one statement past the limit used to
@@ -291,6 +313,31 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $request->getBody();
     }
 
+    public function testExecuteRequiresAnExplicitModeForNumericBindMarkerMetadata(): void {
+        $prepared = self::preparedResultWithMarkers('id', [
+            self::columnInfo('1'),
+            self::columnInfo('0'),
+        ]);
+        $prepared->setRequest(new Prepare('SELECT * FROM t WHERE a = :"1" AND b = :"0"'));
+
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_AMBIGUOUS_NUMERIC_NAMES->value);
+
+        new Execute($prepared, ['0' => 10, '1' => 20]);
+    }
+
+    public function testExecuteTreatsNumericColumnMetadataAsPositionalForAnonymousMarkers(): void {
+        $prepared = self::preparedResultWithMarkers('id', [
+            self::columnInfo('1'),
+            self::columnInfo('0'),
+        ]);
+        $prepared->setRequest(new Prepare('SELECT * FROM t WHERE "1" = ? AND "0" = ?'));
+
+        $execute = new Execute($prepared, [10, 20]);
+
+        $this->assertNull($execute->getOptions()->namesForValues);
+    }
+
     public function testExplicitNullBindValueIsAccepted(): void {
         $encoded = self::testableRequest()->encodeValuesForBindMarkers(
             ['userid' => null],
@@ -442,6 +489,27 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $body = $request->getBody();
 
         $this->assertSame("\xff\xff", substr($body, -65535 * 8 - 2, 2));
+    }
+
+    public function testQueryCanExplicitlyBindNumericMarkerNames(): void {
+        $query = 'SELECT * FROM t WHERE a = :"1" AND b = :"0"';
+        $request = new Query(
+            $query,
+            ['0' => 10, '1' => 20],
+            options: new QueryOptions(namesForValues: true),
+        );
+        $request->setVersion(ProtocolVersion::V5);
+
+        $parameters = substr($request->getBody(), 4 + strlen($query));
+
+        $this->assertSame(
+            pack('n', Consistency::ONE->value)
+                . pack('N', QueryFlag::VALUES | QueryFlag::WITH_NAMES_FOR_VALUES)
+                . pack('n', 2)
+                . pack('n', 1) . '0' . pack('N', 4) . pack('N', 10)
+                . pack('n', 1) . '1' . pack('N', 4) . pack('N', 20),
+            $parameters,
+        );
     }
 
     public function testQueryEncodesInInt32RangeIntAsFourBytes(): void {
@@ -608,6 +676,23 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::REQUEST_FIELD_TOO_LONG->value);
 
         $request->getBody();
+    }
+
+    public function testQueryRequiresAnExplicitModeForAnyNumericNamedMarker(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_AMBIGUOUS_NUMERIC_NAMES->value);
+
+        new Query('SELECT * FROM t WHERE a = :"7"', [10]);
+    }
+
+    public function testQueryRequiresAnExplicitModeForNumericNamedMarkersThatLookPositional(): void {
+        $this->expectException(RequestException::class);
+        $this->expectExceptionCode(ExceptionCode::REQUEST_VALUES_AMBIGUOUS_NUMERIC_NAMES->value);
+
+        new Query(
+            'SELECT * FROM t WHERE a = :"1" AND b = :"0"',
+            ['0' => 10, '1' => 20],
+        );
     }
 
     public function testQuotedBindMarkerNameSurvivesADollarQuotedStringLiteral(): void {
@@ -842,24 +927,34 @@ final class RequestEncodingTest extends AbstractUnitTestCase {
     }
 
     private static function preparedResultWithMarker(string $id, Type $type, string $query): CachedPreparedResult {
-        $result = new CachedPreparedResult(
+        $result = self::preparedResultWithMarkers(
+            $id,
+            [new ColumnInfo('ks', 't', 'v', new SimpleTypeInfo($type))],
+        );
+        $result->setRequest(new Prepare($query));
+
+        return $result;
+    }
+
+    /**
+     * @param list<ColumnInfo> $markers
+     */
+    private static function preparedResultWithMarkers(string $id, array $markers): CachedPreparedResult {
+        return new CachedPreparedResult(
             new Header(version: ProtocolVersion::V4, flags: 0, stream: 0, opcode: Opcode::RESPONSE_RESULT, length: 0),
             new StreamReader(''),
             new PreparedData(
                 id: $id,
                 prepareMetadata: new PrepareMetadata(
                     flags: 0,
-                    bindMarkersCount: 1,
-                    bindMarkers: [new ColumnInfo('ks', 't', 'v', new SimpleTypeInfo($type))],
+                    bindMarkersCount: count($markers),
+                    bindMarkers: $markers,
                     pkCount: 0,
                     pkIndex: [],
                 ),
                 rowsMetadata: new RowsMetadata(flags: 0, columnsCount: 0, pagingState: null, metadataId: null, columns: []),
             ),
         );
-        $result->setRequest(new Prepare($query));
-
-        return $result;
     }
 
     private static function testableRequest(): TestableBindMarkerRequest {

@@ -7,6 +7,8 @@ namespace Cassandra\Request;
 use Cassandra\Protocol\Opcode;
 use Cassandra\Request\Options\QueryOptions;
 use Cassandra\Consistency;
+use Cassandra\Exception\ExceptionCode;
+use Cassandra\Exception\RequestException;
 
 final class Query extends Request {
     /**
@@ -22,8 +24,23 @@ final class Query extends Request {
     ) {
         parent::__construct(Opcode::REQUEST_QUERY);
 
-        if ($this->options->namesForValues === null && !array_is_list($values)) {
-            $this->options = $this->options->withNamesForValues(true);
+        if ($this->options->namesForValues === null) {
+            if (!array_is_list($values)) {
+                $this->options = $this->options->withNamesForValues(true);
+            } else {
+                $ambiguousNames = self::ambiguousNumericBindMarkerNames($this->query, $values);
+                if ($ambiguousNames !== []) {
+                    throw new RequestException(
+                        'Numeric named bind markers are ambiguous with positional PHP array keys; set namesForValues explicitly',
+                        ExceptionCode::REQUEST_VALUES_AMBIGUOUS_NUMERIC_NAMES->value,
+                        [
+                            'stage' => 'values_encoding_mode',
+                            'bind_markers' => $ambiguousNames,
+                            'hint' => 'Set QueryOptions::namesForValues to true for named values or false for positional values',
+                        ]
+                    );
+                }
+            }
         }
     }
 
@@ -106,103 +123,4 @@ final class Query extends Request {
         return $this->values;
     }
 
-    /**
-     * Names of quoted bind markers, keyed for an exact-name lookup while the
-     * QUERY values are encoded. CQL strings, quoted identifiers and comments
-     * are skipped so a colon inside any of them is not mistaken for a marker.
-     *
-     * @return array<string, true>
-     */
-    private static function quotedBindMarkerNames(string $query): array {
-        $names = [];
-        $length = strlen($query);
-
-        for ($offset = 0; $offset < $length; ++$offset) {
-            $character = $query[$offset];
-
-            if ($character === '$' && ($query[$offset + 1] ?? '') === '$') {
-                self::skipDollarQuoted($query, $offset);
-
-                continue;
-            }
-
-            if ($character === "'") {
-                self::skipQuoted($query, $offset, "'");
-
-                continue;
-            }
-
-            if ($character === '-' && ($query[$offset + 1] ?? '') === '-') {
-                self::skipLineComment($query, $offset);
-
-                continue;
-            }
-
-            if ($character === '/' && ($query[$offset + 1] ?? '') === '/') {
-                self::skipLineComment($query, $offset);
-
-                continue;
-            }
-
-            if ($character === '/' && ($query[$offset + 1] ?? '') === '*') {
-                $closing = strpos($query, '*/', $offset + 2);
-                $offset = $closing === false ? $length : $closing + 1;
-
-                continue;
-            }
-
-            if ($character === ':' && ($query[$offset + 1] ?? '') === '"') {
-                ++$offset;
-                $name = self::readQuoted($query, $offset);
-                $names[$name] = true;
-
-                continue;
-            }
-
-            if ($character === '"') {
-                self::skipQuoted($query, $offset, '"');
-            }
-        }
-
-        return $names;
-    }
-
-    private static function readQuoted(string $query, int &$offset, string $quote = '"'): string {
-        $value = '';
-        $length = strlen($query);
-
-        for (++$offset; $offset < $length; ++$offset) {
-            $character = $query[$offset];
-            if ($character !== $quote) {
-                $value .= $character;
-
-                continue;
-            }
-
-            if (($query[$offset + 1] ?? '') === $quote) {
-                $value .= $quote;
-                ++$offset;
-
-                continue;
-            }
-
-            return $value;
-        }
-
-        return $value;
-    }
-
-    private static function skipDollarQuoted(string $query, int &$offset): void {
-        $closing = strpos($query, '$$', $offset + 2);
-        $offset = $closing === false ? strlen($query) : $closing + 1;
-    }
-
-    private static function skipLineComment(string $query, int &$offset): void {
-        $newline = strpos($query, "\n", $offset + 2);
-        $offset = $newline === false ? strlen($query) : $newline;
-    }
-
-    private static function skipQuoted(string $query, int &$offset, string $quote): void {
-        self::readQuoted($query, $offset, $quote);
-    }
 }

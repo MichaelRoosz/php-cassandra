@@ -361,11 +361,11 @@ final class Batch extends Request {
         $encodedValues = $this->encodeQueryValuesForBindMarkerTypes(
             $values,
             $prepareData->prepareMetadata->bindMarkers,
-            false
+            !array_is_list($values)
         );
 
         return chr(1)
             . pack('n', strlen($queryId)) . $queryId
-            . $this->encodeQueryValuesAsBinary($encodedValues, namesForValues: false);
+            . $this->encodeQueryValuesAsBinary(array_values($encodedValues), namesForValues: false);
     }
 }

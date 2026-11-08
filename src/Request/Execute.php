@@ -63,16 +63,14 @@ final class Execute extends Request {
     ) {
         parent::__construct(Opcode::REQUEST_EXECUTE);
 
-        if ($this->options->namesForValues === null && !array_is_list($values)) {
-            $this->options = $this->options->withNamesForValues(true);
-        }
-
         if ($previousResult instanceof PreparedResult) {
             $preparedData = $previousResult->getPreparedData();
+            $sourcePreparedResult = $previousResult;
             $pagingStateOfPreviousResult = null;
 
         } elseif ($previousResult instanceof RowsResult) {
             $preparedData = $previousResult->getLastPreparedData();
+            $sourcePreparedResult = $previousResult->getLastPreparedResult();
             if ($preparedData === null) {
                 throw new RequestException(
                     message: 'Prepared statement not found for resumption of execution',
@@ -97,6 +95,29 @@ final class Execute extends Request {
 
         $this->queryId = $preparedData->id;
         $this->rowsMetadataId = $preparedData->rowsMetadataId;
+
+        if ($this->options->namesForValues === null) {
+            if (!array_is_list($values)) {
+                $this->options = $this->options->withNamesForValues(true);
+            } else {
+                $prepareRequest = $sourcePreparedResult?->getRequest();
+                $ambiguousNames = $prepareRequest instanceof Prepare
+                    ? self::ambiguousNumericBindMarkerNames($prepareRequest->getQuery(), $values)
+                    : [];
+
+                if ($ambiguousNames !== []) {
+                    throw new RequestException(
+                        'Numeric named bind markers are ambiguous with positional PHP array keys; set namesForValues explicitly',
+                        ExceptionCode::REQUEST_VALUES_AMBIGUOUS_NUMERIC_NAMES->value,
+                        [
+                            'stage' => 'values_encoding_mode',
+                            'bind_markers' => $ambiguousNames,
+                            'hint' => 'Set ExecuteOptions::namesForValues to true for named values or false for positional values',
+                        ]
+                    );
+                }
+            }
+        }
 
         $this->unencodedValues = $values;
 

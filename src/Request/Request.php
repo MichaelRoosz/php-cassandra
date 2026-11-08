@@ -329,6 +329,25 @@ abstract class Request implements Frame, Stringable {
     }
 
     /**
+     * @param array<mixed> $values
+     * @return list<string>
+     */
+    final protected static function ambiguousNumericBindMarkerNames(string $query, array $values): array {
+        if ($values === []) {
+            return [];
+        }
+
+        $ambiguous = [];
+        foreach (array_keys(self::quotedBindMarkerNames($query)) as $name) {
+            if (is_int($name)) {
+                $ambiguous[] = (string) $name;
+            }
+        }
+
+        return $ambiguous;
+    }
+
+    /**
      * @throws \Cassandra\Exception\RequestException
      */
     protected static function assertFrameBodyLength(int $length): void {
@@ -433,7 +452,7 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
-     * @param array<string, true> $exactValueNames
+     * @param array<array-key, true> $exactValueNames
      *
      * @throws \Cassandra\Exception\RequestException
      */
@@ -538,7 +557,7 @@ abstract class Request implements Frame, Stringable {
 
     /**
      * @param array<mixed> $values
-     * @param array<string, true> $exactValueNames
+     * @param array<array-key, true> $exactValueNames
      *
      * @throws \Cassandra\Exception\RequestException
      */
@@ -863,6 +882,66 @@ abstract class Request implements Frame, Stringable {
     }
 
     /**
+     * CQL strings, quoted identifiers and comments are skipped so a colon in
+     * any of them is not mistaken for a quoted bind marker.
+     *
+     * @return array<array-key, true>
+     */
+    final protected static function quotedBindMarkerNames(string $query): array {
+        $names = [];
+        $length = strlen($query);
+
+        for ($offset = 0; $offset < $length; ++$offset) {
+            $character = $query[$offset];
+
+            if ($character === '$' && ($query[$offset + 1] ?? '') === '$') {
+                self::skipDollarQuoted($query, $offset);
+
+                continue;
+            }
+
+            if ($character === "'") {
+                self::skipQuoted($query, $offset, "'");
+
+                continue;
+            }
+
+            if ($character === '-' && ($query[$offset + 1] ?? '') === '-') {
+                self::skipLineComment($query, $offset);
+
+                continue;
+            }
+
+            if ($character === '/' && ($query[$offset + 1] ?? '') === '/') {
+                self::skipLineComment($query, $offset);
+
+                continue;
+            }
+
+            if ($character === '/' && ($query[$offset + 1] ?? '') === '*') {
+                $closing = strpos($query, '*/', $offset + 2);
+                $offset = $closing === false ? $length : $closing + 1;
+
+                continue;
+            }
+
+            if ($character === ':' && ($query[$offset + 1] ?? '') === '"') {
+                ++$offset;
+                $name = self::readQuoted($query, $offset);
+                $names[$name] = true;
+
+                continue;
+            }
+
+            if ($character === '"') {
+                self::skipQuoted($query, $offset, '"');
+            }
+        }
+
+        return $names;
+    }
+
+    /**
      * @throws \Cassandra\Exception\RequestException
      */
     private function assertCustomPayloadSupported(): void {
@@ -906,6 +985,45 @@ abstract class Request implements Frame, Stringable {
                 'bind_marker' => $key,
             ]
         );
+    }
+
+    private static function readQuoted(string $query, int &$offset, string $quote = '"'): string {
+        $value = '';
+        $length = strlen($query);
+
+        for (++$offset; $offset < $length; ++$offset) {
+            $character = $query[$offset];
+            if ($character !== $quote) {
+                $value .= $character;
+
+                continue;
+            }
+
+            if (($query[$offset + 1] ?? '') === $quote) {
+                $value .= $quote;
+                ++$offset;
+
+                continue;
+            }
+
+            return $value;
+        }
+
+        return $value;
+    }
+
+    private static function skipDollarQuoted(string $query, int &$offset): void {
+        $closing = strpos($query, '$$', $offset + 2);
+        $offset = $closing === false ? strlen($query) : $closing + 1;
+    }
+
+    private static function skipLineComment(string $query, int &$offset): void {
+        $newline = strpos($query, "\n", $offset + 2);
+        $offset = $newline === false ? strlen($query) : $newline;
+    }
+
+    private static function skipQuoted(string $query, int &$offset, string $quote): void {
+        self::readQuoted($query, $offset, $quote);
     }
 
     /**
