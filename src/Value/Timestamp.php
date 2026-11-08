@@ -28,8 +28,20 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
         } elseif (is_string($value)) {
             try {
                 $date = new DateTimeImmutable($value);
+
+                // PHP rolls an impossible calendar field over into the next
+                // one (2020-02-30 becomes March 1) and only reports it here.
+                $parseErrors = DateTimeImmutable::getLastErrors();
+                if ($parseErrors !== false && ($parseErrors['warning_count'] > 0 || $parseErrors['error_count'] > 0)) {
+                    throw new ValueException('Invalid timestamp value; the date contains invalid calendar fields', ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
+                        'value' => $value,
+                    ]);
+                }
+
                 $timestamp = $date->getTimestamp();
                 $milliseconds = ($timestamp * 1000) + (int) $date->format('v');
+            } catch (ValueException $e) {
+                throw $e;
             } catch (PhpException $e) {
                 throw new ValueException('Invalid timestamp value; expected milliseconds as int, date in format YYYY-mm-dd HH:ii:ss.uuu as string, or DateTimeInterface', ExceptionCode::VALUE_TIMESTAMP_INVALID_VALUE_TYPE->value, [
                     'value_type' => gettype($value),
