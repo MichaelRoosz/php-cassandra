@@ -897,7 +897,8 @@ final class Connection {
     }
 
     /**
-     * Wit until any of the given statements becomes ready and return that statement.
+     * Wait until any of the given statements becomes ready and return that statement.
+     * An empty list raises a ConnectionException.
      *
      * @param array<Statement> $statements
      *
@@ -911,13 +912,22 @@ final class Connection {
      * @throws \Cassandra\Exception\ServerException
      */
     public function waitForAnyStatement(array $statements): Statement {
+        if ($statements === []) {
+            throw new ConnectionException('Cannot wait for any of an empty list of statements', ExceptionCode::CONNECTION_WAIT_FOR_ANY_STATEMENT_EMPTY_LIST->value, [
+                'operation' => 'waitForAnyStatement',
+            ]);
+        }
+
+        // Checked before each read, not only after it: a statement answered
+        // already would otherwise wait for a response that never comes.
         while (true) {
-            $this->readResponse(waitForResponse: true);
             foreach ($statements as $s) {
                 if ($s->isResultReady()) {
                     return $s;
                 }
             }
+
+            $this->readResponse(waitForResponse: true);
         }
     }
 
