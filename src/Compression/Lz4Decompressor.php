@@ -33,6 +33,14 @@ use Cassandra\Exception\CompressionException;
 use Cassandra\Exception\ExceptionCode;
 
 final class Lz4Decompressor {
+    /** @var array<int, int> */
+    private const FRAME_BLOCK_MAX_SIZES = [
+        4 => 64 * 1024,
+        5 => 256 * 1024,
+        6 => 1024 * 1024,
+        7 => 4 * 1024 * 1024,
+    ];
+
     /**
      * The magic number of the pre-1.4 "legacy" frame format.
      */
@@ -78,6 +86,8 @@ final class Lz4Decompressor {
      *   available (much faster). Only applies to {@see decompressBlock()} when an
      *   expected uncompressed length is supplied; pass false to force the
      *   pure-PHP implementation.
+     *
+     * @throws \Cassandra\Exception\CompressionException
      */
     public function __construct(
         ?string $compressedData = null,
@@ -190,14 +200,30 @@ final class Lz4Decompressor {
      *   of the string is cut back to it, so what is decompressed is never more
      *   than what was handed in — the shortfall is reported as the truncated
      *   input it is rather than read off the end of the string.
+     *
+     * @throws \Cassandra\Exception\CompressionException
      */
     public function setInput(string $compressedData, int $inputOffset = 0, int $inputLength = 0): void {
+        $dataLength = strlen($compressedData);
+        if ($inputOffset < 0 || $inputOffset > $dataLength) {
+            throw new CompressionException(
+                'invalid lz4 input offset',
+                ExceptionCode::COMPRESSION_INVALID_INPUT_OFFSET->value,
+                [
+                    'stage' => 'set_input',
+                    'inputOffset' => $inputOffset,
+                    'inputLength' => $inputLength,
+                    'dataLength' => $dataLength,
+                ]
+            );
+        }
+
         $this->input = $compressedData;
         $this->inputOffset = $inputOffset;
 
         $this->inputEnd = $inputLength > 0
-            ? min($inputOffset + $inputLength, strlen($compressedData))
-            : strlen($compressedData);
+            ? $inputOffset + min($inputLength, $dataLength - $inputOffset)
+            : $dataLength;
         $this->outputLength = 0;
         $this->frameOutputStart = 0;
 
@@ -586,7 +612,12 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    private function readVersionOneBlock(int $flgBlockChecksum, bool $validateChecksums): bool {
+    private function readVersionOneBlock(
+        int $flgBlockChecksum,
+        bool $validateChecksums,
+        int $blockMaximumSize,
+        bool $blocksIndependent,
+    ): bool {
         if ($this->inputOffset + 4 > $this->inputEnd) {
             throw new CompressionException(
                 'invalid lz4 frame data - input overflow while reading block size',
@@ -629,6 +660,19 @@ final class Lz4Decompressor {
         $blockSize = $blockSizeRaw & 0x7FFFFFFF;
         $blockStart = $this->inputOffset;
 
+        if ($blockSize > $blockMaximumSize) {
+            throw new CompressionException(
+                'invalid lz4 frame data - block exceeds the maximum size declared by the frame',
+                ExceptionCode::COMPRESSION_FRAME_BLOCK_TOO_LARGE->value,
+                [
+                    'stage' => 'v1_block_size',
+                    'blockSize' => $blockSize,
+                    'blockMaximumSize' => $blockMaximumSize,
+                    'isUncompressed' => (bool) $isUncompressed,
+                ]
+            );
+        }
+
         if ($blockSize > 0) {
             if ($this->inputOffset + $blockSize > $this->inputEnd) {
                 throw new CompressionException(
@@ -648,7 +692,35 @@ final class Lz4Decompressor {
                 $this->output .= substr($this->input, $this->inputOffset, $blockSize);
                 $this->outputLength += $blockSize;
             } else {
-                $this->decompressBlockAtOffset($this->inputOffset, $this->inputOffset + $blockSize);
+                if ($blocksIndependent) {
+                    $this->frameOutputStart = $this->outputLength;
+                }
+
+                $blockOutputStart = $this->outputLength;
+
+                try {
+                    $this->decompressBlockAtOffset(
+                        $this->inputOffset,
+                        $this->inputOffset + $blockSize,
+                        $blockOutputStart + $blockMaximumSize,
+                    );
+                } catch (CompressionException $e) {
+                    if ($e->getCode() !== ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value) {
+                        throw $e;
+                    }
+
+                    throw new CompressionException(
+                        'invalid lz4 frame data - decompressed block exceeds the maximum size declared by the frame',
+                        ExceptionCode::COMPRESSION_FRAME_BLOCK_TOO_LARGE->value,
+                        [
+                            'stage' => 'v1_block_output',
+                            'blockSize' => $blockSize,
+                            'blockMaximumSize' => $blockMaximumSize,
+                            'blockOutputLength' => $this->outputLength - $blockOutputStart,
+                        ],
+                        $e,
+                    );
+                }
             }
 
             $this->inputOffset += $blockSize;
@@ -718,17 +790,16 @@ final class Lz4Decompressor {
             );
         }
         $flg = ord($this->input[$this->inputOffset++]);
-
-        //$bd = ord($this->input[$this->inputOffset++]);
-        $this->inputOffset++; // skip bd
+        $bd = ord($this->input[$this->inputOffset++]);
 
         $version = ($flg & 0xC0) >> 6;
-        //$flgBlockIndependence = $flg & 0x20;
+        $blocksIndependent = ($flg & 0x20) !== 0;
         $flgBlockChecksum = $flg & 0x10;
         $flgContentSize = $flg & 0x8;
         $flgContentChecksum = $flg & 0x4;
         $flgDictionaryId = $flg & 0x1;
-        //$flgBlockMaxSize = ($bd & 0x70) >> 4;
+        $blockMaximumSizeId = ($bd & 0x70) >> 4;
+        $contentSize = null;
 
         if ($version !== 0x01) {
             throw new CompressionException(
@@ -741,6 +812,33 @@ final class Lz4Decompressor {
                 ]
             );
         }
+
+        if (($flg & 0x02) !== 0 || ($bd & 0x8F) !== 0 || !isset(self::FRAME_BLOCK_MAX_SIZES[$blockMaximumSizeId])) {
+            throw new CompressionException(
+                'invalid lz4 frame descriptor',
+                ExceptionCode::COMPRESSION_INVALID_FRAME_DESCRIPTOR->value,
+                [
+                    'stage' => 'v1_frame_descriptor',
+                    'flg' => $flg,
+                    'bd' => $bd,
+                    'blockMaximumSizeId' => $blockMaximumSizeId,
+                ]
+            );
+        }
+
+        if ($flgDictionaryId) {
+            throw new CompressionException(
+                'lz4 frame dictionaries are not supported',
+                ExceptionCode::COMPRESSION_UNSUPPORTED_DICTIONARY->value,
+                [
+                    'stage' => 'v1_frame_descriptor',
+                    'flg' => $flg,
+                    'bd' => $bd,
+                ]
+            );
+        }
+
+        $blockMaximumSize = self::FRAME_BLOCK_MAX_SIZES[$blockMaximumSizeId];
 
         if ($flgContentSize) {
             if ($this->inputOffset + 8 > $this->inputEnd) {
@@ -755,23 +853,8 @@ final class Lz4Decompressor {
                     ]
                 );
             }
+            $contentSize = substr($this->input, $this->inputOffset, 8);
             $this->inputOffset += 8;
-        }
-
-        if ($flgDictionaryId) {
-            if ($this->inputOffset + 4 > $this->inputEnd) {
-                throw new CompressionException(
-                    'invalid lz4 frame data - input overflow while reading dictionary id',
-                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
-                    [
-                        'stage' => 'v1_header_dictionary_id',
-                        'inputOffset' => $this->inputOffset,
-                        'inputEnd' => $this->inputEnd,
-                        'requiredBytes' => 4,
-                    ]
-                );
-            }
-            $this->inputOffset += 4;
         }
 
         if ($this->inputOffset + 1 > $this->inputEnd) {
@@ -793,8 +876,33 @@ final class Lz4Decompressor {
         }
 
         do {
-            $moreBlocks = $this->readVersionOneBlock($flgBlockChecksum, $validateChecksums);
+            $moreBlocks = $this->readVersionOneBlock(
+                $flgBlockChecksum,
+                $validateChecksums,
+                $blockMaximumSize,
+                $blocksIndependent,
+            );
         } while ($moreBlocks);
+
+        if ($contentSize !== null) {
+            $frameOutputLength = $this->outputLength - $frameOutputStart;
+            $encodedFrameOutputLength = pack(
+                'V2',
+                $frameOutputLength,
+                PHP_INT_SIZE >= 8 ? $frameOutputLength >> 32 : 0,
+            );
+            if ($contentSize !== $encodedFrameOutputLength) {
+                throw new CompressionException(
+                    'invalid lz4 frame data - decompressed content size does not match the frame descriptor',
+                    ExceptionCode::COMPRESSION_CONTENT_SIZE_MISMATCH->value,
+                    [
+                        'stage' => 'v1_content_size',
+                        'declaredContentSizeHex' => bin2hex($contentSize),
+                        'actualContentSize' => $frameOutputLength,
+                    ]
+                );
+            }
+        }
 
         if ($flgContentChecksum) {
             if ($this->inputOffset + 4 > $this->inputEnd) {

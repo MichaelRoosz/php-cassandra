@@ -11,6 +11,18 @@ use Cassandra\Exception\ExceptionCode;
 
 class Lz4DecompressorTest extends AbstractUnitTestCase {
     private const MAGIC_LEGACY = 0x184C2102;
+    private const MAGIC_V1 = 0x184D2204;
+
+    /**
+     * @return array<string, array{int<0, 255>, int<0, 255>}>
+     */
+    public static function invalidFrameDescriptorProvider(): array {
+        return [
+            'reserved FLG bit' => [0x62, 0x40],
+            'reserved BD bit' => [0x60, 0x41],
+            'unsupported block maximum id' => [0x60, 0x00],
+        ];
+    }
 
     public function testDecompressBlockRejectsLiteralsBeyondExpectedLength(): void {
         $dec = new Lz4Decompressor("\x20ab", preferExtension: false);
@@ -206,6 +218,26 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         (new Lz4Decompressor(pack('V', self::MAGIC_LEGACY) . pack('V', 9999) . 'short'))->decompress();
     }
 
+    public function testDependentFrameBlocksCanReferenceAnEarlierBlock(): void {
+        $this->assertSame(
+            'AAAAA',
+            (new Lz4Decompressor(
+                self::versionOneFrame(0x40, 0x40, [["\x10A", false], ["\x00\x01\x00", false]]),
+                preferExtension: false,
+            ))->decompress(),
+        );
+    }
+
+    public function testIndependentFrameBlocksCannotReferenceAnEarlierBlock(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_OUTPUT_UNDERFLOW->value);
+
+        (new Lz4Decompressor(
+            self::versionOneFrame(0x60, 0x40, [["\x10A", false], ["\x00\x01\x00", false]]),
+            preferExtension: false,
+        ))->decompress();
+    }
+
     public function testSetInputCutsALengthPastTheEndOfTheStringBackToIt(): void {
         // A length reaching past the string used to leave the decoder reading
         // off the end of it, which is a PHP warning and a zero byte rather than
@@ -220,6 +252,31 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         $this->expectExceptionCode(ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value);
 
         $decompressor->decompressBlock(strlen($plain));
+    }
+
+    public function testSetInputRejectsANegativeOffsetWithAProjectException(): void {
+        try {
+            new Lz4Decompressor('abcd', -1, preferExtension: false);
+            $this->fail('expected a negative input offset to be refused');
+        } catch (CompressionException $e) {
+            $this->assertSame(ExceptionCode::COMPRESSION_INVALID_INPUT_OFFSET->value, $e->getCode());
+            $this->assertSame(
+                [
+                    'stage' => 'set_input',
+                    'inputOffset' => -1,
+                    'inputLength' => 0,
+                    'dataLength' => 4,
+                ],
+                $e->getContext(),
+            );
+        }
+    }
+
+    public function testSetInputRejectsAnOffsetPastTheInput(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_INVALID_INPUT_OFFSET->value);
+
+        (new Lz4Decompressor(preferExtension: false))->setInput('abcd', 5);
     }
 
     public function testSetInputTakesALengthCountedFromTheOffset(): void {
@@ -245,6 +302,73 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         $this->assertSame($plain, $viaConstructor->decompressBlock(strlen($plain)));
     }
 
+    public function testVersionOneFrameAcceptsAMatchingContentSize(): void {
+        $this->assertSame(
+            'abc',
+            (new Lz4Decompressor(
+                self::versionOneFrame(0x68, 0x40, [['abc', true]], contentSize: 3),
+                preferExtension: false,
+            ))->decompress(),
+        );
+    }
+
+    public function testVersionOneFrameBoundsCompressedBlockOutputByItsDeclaredMaximum(): void {
+        $extendedMatchLength = str_repeat("\xff", 300) . "\x00";
+        $block = "\x1fA\x01\x00" . $extendedMatchLength;
+
+        try {
+            (new Lz4Decompressor(
+                self::versionOneFrame(0x60, 0x40, [[$block, false]]),
+                preferExtension: false,
+            ))->decompress();
+            $this->fail('expected decompressed block output past the declared maximum to be refused');
+        } catch (CompressionException $e) {
+            $this->assertSame(ExceptionCode::COMPRESSION_FRAME_BLOCK_TOO_LARGE->value, $e->getCode());
+            $this->assertInstanceOf(CompressionException::class, $e->getPrevious());
+            $this->assertSame(ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value, $e->getPrevious()->getCode());
+        }
+    }
+
+    public function testVersionOneFrameRejectsAMismatchedContentSize(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_CONTENT_SIZE_MISMATCH->value);
+
+        (new Lz4Decompressor(
+            self::versionOneFrame(0x68, 0x40, [['x', true]], contentSize: 0),
+            preferExtension: false,
+        ))->decompress();
+    }
+
+    public function testVersionOneFrameRejectsAStoredBlockPastItsDeclaredMaximum(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_FRAME_BLOCK_TOO_LARGE->value);
+
+        (new Lz4Decompressor(
+            self::versionOneFrame(0x60, 0x40, [[str_repeat('x', (64 * 1024) + 1), true]]),
+            preferExtension: false,
+        ))->decompress();
+    }
+
+    public function testVersionOneFrameRejectsDictionaryFrames(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_UNSUPPORTED_DICTIONARY->value);
+
+        (new Lz4Decompressor(self::versionOneFrame(0x61, 0x40, [['x', true]]), preferExtension: false))->decompress();
+    }
+
+    /**
+     * @dataProvider invalidFrameDescriptorProvider
+     *
+     * @param int<0, 255> $flg
+     * @param int<0, 255> $bd
+     */
+    public function testVersionOneFrameRejectsInvalidDescriptorBits(int $flg, int $bd): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_INVALID_FRAME_DESCRIPTOR->value);
+
+        (new Lz4Decompressor(self::versionOneFrame($flg, $bd, [['x', true]]), preferExtension: false))->decompress();
+    }
+
     /**
      * A pre-1.4 "legacy" frame: the magic number, then one length-prefixed raw
      * LZ4 block per entry.
@@ -265,5 +389,33 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         }
 
         return $frame;
+    }
+
+    /**
+     * @param list<array{string, bool}> $blocks block data and whether it is stored uncompressed
+     * @param int<0, 255> $flg
+     * @param int<0, 255> $bd
+     */
+    private static function versionOneFrame(int $flg, int $bd, array $blocks, int $contentSize = 0): string {
+        $descriptor = chr($flg) . chr($bd);
+        if (($flg & 0x08) !== 0) {
+            $descriptor .= pack('V2', $contentSize, 0);
+        }
+        if (($flg & 0x01) !== 0) {
+            $descriptor .= pack('V', 1);
+        }
+
+        $headerChecksum = ord(hash('xxh32', $descriptor, true, ['seed' => 0])[2]);
+        $frame = pack('V', self::MAGIC_V1) . $descriptor . chr($headerChecksum);
+
+        foreach ($blocks as [$block, $isUncompressed]) {
+            $blockSize = pack('V', strlen($block));
+            if ($isUncompressed) {
+                $blockSize[3] = chr((ord($blockSize[3]) | 0x80) & 0xFF);
+            }
+            $frame .= $blockSize . $block;
+        }
+
+        return $frame . pack('V', 0);
     }
 }

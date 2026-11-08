@@ -8,19 +8,24 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1440
+ * Next free code: 1446
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
     case COMPRESSION_CHECKSUM_DECODE_FAILURE = 1064;
     case COMPRESSION_CHECKSUM_MISMATCH = 1065;
+    case COMPRESSION_CONTENT_SIZE_MISMATCH = 1445;
     case COMPRESSION_DECODE_FAILURE = 1067;
+    case COMPRESSION_FRAME_BLOCK_TOO_LARGE = 1441;
     case COMPRESSION_ILLEGAL_VALUE = 1072;
     case COMPRESSION_INPUT_OVERFLOW = 1073;
+    case COMPRESSION_INVALID_FRAME_DESCRIPTOR = 1442;
+    case COMPRESSION_INVALID_INPUT_OFFSET = 1440;
     case COMPRESSION_INVALID_MAGIC = 1075;
     case COMPRESSION_INVALID_VERSION = 1078;
     case COMPRESSION_OUTPUT_OVERFLOW = 1400;
     case COMPRESSION_OUTPUT_UNDERFLOW = 1080;
+    case COMPRESSION_UNSUPPORTED_DICTIONARY = 1443;
 
     // ConnectionException - (CONNECTION_)
     case CONNECTION_AUTH_CHALLENGE_UNSUPPORTED = 1353;
