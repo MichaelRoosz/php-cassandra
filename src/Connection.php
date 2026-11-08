@@ -19,39 +19,35 @@ use Cassandra\Response\Result;
 use Cassandra\Value\ValueEncodeConfig;
 
 /**
- * A client connection to a Cassandra or ScyllaDB cluster.
- *
- * This is the whole of what a caller does to a connection; the rest of the
- * public API is the things they hand it and get back — {@see ConnectionOptions}
- * and {@see \Cassandra\Connection\NodeConfig} on the way in,
- * {@see \Cassandra\Statement} and the {@see \Cassandra\Response\Response} tree
- * on the way out. It builds requests out of what a caller passes — filling in
- * this connection's consistency where a call leaves it out — and hands
- * everything that touches the node to its
- * {@see \Cassandra\Connection\Session}, which opens the connection, sends the
- * request, matches the answer to it and keeps its budget.
- *
- * The keyspace is not filled in here but on the way to the wire, by
- * {@see \Cassandra\Connection\RequestExecutor}, because whether a request can
- * carry one at all depends on the negotiated protocol version and that is only
- * settled once the connection is up. Which is why it reaches a request built by
- * hand and handed to {@see self::syncRequest()} just as it reaches the ones
- * built here; see {@see self::setKeyspace()}.
+ * A client connection to a Cassandra or ScyllaDB cluster: the public API for
+ * sending requests and waiting for answers. Its work is done by
+ * {@see \Cassandra\Connection\Session}.
  */
 final class Connection {
-    private Consistency $consistency = Consistency::ONE;
+    /**
+     * For the `$timeoutInSeconds` of a `waitFor…()` method: use that method's default.
+     */
+    public const WAIT_DEFAULT = null;
 
     /**
-     * The connection to the node and the machinery around it. Owned rather than
-     * inherited from, so that what a caller can reach stays exactly what is
-     * documented here. {@see self::getNode()} is the one thing that reaches past
-     * it, and is deprecated for that reason.
+     * For the `$timeoutInSeconds` of a `waitFor…()` method: wait for as long as it takes.
      */
+    public const WAIT_FOREVER = INF;
+
+    /**
+     * For the `$timeoutInSeconds` of a `waitFor…()` method: make one non-blocking
+     * read attempt and return.
+     */
+    public const WAIT_NONE = 0.0;
+
+    private Consistency $consistency = Consistency::ONE;
+
     private Session $session;
 
     /**
      * @param array<\Cassandra\Connection\NodeConfig> $nodes
      *
+     * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
      */
     public function __construct(
@@ -175,52 +171,17 @@ final class Connection {
     }
 
     /**
-     * Non-blocking: read up to $max available responses, returning how many were processed.
+     * Non-blocking: read up to $max available frames and return how many were
+     * processed, including late answers and the driver's own heartbeat;
+     * {@see self::tryResolveStatements()} counts a caller's own statements instead.
      *
-     * NOTE: This method will not block; it processes any currently available responses
-     * and returns when the receive buffer is drained or the provided limit is reached.
+     * Like the other try…() calls this never waits for the node, but it still
+     * enforces request budgets and sends a due heartbeat, whose write can block up
+     * to the send stall window. Enforcing them can fail the connection with a
+     * ConnectionException: an unanswered heartbeat or too many orphaned streams.
      *
-     * The count is of frames taken off the wire and dealt with, not of requests
-     * of the caller's that were answered — it also covers a late answer to a
-     * request already given up on, and the driver's own heartbeat.
-     * {@see self::tryResolveStatements()} is what counts a caller's own
-     * statements.
-     *
-     * @param int $max most frames to take off the wire, which zero or less
-     * makes none: such a call reads nothing and so opens no connection, but it
-     * still keeps the request budgets described below.
-     *
-     * "Does not block" is about waiting for the node to answer. Two things
-     * around that still can, and they are the same for
-     * {@see self::tryReadNextEvent()}, {@see self::tryReadNextResponse()},
-     * {@see self::tryResolveStatement()} and
-     * {@see self::tryResolveStatements()}:
-     *
-     * Getting a connection at all. Only the calls that read off the wire on
-     * their own account open one: called before anything has been sent, this
-     * method and {@see self::tryReadNextEvent()}/{@see self::tryReadNextResponse()}
-     * open a connection and take it through the handshake first, as every other
-     * method that touches the transport does — and even they do not where they
-     * never get as far as reading, which a $max of zero here does not. The two
-     * calls that take statements never open one at all: a statement is only
-     * resolvable here if this connection is the one that sent it, so where
-     * there is no connection there is nothing they could be asked about, and
-     * they raise instead of opening one to read on — a StatementException for
-     * one that was never this connection's or was abandoned with it, a
-     * RequestTimeoutException for one already given up on.
-     *
-     * Writing the heartbeat. Having read, these calls owe the connection the
-     * probe a wait would have sent, and a write blocks until the transport
-     * accepts it — bounded by the send stall window, not by anything here.
-     * Waiting for its answer is what these calls do not do; that is left to
-     * whichever call reads next. That call may well be this one on a later pass,
-     * and finding a probe of an earlier pass still unanswered past the heartbeat
-     * timeout is one of the two ways a call that never waits can nonetheless
-     * fail the connection with a ConnectionException — the other being the
-     * orphaned-stream limit, which the request budgets kept here can reach; see
-     * {@see self::waitForNextResponse()}. The probe's write failing takes the
-     * connection down as well, but is reported as the transport failure it is
-     * rather than as either of those.
+     * Opens a connection if there is none, as tryReadNextEvent() and
+     * tryReadNextResponse() do; a $max of zero or less reads nothing and opens none.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -386,32 +347,11 @@ final class Connection {
     /**
      * Wait for this statement's answer and return it.
      *
-     * The wait is bounded by the statement's own request timeout, or by the
-     * connection's where it has none. Where neither is set the wait is
-     * unbounded, and then — exactly as in {@see self::waitForNextEvent()} — the
-     * heartbeat is the only thing that can tell a dead connection from a slow
-     * one. With heartbeats disabled as well
-     * ({@see ConnectionOptions::$heartbeatIntervalInSeconds} set to null), the
-     * transport's stall window is the last judgement left and this fails the
-     * connection with a NodeException once it elapses — unless some other
-     * request in flight is bounded, since each read is held to the earliest
-     * budget on the connection rather than only to this statement's, and a read
-     * that something still bounds treats the stall window as the quiet moment it
-     * is instead of as a failure.
-     *
-     * An answer that arrives is the answer, whichever read took it off the wire.
-     * A listener invoked from inside this wait can issue a request of its own,
-     * and the read that serves it may well be the one that brings this
-     * statement's answer; it resolves the statement all the same, and is handed
-     * back here rather than being overtaken by the budget that ran out while
-     * the nested request was still being waited for.
-     *
-     * What such a listener cannot do is have this wait carry on across a
-     * connection it replaced: a statement is only resolvable on the connection
-     * that sent it, so one whose connection went away while its answer was
-     * outstanding is reported with a ConnectionException — as
-     * {@see self::syncRequest()} describes — instead of being waited on for an
-     * answer that can no longer reach it.
+     * The wait is bounded by the statement's request timeout, or the connection's.
+     * Where neither is set, the heartbeat is what detects a dead connection; with the
+     * heartbeat off too, the transport's stall window fails the connection with a
+     * NodeException. A statement whose connection was replaced during the wait raises
+     * a ConnectionException, as its answer can no longer arrive.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -605,57 +545,17 @@ final class Connection {
     }
 
     /**
-     * The keyspace the requests this connection builds run against.
+     * Set the keyspace this connection's requests run against. The name is taken
+     * exactly as given, so a keyspace created as `MyKs` is not reached by `myks`.
      *
-     * How it takes effect depends on the negotiated protocol version, and so
-     * does when a keyspace that does not exist is refused. Up to v4 it is the
-     * node's session that is switched over, with a USE sent from here, so a bad
-     * keyspace fails this call — and leaves the connection on the keyspace it
-     * was already on, which is where the node's session stayed. From v5 the
-     * keyspace travels with each request — USE is deprecated there — so this
-     * call only records it, and a bad one is refused by the next request
-     * instead.
+     * Up to v4 this sends a USE: a keyspace that does not exist fails here and leaves
+     * the connection where it was, and switching empties the prepared-statement cache.
+     * There is no CQL to leave a keyspace, so an empty one is refused while connected
+     * to a keyspace; {@see self::disconnect()} first.
      *
-     * That difference is also why an empty keyspace — moving this connection off
-     * a keyspace rather than onto another one — is only accepted from v5, where
-     * it means the absence of a keyspace on each request. Up to v4 there is no
-     * CQL that un-sets a node session's keyspace, so on a connected v4
-     * connection that is on one this raises rather than recording a keyspace the
-     * requests would not actually run against; before connecting, and from v5,
-     * it is recorded like any other value. A connection that is on no keyspace
-     * already is not being moved off anything, so an empty keyspace is recorded
-     * there too, on every version — there is nothing for it to contradict.
-     *
-     * {@see self::disconnect()} is therefore what makes a v4 connection
-     * clearable: with no connection there is no node session to contradict, so
-     * an empty keyspace is recorded like any other value and the next connect
-     * opens on none. Disconnecting does not clear it by itself — what this
-     * connection is on outlives the socket, which is why reconnecting sends the
-     * USE again — so moving a v4 connection off its keyspace is disconnect,
-     * then setKeyspace(''), and not either of them alone.
-     *
-     * Switching keyspace also empties the prepared-statement cache up to v4,
-     * where a prepared statement cannot be told apart by the keyspace it was
-     * prepared in. From v5 it is kept: the keyspace is part of what each entry
-     * is filed under, so both keyspaces keep their own.
-     *
-     * Either way it applies to every request sent on this connection, including
-     * one built by hand and handed to {@see self::syncRequest()} or
-     * {@see self::asyncRequest()} — except where that request names a keyspace
-     * of its own, which wins from v5. A request sent more than once takes
-     * whatever this connection is on at each send; it is only a keyspace the
-     * caller put on the request that survives a change here.
-     *
-     * Up to v4 a keyspace on the request has nothing to win with: the request
-     * option does not exist before v5, so a request carrying one is refused when
-     * it is encoded, with a RequestException, rather than being sent against the
-     * keyspace it names. Only the connection's own keyspace reaches a v4 node,
-     * and only through the USE described above — which is why the driver takes
-     * its own default back off a request before a v4 send, and why a keyspace
-     * the caller named is left there to be refused rather than quietly dropped.
-     *
-     * The name is taken exactly as given, on every protocol version: a keyspace
-     * created as `MyKs` is reached by that spelling and not by `myks`.
+     * From v5 the keyspace travels with each request: this only records it, and a
+     * keyspace that does not exist is refused by the next request. A keyspace in a
+     * request's own options takes precedence; before v5 such a request is refused.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -672,30 +572,14 @@ final class Connection {
     }
 
     /**
-     * How long to wait for the server's answer to a request before giving up
-     * with a {@see \Cassandra\Exception\RequestTimeoutException}, in seconds.
-     * Null waits indefinitely, and so does INF — the same wait, spelled the way
-     * a single request spells it, so that one value can be passed around
-     * without having to be translated on the way in; see
-     * {@see self::getRequestTimeout()}. Zero or less is refused, being a
-     * request that would be out of time before it was sent.
+     * Set the default time the server may take to answer, in seconds, after which a
+     * {@see \Cassandra\Exception\RequestTimeoutException} is raised. Null and INF wait
+     * indefinitely; zero or less is refused.
      *
-     * Applies to every request that has no explicit timeout of its own. That
-     * includes the ones already in flight, whose budgets are measured against
-     * this value as it stands when they are looked at rather than as it stood
-     * when they were sent: lowering it can therefore leave outstanding requests
-     * already overdue. This call does not act on that — nothing is given up on
-     * here — but the next wait or poll that examines them does, all in one pass,
-     * and since giving up on a request parks its stream id, doing so to enough
-     * of them at once can reach {@see ConnectionOptions::$maxOrphanedStreams}
-     * and replace the connection.
-     * Requests sent with a timeout of their own — from their options, or from
-     * the argument {@see self::syncRequest()} and {@see self::asyncRequest()}
-     * take — are unaffected.
-     *
-     * Raise it around operations Cassandra allows more time for, such as
-     * TRUNCATE (60s server-side by default), or pass the timeout directly to
-     * {@see self::syncRequest()} for a single request.
+     * It applies to every request without a timeout in its own options, including
+     * those in flight: lowering it can leave them overdue, and giving up on enough of
+     * them at once reaches {@see ConnectionOptions::$maxOrphanedStreams} and replaces
+     * the connection.
      *
      * @throws \Cassandra\Exception\ConnectionException
      */
@@ -765,9 +649,7 @@ final class Connection {
     }
 
     /**
-     * Non-blocking: attempt to read and return the next response, or null if none is available.
-     *
-     * Opens the connection first if there is none yet; see
+     * Non-blocking: return the next response, or null if none is available. See
      * {@see self::drainAvailableResponses()}.
      *
      * @throws \Cassandra\Exception\CompressionException
@@ -785,14 +667,11 @@ final class Connection {
     }
 
     /**
-     * Non-blocking: try to resolve a specific statement; returns true if it is ready.
+     * Non-blocking: try to resolve a statement; returns true if it is ready.
      *
-     * Unlike the reads, this never opens a connection: a statement can only be
-     * resolved on the connection that sent it, so one that cannot be raises
-     * here rather than being waited on — a StatementException where it was
-     * never this connection's or was abandoned with it, a
-     * RequestTimeoutException where it was already given up on. What the
-     * non-blocking calls do have in common is described at
+     * Never opens a connection. A statement that cannot resolve raises instead: a
+     * StatementException if it was never this connection's or was abandoned, a
+     * RequestTimeoutException if it was given up on. See also
      * {@see self::drainAvailableResponses()}.
      *
      * @throws \Cassandra\Exception\CompressionException
@@ -811,12 +690,8 @@ final class Connection {
     }
 
     /**
-     * Non-blocking: try to resolve from a set of statements, up to $max responses processed.
-     * Returns the number of newly resolved statements from the provided set.
-     *
-     * As with {@see self::tryResolveStatement()}, this never opens a
-     * connection, and it reads nothing at all where every statement handed in
-     * has been answered already; see {@see self::drainAvailableResponses()}.
+     * Non-blocking: process up to $max responses and return how many of $statements
+     * newly resolved. Raises as {@see self::tryResolveStatement()} does.
      *
      * @param array<Statement> $statements
      *
@@ -844,22 +719,13 @@ final class Connection {
     }
 
     /**
-     * Wait until every statement in flight has been answered.
+     * Wait until every statement in flight has been answered or the time is up.
+     * A statement that runs out of its budget raises a RequestTimeoutException.
      *
-     * @param ?float $timeoutInSeconds how long this call may block:
+     * @param ?float $timeoutInSeconds how long this call may block, in seconds:
      *   null  let the statements' own budgets bound it (the default)
-     *   0     do not wait: make one non-blocking read attempt and return
-     *   n     wait at most n seconds
-     *   INF   wait for as long as it takes
-     *
-     * It returns once every statement has been answered or the time is up. A
-     * statement that runs out of its own budget is given up on and raises a
-     * RequestTimeoutException instead.
-     *
-     * A timeout of 0 still costs a read while anything is outstanding, but a
-     * non-blocking one, so it does not wait on the transport either;
-     * {@see self::tryResolveStatements()} is the equivalent that never touches
-     * a deadline at all.
+     *   {@see self::WAIT_NONE}     one non-blocking read attempt
+     *   {@see self::WAIT_FOREVER}  for as long as it takes
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -876,39 +742,19 @@ final class Connection {
     }
 
     /**
-     * Wait until any of the given statements becomes ready and return it.
+     * Wait until any of the given statements is ready and return it. Returns null when
+     * the time is up, or at once when $statements is empty.
+     *
+     * Remove a returned statement from the list before calling again, as a ready
+     * statement is returned every time. A statement that runs out of its budget raises
+     * a RequestTimeoutException, even if another became ready in the same pass; that
+     * one stays ready and is returned by the next call.
      *
      * @param array<Statement> $statements
-     * @param ?float $timeoutInSeconds how long this call may block:
+     * @param ?float $timeoutInSeconds how long this call may block, in seconds:
      *   null  let the statements' own budgets bound it (the default)
-     *   0     do not wait: make one non-blocking read attempt and return
-     *   n     wait at most n seconds
-     *   INF   wait for as long as it takes
-     *
-     * Returns null when the time is up with none of them ready; the statements
-     * are untouched and can still be waited on. One that is answered in the very
-     * pass the time runs out is handed back rather than lost, so a null return
-     * really does mean that none of them arrived.
-     *
-     * Passing no statements at all returns null at once: there is nothing that
-     * could become ready, so there is nothing to wait for.
-     *
-     * A statement that runs out of its own budget is given up on and raises a
-     * RequestTimeoutException, which takes precedence over handing one back:
-     * where one of them is answered in the same pass that another runs out, the
-     * exception is what the caller sees. Nothing is lost by it — the answer
-     * stays on its statement and the exception names the ones that ran out, so
-     * calling again hands back the one that is ready: a statement already
-     * holding its answer is looked for before any of them is judged resolvable,
-     * so the ones that ran out do not have to be dropped from $statements for
-     * that. They do once nothing is ready any more, though — a statement that
-     * can never resolve is reported rather than waited on, so a call with only
-     * those left raises instead of waiting.
-     *
-     * A timeout of 0 still costs a read while anything is outstanding, but a
-     * non-blocking one, so it does not wait on the transport either;
-     * {@see self::tryResolveStatements()} is the equivalent that never touches
-     * a deadline at all.
+     *   {@see self::WAIT_NONE}     one non-blocking read attempt
+     *   {@see self::WAIT_FOREVER}  for as long as it takes
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -926,52 +772,20 @@ final class Connection {
     }
 
     /**
-     * Wait for the next server event.
+     * Wait for the next server event, opening the connection if needed. Returns null
+     * when the time is up. A quiet cluster is not an error, and the heartbeat is what
+     * detects a dead connection: with the heartbeat off, pass a finite timeout, since
+     * the transport's stall window otherwise fails the connection.
      *
-     * Opens the connection first if there is none yet, as every call that reads
-     * off the wire on its own account does; see
-     * {@see self::drainAvailableResponses()}.
+     * Requests in flight keep their budgets, but one that expires here only raises when
+     * its statement is next used, so an event loop is not interrupted for it. Reaching
+     * {@see ConnectionOptions::$maxOrphanedStreams} does raise a ConnectionException,
+     * because the connection is gone.
      *
-     * An idle event stream is not an error, so this keeps waiting across
-     * transport read timeouts instead of tearing the connection down: the node
-     * simply had nothing to report. While waiting, an OPTIONS heartbeat is sent
-     * whenever the connection has been silent for longer than the configured
-     * heartbeat interval, so a connection that died quietly is still noticed —
-     * which is the job a read timeout cannot do here.
-     *
-     * That rests on the heartbeat, and only on it. Turn it off
-     * ({@see ConnectionOptions::$heartbeatIntervalInSeconds} set to null) and
-     * an unbounded wait here has nothing bounding its reads at all, at which
-     * point the transport's stall window is the only judgement left and this
-     * fails the connection with a NodeException once it elapses, as every other
-     * unbounded wait does. Waiting for events with heartbeats disabled
-     * therefore means passing a finite $timeoutInSeconds and calling again,
-     * rather than waiting indefinitely.
-     *
-     * @param ?float $timeoutInSeconds how long this call may block:
-     *   null  wait for as long as it takes (the default), since an event can
-     *         arrive at any time
-     *   0     do not wait: make one non-blocking read attempt and return
-     *   n     wait at most n seconds
-     *   INF   wait for as long as it takes
-     *
-     * Returns null when the time is up without an event, leaving the connection
-     * usable. A timeout of 0 still costs one read, but a non-blocking one, so
-     * it does not wait on the transport either; {@see self::tryReadNextEvent()}
-     * is the equivalent that never touches a deadline at all.
-     *
-     * Requests already in flight keep their own deadlines while this waits, and
-     * one that runs out is given up on here. It is not raised here, though: an
-     * event listener did not ask about it, so its loop is not interrupted for
-     * it — the caller finds out from the statement, which then raises
-     * RequestTimeoutException. Only that request is affected and the connection
-     * stays open.
-     *
-     * The one exception is the connection itself giving out: enough requests
-     * running out without their answers ever arriving reaches
-     * {@see ConnectionOptions::$maxOrphanedStreams}, and that replaces the
-     * connection and raises a ConnectionException here. An event loop is
-     * interrupted for that, because the connection it was reading from is gone.
+     * @param ?float $timeoutInSeconds how long this call may block, in seconds:
+     *   null  for as long as it takes (the default)
+     *   {@see self::WAIT_NONE}     one non-blocking read attempt
+     *   {@see self::WAIT_FOREVER}  for as long as it takes
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -988,47 +802,15 @@ final class Connection {
     }
 
     /**
-     * Wait for the next response of any kind, the counterpart of
+     * Wait for the next response of any kind, opening the connection if needed. Returns
+     * null when the time is up. Requests in flight behave as in
      * {@see self::waitForNextEvent()}.
      *
-     * Opens the connection first if there is none yet, exactly as that call
-     * does.
-     *
-     * @param ?float $timeoutInSeconds how long this call may block:
-     *   null  use the connection's request timeout (the default)
-     *   0     do not wait: make one non-blocking read attempt and return
-     *   n     wait at most n seconds
-     *   INF   wait for as long as it takes
-     *
-     * Null means the connection's request timeout here, rather than "no bound"
-     * as it does in the waits that take statements: those are bounded by the
-     * budgets of the statements they were given, and this call has none to go
-     * by. Where the connection's request timeout is itself null there is
-     * nothing to fall back on and the wait is unbounded, exactly as INF is —
-     * the two are the same wait, INF being the way to ask for it without
-     * changing what the connection default means for everything else. Neither
-     * ends of its own accord: what ends an unbounded wait is a response
-     * arriving, or the connection being found dead, as
-     * {@see self::waitForNextEvent()} describes.
-     *
-     * Returns null when the time is up with nothing having arrived, whether or
-     * not anything went overdue in the meantime — see below. A timeout of 0
-     * still costs one read, but a non-blocking one, so it does not wait on the
-     * transport either; {@see self::tryReadNextResponse()} is the equivalent
-     * that never touches a deadline at all.
-     *
-     * Requests already in flight keep their own deadlines while this waits, and
-     * one that runs out is given up on here. It is not raised here, though: the
-     * caller asked for the next response, not about any request in particular —
-     * they find out from the statement, which then raises
-     * RequestTimeoutException. Only that request is affected and the connection
-     * stays open.
-     *
-     * The one exception is the connection itself giving out: enough requests
-     * running out without their answers ever arriving reaches
-     * {@see ConnectionOptions::$maxOrphanedStreams}, and that replaces the
-     * connection and raises a ConnectionException here. The wait cannot simply
-     * be repeated then, because the connection it was reading from is gone.
+     * @param ?float $timeoutInSeconds how long this call may block, in seconds:
+     *   null  the connection's request timeout (the default), or for as long as it
+     *         takes where that is null too
+     *   {@see self::WAIT_NONE}     one non-blocking read attempt
+     *   {@see self::WAIT_FOREVER}  for as long as it takes
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1045,23 +827,15 @@ final class Connection {
     }
 
     /**
-     * Wait until the given async statements have been answered.
+     * Wait until the given statements have been answered or the time is up, so check
+     * {@see Statement::isResultReady()} when passing a timeout. A statement that runs
+     * out of its budget raises a RequestTimeoutException.
      *
      * @param array<Statement> $statements
-     * @param ?float $timeoutInSeconds how long this call may block:
+     * @param ?float $timeoutInSeconds how long this call may block, in seconds:
      *   null  let the statements' own budgets bound it (the default)
-     *   0     do not wait: make one non-blocking read attempt and return
-     *   n     wait at most n seconds
-     *   INF   wait for as long as it takes
-     *
-     * It returns once they have all been answered or the time is up, so check
-     * isResultReady() when passing a timeout. A statement that runs out of its
-     * own budget is given up on and raises a RequestTimeoutException instead.
-     *
-     * A timeout of 0 still costs a read while anything is outstanding, but a
-     * non-blocking one, so it does not wait on the transport either;
-     * {@see self::tryResolveStatements()} is the equivalent that never touches
-     * a deadline at all.
+     *   {@see self::WAIT_NONE}     one non-blocking read attempt
+     *   {@see self::WAIT_FOREVER}  for as long as it takes
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -1079,17 +853,8 @@ final class Connection {
     }
 
     /**
-     * {@see self::setConsistency()}, returning the connection so that it can be
-     * set in the same expression the connection is used in.
-     *
-     * Fluent, not immutable: this changes the connection it is called on and
-     * hands that same object back, rather than producing a copy that differs in
-     * the consistency. There is nothing here a copy could be made of — a
-     * connection is a socket and the requests in flight on it — so
-     * `$connection->withConsistency(...)` is `setConsistency()` written to
-     * chain, and every other reference to the connection sees the change. The
-     * `with` prefix on the request options means the other thing: those really
-     * do return a new object.
+     * {@see self::setConsistency()} for chaining. This changes and returns this
+     * connection rather than a copy, unlike the `with…()` methods of request options.
      */
     public function withConsistency(Consistency $consistency): self {
         $this->setConsistency($consistency);
@@ -1098,14 +863,8 @@ final class Connection {
     }
 
     /**
-     * {@see self::setKeyspace()}, returning the connection so that it can be
-     * set in the same expression the connection is used in.
-     *
-     * Fluent, not immutable, for the reason {@see self::withConsistency()}
-     * gives — and more pointedly here, since up to v4 the keyspace is the
-     * node's session's: there is only one of those per connection, so a copy
-     * on another keyspace is not something this could hand back even in
-     * principle.
+     * {@see self::setKeyspace()} for chaining. This changes and returns this connection
+     * rather than a copy.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException

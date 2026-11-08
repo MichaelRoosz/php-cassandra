@@ -2044,37 +2044,11 @@ final class Session {
     }
 
     /**
-     * One read, with $deadline rather than the transport timeout deciding when
-     * the wait is over.
+     * Read one response, blocking no later than $deadline or the next heartbeat
+     * action, whichever comes first.
      *
-     * A transport read timeout only means that the connection was silent for
-     * its stall window. The response reader keeps any partially consumed frame,
-     * so resuming the read is always safe — which makes the transport timeout
-     * the wrong place to decide that a slow server, or an event stream with
-     * nothing to report, has waited long enough. That decision belongs to
-     * $deadline, an absolute microtime; null waits indefinitely.
-     *
-     * $deadline is handed to the read rather than merely consulted before it,
-     * so a read never outlives it: a budget of half a second is reported after
-     * half a second even where the transport would have sat in the same read
-     * for fifteen, and one that has already passed — an expired statement, or a
-     * caller waiting with a timeout of 0 — costs no wait at all. Whatever has
-     * already arrived is consumed either way, so an answer sitting in the
-     * buffer resolves the wait instead of being reported as overdue.
-     *
-     * The read is bounded by {@see HeartbeatMonitor::getNextActionAt()} as well,
-     * because a wait with no deadline of its own still has to come up for air
-     * often enough to probe a connection that has gone quiet. Between the two
-     * of them the transport's stall window is no longer what decides when
-     * anything happens, so it is free to be long, or absent altogether — and
-     * where neither of them bounds the read, the stall window is what is left
-     * to end it, so its elapsing is reported as the transport failure it is
-     * rather than swallowed like the timeouts that a bounded read produces.
-     *
-     * Returns null when no complete response was available, with
-     * $deadlineExceeded telling the caller whether the wait may continue. The
-     * two are independent: a response for some other request may well arrive
-     * after this one's deadline has passed, and the caller has to act on both.
+     * Returns null when no complete response arrived. $deadlineExceeded is set
+     * independently: a response can arrive in the pass its deadline ran out.
      *
      * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\ConnectionException
@@ -2091,10 +2065,6 @@ final class Session {
 
         $node = $this->getConnectedNode();
 
-        // The read itself is bounded, not just the decision whether to start
-        // one. Beside the caller's deadline it is held to when the heartbeat
-        // next needs attention, which is the one thing that still has to happen
-        // on a connection nobody has set a deadline on.
         $readDeadline = $this->deadlines->earlier($deadline, $this->heartbeat->getNextActionAt($this->handshakeComplete, $this->streamIds->hasImmediate()));
 
         $receivedBefore = $node->getReceivedByteCount();
@@ -2108,15 +2078,9 @@ final class Session {
                 throw $e;
             }
 
-            // A read timeout only says the connection was silent for its stall
-            // window, which decides nothing while something else still bounds
-            // this wait: the caller's deadline or the next heartbeat will end
-            // it, and a coordinator that is still thinking looks exactly like
-            // this. With neither — $readDeadline is what the two of them
-            // produced — the stall window is the only judgement available, and
-            // it is the transport's own: a connection that has made no progress
-            // for its whole window, with nothing left to notice it, is treated
-            // as failed rather than waited on forever.
+            // A coordinator still thinking is silent too, so the stall window
+            // decides nothing while a deadline or heartbeat still bounds this
+            // wait. With neither, it is the only judgement left.
             if ($readDeadline === null) {
                 $this->handleNodeException($node);
 
