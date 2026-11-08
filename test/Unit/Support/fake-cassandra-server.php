@@ -5,7 +5,7 @@
  * handshake and then behave in the ways timeouts care about: answering slowly,
  * staying silent, or pushing an event.
  *
- * Usage: php fake-cassandra-server.php <mode> [delaySeconds]
+ * Usage: php fake-cassandra-server.php <mode> [delaySeconds] [tlsCertificatePem]
  *
  * Listens on a free port of 127.0.0.1 and prints "ready <port>" once it does.
  *
@@ -481,7 +481,14 @@ $delay = (float) ($argv[2] ?? 0.0);
 // Port 0 lets the OS pick a free one, which is then reported back on stdout.
 // Choosing a port ourselves would risk colliding with a server left over from
 // another test and silently talking to the wrong one.
-$server = stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
+$certificate = $argv[3] ?? null;
+$server = stream_socket_server(
+    ($certificate === null ? 'tcp' : 'ssl') . '://127.0.0.1:0',
+    $errorCode,
+    $errorMessage,
+    STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+    stream_context_create(['ssl' => ['local_cert' => $certificate, 'verify_peer' => false]]),
+);
 if ($server === false) {
     fwrite(STDERR, "listen failed: $errorMessage\n");
 

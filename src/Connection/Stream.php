@@ -359,7 +359,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'port' => $this->config->port,
                     'operation' => 'connect',
                     'connect_timeout_seconds' => $this->config->connectTimeoutInSeconds,
-                    'ssl_options' => $this->config->sslOptions,
+                    'ssl_options' => array_diff_key($this->config->sslOptions, ['passphrase' => true]),
                     'system_error_code' => $errorCode,
                 ]
             );
