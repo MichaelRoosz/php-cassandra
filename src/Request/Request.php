@@ -161,7 +161,7 @@ abstract class Request implements Frame, Stringable {
 
         if ($options->serialConsistency !== null) {
             $flags |= QueryFlag::WITH_SERIAL_CONSISTENCY;
-            $optional .= pack('n', $options->serialConsistency);
+            $optional .= pack('n', $options->serialConsistency->value);
         }
 
         if ($options->defaultTimestamp !== null) {
