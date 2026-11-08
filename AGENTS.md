@@ -28,3 +28,8 @@
 ## PHPDoc
 
 - Keep PHPDoc types as narrow as the intended contract permits. Do not widen a public parameter or return type merely to make defensive runtime validation visible to a static analyzer; isolate that validation behind an internal helper with the broader input type instead.
+
+## Releases
+
+- `RELEASING.md` defines when a release is done. A reviewer's finding only blocks one if it meets the rules there; everything else goes to the backlog in `TODO.md` and is not fixed in that release.
+- Prefer a mechanical check over another review pass. Do not re-audit code because a fix touched it.

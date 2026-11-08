@@ -88,9 +88,17 @@
         "test:integration_scylladb": "composer test:integration_scylladb:up && composer test:integration_scylladb:init && composer test:integration_scylladb:run && composer test:integration_scylladb:down",
         "bench": "vendor/bin/phpbench run",
         "bench:profile": "vendor/bin/phpbench xdebug:profile",
-        "find-unused-exceptions": "php scripts/find_unused_exception_codes.php"
+        "find-unused-exceptions": "php scripts/find_unused_exception_codes.php",
+        "fuzz": "php scripts/fuzz_decoders.php",
+        "check-readme": "php scripts/check_readme.php"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "2.x-dev"
+        }
     },
     "config": {
-        "process-timeout": 600
+        "process-timeout": 600,
+        "sort-packages": true
     }
 }

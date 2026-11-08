@@ -1,0 +1,23 @@
+# Keep the Composer package to what a user runs.
+/.docker export-ignore
+/.editorconfig export-ignore
+/.github export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.php-cs-fixer.php export-ignore
+/AGENTS.md export-ignore
+/CONTRIBUTING.md export-ignore
+/RELEASING.md export-ignore
+/SECURITY.md export-ignore
+/TODO.md export-ignore
+/benchmarks export-ignore
+/doc export-ignore
+/docker-compose*.yml export-ignore
+/phpbench.json export-ignore
+/phpstan export-ignore
+/phpstan*.neon export-ignore
+/phpunit.xml export-ignore
+/psalm.xml export-ignore
+/scripts export-ignore
+/stubs export-ignore
+/test export-ignore
