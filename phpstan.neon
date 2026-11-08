@@ -21,6 +21,15 @@ parameters:
             path: src/Value/Duration.php
             message: '#Dead catch - Exception is never thrown in the try block\.#'
             reportUnmatched: false
+        # On PHP 8.3+ these methods throw instead of returning false, which PHP 8.1 and 8.2 still do.
+        -
+            path: src/Value/Duration.php
+            identifier: identical.alwaysFalse
+            reportUnmatched: false
+        -
+            path: src/Value/Timestamp.php
+            identifier: identical.alwaysFalse
+            reportUnmatched: false
         -
             path: src/Value/Uuid.php
             message: '#Method Cassandra\\Value\\Uuid::random\(\) throws checked exception Random\\RandomException but it''s missing from the PHPDoc @throws tag\.#'

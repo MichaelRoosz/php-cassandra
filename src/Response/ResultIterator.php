@@ -25,6 +25,8 @@ final class ResultIterator implements Iterator {
     /**
      * @return \Cassandra\Response\Result\RowClassInterface|array<array-key, mixed>|false
      *
+     * @phpstan-impure
+     *
      * @throws \Cassandra\Exception\ResponseException
      * @throws \Cassandra\Exception\ValueException
      * @throws \Cassandra\Exception\ValueFactoryException
