@@ -160,7 +160,7 @@ final class StatementRegistry {
      */
     public function expire(?Statement $ignored): array {
 
-        $now = microtime(true);
+        $now = Clock::now();
         $expired = [];
 
         foreach ($this->statements as $streamId => $statement) {

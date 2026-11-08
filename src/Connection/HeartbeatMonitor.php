@@ -90,7 +90,7 @@ final class HeartbeatMonitor {
      */
     public function anchor(): void {
 
-        $this->lastResponseAt = microtime(true);
+        $this->lastResponseAt = Clock::now();
         $this->lastProgressAt = $this->lastResponseAt;
     }
 
@@ -163,7 +163,7 @@ final class HeartbeatMonitor {
             return $this->probeDeadline();
         }
 
-        $now = microtime(true);
+        $now = Clock::now();
         $dueAt = $this->lastResponseAt + $interval;
 
         if ($dueAt <= $now && !$streamIdAvailable) {
@@ -268,7 +268,7 @@ final class HeartbeatMonitor {
      */
     public function recordProgress(): void {
 
-        $this->lastProgressAt = microtime(true);
+        $this->lastProgressAt = Clock::now();
     }
 
     /**
@@ -276,7 +276,7 @@ final class HeartbeatMonitor {
      */
     public function recordResponse(): void {
 
-        $this->lastResponseAt = microtime(true);
+        $this->lastResponseAt = Clock::now();
         $this->lastProgressAt = $this->lastResponseAt;
     }
 

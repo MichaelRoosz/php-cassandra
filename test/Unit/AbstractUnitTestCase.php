@@ -70,10 +70,10 @@ abstract class AbstractUnitTestCase extends TestCase {
      * been enforced.
      */
     protected static function sleepAtLeast(float $seconds): void {
-        $until = microtime(true) + $seconds;
+        $until = \Cassandra\Connection\Clock::now() + $seconds;
 
         while (true) {
-            $remaining = $until - microtime(true);
+            $remaining = $until - \Cassandra\Connection\Clock::now();
             if ($remaining <= 0.0) {
                 return;
             }

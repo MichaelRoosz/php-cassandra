@@ -61,7 +61,7 @@ final class Statement {
         $this->request = $request;
         $this->originalRequest = $originalRequest ?? $request;
         $this->status = StatementStatus::CREATED;
-        $this->sentAt = microtime(true);
+        $this->sentAt = Connection\Clock::now();
         $this->requestTimeout = $requestTimeoutInSeconds
             ?? $this->originalRequest->getRequestTimeout()
             ?? $request->getRequestTimeout();
@@ -228,7 +228,7 @@ final class Statement {
     }
 
     /**
-     * When the request was written to the node, as a microtime.
+     * When the request was written to the node, as a point on {@see Connection\Clock::now()}.
      */
     public function getSentAt(): float {
         return $this->sentAt;

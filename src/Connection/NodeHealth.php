@@ -37,7 +37,7 @@ final class NodeHealth {
             return true;
         }
 
-        return $status['cooldown_until'] <= microtime(true);
+        return $status['cooldown_until'] <= Clock::now();
     }
 
     /**
@@ -71,7 +71,7 @@ final class NodeHealth {
         $backoffSeconds = $this->computeBackoffSeconds($failures);
         $this->statusByKey[$key] = [
             'failures' => $failures,
-            'cooldown_until' => microtime(true) + $backoffSeconds,
+            'cooldown_until' => Clock::now() + $backoffSeconds,
         ];
     }
 

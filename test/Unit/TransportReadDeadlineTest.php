@@ -65,7 +65,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
     public function testSocketDeadlineBeatsALongStallWindow(): void {
         $node = $this->connectSocket(['sec' => 15, 'usec' => 0]);
 
-        [$data, $elapsed] = $this->timedRead($node, microtime(true) + 0.3);
+        [$data, $elapsed] = $this->timedRead($node, \Cassandra\Connection\Clock::now() + 0.3);
 
         $this->assertSame('', $data, 'nothing arrived, and that is not a failure');
         $this->assertGreaterThan(0.2, $elapsed, 'it waited the deadline out');
@@ -77,7 +77,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
         // unbounded read. The deadline is now what ends it.
         $node = $this->connectSocket(['sec' => 0, 'usec' => 0]);
 
-        [$data, $elapsed] = $this->timedRead($node, microtime(true) + 0.3);
+        [$data, $elapsed] = $this->timedRead($node, \Cassandra\Connection\Clock::now() + 0.3);
 
         $this->assertSame('', $data);
         $this->assertGreaterThan(0.2, $elapsed);
@@ -124,7 +124,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
     public function testStreamDeadlineBeatsALongStallWindow(): void {
         $node = $this->connectStream(15.0);
 
-        [$data, $elapsed] = $this->timedRead($node, microtime(true) + 0.3);
+        [$data, $elapsed] = $this->timedRead($node, \Cassandra\Connection\Clock::now() + 0.3);
 
         $this->assertSame('', $data);
         $this->assertGreaterThan(0.2, $elapsed);
@@ -134,7 +134,7 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
     public function testStreamDeadlineIsHonouredWithNoStallWindowAtAll(): void {
         $node = $this->connectStream(0.0);
 
-        [$data, $elapsed] = $this->timedRead($node, microtime(true) + 0.3);
+        [$data, $elapsed] = $this->timedRead($node, \Cassandra\Connection\Clock::now() + 0.3);
 
         $this->assertSame('', $data);
         $this->assertGreaterThan(0.2, $elapsed);
@@ -273,9 +273,9 @@ final class TransportReadDeadlineTest extends AbstractUnitTestCase {
      * @throws \Cassandra\Exception\NodeException
      */
     private function timedRead(IoNode $node, ?float $readDeadline): array {
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
         $data = $node->readAvailableDataFromSource(9, 9, $readDeadline);
 
-        return [$data, microtime(true) - $start];
+        return [$data, \Cassandra\Connection\Clock::now() - $start];
     }
 }

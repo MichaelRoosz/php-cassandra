@@ -23,7 +23,7 @@ final class DeadlineTest extends AbstractUnitTestCase {
     public function testAtCountsAnExplicitTimeoutFromWhenTheRequestWasSent(): void {
         $deadlines = new Deadline(30.0);
 
-        $sentAt = microtime(true) - 100.0;
+        $sentAt = \Cassandra\Connection\Clock::now() - 100.0;
 
         $this->assertSame($sentAt + 5.0, $deadlines->at(5.0, $sentAt));
     }
@@ -31,14 +31,14 @@ final class DeadlineTest extends AbstractUnitTestCase {
     public function testAtFallsBackToTheConnectionDefault(): void {
         $deadlines = new Deadline(30.0);
 
-        $sentAt = microtime(true);
+        $sentAt = \Cassandra\Connection\Clock::now();
 
         $this->assertSame($sentAt + 30.0, $deadlines->at(null, $sentAt));
         $this->assertSame($sentAt + 5.0, $deadlines->at(5.0, $sentAt));
     }
 
     public function testAtTreatsInfiniteTimeoutsAsUnbounded(): void {
-        $sentAt = microtime(true);
+        $sentAt = \Cassandra\Connection\Clock::now();
 
         $this->assertNull((new Deadline(30.0))->at(INF, $sentAt));
 
@@ -51,7 +51,7 @@ final class DeadlineTest extends AbstractUnitTestCase {
     public function testAtTreatsNegativeInfinityAsADeadlineAlreadyPassed(): void {
         $deadlines = new Deadline(30.0);
 
-        $sentAt = microtime(true);
+        $sentAt = \Cassandra\Connection\Clock::now();
 
         // -INF asks for a wait that is already over, which is the opposite of
         // what INF asks for and must not be normalised away with it.
@@ -78,7 +78,7 @@ final class DeadlineTest extends AbstractUnitTestCase {
 
         $this->assertNotNull($waitDeadline);
         $this->assertNan($waitDeadline);
-        $this->assertFalse(microtime(true) >= $waitDeadline);
+        $this->assertFalse(\Cassandra\Connection\Clock::now() >= $waitDeadline);
     }
 
     public function testDescribeSpellsOutInfinitiesForExceptionContexts(): void {
@@ -102,9 +102,9 @@ final class DeadlineTest extends AbstractUnitTestCase {
     public function testInClampsANegativeWaitToNow(): void {
         $deadlines = new Deadline(30.0);
 
-        $before = microtime(true);
+        $before = \Cassandra\Connection\Clock::now();
         $deadline = $deadlines->in(-5.0);
-        $after = microtime(true);
+        $after = \Cassandra\Connection\Clock::now();
 
         $this->assertNotNull($deadline);
         $this->assertGreaterThanOrEqual($before, $deadline);
@@ -121,7 +121,7 @@ final class DeadlineTest extends AbstractUnitTestCase {
 
         $deadline = $deadlines->in(5.0);
         $this->assertNotNull($deadline);
-        $this->assertLessThan(microtime(true) + 30.0, $deadline);
+        $this->assertLessThan(\Cassandra\Connection\Clock::now() + 30.0, $deadline);
     }
 
     public function testInTreatsInfinityAsUnbounded(): void {

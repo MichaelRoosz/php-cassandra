@@ -307,11 +307,11 @@ final class TransportCloseTest extends AbstractUnitTestCase {
      * arrived yet reads as "nothing there", so this keeps asking.
      */
     private function readUntilItFails(IoNode $node): void {
-        $deadline = microtime(true) + 5.0;
+        $deadline = \Cassandra\Connection\Clock::now() + 5.0;
 
-        while (microtime(true) < $deadline) {
+        while (\Cassandra\Connection\Clock::now() < $deadline) {
             try {
-                $node->readAvailableDataFromSource(9, 9, readDeadline: microtime(true) + 0.2);
+                $node->readAvailableDataFromSource(9, 9, readDeadline: \Cassandra\Connection\Clock::now() + 0.2);
             } catch (NodeException $e) {
                 return;
             }

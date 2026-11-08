@@ -222,7 +222,7 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     private function checkForReceiveTimeout(float $start, int $expectedLength, int $upperBoundaryLength): void {
 
-        if (microtime(true) - $start >= $this->receiveTimeout) {
+        if (Clock::now() - $start >= $this->receiveTimeout) {
             throw new SocketException(
                 message: 'Socket read timed out',
                 code: ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value,
@@ -244,7 +244,7 @@ final class Socket extends NodeImplementation implements IoNode {
      */
     private function checkForWriteTimeout(float $lastProgressAt): void {
 
-        if (microtime(true) - $lastProgressAt >= $this->sendTimeout) {
+        if (Clock::now() - $lastProgressAt >= $this->sendTimeout) {
             throw new SocketException(
                 message: 'Socket write timed out',
                 code: ExceptionCode::SOCKET_TIMEOUT_DURING_WRITE->value,
@@ -383,7 +383,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
         $this->isBlockingIo = socket_set_nonblock($socket) === false;
 
-        $start = microtime(true);
+        $start = Clock::now();
         do {
             // Suppressed for the reason given in readAvailableDataFromSource(),
             // and with one of its own: connect() works through every address the
@@ -400,7 +400,7 @@ final class Socket extends NodeImplementation implements IoNode {
 
                 if ($errorCode === SOCKET_EINTR) {
 
-                    if (microtime(true) - $start > $this->connectTimeout) {
+                    if (Clock::now() - $start > $this->connectTimeout) {
                         $this->closeSocket($socket, false);
 
                         throw new SocketException(
@@ -574,7 +574,7 @@ final class Socket extends NodeImplementation implements IoNode {
             return '';
         }
 
-        $start = microtime(true);
+        $start = Clock::now();
         $waitForData = $this->mayBlock($readDeadline);
 
         // Whether the read below is the one that can pass judgement on the
@@ -860,7 +860,7 @@ final class Socket extends NodeImplementation implements IoNode {
             if ($waitForData) {
                 // Wait at most for the remaining receive timeout, so a peer that
                 // stays connected but silent cannot block reads forever.
-                $remaining = $this->receiveTimeout - (microtime(true) - $start);
+                $remaining = $this->receiveTimeout - (Clock::now() - $start);
 
                 if ($remaining <= 0.0) {
                     // Selecting with a zero timeout would return immediately and
@@ -955,7 +955,7 @@ final class Socket extends NodeImplementation implements IoNode {
         // Wait at most for what is left of the stall window, so that several
         // select() calls without progress cannot add up to a multiple of the
         // configured send timeout.
-        $remaining = $this->sendTimeout - (microtime(true) - $lastProgressAt);
+        $remaining = $this->sendTimeout - (Clock::now() - $lastProgressAt);
 
         if ($remaining <= 0.0) {
             $this->checkForWriteTimeout($lastProgressAt);
@@ -1114,7 +1114,7 @@ final class Socket extends NodeImplementation implements IoNode {
             // Unlike the I/O timeouts, the connect timeout is a hard deadline
             // for the whole attempt: there is no progress to measure, and an
             // unbounded connect would let an unreachable host wedge the client.
-            $remaining = $this->connectTimeout - (microtime(true) - $start);
+            $remaining = $this->connectTimeout - (Clock::now() - $start);
 
             if ($remaining <= 0.0) {
                 $this->throwConnectTimeout();
@@ -1220,7 +1220,7 @@ final class Socket extends NodeImplementation implements IoNode {
         // payload: it bounds how long the socket makes no progress at all, so
         // writing a large frame over a slow but healthy connection cannot trip
         // it. This mirrors SO_SNDTIMEO, which POSIX defines per send() call.
-        $lastProgressAt = microtime(true);
+        $lastProgressAt = Clock::now();
 
         // A blocking socket normally needs no select(): socket_write() waits for
         // room of its own accord, bounded by SO_SNDTIMEO. But a pass that comes
@@ -1346,7 +1346,7 @@ final class Socket extends NodeImplementation implements IoNode {
                 $data = substr($data, $sentBytes);
 
                 // Bytes moved, so the stall window starts over.
-                $lastProgressAt = microtime(true);
+                $lastProgressAt = Clock::now();
 
             } while ($data !== '');
 

@@ -13,9 +13,9 @@ use Cassandra\Statement;
  * deadlines its waits are bounded by, and keeps the connection default they
  * fall back to.
  *
- * A deadline is an absolute microtime (the scale {@see microtime()} returns for
- * `true`), and null throughout means "no bound", i.e. wait for as long as it
- * takes.
+ * A deadline is a point on {@see Clock::now()}.
+ *
+ * @internal this is not part of the public API and may change at any time
  */
 final class Deadline {
     private ?float $requestTimeout;
@@ -103,7 +103,7 @@ final class Deadline {
     }
 
     /**
-     * Absolute microtime at which a wait must give up, or null to wait forever.
+     * Point on {@see Clock::now()} at which a wait must give up, or null to wait forever.
      *
      * The budget runs from $sentAt — when the request was handed to the node —
      * rather than from now, so that an async statement gets the same total
@@ -129,7 +129,7 @@ final class Deadline {
             return null;
         }
 
-        return ($sentAt ?? microtime(true)) + self::asWaitLength($timeout);
+        return ($sentAt ?? Clock::now()) + self::asWaitLength($timeout);
     }
 
     /**
@@ -245,7 +245,7 @@ final class Deadline {
             return null;
         }
 
-        return microtime(true) + self::asWaitLength($timeoutInSeconds);
+        return Clock::now() + self::asWaitLength($timeoutInSeconds);
     }
 
     /**

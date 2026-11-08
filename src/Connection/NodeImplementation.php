@@ -107,7 +107,7 @@ abstract class NodeImplementation implements Node {
      */
     protected function mayBlock(?float $readDeadline): bool {
 
-        return $readDeadline === null || microtime(true) < $readDeadline;
+        return $readDeadline === null || Clock::now() < $readDeadline;
     }
 
     /**
@@ -125,7 +125,7 @@ abstract class NodeImplementation implements Node {
             return $remaining;
         }
 
-        $untilDeadline = $readDeadline - microtime(true);
+        $untilDeadline = $readDeadline - Clock::now();
         if ($untilDeadline <= 0.0) {
             return null;
         }

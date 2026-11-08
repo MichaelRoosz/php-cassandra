@@ -41,7 +41,7 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
             'an unbounded read would let the transport stall window fail a connection over the client\'s own backlog'
         );
         $this->assertGreaterThan(
-            microtime(true),
+            \Cassandra\Connection\Clock::now(),
             $boundAt,
             'a bound in the past for a probe that is never sent would spin every wait'
         );
@@ -88,7 +88,7 @@ final class HeartbeatStreamIdTest extends AbstractUnitTestCase {
         );
 
         (new ReflectionProperty(Session::class, 'handshakeComplete'))->setValue(self::sessionOf($connection), true);
-        (new ReflectionProperty(HeartbeatMonitor::class, 'lastResponseAt'))->setValue(self::heartbeatOf($connection), microtime(true) - 600.0);
+        (new ReflectionProperty(HeartbeatMonitor::class, 'lastResponseAt'))->setValue(self::heartbeatOf($connection), \Cassandra\Connection\Clock::now() - 600.0);
 
         return $connection;
     }

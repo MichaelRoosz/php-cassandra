@@ -41,8 +41,8 @@ interface Node {
     /**
      * Returns exactly $length bytes of data, or an empty string if not enough data is available.
      *
-     * @param ?float $readDeadline how long this read may block, as an absolute
-     * microtime (the scale {@see microtime()} returns for `true`):
+     * @param ?float $readDeadline how long this read may block, as a point on
+     * {@see Clock::now()}:
      *   null   block for as long as the transport's own stall window allows
      *   future block until then, or until the stall window is over, whichever
      *          comes first

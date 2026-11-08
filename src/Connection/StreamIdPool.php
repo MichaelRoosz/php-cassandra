@@ -181,7 +181,7 @@ final class StreamIdPool {
 
         unset($this->outstanding[$streamId]);
 
-        $this->orphanedStreams[$streamId] = microtime(true);
+        $this->orphanedStreams[$streamId] = Clock::now();
     }
 
     /**

@@ -36,7 +36,7 @@ final class StatementRegistryDeadlineTest extends AbstractUnitTestCase {
     private float $sentAt;
 
     protected function setUp(): void {
-        $this->sentAt = microtime(true);
+        $this->sentAt = \Cassandra\Connection\Clock::now();
     }
 
     public function testAbandoningEverythingLeavesNoDeadline(): void {
@@ -95,7 +95,7 @@ final class StatementRegistryDeadlineTest extends AbstractUnitTestCase {
 
         // Long past its budget, so expire() gives up on it.
         $overdue = $this->statement(1.0);
-        $overdue->setSentAt(microtime(true) - 3600.0);
+        $overdue->setSentAt(\Cassandra\Connection\Clock::now() - 3600.0);
 
         $registry->register(1, $overdue);
         $registry->register(2, $this->statement(30.0));

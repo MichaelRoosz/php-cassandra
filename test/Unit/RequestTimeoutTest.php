@@ -176,13 +176,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // transfer begins.
         self::sleepAtLeast(0.3);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         $connection->query('SELECT * FROM big');
 
         $this->assertGreaterThan(
             1.0,
-            microtime(true) - $start,
+            \Cassandra\Connection\Clock::now() - $start,
             'the answer must have taken longer than the heartbeat timeout, or this proves nothing'
         );
         $this->assertTrue($connection->isConnected(), 'bytes were arriving the whole time, so nothing died');
@@ -200,14 +200,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             receiveTimeoutSeconds: 0.0,
         );
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForNextEvent(timeoutInSeconds: 20.0);
             $this->fail('expected the unanswered heartbeat to be detected');
         } catch (ConnectionException $e) {
             $this->assertSame(ExceptionCode::CONNECTION_HEARTBEAT_TIMEOUT->value, $e->getCode());
-            $this->assertLessThan(6.0, microtime(true) - $start, 'roughly interval + timeout, not the whole wait');
+            $this->assertLessThan(6.0, \Cassandra\Connection\Clock::now() - $start, 'roughly interval + timeout, not the whole wait');
         }
     }
 
@@ -364,7 +364,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $statement = $connection->queryAsync('SELECT * FROM SLOW');
         self::sleepAtLeast(1.0);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForStatements([$statement]);
@@ -377,7 +377,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             // machine must not be able to look like one.
             $this->assertLessThan(
                 3.0,
-                microtime(true) - $start,
+                \Cassandra\Connection\Clock::now() - $start,
                 'an already expired budget must not cost another transport stall window'
             );
         }
@@ -416,7 +416,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $bounded = $connection->queryAsync('SELECT 1 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 1.0));
         $unbounded = $connection->queryAsync('SELECT 2 FROM SLOW');
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             // No wait bound either: the statements' own budgets are all there is.
@@ -428,7 +428,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $this->assertLessThan(
             5.0,
-            microtime(true) - $start,
+            \Cassandra\Connection\Clock::now() - $start,
             'the 1s budget must end the wait, not run on until something else does'
         );
 
@@ -535,13 +535,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             receiveTimeoutSeconds: 15.0,
         );
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->query('SELECT * FROM SLOW');
             $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $elapsed = microtime(true) - $start;
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
             $this->assertGreaterThan(0.4, $elapsed, 'it must still wait its budget out');
 
@@ -565,13 +565,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             receiveTimeoutSeconds: 0.0,
         );
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->query('SELECT * FROM SLOW');
             $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $elapsed = microtime(true) - $start;
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
             $this->assertGreaterThan(0.9, $elapsed);
             $this->assertLessThan(5.0, $elapsed, 'a disabled stall window must not mean an unbounded read');
@@ -599,12 +599,12 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $middle = $connection->queryAsync('SELECT 2 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 2.0));
         $long = $connection->queryAsync('SELECT 3 FROM SLOW', options: new QueryOptions(requestTimeoutInSeconds: 30.0));
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         // Only the long statement is asked about, so only its budget and this
         // bound can end the wait; the 3s bound is what actually returns.
         $connection->waitForStatements([$long], timeoutInSeconds: 3.0);
-        $waitEndedAt = microtime(true);
+        $waitEndedAt = \Cassandra\Connection\Clock::now();
 
         $this->assertTrue(
             $short->isTimedOut(),
@@ -650,14 +650,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // on a stream id this connection no longer associates with it.
         (new ReflectionProperty(StatementRegistry::class, 'statements'))->setValue(self::statementsOf($connection), []);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForStatements([$statement]);
             $this->fail('expected the statement to be rejected');
         } catch (StatementException $e) {
             $this->assertSame(ExceptionCode::STATEMENT_NOT_ON_THIS_CONNECTION->value, $e->getCode());
-            $this->assertLessThan(1.0, microtime(true) - $start, 'it must fail at once rather than spin');
+            $this->assertLessThan(1.0, \Cassandra\Connection\Clock::now() - $start, 'it must fail at once rather than spin');
         }
     }
 
@@ -675,13 +675,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         $statement = $connection->queryAsync('SELECT * FROM system.local');
         self::sleepAtLeast(2.8);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForStatements([$statement]);
             $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $elapsed = microtime(true) - $start;
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
             $this->assertLessThan(1.5, $elapsed, 'the budget should already have been nearly used up');
         }
     }
@@ -698,14 +698,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $this->assertSame(1.0, $statement->getRequestTimeout(), 'the override must win over the connection default');
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForStatements([$statement]);
             $this->fail('expected the per-call timeout to fire');
         } catch (RequestTimeoutException $e) {
             $this->assertSame([$statement], $e->getTimedOutStatements());
-            $this->assertLessThan(10.0, microtime(true) - $start, 'the statement must be held to the overridden budget');
+            $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the statement must be held to the overridden budget');
         }
     }
 
@@ -876,9 +876,9 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $statement = $connection->queryAsync('SELECT * FROM SLOW');
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
         $ready = $connection->waitForAnyStatement([$statement], timeoutInSeconds: 1.0);
-        $elapsed = microtime(true) - $start;
+        $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
         $this->assertNull($ready, 'nothing became ready within the wait bound');
         $this->assertLessThan(5.0, $elapsed, 'the wait bound, not the 30s budget, ended the wait');
@@ -890,11 +890,11 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
     public function testAWaitBoundIsHonouredWithTheTransportTimeoutDisabled(): void {
         $connection = $this->connect('idle', requestTimeoutInSeconds: null, receiveTimeoutSeconds: 0.0);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         $this->assertNull($connection->waitForNextResponse(timeoutInSeconds: 1.0));
 
-        $elapsed = microtime(true) - $start;
+        $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
         $this->assertGreaterThan(0.9, $elapsed, 'the wait bound is a bound, not a hint');
         $this->assertLessThan(5.0, $elapsed);
@@ -914,9 +914,9 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $statement = $connection->queryAsync('SELECT * FROM SLOW');
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
         $connection->waitForStatements([$statement], timeoutInSeconds: 0.0);
-        $elapsed = microtime(true) - $start;
+        $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
         $this->assertLessThan(2.0, $elapsed, 'a bound of 0 must not wait on the transport');
         $this->assertFalse($statement->isResultReady());
@@ -948,9 +948,9 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // would read for good on a connection that is perfectly healthy.
         $connection = $this->connect('idle', requestTimeoutInSeconds: 30.0, heartbeatIntervalInSeconds: 0.2);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
         $ready = $connection->waitForAnyStatement([], timeoutInSeconds: null);
-        $elapsed = microtime(true) - $start;
+        $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
         $this->assertNull($ready);
         $this->assertLessThan(1.0, $elapsed, 'an empty set must not be waited on');
@@ -980,14 +980,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $this->assertFalse($slow->isResultReady(), 'the slow statement must still be pending');
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForStatements([$slow, $foreign], timeoutInSeconds: 5.0);
             $this->fail('expected the unresolvable statement to be reported');
         } catch (StatementException $e) {
             $this->assertSame(ExceptionCode::STATEMENT_NOT_ON_THIS_CONNECTION->value, $e->getCode());
-            $this->assertLessThan(3.0, microtime(true) - $start, 'it must not be waited on first');
+            $this->assertLessThan(3.0, \Cassandra\Connection\Clock::now() - $start, 'it must not be waited on first');
         }
     }
 
@@ -1023,14 +1023,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         ];
 
         foreach ($waits as $name => $wait) {
-            $start = microtime(true);
+            $start = \Cassandra\Connection\Clock::now();
 
             try {
                 $wait($connection);
                 $this->fail($name . ' accepted a wait timeout of NAN');
             } catch (ConnectionException $e) {
                 $this->assertSame(ExceptionCode::CONNECTION_INVALID_WAIT_TIMEOUT->value, $e->getCode(), $name);
-                $this->assertLessThan(1.0, microtime(true) - $start, $name . ' must refuse before it waits or reads');
+                $this->assertLessThan(1.0, \Cassandra\Connection\Clock::now() - $start, $name . ' must refuse before it waits or reads');
             }
         }
 
@@ -1057,14 +1057,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             receiveTimeoutSeconds: 1.0,
         );
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForNextEvent();
             $this->fail('an unbounded wait on a silent connection must not be unbounded in fact');
         } catch (NodeException $e) {
             $this->assertSame(ExceptionCode::SOCKET_TIMEOUT_DURING_READ->value, $e->getCode());
-            $this->assertLessThan(10.0, microtime(true) - $start, 'the stall window, not forever');
+            $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the stall window, not forever');
             $this->assertFalse($connection->isConnected(), 'a connection that made no progress at all has failed');
         }
     }
@@ -1098,13 +1098,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             heartbeatTimeoutInSeconds: 1.0,
         );
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->query('SELECT * FROM system.local');
             $this->fail('expected the heartbeat to declare the connection dead');
         } catch (ConnectionException $e) {
-            $elapsed = microtime(true) - $start;
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
             $this->assertSame(ExceptionCode::CONNECTION_HEARTBEAT_TIMEOUT->value, $e->getCode());
             $this->assertLessThan(10.0, $elapsed, 'the heartbeat must not wait for the request timeout');
         }
@@ -1135,9 +1135,9 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // times that: an idle event stream must not be mistaken for a failure.
         $connection = $this->connect('idle');
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
         $event = $connection->waitForNextEvent(timeoutInSeconds: 3.0);
-        $elapsed = microtime(true) - $start;
+        $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
         $this->assertNull($event, 'no event was pushed, so the wait should end empty-handed');
         $this->assertGreaterThan(2.5, $elapsed, 'the wait should last for the requested timeout, not the transport one');
@@ -1229,14 +1229,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $this->assertSame(1.0, $statement->getRequestTimeout(), 'the override must win over the connection default');
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForStatements([$statement]);
             $this->fail('expected the per-call timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $this->assertSame([$statement], $e->getTimedOutStatements());
-            $this->assertLessThan(10.0, microtime(true) - $start, 'the statement must be held to the overridden budget');
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
+            $this->assertLessThan(10.0, $elapsed, 'the statement must be held to its own budget');
         }
     }
 
@@ -1245,13 +1245,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // to build an options object for it.
         $connection = $this->connect('slow-query', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->query('SELECT * FROM system.local', requestTimeoutInSeconds: 1.0);
             $this->fail('expected the per-call timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $this->assertLessThan(10.0, microtime(true) - $start, 'the argument must win over the connection default');
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
+            $this->assertLessThan(10.0, $elapsed, 'the request option must win over the connection default');
         }
     }
 
@@ -1279,14 +1280,14 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
 
         $this->assertSame(1.0, $statement->getRequestTimeout());
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->waitForStatements([$statement]);
             $this->fail('expected the per-request timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $elapsed = microtime(true) - $start;
-            $this->assertLessThan(10.0, $elapsed, 'the statement must be held to its own budget');
+            $this->assertSame([$statement], $e->getTimedOutStatements());
+            $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the statement must be held to the overridden budget');
         }
     }
 
@@ -1294,7 +1295,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // The connection would allow 30s; the request itself asks for 1s.
         $connection = $this->connect('slow-query', delaySeconds: 30.0, requestTimeoutInSeconds: 30.0);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->query(
@@ -1303,21 +1304,20 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             );
             $this->fail('expected the per-request timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $elapsed = microtime(true) - $start;
-            $this->assertLessThan(10.0, $elapsed, 'the request option must win over the connection default');
+            $this->assertLessThan(10.0, \Cassandra\Connection\Clock::now() - $start, 'the option must win over the connection default');
         }
     }
 
     public function testSlowQueryFailsOnceTheRequestTimeoutIsReached(): void {
         $connection = $this->connect('slow-query', delaySeconds: 10.0, requestTimeoutInSeconds: 2.0);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $connection->query('SELECT * FROM system.local');
             $this->fail('expected the request timeout to fire');
         } catch (RequestTimeoutException $e) {
-            $elapsed = microtime(true) - $start;
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
             $this->assertGreaterThan(1.5, $elapsed);
             $this->assertLessThan(8.0, $elapsed, "well under the server's 10s delay");
         }
@@ -1328,9 +1328,9 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // timeout: the query must survive the transport timeouts in between.
         $connection = $this->connect('slow-query', delaySeconds: 3.0, requestTimeoutInSeconds: 10.0);
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
         $connection->query('SELECT * FROM system.local');
-        $elapsed = microtime(true) - $start;
+        $elapsed = \Cassandra\Connection\Clock::now() - $start;
 
         // What matters is that the query outlived the 1s transport timeout
         // without the connection being torn down, not how close to the
@@ -1348,13 +1348,13 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
         // the statement's stream id means nothing any more.
         $connection->disconnect();
 
-        $start = microtime(true);
+        $start = \Cassandra\Connection\Clock::now();
 
         try {
             $statement->getResult();
             $this->fail('expected the abandoned statement to be rejected');
         } catch (StatementException $e) {
-            $elapsed = microtime(true) - $start;
+            $elapsed = \Cassandra\Connection\Clock::now() - $start;
             $this->assertTrue($statement->isAbandoned());
             $this->assertLessThan(0.5, $elapsed, 'an abandoned statement must fail at once, not wait out the request timeout');
             $this->assertSame(ExceptionCode::STATEMENT_ABANDONED->value, $e->getCode());
@@ -1474,9 +1474,9 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             }
         });
 
-        $started = microtime(true);
+        $started = \Cassandra\Connection\Clock::now();
         $result = $connection->query('SELECT * FROM SLOW');
-        $elapsed = microtime(true) - $started;
+        $elapsed = \Cassandra\Connection\Clock::now() - $started;
 
         $this->assertInstanceOf(Result::class, $result);
         $this->assertSame(1, $nestedResults, 'the listener must have run a request of its own inside the wait');
@@ -1729,7 +1729,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
      * @throws \Cassandra\Exception\CassandraException
      */
     private function drainUntilStreamIdsAreReclaimed(Connection $connection, float $withinSeconds): void {
-        $deadline = microtime(true) + $withinSeconds;
+        $deadline = \Cassandra\Connection\Clock::now() + $withinSeconds;
 
         do {
             $connection->drainAvailableResponses();
@@ -1739,7 +1739,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             }
 
             self::sleepAtLeast(0.02);
-        } while (microtime(true) < $deadline);
+        } while (\Cassandra\Connection\Clock::now() < $deadline);
     }
 
     /**
@@ -1901,7 +1901,7 @@ final class RequestTimeoutTest extends AbstractUnitTestCase {
             $deadline = max($deadline, $statement->getSentAt() + ($statement->getRequestTimeout() ?? $connectionDefault));
         }
 
-        $remaining = $deadline - microtime(true);
+        $remaining = $deadline - \Cassandra\Connection\Clock::now();
         if (is_finite($remaining) && $remaining > 0.0) {
             self::sleepAtLeast($remaining);
         }

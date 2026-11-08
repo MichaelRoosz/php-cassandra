@@ -152,7 +152,7 @@ final class RequestExecutor {
                 // waits on a slow transport is not time the node spent failing
                 // to answer, and charging it to the follow-up's budget would let
                 // the request be overdue before the node has seen it.
-                $sentAt = microtime(true);
+                $sentAt = Clock::now();
 
                 $this->session->recordNodeSuccess($node->getConfig());
             } catch (NodeException $e) {

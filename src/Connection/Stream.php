@@ -253,7 +253,7 @@ final class Stream extends NodeImplementation implements IoNode {
      */
     private function checkForReadTimeout($stream, float $start, int $expectedLength, int $upperBoundaryLength, bool $waitForData): void {
 
-        if (microtime(true) - $start >= $this->receiveTimeout) {
+        if (Clock::now() - $start >= $this->receiveTimeout) {
             throw new StreamException(
                 message: 'Stream read timed out',
                 code: ExceptionCode::STREAM_TIMEOUT_DURING_READ->value,
@@ -278,7 +278,7 @@ final class Stream extends NodeImplementation implements IoNode {
      */
     private function checkForWriteTimeout($stream, float $lastProgressAt): void {
 
-        if (microtime(true) - $lastProgressAt >= $this->sendTimeout) {
+        if (Clock::now() - $lastProgressAt >= $this->sendTimeout) {
             throw new StreamException(
                 message: 'Stream write timed out',
                 code: ExceptionCode::STREAM_TIMEOUT_DURING_WRITE->value,
@@ -407,7 +407,7 @@ final class Stream extends NodeImplementation implements IoNode {
             return '';
         }
 
-        $start = microtime(true);
+        $start = Clock::now();
         $waitForData = $this->mayBlock($readDeadline);
 
         // Whether the read below is the one that can pass judgement on the
@@ -564,7 +564,7 @@ final class Stream extends NodeImplementation implements IoNode {
                 // Wait at most for the remaining receive timeout; the per-stream
                 // timeout set via stream_set_timeout() has no effect on
                 // non-blocking streams, so it must be enforced here.
-                $remaining = $this->receiveTimeout - (microtime(true) - $start);
+                $remaining = $this->receiveTimeout - (Clock::now() - $start);
 
                 if ($remaining <= 0.0) {
                     // Selecting with a zero timeout would return immediately and
@@ -637,7 +637,7 @@ final class Stream extends NodeImplementation implements IoNode {
                 // so the tally is what ends them instead; see
                 // {@see self::MAX_CONSECUTIVE_SELECT_FAILURES}.
                 if (
-                    microtime(true) - $start >= $this->receiveTimeout
+                    Clock::now() - $start >= $this->receiveTimeout
                     || $selectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES
                 ) {
                     throw new StreamException(
@@ -694,7 +694,7 @@ final class Stream extends NodeImplementation implements IoNode {
         // Wait at most for what is left of the stall window, so that several
         // select() calls without progress cannot add up to a multiple of the
         // configured send timeout.
-        $remaining = $this->sendTimeout - (microtime(true) - $lastProgressAt);
+        $remaining = $this->sendTimeout - (Clock::now() - $lastProgressAt);
 
         if ($remaining <= 0.0) {
             $this->checkForWriteTimeout($stream, $lastProgressAt);
@@ -737,7 +737,7 @@ final class Stream extends NodeImplementation implements IoNode {
             // only one of the two that can fire there; see
             // {@see self::MAX_CONSECUTIVE_SELECT_FAILURES}.
             if (
-                microtime(true) - $lastProgressAt <= $this->sendTimeout
+                Clock::now() - $lastProgressAt <= $this->sendTimeout
                 && $selectFailures < self::MAX_CONSECUTIVE_SELECT_FAILURES
             ) {
                 return false;
@@ -841,7 +841,7 @@ final class Stream extends NodeImplementation implements IoNode {
         // The send timeout is a stall timeout, not a deadline for the whole
         // payload: it bounds how long the stream makes no progress at all, so
         // writing a large frame over a slow but healthy connection cannot trip it.
-        $lastProgressAt = microtime(true);
+        $lastProgressAt = Clock::now();
 
         // A blocking stream normally needs no select(): fwrite() waits for room
         // of its own accord, bounded by the stream timeout. But a pass that comes
@@ -923,7 +923,7 @@ final class Stream extends NodeImplementation implements IoNode {
             $data = substr($data, $sentBytes);
 
             // Bytes moved, so the stall window starts over.
-            $lastProgressAt = microtime(true);
+            $lastProgressAt = Clock::now();
 
         } while ($data !== '');
     }

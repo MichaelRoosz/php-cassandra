@@ -416,7 +416,7 @@ final class Session {
                 // so that overdue requests are still finished on time.
                 $this->timeOutExpiredStatements();
 
-                if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                if ($waitDeadline !== null && Clock::now() >= $waitDeadline) {
                     throw new RequestTimeoutException(
                         'Every stream id the protocol allows is already in use and none was released in time, so this request could not be sent',
                         ExceptionCode::REQUESTTIMEOUT_STREAM_IDS_EXHAUSTED->value,
@@ -451,7 +451,7 @@ final class Session {
         // The sync path has no statement to carry an anchor for it, and it
         // wrote its request immediately before getting here, so its budget is
         // anchored once, now. A statement's own anchor is read per pass below.
-        $sentAt = microtime(true);
+        $sentAt = Clock::now();
 
         // A wait with no statement behind it is the sync path, whose answer
         // nothing but this loop can take delivery of. Announced for the duration
@@ -651,7 +651,7 @@ final class Session {
                     if (
                         !$statementStillPending
                         && $ownDeadline !== null
-                        && microtime(true) >= $ownDeadline
+                        && Clock::now() >= $ownDeadline
                     ) {
                         $this->timeOutStream(
                             $streamId,
@@ -1162,7 +1162,7 @@ final class Session {
                 // the wait. A statement deadline firing without anything having
                 // expired means that statement was answered in the same pass,
                 // which is no reason to stop waiting for the rest.
-                if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                if ($waitDeadline !== null && Clock::now() >= $waitDeadline) {
                     return;
                 }
             }
@@ -1230,7 +1230,7 @@ final class Session {
 
                 // Only the caller's wait bound is left, or a statement that is
                 // none of their business ran out.
-                if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                if ($waitDeadline !== null && Clock::now() >= $waitDeadline) {
                     foreach ($statements as $s) {
                         if ($s->isResultReady()) {
                             return $s;
@@ -1291,7 +1291,7 @@ final class Session {
                 return $event;
             }
 
-            if ($deadlineExceeded && $waitDeadline !== null && microtime(true) >= $waitDeadline) {
+            if ($deadlineExceeded && $waitDeadline !== null && Clock::now() >= $waitDeadline) {
                 return null;
             }
         }
@@ -1347,7 +1347,7 @@ final class Session {
                 return $response;
             }
 
-            if ($deadlineExceeded && $waitDeadline !== null && microtime(true) >= $waitDeadline) {
+            if ($deadlineExceeded && $waitDeadline !== null && Clock::now() >= $waitDeadline) {
                 return null;
             }
         }
@@ -1410,7 +1410,7 @@ final class Session {
                     $this->statements->reportTimedOut($expired, 'waitForStatements');
                 }
 
-                if ($waitDeadline !== null && microtime(true) >= $waitDeadline) {
+                if ($waitDeadline !== null && Clock::now() >= $waitDeadline) {
                     return;
                 }
             }
@@ -1460,7 +1460,7 @@ final class Session {
             return;
         }
 
-        $now = microtime(true);
+        $now = Clock::now();
 
         $probe = $this->heartbeat->getProbe();
         if ($probe !== null) {
@@ -2147,24 +2147,9 @@ final class Session {
 
         $this->recordReadProgress($node, $receivedBefore);
 
-        // Checked after the read, not before it: the read is bounded by the
-        // deadline rather than merely started on the strength of it, so it is
-        // only on the way out that the deadline can have passed. Reaching it is
-        // not exclusive with having read something either — a response for
-        // another request may well arrive in the same pass — so both are
-        // reported and it is left to the caller to act on each.
-        //
-        // And before the frame is dispatched below, not after, which is what
-        // keeps this honest about the read rather than about what handling the
-        // read led to. Dispatching runs the application's listeners, and one of
-        // those can block for as long as it likes — issuing a request of its
-        // own, above all, which waits. Timed on the way out instead, a deadline
-        // that had not passed when the frame arrived would be reported as
-        // exceeded because a listener took a second, and the callers' deadline
-        // branches would then give up on requests that were answered on time —
-        // {@see self::getNextResponseForStream()} on the very statement whose
-        // answer that nested read may have brought.
-        if ($deadline !== null && microtime(true) >= $deadline) {
+        // Before dispatching, which runs listeners: one that blocks must not make
+        // a request answered on time look overdue.
+        if ($deadline !== null && Clock::now() >= $deadline) {
             $deadlineExceeded = true;
         }
 
