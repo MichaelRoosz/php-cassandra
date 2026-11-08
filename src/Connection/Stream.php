@@ -304,6 +304,7 @@ final class Stream extends NodeImplementation implements IoNode {
 
         $context = stream_context_create(
             options: [
+                'socket' => ['tcp_nodelay' => true],
                 'ssl' => $this->config->sslOptions,
             ]
         );
