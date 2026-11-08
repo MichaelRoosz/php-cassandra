@@ -9,6 +9,22 @@ use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Exception\ExceptionCode;
 
 class Lz4DecompressorTest extends AbstractUnitTestCase {
+    public function testABlockIsNotExpandedPastItsExpectedLength(): void {
+        // Regression: a short block could expand without bound; 0x1F with offset 1 repeats one byte.
+        $block = "\x1Fa\x01\x00" . str_repeat("\xFF", 400) . "\x00\x00";
+        $decompressor = new Lz4Decompressor();
+        $decompressor->setInput($block);
+
+        try {
+            $decompressor->decompressBlock(1000);
+            $this->fail('expected the block to be refused');
+        } catch (\Cassandra\Exception\CompressionException $e) {
+            $this->assertSame(\Cassandra\Exception\ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value, $e->getCode());
+        }
+
+        $decompressor->setInput("\x40abcd");
+        $this->assertSame('abcd', $decompressor->decompressBlock(4));
+    }
     public function testDecompressBlockThrowsOnIllegalOffset(): void {
         // Have some literals, then offset=0 -> illegal
         $token = chr((1 << 4) | 0x1); // literals=1, match nibble=1 (but we'll fail before using it)

@@ -91,10 +91,13 @@ final class Lz4Decompressor {
     }
 
     /**
+     * @param ?int $expectedUncompressedLength the most output the block may
+     * produce; decoding stops with an exception before it grows past it.
+     *
      * @throws \Cassandra\Exception\CompressionException
      */
-    public function decompressBlock(): string {
-        $this->decompressBlockAtOffset($this->inputOffset, $this->inputLength);
+    public function decompressBlock(?int $expectedUncompressedLength = null): string {
+        $this->decompressBlockAtOffset($this->inputOffset, $this->inputLength, $expectedUncompressedLength);
 
         return $this->output;
     }
@@ -112,7 +115,7 @@ final class Lz4Decompressor {
     /**
      * @throws \Cassandra\Exception\CompressionException
      */
-    private function decompressBlockAtOffset(int $inputOffset, int $inputLength): void {
+    private function decompressBlockAtOffset(int $inputOffset, int $inputLength, ?int $expectedUncompressedLength = null): void {
         while ($inputOffset < $inputLength) {
             $token = ord($this->input[$inputOffset++]);
             $nLiterals = $token >> 4;
@@ -151,6 +154,7 @@ final class Lz4Decompressor {
                         ]
                     );
                 }
+                $this->ensureOutputFits($nLiterals, $expectedUncompressedLength, 'append_literals');
                 $this->output .= substr($this->input, $inputOffset, $nLiterals);
                 $this->outputLength += $nLiterals;
                 $inputOffset += $nLiterals;
@@ -234,6 +238,8 @@ final class Lz4Decompressor {
             }
             $matchLength += 4;
 
+            $this->ensureOutputFits($matchLength, $expectedUncompressedLength, 'expand_match');
+
             $j = $matchStart;
             $k = $matchLength;
             while ($k--) {
@@ -242,6 +248,29 @@ final class Lz4Decompressor {
 
             $this->outputLength += $matchLength;
         }
+    }
+
+    /**
+     * Refuse output past the expected length before allocating it: a few bytes
+     * of block can otherwise expand to gigabytes.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    private function ensureOutputFits(int $additionalOutputLength, ?int $expectedUncompressedLength, string $stage): void {
+        if ($expectedUncompressedLength === null || $additionalOutputLength <= $expectedUncompressedLength - $this->outputLength) {
+            return;
+        }
+
+        throw new CompressionException(
+            'invalid lz4 block data - output exceeds expected uncompressed length',
+            ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value,
+            [
+                'stage' => $stage,
+                'outputLength' => $this->outputLength,
+                'additionalOutputLength' => $additionalOutputLength,
+                'expectedUncompressedLength' => $expectedUncompressedLength,
+            ]
+        );
     }
 
     /**

@@ -244,7 +244,7 @@ final class FrameCodec extends NodeImplementation {
                 $compressedLength = $payloadLength;
                 $this->lz4Decompressor->setInput($payload, 0, $payloadLength);
 
-                $payload = $this->lz4Decompressor->decompressBlock();
+                $payload = $this->lz4Decompressor->decompressBlock($uncompressedLength);
                 $payloadLength = strlen($payload);
 
                 if ($payloadLength !== $uncompressedLength) {
