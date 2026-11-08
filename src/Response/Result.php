@@ -23,7 +23,7 @@ use TypeError;
 use ValueError;
 
 /**
- * @implements IteratorAggregate<array<string, mixed>|null>
+ * @implements IteratorAggregate<mixed>
  */
 class Result extends Response implements IteratorAggregate {
     protected int $dataOffset;
