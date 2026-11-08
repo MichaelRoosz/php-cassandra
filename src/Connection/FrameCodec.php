@@ -10,6 +10,9 @@ use Cassandra\Exception\ExceptionCode;
 use Cassandra\Exception\NodeException;
 use Cassandra\Request\Request;
 
+/**
+ * @internal this is not part of the public API and may change at any time
+ */
 final class FrameCodec extends NodeImplementation {
     final public const CRC24_INIT = 0x875060;
     final public const CRC24_POLYNOMIAL = 0x1974F0B;
@@ -48,6 +51,7 @@ final class FrameCodec extends NodeImplementation {
     private Node $node;
 
     /**
+     * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\NodeException
      */
     public function __construct(Node $node, string $compression = '') {

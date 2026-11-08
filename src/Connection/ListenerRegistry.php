@@ -44,6 +44,8 @@ use Throwable;
  * What is put aside belongs to the pass that put it there, which is what
  * {@see self::beginPass()} and {@see self::endPass()} enforce — see
  * {@see self::$deferredFailure}.
+ *
+ * @internal this is not part of the public API and may change at any time
  */
 final class ListenerRegistry {
     /**

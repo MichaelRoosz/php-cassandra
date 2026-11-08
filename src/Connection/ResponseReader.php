@@ -22,6 +22,9 @@ use Throwable;
 use TypeError;
 use ValueError;
 
+/**
+ * @internal this is not part of the public API and may change at any time
+ */
 final class ResponseReader {
     /**
      * Largest frame body the protocol allows, and so the largest this reader
@@ -76,6 +79,9 @@ final class ResponseReader {
 
     private Lz4Decompressor $lz4Decompressor;
 
+    /**
+     * @throws \Cassandra\Exception\CompressionException
+     */
     public function __construct() {
         $this->lz4Decompressor = new Lz4Decompressor();
         $this->currentHeader = null;

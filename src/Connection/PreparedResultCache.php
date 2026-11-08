@@ -34,6 +34,8 @@ use Cassandra\Response\StreamReader;
  * Keeping the order costs an unset and an append per hit — some tens of
  * nanoseconds, against the PREPARE round trip that a hit is there to avoid, and
  * only on the prepare path: executing a prepared statement never comes here.
+ *
+ * @internal this is not part of the public API and may change at any time
  */
 final class PreparedResultCache {
     /**

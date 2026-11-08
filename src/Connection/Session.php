@@ -174,6 +174,8 @@ final class Session {
 
     /**
      * @param array<NodeConfig> $nodes
+     *
+     * @throws \Cassandra\Exception\CompressionException
      */
     public function __construct(
         Connection $connection,

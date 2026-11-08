@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Cassandra\Connection;
 
+/**
+ * @internal this is not part of the public API and may change at any time
+ */
 final class NodeHealth {
     /**
      * How long a node stays in its cooldown, by the number of failures recorded

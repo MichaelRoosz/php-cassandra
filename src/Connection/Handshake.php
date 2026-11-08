@@ -19,6 +19,8 @@ use Cassandra\Response\Supported;
  * authentication — is driven by {@see Session::completeHandshake()}, which is
  * the only thing that can send a request on the connection being set up. What
  * is here is the part that decides rather than the part that waits.
+ *
+ * @internal this is not part of the public API and may change at any time
  */
 final class Handshake {
     private ConnectionOptions $options;
@@ -141,6 +143,7 @@ final class Handshake {
      *
      * @param array<string,string> $startupOptions
      *
+     * @throws \Cassandra\Exception\CompressionException
      * @throws \Cassandra\Exception\NodeException
      */
     public function wrapNode(Node $node, ProtocolVersion $version, array $startupOptions): Node {

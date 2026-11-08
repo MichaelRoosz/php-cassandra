@@ -22,6 +22,8 @@ use Cassandra\Request\Request;
  *
  * Reads pass straight through to the wrapped node; response decompression stays
  * in {@see ResponseReader}.
+ *
+ * @internal this is not part of the public API and may change at any time
  */
 final class RequestCompressor extends NodeImplementation {
     /**
