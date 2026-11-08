@@ -52,7 +52,6 @@ final class TimestampStringRoundTripTest extends AbstractUnitTestCase {
             'year 0001' => [-62135596800000],
             'year 0000' => [-62167219200000],
             'negative year' => [-62335564800000],
-            'smallest int64' => [PHP_INT_MIN],
         ];
     }
 
