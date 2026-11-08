@@ -2,6 +2,9 @@ parameters:
     level: max
     paths:
         - test
+    excludePaths:
+        # Generated pass-through overrides; see test/Support/Faults.php.
+        - test/Support/faults-functions.php
     treatPhpDocTypesAsCertain: false
     ignoreErrors:
         -
