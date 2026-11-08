@@ -8,7 +8,10 @@ namespace Cassandra\Exception;
  * Global enumeration of all exception codes used throughout the Cassandra library.
  * Each exception class has its own prefix based on its namespace or class name in uppercase.
  * 
- * Next free code: 1447
+ * Next free code: 1449
+ *
+ * 1447 and 1448 are used by the 1.x branch only; codes are allocated here so
+ * that a code means the same failure on both.
  */
 enum ExceptionCode: int {
     // CompressionException (COMPRESSION_)
