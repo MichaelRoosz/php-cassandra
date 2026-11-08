@@ -53,6 +53,16 @@ final class ValueComparatorMalformedBinaryTest extends AbstractUnitTestCase {
     }
 
     /**
+     * @dataProvider trailingDataProvider
+     */
+    public function testTrailingCompositeDataIsReported(TypeInfo $typeInfo, string $left, string $right): void {
+        $this->expectException(ValueException::class);
+        $this->expectExceptionCode(ExceptionCode::VALUE_COMPARATOR_TRAILING_DATA->value);
+
+        ValueComparator::compare($typeInfo, $left, $right);
+    }
+
+    /**
      * @dataProvider truncatedProvider
      */
     public function testTruncatedBinaryIsReported(TypeInfo $typeInfo, string $left, string $right): void {
@@ -91,6 +101,38 @@ final class ValueComparatorMalformedBinaryTest extends AbstractUnitTestCase {
 
         ValueComparator::compare($typeInfo, $left, $right);
     }
+
+    /**
+     * @return array<string, array{0: TypeInfo, 1: string, 2: string}>
+     */
+    public static function trailingDataProvider(): array {
+        $int = new SimpleTypeInfo(Type::INT);
+        $element = pack('N', 4) . pack('N', 1);
+
+        return [
+            'list' => [
+                new ListCollectionInfo(valueType: $int, isFrozen: false),
+                pack('N', 1) . $element . 'x',
+                pack('N', 1) . $element . 'y',
+            ],
+            'map' => [
+                new MapCollectionInfo(keyType: $int, valueType: $int, isFrozen: false),
+                pack('N', 1) . $element . $element . 'x',
+                pack('N', 1) . $element . $element . 'y',
+            ],
+            'tuple' => [
+                new TupleInfo(valueTypes: [$int]),
+                $element . 'x',
+                $element . 'y',
+            ],
+            'udt' => [
+                new UDTInfo(valueTypes: ['a' => $int], isFrozen: false, keyspace: 'k', name: 'u'),
+                $element . 'x',
+                $element . 'y',
+            ],
+        ];
+    }
+
     /**
      * Every shape whose framing runs past the end of the buffer that carries it.
      *
@@ -163,10 +205,20 @@ final class ValueComparatorMalformedBinaryTest extends AbstractUnitTestCase {
      */
     public static function wrongWidthProvider(): array {
         return [
+            'bigint: seven bytes' => [new SimpleTypeInfo(Type::BIGINT), str_repeat("\x01", 7), str_repeat("\x02", 7)],
+            'counter: nine bytes' => [new SimpleTypeInfo(Type::COUNTER), str_repeat("\x01", 9), str_repeat("\x02", 9)],
+            'int: one byte' => [new SimpleTypeInfo(Type::INT), "\x01", "\x02"],
+            'smallint: one byte' => [new SimpleTypeInfo(Type::SMALLINT), "\x01", "\x02"],
+            'time: seven bytes' => [new SimpleTypeInfo(Type::TIME), str_repeat("\x01", 7), str_repeat("\x02", 7)],
+            'timestamp: nine bytes' => [new SimpleTypeInfo(Type::TIMESTAMP), str_repeat("\x01", 9), str_repeat("\x02", 9)],
+            'tinyint: two bytes' => [new SimpleTypeInfo(Type::TINYINT), "\x01\x01", "\x02\x02"],
+            'boolean: two bytes' => [new SimpleTypeInfo(Type::BOOLEAN), "\x00\x00", "\x01\x01"],
+            'date: one byte' => [new SimpleTypeInfo(Type::DATE), "\x01", "\x02"],
             'double: seven bytes' => [new SimpleTypeInfo(Type::DOUBLE), str_repeat("\x01", 7), str_repeat("\x02", 7)],
             'double: empty against eight' => [new SimpleTypeInfo(Type::DOUBLE), '', str_repeat("\x00", 8)],
             'float: three bytes' => [new SimpleTypeInfo(Type::FLOAT), str_repeat("\x01", 3), str_repeat("\x02", 3)],
             'float: eight bytes' => [new SimpleTypeInfo(Type::FLOAT), str_repeat("\x01", 8), str_repeat("\x02", 8)],
+            'inet: five bytes' => [new SimpleTypeInfo(Type::INET), str_repeat("\x01", 5), str_repeat("\x02", 5)],
             'uuid: six bytes' => [new SimpleTypeInfo(Type::UUID), str_repeat("\x01", 6), str_repeat("\x02", 6)],
             'uuid: fifteen against sixteen' => [new SimpleTypeInfo(Type::UUID), str_repeat("\x01", 15), str_repeat("\x02", 16)],
             'timeuuid: seven bytes' => [new SimpleTypeInfo(Type::TIMEUUID), str_repeat("\x11", 7), str_repeat("\x12", 7)],

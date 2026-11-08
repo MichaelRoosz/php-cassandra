@@ -39,14 +39,15 @@ final class ValueComparator {
         return match ($typeInfo->type) {
             Type::BIGINT,
             Type::COUNTER,
-            Type::INT,
-            Type::SMALLINT,
             Type::TIME,
-            Type::TIMESTAMP,
-            Type::TINYINT => self::compareSignedBinary($left, $right),
+            Type::TIMESTAMP => self::compareSignedBinary($left, $right, 8),
 
-            Type::BOOLEAN,
-            Type::DATE,
+            Type::INT => self::compareSignedBinary($left, $right, 4),
+            Type::SMALLINT => self::compareSignedBinary($left, $right, 2),
+            Type::TINYINT => self::compareSignedBinary($left, $right, 1),
+
+            Type::BOOLEAN => self::compareFixedBinary($left, $right, 1),
+            Type::DATE => self::compareFixedBinary($left, $right, 4),
             Type::DURATION => strcmp($left, $right),
 
             Type::DECIMAL => self::compareDecimal(
@@ -56,7 +57,7 @@ final class ValueComparator {
 
             Type::DOUBLE => self::compareFloat($left, $right, false),
             Type::FLOAT => self::compareFloat($left, $right, true),
-            Type::INET => strcmp($left, $right),
+            Type::INET => self::compareInet($left, $right),
             Type::TIMEUUID => self::compareTimeUuid($left, $right, true),
             Type::UUID => self::compareUuid($left, $right),
             Type::VARINT => self::compareDecimal(
@@ -102,6 +103,27 @@ final class ValueComparator {
                 'expected_length' => $width,
                 'left_length' => strlen($left),
                 'right_length' => strlen($right),
+            ]
+        );
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function assertFullyConsumed(string $binary, int $offset, string $field): void {
+        $length = strlen($binary);
+        if ($offset === $length) {
+            return;
+        }
+
+        throw new ValueException(
+            'Cannot compare a value whose binary contains trailing data',
+            ExceptionCode::VALUE_COMPARATOR_TRAILING_DATA->value,
+            [
+                'field' => $field,
+                'parsed_length' => $offset,
+                'binary_length' => $length,
+                'trailing_length' => $length - $offset,
             ]
         );
     }
@@ -154,6 +176,8 @@ final class ValueComparator {
             $values[] = self::readValue($binary, $offset);
         }
 
+        self::assertFullyConsumed($binary, $offset, 'collection');
+
         return $values;
     }
 
@@ -205,6 +229,15 @@ final class ValueComparator {
     /**
      * @throws \Cassandra\Exception\ValueException
      */
+    private static function compareFixedBinary(string $left, string $right, int $width): int {
+        self::assertFixedWidth($left, $right, $width);
+
+        return strcmp($left, $right);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
     private static function compareFloat(string $left, string $right, bool $singlePrecision): int {
         self::assertFixedWidth($left, $right, $singlePrecision ? 4 : 8);
 
@@ -230,7 +263,26 @@ final class ValueComparator {
 
         // Java Float.compare()/Double.compare(), which Cassandra's numeric
         // types use, distinguish negative zero from positive zero.
-        return self::compareSignedBinary($left, $right);
+        return self::compareSignedBinary($left, $right, $singlePrecision ? 4 : 8);
+    }
+
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    private static function compareInet(string $left, string $right): int {
+        if (in_array(strlen($left), [4, 16], true) && in_array(strlen($right), [4, 16], true)) {
+            return strcmp($left, $right);
+        }
+
+        throw new ValueException(
+            'Cannot compare inet values whose binary is not an IPv4 or IPv6 address',
+            ExceptionCode::VALUE_COMPARATOR_INVALID_LENGTH->value,
+            [
+                'expected_lengths' => [4, 16],
+                'left_length' => strlen($left),
+                'right_length' => strlen($right),
+            ]
+        );
     }
 
     /**
@@ -300,9 +352,10 @@ final class ValueComparator {
     /**
      * @throws \Cassandra\Exception\ValueException
      */
-    private static function compareSignedBinary(string $left, string $right): int {
+    private static function compareSignedBinary(string $left, string $right, int $width): int {
         self::assertHasBytes($left, 0, 1, 'sign byte');
         self::assertHasBytes($right, 0, 1, 'sign byte');
+        self::assertFixedWidth($left, $right, $width);
 
         $leftNegative = (ord($left[0]) & 0x80) !== 0;
         $rightNegative = (ord($right[0]) & 0x80) !== 0;
@@ -480,6 +533,8 @@ final class ValueComparator {
             $values[] = substr($binary, $offset, $elementLength);
             $offset += $elementLength;
         }
+
+        self::assertFullyConsumed($binary, $offset, 'tuple or UDT');
 
         return $values;
     }
