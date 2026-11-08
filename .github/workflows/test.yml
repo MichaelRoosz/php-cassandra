@@ -2,21 +2,27 @@ name: Test
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   unit-test:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.1", "8.2", "8.3", "8.4", "8.5"]
 
     name: Unit test - PHP ${{ matrix.php }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     - name: Setup PHP
-      uses: shivammathur/setup-php@v2
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
       with:
         php-version: ${{ matrix.php }}
         extensions: bcmath, gmp, openssl, sockets
@@ -24,15 +30,16 @@ jobs:
         coverage: pcov
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-${{ matrix.php }}-
+        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    - name: Syntax check on this PHP version
+      run: find src scripts php-cassandra.php -name '*.php' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
 
     - name: Lint
       run: composer run lint
@@ -49,17 +56,64 @@ jobs:
     - name: PHPUnit unit tests
       run: composer run test:unit
 
+    - name: Decoder fuzzing
+      run: php scripts/fuzz_decoders.php 200000
+
+    - name: README check
+      run: composer run check-readme
+
+  # Early warning only: neither is a supported target yet, so a failure here does
+  # not fail the build.
+  unit-test-experimental:
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            php: "8.5"
+          - os: macos-latest
+            php: "8.5"
+          - os: ubuntu-latest
+            php: "8.6"
+
+    name: Experimental unit test - ${{ matrix.os }} - PHP ${{ matrix.php }}
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+      with:
+        php-version: ${{ matrix.php }}
+        extensions: bcmath, gmp, openssl, sockets
+        tools: composer:v2
+        coverage: none
+
+    - name: Install dependencies
+      run: composer update --no-progress --prefer-dist --ignore-platform-reqs
+
+    - name: PHPUnit unit tests
+      run: vendor/bin/phpunit --testsuite unit --no-coverage --no-logging
+
   unit-test-32bit:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.5"]
 
     name: Unit test (32-bit) - PHP ${{ matrix.php }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     # setup-php only ships 64-bit builds, so the toolchain lives in an i386
     # container (x86-64 runs i386 code natively, no emulation involved) and
@@ -88,12 +142,10 @@ jobs:
         docker exec php32 php -r 'if (PHP_INT_SIZE !== 4) { fwrite(STDERR, "Expected 32-bit PHP, got PHP_INT_SIZE=" . PHP_INT_SIZE . PHP_EOL); exit(1); }'
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php32-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php32-${{ matrix.php }}-
+        key: ${{ runner.os }}-php32-${{ matrix.php }}-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: docker exec php32 composer install --no-progress --prefer-dist --optimize-autoloader
@@ -110,6 +162,7 @@ jobs:
     needs: unit-test
 
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.1", "8.2", "8.3", "8.4", "8.5"]
         cassandra: ["4.0", "4.1", "5.0"]
@@ -117,10 +170,12 @@ jobs:
     name: Integration test - PHP ${{ matrix.php }} - Cassandra ${{ matrix.cassandra }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     - name: Setup PHP
-      uses: shivammathur/setup-php@v2
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
       with:
         php-version: ${{ matrix.php }}
         extensions: bcmath, gmp, openssl, sockets
@@ -128,12 +183,10 @@ jobs:
         coverage: pcov
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-${{ matrix.php }}-
+        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader
@@ -150,6 +203,7 @@ jobs:
     needs: unit-test-32bit
 
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.5"]
         cassandra: ["5.0"]
@@ -157,7 +211,9 @@ jobs:
     name: Integration test (32-bit) - PHP ${{ matrix.php }} - Cassandra ${{ matrix.cassandra }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     # setup-php only ships 64-bit builds, so the toolchain lives in an i386
     # container (x86-64 runs i386 code natively, no emulation involved) and
@@ -193,12 +249,10 @@ jobs:
         docker exec php32 php -r 'if (PHP_INT_SIZE !== 4) { fwrite(STDERR, "Expected 32-bit PHP, got PHP_INT_SIZE=" . PHP_INT_SIZE . PHP_EOL); exit(1); }'
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php32-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php32-${{ matrix.php }}-
+        key: ${{ runner.os }}-php32-${{ matrix.php }}-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: docker exec php32 composer install --no-progress --prefer-dist --optimize-autoloader
@@ -224,6 +278,7 @@ jobs:
     needs: unit-test
 
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.5"]
         cassandra: ["3.0", "3.11"]
@@ -231,10 +286,12 @@ jobs:
     name: Integration test - PHP ${{ matrix.php }} - Cassandra ${{ matrix.cassandra }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     - name: Setup PHP
-      uses: shivammathur/setup-php@v2
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
       with:
         php-version: ${{ matrix.php }}
         extensions: bcmath, gmp, openssl, sockets
@@ -242,12 +299,10 @@ jobs:
         coverage: pcov
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-${{ matrix.php }}-
+        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader
@@ -256,7 +311,7 @@ jobs:
       run: php -v
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
       with:
         python-version: '3.13' 
 
@@ -272,6 +327,7 @@ jobs:
     needs: unit-test
 
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.5"]
         scylladb: ["6.2", "2025.1", "2026.1", "2026.2"]
@@ -279,10 +335,12 @@ jobs:
     name: Integration test - PHP ${{ matrix.php }} - ScyllaDB ${{ matrix.scylladb }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     - name: Setup PHP
-      uses: shivammathur/setup-php@v2
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
       with:
         php-version: ${{ matrix.php }}
         extensions: bcmath, gmp, openssl, sockets
@@ -290,12 +348,10 @@ jobs:
         coverage: pcov
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-${{ matrix.php }}-
+        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader
@@ -312,6 +368,7 @@ jobs:
     needs: unit-test
 
     strategy:
+      fail-fast: false
       matrix:
         php: ["8.5"]
         cassandra: ["4.1", "5.0"]
@@ -319,10 +376,12 @@ jobs:
     name: Integration test (auth) - PHP ${{ matrix.php }} - Cassandra ${{ matrix.cassandra }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     - name: Setup PHP
-      uses: shivammathur/setup-php@v2
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
       with:
         php-version: ${{ matrix.php }}
         extensions: bcmath, gmp, openssl, sockets
@@ -330,12 +389,10 @@ jobs:
         coverage: pcov
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-${{ matrix.php }}-
+        key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader
@@ -352,22 +409,22 @@ jobs:
     name: PHP version compatibility test - PHP 8.1
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
 
     - name: Setup PHP
-      uses: shivammathur/setup-php@v2
+      uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
       with:
         php-version: "8.1"
         extensions: bcmath, gmp, openssl, sockets, sqlite3
         tools: composer:v2
 
     - name: Cache Composer packages
-      uses: actions/cache@v3
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: vendor
-        key: ${{ runner.os }}-php-8.1-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-8.1-
+        key: ${{ runner.os }}-php-8.1-${{ hashFiles('composer.json') }}
 
     - name: Install dependencies
       run: composer install --no-progress --prefer-dist --optimize-autoloader

@@ -1,0 +1,25 @@
+name: Workflow security
+
+on:
+  push:
+    paths:
+      - '.github/**.yml'
+  pull_request:
+    paths:
+      - '.github/**.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    name: Scan workflows with zizmor
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      with:
+        persist-credentials: false
+
+    - name: Run zizmor
+      run: pipx run zizmor --no-progress .github/workflows
