@@ -17,8 +17,13 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     private const INT32_MAX = 2147483647;
     private const INT32_MIN = -2147483647 - 1;
 
+    private const PATTERN_COMPONENTS = [
+        'years', 'months', 'weeks', 'days', 'hours',
+        'minutes', 'seconds', 'milliseconds', 'microseconds', 'nanoseconds',
+    ];
+
     private const PATTERNS = [
-        '/P'
+        '/^P'
             . '(?<years>\d+)?'
             . '-'
             . '(?<months>\d+)?'
@@ -32,8 +37,8 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
                 . ':'
                 . '(?<seconds>\d+)?'
             . ')?'
-            . '/',
-        '/P'
+            . '$/D',
+        '/^P'
             . '(?:(?<years>\d+)Y)?'
             . '(?:(?<months>\d+)M)?'
             . '(?:(?<days>\d+)D)?'
@@ -44,11 +49,11 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
                 . '(?:(?<minutes>\d+)M)?'
                 . '(?:(?<seconds>\d+)S)?'
             . ')?'
-            . '/',
-        '/P'
+            . '$/D',
+        '/^P'
             . '(?:(?<weeks>\d+)W)?'
-            . '/',
-        '/(?<sign>[+-])?'
+            . '$/D',
+        '/^(?<sign>[+-])?'
             . '(?:(?<years>\d+)y)?'
             . '(?:(?<months>\d+)mo)?'
             . '(?:(?<weeks>\d+)w)?'
@@ -59,7 +64,7 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             . '(?:(?<milliseconds>\d+)ms)?'
             . '(?:(?<microseconds>\d+)(?:us|µs))?'
             . '(?:(?<nanoseconds>\d+)ns)?'
-            . '/',
+            . '$/D',
     ];
 
     /**
@@ -177,6 +182,11 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
             if ($microseconds) {
                 $duration .= $sign . $microseconds . ' microseconds ';
             }
+        }
+
+        // An empty string makes PHP 8.3+ throw rather than return a zero interval.
+        if ($duration === '') {
+            $duration = '0 seconds';
         }
 
         $interval = DateInterval::createFromDateString($duration);
@@ -464,6 +474,19 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
     }
 
     /**
+     * @param array<int|string, string> $matches
+     */
+    private static function hasDurationComponent(array $matches): bool {
+        foreach (self::PATTERN_COMPONENTS as $component) {
+            if (isset($matches[$component]) && $matches[$component] !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array{ months: int, days: int, nanoseconds: int }
      */
     private function nativeValueFromDateInterval(DateInterval $value): array {
@@ -502,7 +525,9 @@ final class Duration extends ValueReadableWithoutLength implements ValueWithMult
         $foundPattern = false;
         foreach (self::PATTERNS as $pattern) {
             $matches = [];
-            if (preg_match($pattern, $value, $matches) === 1) {
+            // Whole strings with at least one component only: every component
+            // is optional, so anything else matched as an empty duration.
+            if (preg_match($pattern, $value, $matches) === 1 && self::hasDurationComponent($matches)) {
                 $foundPattern = true;
 
                 break;
