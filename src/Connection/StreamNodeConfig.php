@@ -5,6 +5,16 @@ declare(strict_types=1);
 namespace Cassandra\Connection;
 
 final class StreamNodeConfig extends NodeConfig {
+    /**
+     * The sslOptions a config gets when none are given; on a host without a
+     * scheme they leave the connection in plaintext, as they always have.
+     */
+    public const DEFAULT_SSL_OPTIONS = [
+        'verify_peer' => true,
+        'verify_peer_name' => true,
+        'allow_self_signed' => false,
+    ];
+
     public function __construct(
         string $host = 'localhost',
         int $port = 9042,
@@ -18,11 +28,7 @@ final class StreamNodeConfig extends NodeConfig {
          * @var array<string,mixed> $sslOptions 
          * see https://www.php.net/manual/en/context.ssl.php
          */
-        public readonly array $sslOptions = [
-            'verify_peer' => true,
-            'verify_peer_name' => true,
-            'allow_self_signed' => false,
-        ],
+        public readonly array $sslOptions = self::DEFAULT_SSL_OPTIONS,
     ) {
         parent::__construct(
             host: $host,

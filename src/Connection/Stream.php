@@ -69,8 +69,17 @@ final class Stream extends NodeImplementation implements IoNode {
 
         $flags = $this->config->persistent ? STREAM_CLIENT_PERSISTENT : STREAM_CLIENT_CONNECT;
 
+        // Without a scheme PHP connects over plain TCP, which would ignore ssl
+        // options given for TLS and send everything in plaintext. The defaults
+        // are not such a request, so a plain host keeps connecting in plaintext.
+        $host = $this->config->host;
+        $sslOptions = $this->config->sslOptions;
+        if ($sslOptions !== [] && $sslOptions !== StreamNodeConfig::DEFAULT_SSL_OPTIONS && !str_contains($host, '://')) {
+            $host = 'tls://' . $host;
+        }
+
         $stream = stream_socket_client(
-            address: $this->config->host . ':' . $this->config->port,
+            address: $host . ':' . $this->config->port,
             error_code: $errorCode,
             error_message: $errorMessage,
             timeout: $this->config->connectTimeoutInSeconds,
@@ -98,7 +107,7 @@ final class Stream extends NodeImplementation implements IoNode {
                     'operation' => 'connect',
                     'connect_timeout_seconds' => $this->config->connectTimeoutInSeconds,
                     'persistent' => $this->config->persistent,
-                    'ssl_options' => $this->config->sslOptions,
+                    'ssl_options' => array_diff_key($this->config->sslOptions, ['passphrase' => true]),
                     'system_error_code' => $errorCode,
                 ]
             );
