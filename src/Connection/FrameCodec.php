@@ -116,9 +116,9 @@ final class FrameCodec extends NodeImplementation {
         if ($dataLength < self::PAYLOAD_MAX_SIZE) {
             $this->writeFrame($data, true, 0, $dataLength);
         } else {
+            $offset = 0;
+            $remainingDataLength = $dataLength;
             do {
-                $offset = 0;
-                $remainingDataLength = $dataLength;
                 $writeDataLength = min(self::PAYLOAD_MAX_SIZE, $remainingDataLength);
 
                 $this->writeFrame($data, false, $offset, $writeDataLength);
