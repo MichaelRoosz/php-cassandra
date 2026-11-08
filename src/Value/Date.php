@@ -78,10 +78,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
                 ], $e);
             }
 
-            $baseDate = new DateTimeImmutable('1970-01-01', new DateTimeZone('UTC'));
-            $interval = $baseDate->diff($valueAsDate);
-
-            $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
+            $valueAsInt = self::VALUE_2_31 + self::daysSinceEpoch($valueAsDate);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
                 throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
@@ -111,9 +108,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
                     'value' => $value->format('Y-m-d'),
                 ], $e);
             }
-            $interval = $baseDate->diff($valueAsDate);
-
-            $valueAsInt = self::VALUE_2_31 + $this->getDayCountFromInterval($interval);
+            $valueAsInt = self::VALUE_2_31 + self::daysSinceEpoch($valueAsDate);
 
             if ($valueAsInt > self::VALUE_INT_MAX || $valueAsInt < self::VALUE_INT_MIN) {
                 throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
@@ -190,10 +185,6 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Exception\ValueException
-     */
-    #[\Override]
-    /**
      * What {@see self::getValue()} returns for a wire value, without building
      * one: this is the per-cell cost of reading a date column.
      *
@@ -213,6 +204,10 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
         return $date->asDateTime()->format('Y-m-d');
     }
 
+    /**
+     * @throws \Cassandra\Exception\ValueException
+     */
+    #[\Override]
     public static function fromBinary(
         string $binary,
         ?TypeInfo $typeInfo = null,
@@ -303,24 +298,12 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     }
 
     /**
-     * @throws \Cassandra\Exception\ValueException
+     * Counted from the timestamp, because DateInterval holds days in 32 bits and
+     * wraps for the far ends of the range. The value is a UTC midnight, so the
+     * division is exact.
      */
-    private function getDayCountFromInterval(DateInterval $interval): int {
-        $dayCount = $interval->format('%r%a');
-
-        if (str_starts_with($dayCount, '--')) {
-            if ($dayCount === '--2147483648') {
-                $dayCount = '-2147483648'; // Special case for minimum date
-            } else {
-                throw new ValueException('Unsigned integer value is outside of supported range', ExceptionCode::VALUE_INTEGER_OUT_OF_RANGE->value, [
-                    'value' => $dayCount,
-                    'min' => self::VALUE_INT_MIN,
-                    'max' => self::VALUE_INT_MAX,
-                ]);
-            }
-        }
-
-        return (int) $dayCount;
+    private static function daysSinceEpoch(DateTimeImmutable $midnight): int {
+        return intdiv($midnight->getTimestamp(), 86400);
     }
 
 }
