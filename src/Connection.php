@@ -237,7 +237,7 @@ final class Connection {
         }
 
         if ($this->keyspace && $this->version->value < ProtocolVersion::V5->value) {
-            $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
+            $this->syncRequest(self::useKeyspaceQuery($this->keyspace));
         }
     }
 
@@ -641,7 +641,7 @@ final class Connection {
         }
 
         if ($this->version->value < ProtocolVersion::V5->value) {
-            $response = $this->syncRequest(new Request\Query("USE {$this->keyspace};"));
+            $response = $this->syncRequest(self::useKeyspaceQuery($this->keyspace));
             if (!($response instanceof Response\Result)) {
                 throw new ConnectionException('Unexpected response type during setKeyspace', ExceptionCode::CONNECTION_SET_KEYSPACE_UNEXPECTED_RESPONSE->value, [
                     'expected' => Response\Result::class,
@@ -1755,5 +1755,22 @@ final class Connection {
         }
 
         return $statement;
+    }
+
+    /**
+     * The USE statement for a keyspace, refusing a name that is not one
+     * identifier: interpolated as it is, anything else would be CQL of its own.
+     *
+     * @throws \Cassandra\Exception\ConnectionException
+     */
+    private static function useKeyspaceQuery(string $keyspace): Request\Query {
+        if (preg_match('/^(?:[A-Za-z0-9_]+|"(?:[^"]|"")+")$/D', $keyspace) !== 1) {
+            throw new ConnectionException('Invalid keyspace name; expected an unquoted or a double-quoted identifier', ExceptionCode::CONNECTION_INVALID_KEYSPACE_NAME->value, [
+                'operation' => 'setKeyspace',
+                'keyspace' => $keyspace,
+            ]);
+        }
+
+        return new Request\Query("USE {$keyspace};");
     }
 }
