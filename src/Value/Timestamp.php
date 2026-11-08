@@ -15,6 +15,12 @@ use DateTimeZone;
 use Exception as PhpException;
 
 final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleEncodings {
+    /**
+     * The years gmdate() spells exactly as DateTimeImmutable does: 0000 to 9999.
+     */
+    private const GMDATE_MILLISECONDS_MAX = 253_402_300_799_999;
+    private const GMDATE_MILLISECONDS_MIN = -62_167_219_200_000;
+
     private readonly int $value;
 
     /**
@@ -81,17 +87,25 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
 
         try {
             $datetime = new DateTimeImmutable('@' . $seconds);
-            $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
+            if ($microseconds !== 0) {
+                $datetime = $datetime->modify('+' . $microseconds . ' microseconds');
+            }
+            // Unreachable: every 64-bit millisecond count fits a DateTimeImmutable.
+            // @codeCoverageIgnoreStart
         } catch (PhpException $e) {
             throw new ValueException('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::VALUE_TIMESTAMP_TO_DATETIME_FAILED->value, [
                 'milliseconds' => $this->value,
             ], $e);
+            // @codeCoverageIgnoreEnd
         }
 
         if ($datetime === false) {
+            // Unreachable: modify() with a plain microsecond count does not fail.
+            // @codeCoverageIgnoreStart
             throw new ValueException('Cannot convert timestamp to DateTimeImmutable', ExceptionCode::VALUE_TIMESTAMP_TO_DATETIME_FAILED->value, [
                 'milliseconds' => $this->value,
             ]);
+            // @codeCoverageIgnoreEnd
         }
 
         return $datetime;
@@ -111,6 +125,36 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
     #[\Override]
     final public static function fixedLength(): int {
         return 8;
+    }
+
+    /**
+     * What {@see self::getValue()} returns for a value, without building one:
+     * this is the per-cell cost of reading a timestamp column.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    public static function formatMilliseconds(int $milliseconds): string {
+        if ($milliseconds >= self::GMDATE_MILLISECONDS_MIN && $milliseconds <= self::GMDATE_MILLISECONDS_MAX) {
+            $fraction = $milliseconds % 1000;
+            if ($fraction < 0) {
+                $fraction += 1000;
+            }
+
+            return gmdate('Y-m-d H:i:s', intdiv($milliseconds - $fraction, 1000))
+                . sprintf('.%03d+0000', $fraction);
+        }
+
+        $formatted = (new self($milliseconds))->asDateTime()->format('Y-m-d H:i:s.vO');
+
+        if ($formatted[0] === '-' || $formatted[0] === '+') {
+            return $formatted;
+        }
+
+        $yearLength = strpos($formatted, '-');
+
+        return $yearLength !== false && $yearLength > 4
+            ? '+' . $formatted
+            : $formatted;
     }
 
     /**
@@ -184,17 +228,7 @@ final class Timestamp extends ValueWithFixedLength implements ValueWithMultipleE
      */
     #[\Override]
     public function getValue(): string {
-        $formatted = $this->asDateTime()->format('Y-m-d H:i:s.vO');
-
-        if ($formatted[0] === '-' || $formatted[0] === '+') {
-            return $formatted;
-        }
-
-        $yearLength = strpos($formatted, '-');
-
-        return $yearLength !== false && $yearLength > 4
-            ? '+' . $formatted
-            : $formatted;
+        return self::formatMilliseconds($this->value);
     }
 
     #[\Override]

@@ -20,6 +20,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
     final public const VALUE_INT_MIN = 0;
 
     private const VALUE_2_31 = 2_147_483_648;
+    private const VALUE_INT_0000_01_01 = 2_146_764_120;
     private const VALUE_INT_9999_12_31 = 2_150_416_544;
 
     private readonly int $value;
@@ -192,6 +193,26 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
      * @throws \Cassandra\Exception\ValueException
      */
     #[\Override]
+    /**
+     * What {@see self::getValue()} returns for a wire value, without building
+     * one: this is the per-cell cost of reading a date column.
+     *
+     * @throws \Cassandra\Exception\ValueException
+     */
+    public static function formatWireValue(int $value): string {
+        if ($value >= self::VALUE_INT_0000_01_01 && $value <= self::VALUE_INT_9999_12_31) {
+            return gmdate('Y-m-d', ($value - self::VALUE_2_31) * 86400);
+        }
+
+        $date = new self($value);
+
+        if ($value > self::VALUE_INT_9999_12_31) {
+            return '+' . $date->asDateTime()->format('Y-m-d');
+        }
+
+        return $date->asDateTime()->format('Y-m-d');
+    }
+
     public static function fromBinary(
         string $binary,
         ?TypeInfo $typeInfo = null,
@@ -261,11 +282,7 @@ final class Date extends ValueWithFixedLength implements ValueWithMultipleEncodi
      */
     #[\Override]
     public function getValue(): string {
-        if ($this->value > self::VALUE_INT_9999_12_31) {
-            return '+' . $this->asDateTime()->format('Y-m-d');
-        } else {
-            return $this->asDateTime()->format('Y-m-d');
-        }
+        return self::formatWireValue($this->value);
     }
 
     #[\Override]

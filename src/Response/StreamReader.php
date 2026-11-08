@@ -18,8 +18,12 @@ use Cassandra\TypeInfo\TupleInfo;
 use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\TypeInfo\UDTInfo;
 use Cassandra\TypeNameParser;
+use Cassandra\Value\Date;
+use Cassandra\Value\EncodeOption\DateEncodeOption;
+use Cassandra\Value\EncodeOption\TimestampEncodeOption;
 use Cassandra\Value\EncodeOption\UuidEncodeOption;
 use Cassandra\Value\MapCollection;
+use Cassandra\Value\Timestamp;
 use Cassandra\Value\ValueEncodeConfig;
 use Cassandra\Value\ValueWithMultipleEncodings;
 use TypeError;
@@ -103,17 +107,7 @@ final class StreamReader {
         }
 
         if ($this->offset + $length > $this->dataLength) {
-            throw new ResponseException(
-                message: 'Attempted to read beyond available data',
-                code: ExceptionCode::RESPONSE_SR_READ_BEYOND_AVAILABLE->value,
-                context: [
-                    'method' => __METHOD__,
-                    'requested_length' => $length,
-                    'available' => $this->dataLength - $this->offset,
-                    'offset' => $this->pos(),
-                    'data_length' => $this->dataLength,
-                ]
-            );
+            throw $this->readBeyondAvailableException($length);
         }
 
         $output = substr($this->data, $this->offset, $length);
@@ -194,11 +188,14 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ResponseException
      */
     final public function readDouble(): float {
+        if ($this->offset + 8 > $this->dataLength) {
+            throw $this->readBeyondAvailableException(8);
+        }
 
         /**
          * @var false|array<float> $unpacked
          */
-        $unpacked = unpack('E', $this->read(8));
+        $unpacked = unpack('E', $this->data, $this->offset);
         if ($unpacked === false) {
             throw new ResponseException(
                 message: 'Cannot unpack double',
@@ -210,6 +207,8 @@ final class StreamReader {
             );
         }
 
+        $this->offset += 8;
+
         return $unpacked[1];
     }
 
@@ -219,11 +218,14 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ResponseException
      */
     final public function readFloat(): float {
+        if ($this->offset + 4 > $this->dataLength) {
+            throw $this->readBeyondAvailableException(4);
+        }
 
         /**
          * @var false|array<float> $unpacked
          */
-        $unpacked = unpack('G', $this->read(4));
+        $unpacked = unpack('G', $this->data, $this->offset);
         if ($unpacked === false) {
             throw new ResponseException(
                 message: 'Cannot unpack float',
@@ -234,6 +236,8 @@ final class StreamReader {
                 ]
             );
         }
+
+        $this->offset += 4;
 
         return $unpacked[1];
     }
@@ -295,11 +299,14 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ResponseException
      */
     final public function readInt(): int {
+        if ($this->offset + 4 > $this->dataLength) {
+            throw $this->readBeyondAvailableException(4);
+        }
 
         /**
          * @var false|array<int> $unpacked
          */
-        $unpacked = unpack('N', $this->read(4));
+        $unpacked = unpack('N', $this->data, $this->offset);
         if ($unpacked === false) {
             throw new ResponseException(
                 message: 'Cannot unpack 32-bit integer',
@@ -311,6 +318,8 @@ final class StreamReader {
             );
         }
 
+        $this->offset += 4;
+
         return $unpacked[1]
             << self::SIGNED_INT_SHIFT_BIT_SIZE
             >> self::SIGNED_INT_SHIFT_BIT_SIZE;
@@ -320,11 +329,14 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ResponseException
      */
     final public function readLong(): int {
+        if ($this->offset + 8 > $this->dataLength) {
+            throw $this->readBeyondAvailableException(8);
+        }
 
         /**
          * @var false|array<int> $unpacked
          */
-        $unpacked = unpack('J', $this->read(8));
+        $unpacked = unpack('J', $this->data, $this->offset);
         if ($unpacked === false) {
             throw new ResponseException(
                 message: 'Cannot unpack 64-bit integer',
@@ -335,6 +347,8 @@ final class StreamReader {
                 ]
             );
         }
+
+        $this->offset += 8;
 
         return $unpacked[1];
     }
@@ -401,11 +415,14 @@ final class StreamReader {
      * @throws \Cassandra\Exception\ResponseException
      */
     final public function readShort(): int {
+        if ($this->offset + 2 > $this->dataLength) {
+            throw $this->readBeyondAvailableException(2);
+        }
 
         /**
          * @var false|array<int> $unpacked
          */
-        $unpacked = unpack('n', $this->read(2));
+        $unpacked = unpack('n', $this->data, $this->offset);
         if ($unpacked === false) {
             throw new ResponseException(
                 message: 'Cannot unpack 16-bit integer',
@@ -416,6 +433,8 @@ final class StreamReader {
                 ]
             );
         }
+
+        $this->offset += 2;
 
         return $unpacked[1];
     }
@@ -632,7 +651,7 @@ final class StreamReader {
         // are the exception and honour $valueEncodeConfig->uuidEncodeOption
         // inline. list/set recurse through readValue (which forwards the config),
         // so config-dependent elements are still handled correctly. Maps, UDTs,
-        // tuples, vectors and the config-dependent temporal/varint scalars fall
+        // tuples, vectors, time, varint and the DateTimeImmutable encodings fall
         // through to the object path below.
         switch ($typeInfo->type) {
             case Type::INT:
@@ -691,6 +710,34 @@ final class StreamReader {
                 // Value\Bigint); only take the fast path where readLong() is safe.
                 if (PHP_INT_SIZE >= 8) {
                     return $this->readLong();
+                }
+
+                break;
+
+            case Type::TIMESTAMP:
+                // A wrong width or a 32-bit build falls through, so that the
+                // object path reports it.
+                if ($length === 8 && PHP_INT_SIZE >= 8) {
+                    if ($valueEncodeConfig->timestampEncodeOption === TimestampEncodeOption::AS_INT) {
+                        return $this->readLong();
+                    }
+
+                    if ($valueEncodeConfig->timestampEncodeOption === TimestampEncodeOption::AS_STRING) {
+                        return Timestamp::formatMilliseconds($this->readLong());
+                    }
+                }
+
+                break;
+
+            case Type::DATE:
+                if ($length === 4 && PHP_INT_SIZE >= 8) {
+                    if ($valueEncodeConfig->dateEncodeOption === DateEncodeOption::AS_INT) {
+                        return $this->readInt() & 0xFFFFFFFF;
+                    }
+
+                    if ($valueEncodeConfig->dateEncodeOption === DateEncodeOption::AS_STRING) {
+                        return Date::formatWireValue($this->readInt() & 0xFFFFFFFF);
+                    }
                 }
 
                 break;
@@ -793,13 +840,13 @@ final class StreamReader {
      */
     private static function formatUuid(string $uuidBinary): string {
 
-        $hex = bin2hex($uuidBinary);
+        // Back to front, so that each insertion leaves the offsets before it valid.
+        $formatted = bin2hex($uuidBinary);
+        $formatted = substr_replace($formatted, '-', 20, 0);
+        $formatted = substr_replace($formatted, '-', 16, 0);
+        $formatted = substr_replace($formatted, '-', 12, 0);
 
-        return substr($hex, 0, 8) . '-'
-            . substr($hex, 8, 4) . '-'
-            . substr($hex, 12, 4) . '-'
-            . substr($hex, 16, 4) . '-'
-            . substr($hex, 20, 12);
+        return substr_replace($formatted, '-', 8, 0);
     }
 
     private function invalidOffsetException(int $offset, string $field, int $maximumOffset): ResponseException {
@@ -830,6 +877,20 @@ final class StreamReader {
             [
                 'value' => self::formatUuid($uuidBinary),
                 'version' => ord($uuidBinary[6]) >> 4,
+            ]
+        );
+    }
+
+    private function readBeyondAvailableException(int $length): ResponseException {
+        return new ResponseException(
+            message: 'Attempted to read beyond available data',
+            code: ExceptionCode::RESPONSE_SR_READ_BEYOND_AVAILABLE->value,
+            context: [
+                'method' => __METHOD__,
+                'requested_length' => $length,
+                'available' => $this->dataLength - $this->offset,
+                'offset' => $this->pos(),
+                'data_length' => $this->dataLength,
             ]
         );
     }
