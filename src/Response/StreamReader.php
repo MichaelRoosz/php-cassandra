@@ -581,6 +581,17 @@ class StreamReader {
             );
         }
 
+        // An empty cell is a value of its own in Cassandra, not the start of
+        // one: a fixed-length decoder would read past it into the next cell.
+        // Tuples and UDTs are bounded by the cell length and read it themselves.
+        if ($length === 0 && !($typeInfo instanceof TupleInfo) && !($typeInfo instanceof UDTInfo)) {
+            return match ($typeInfo->type) {
+                Type::ASCII, Type::BLOB, Type::CUSTOM, Type::TEXT, Type::VARCHAR => '',
+                Type::LIST, Type::MAP, Type::SET => [],
+                default => null,
+            };
+        }
+
         $valueObject = ValueFactory::getValueObjectFromStream($typeInfo, $length, $this, $valueEncodeConfig);
 
         if ($valueObject instanceof ValueWithMultipleEncodings) {
