@@ -13,6 +13,12 @@ use Cassandra\TypeInfo\TypeInfo;
 use Cassandra\Value\EncodeOption\VarintEncodeOption;
 
 final class Varint extends ValueReadableWithLength implements ValueWithMultipleEncodings {
+    /**
+     * The longest magnitude decoded from the wire: 1701 bytes hold every
+     * value of up to 4096 decimal digits.
+     */
+    final public const MAX_MAGNITUDE_BYTES = 1701;
+
     private readonly string|int $value;
 
     /**
@@ -91,6 +97,15 @@ final class Varint extends ValueReadableWithLength implements ValueWithMultipleE
         $length = strlen($binary);
 
         if ($length > PHP_INT_SIZE) {
+            // Converting a magnitude costs time quadratic in its length, so one
+            // oversized cell could stall a request for minutes.
+            if ($length > self::MAX_MAGNITUDE_BYTES) {
+                throw new ValueException('Varint magnitude exceeds the supported size', ExceptionCode::VALUE_VARINT_MAGNITUDE_TOO_LARGE->value, [
+                    'binary_length' => $length,
+                    'max_binary_length' => self::MAX_MAGNITUDE_BYTES,
+                ]);
+            }
+
             try {
                 $decimal = DecimalCalculator::get()->fromBinary($binary);
             } catch (StringMathException $e) {

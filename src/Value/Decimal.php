@@ -10,6 +10,12 @@ use Cassandra\Type;
 use Cassandra\TypeInfo\TypeInfo;
 
 final class Decimal extends ValueReadableWithLength {
+    /**
+     * The largest scale decoded from the wire, either way: far beyond any real
+     * column, and small enough that expanding it stays cheap.
+     */
+    private const MAX_SCALE_MAGNITUDE = 100_000;
+
     private readonly string $value;
 
     /**
@@ -23,7 +29,13 @@ final class Decimal extends ValueReadableWithLength {
         }
 
         if (is_float($value)) {
-            $this->value = number_format($value, 0, '.', '');
+            if (!is_finite($value)) {
+                throw new ValueException('Decimal value must be a finite number', ExceptionCode::VALUE_DECIMAL_NON_FINITE_FLOAT->value, [
+                    'value' => $value,
+                ]);
+            }
+
+            $this->value = self::floatToDecimalString($value);
 
             return;
         }
@@ -57,7 +69,17 @@ final class Decimal extends ValueReadableWithLength {
                 'binary_length' => $length,
             ]);
         }
-        $scale = $scaleUnpacked[1];
+        // The scale is a signed int32, which unpack('N') returns unsigned.
+        $signShift = (PHP_INT_SIZE * 8) - 32;
+        $scale = $scaleUnpacked[1] << $signShift >> $signShift;
+
+        // Both expansions below allocate in proportion to the scale.
+        if ($scale > self::MAX_SCALE_MAGNITUDE || $scale < -self::MAX_SCALE_MAGNITUDE) {
+            throw new ValueException('Decimal scale is outside of the supported range', ExceptionCode::VALUE_DECIMAL_SCALE_OUT_OF_RANGE->value, [
+                'scale' => $scale,
+                'max_magnitude' => self::MAX_SCALE_MAGNITUDE,
+            ]);
+        }
 
         $varintBinary = substr($binary, 4);
         $unscaledVarint = Varint::fromBinary($varintBinary);
@@ -65,6 +87,9 @@ final class Decimal extends ValueReadableWithLength {
 
         if ($scale === 0) {
             $value = $unscaled;
+        } elseif ($scale < 0) {
+            // A negative scale multiplies by a power of ten.
+            $value = $unscaled === '0' ? '0' : $unscaled . str_repeat('0', -$scale);
         } else {
             $isNegative = str_starts_with($unscaled, '-');
             $absUnscaled = $isNegative ? substr($unscaled, 1) : $unscaled;
@@ -146,5 +171,42 @@ final class Decimal extends ValueReadableWithLength {
     #[\Override]
     final public static function requiresDefinition(): bool {
         return false;
+    }
+
+    /**
+     * A float's shortest round-trip spelling, with any exponent expanded: the
+     * varint-based wire encoding cannot express one.
+     */
+    private static function floatToDecimalString(float $value): string {
+        $spelled = var_export($value, true);
+        $sign = str_starts_with($spelled, '-') ? '-' : '';
+        $spelled = ltrim($spelled, '-');
+
+        $exponentPos = stripos($spelled, 'e');
+        $mantissa = $exponentPos === false ? $spelled : substr($spelled, 0, $exponentPos);
+        $exponent = $exponentPos === false ? 0 : (int) substr($spelled, $exponentPos + 1);
+
+        $dotPos = strpos($mantissa, '.');
+        $digits = str_replace('.', '', $mantissa);
+        $pointPos = ($dotPos === false ? strlen($mantissa) : $dotPos) + $exponent;
+
+        if ($pointPos <= 0) {
+            $decimal = '0.' . str_repeat('0', -$pointPos) . $digits;
+        } elseif ($pointPos >= strlen($digits)) {
+            $decimal = $digits . str_repeat('0', $pointPos - strlen($digits));
+        } else {
+            $decimal = substr($digits, 0, $pointPos) . '.' . substr($digits, $pointPos);
+        }
+
+        if (str_contains($decimal, '.')) {
+            $decimal = rtrim(rtrim($decimal, '0'), '.');
+        }
+
+        $decimal = ltrim($decimal, '0');
+        if ($decimal === '' || $decimal[0] === '.') {
+            $decimal = '0' . $decimal;
+        }
+
+        return $decimal === '0' ? '0' : $sign . $decimal;
     }
 }
