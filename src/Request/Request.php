@@ -245,6 +245,20 @@ abstract class Request implements Frame, Stringable {
                     break;
 
                 case is_int($value):
+                    // An untyped int is sent as a 32-bit int; anything wider
+                    // would be truncated without a word.
+                    if ($value < -2147483648 || $value > 2147483647) {
+                        throw new RequestException(
+                            message: 'Integer bound value is outside the 32-bit range and would be truncated; wrap it in a typed value (e.g. Cassandra\\Value\\Bigint)',
+                            code: ExceptionCode::REQUEST_VALUES_INT_OUT_OF_INT32_RANGE->value,
+                            context: [
+                                'stage' => 'values_encoding',
+                                'name' => $name,
+                                'value' => $value,
+                            ]
+                        );
+                    }
+
                     $binary = pack('N', $value);
 
                     break;
