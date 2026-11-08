@@ -58,6 +58,25 @@ final class Lz4Decompressor {
      * The magic number of the current (v1.x) frame format.
      */
     private const MAGIC_V1 = 0x184D2204;
+
+    /**
+     * A match offset is a 16-bit field, so no match reaches further back than
+     * this; a longer dictionary contributes only its tail.
+     */
+    private const MAX_MATCH_DISTANCE = 0xFFFF;
+
+    /**
+     * Dictionaries for frames that carry a Dict-ID, keyed by it.
+     *
+     * @var array<int, string>
+     */
+    private array $dictionaries = [];
+
+    /**
+     * The dictionary for frames that carry no Dict-ID.
+     */
+    private string $dictionaryWithoutId = '';
+
     private int $frameOutputStart;
 
     private string $input;
@@ -191,6 +210,44 @@ final class Lz4Decompressor {
     }
 
     /**
+     * Register the dictionary that v1 frames were compressed with.
+     *
+     * A frame naming a Dict-ID uses the dictionary registered under that ID and
+     * is refused when there is none. A frame naming none uses the dictionary
+     * registered with a null ID, which is how `lz4 -D` writes them. Raw blocks
+     * and legacy frames never use a dictionary. Registrations survive
+     * {@see self::setInput()}.
+     *
+     * @param ?string $dictionary null removes the registration.
+     * @param ?int $dictionaryId the unsigned 32-bit Dict-ID; on 32-bit PHP, an
+     *   ID from 2^31 up is given as the negative int with the same bits.
+     *
+     * @throws \Cassandra\Exception\CompressionException
+     */
+    public function setDictionary(?string $dictionary, ?int $dictionaryId = null): void {
+        if ($dictionaryId !== null && PHP_INT_SIZE >= 8 && ($dictionaryId < 0 || $dictionaryId > 0xFFFFFFFF)) {
+            throw new CompressionException(
+                'invalid lz4 dictionary id - must be an unsigned 32-bit integer',
+                ExceptionCode::COMPRESSION_ILLEGAL_VALUE->value,
+                [
+                    'stage' => 'set_dictionary',
+                    'dictionaryId' => $dictionaryId,
+                ]
+            );
+        }
+
+        $window = $dictionary === null ? '' : substr($dictionary, -self::MAX_MATCH_DISTANCE);
+
+        if ($dictionaryId === null) {
+            $this->dictionaryWithoutId = $window;
+        } elseif ($dictionary === null) {
+            unset($this->dictionaries[$dictionaryId]);
+        } else {
+            $this->dictionaries[$dictionaryId] = $window;
+        }
+    }
+
+    /**
      * Point this decompressor at the data to work on.
      *
      * @param int $inputOffset where that data begins within $compressedData.
@@ -231,12 +288,16 @@ final class Lz4Decompressor {
     }
 
     /**
+     * @param string $dictionary the bytes that precede {@see self::$frameOutputStart}
+     *   for the purpose of matches; empty when there are none.
+     *
      * @throws \Cassandra\Exception\CompressionException
      */
     private function decompressBlockAtOffset(
         int $inputOffset,
         int $inputEnd,
-        ?int $expectedUncompressedLength = null
+        ?int $expectedUncompressedLength = null,
+        string $dictionary = '',
     ): void {
         while ($inputOffset < $inputEnd) {
             $token = ord($this->input[$inputOffset++]);
@@ -314,7 +375,8 @@ final class Lz4Decompressor {
             }
 
             $matchStart = $this->outputLength - $offset;
-            if ($matchStart < $this->frameOutputStart) {
+            $dictionaryReach = $this->frameOutputStart - $matchStart;
+            if ($dictionaryReach > strlen($dictionary)) {
                 throw new CompressionException(
                     'invalid lz4 block data - output underflow for given match start',
                     ExceptionCode::COMPRESSION_OUTPUT_UNDERFLOW->value,
@@ -324,6 +386,7 @@ final class Lz4Decompressor {
                         'offset' => $offset,
                         'outputLength' => $this->outputLength,
                         'frameOutputStart' => $this->frameOutputStart,
+                        'dictionaryLength' => strlen($dictionary),
                     ]
                 );
             }
@@ -355,6 +418,21 @@ final class Lz4Decompressor {
             $matchLength += 4;
 
             $this->ensureOutputFits($matchLength, $expectedUncompressedLength, 'expand_match');
+
+            if ($dictionaryReach > 0) {
+                // The match begins in the dictionary. Whatever runs past the
+                // dictionary's end continues at the window start, at the same
+                // offset from the (by then advanced) write position.
+                $fromDictionary = min($matchLength, $dictionaryReach);
+                $this->output .= substr($dictionary, -$dictionaryReach, $fromDictionary);
+                $this->outputLength += $fromDictionary;
+                $matchLength -= $fromDictionary;
+                $matchStart = $this->frameOutputStart;
+
+                if ($matchLength === 0) {
+                    continue;
+                }
+            }
 
             if ($offset >= $matchLength) {
                 // Non-overlapping match: the entire source region is already in
@@ -617,6 +695,7 @@ final class Lz4Decompressor {
         bool $validateChecksums,
         int $blockMaximumSize,
         bool $blocksIndependent,
+        string $dictionary,
     ): bool {
         if ($this->inputOffset + 4 > $this->inputEnd) {
             throw new CompressionException(
@@ -703,6 +782,7 @@ final class Lz4Decompressor {
                         $this->inputOffset,
                         $this->inputOffset + $blockSize,
                         $blockOutputStart + $blockMaximumSize,
+                        $dictionary,
                     );
                 } catch (CompressionException $e) {
                     if ($e->getCode() !== ExceptionCode::COMPRESSION_OUTPUT_OVERFLOW->value) {
@@ -826,18 +906,6 @@ final class Lz4Decompressor {
             );
         }
 
-        if ($flgDictionaryId) {
-            throw new CompressionException(
-                'lz4 frame dictionaries are not supported',
-                ExceptionCode::COMPRESSION_UNSUPPORTED_DICTIONARY->value,
-                [
-                    'stage' => 'v1_frame_descriptor',
-                    'flg' => $flg,
-                    'bd' => $bd,
-                ]
-            );
-        }
-
         $blockMaximumSize = self::FRAME_BLOCK_MAX_SIZES[$blockMaximumSizeId];
 
         if ($flgContentSize) {
@@ -855,6 +923,38 @@ final class Lz4Decompressor {
             }
             $contentSize = substr($this->input, $this->inputOffset, 8);
             $this->inputOffset += 8;
+        }
+
+        $dictionaryId = null;
+        if ($flgDictionaryId) {
+            if ($this->inputOffset + 4 > $this->inputEnd) {
+                throw new CompressionException(
+                    'invalid lz4 frame data - input overflow while reading dictionary id',
+                    ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value,
+                    [
+                        'stage' => 'v1_header_dictionary_id',
+                        'inputOffset' => $this->inputOffset,
+                        'inputEnd' => $this->inputEnd,
+                        'requiredBytes' => 4,
+                    ]
+                );
+            }
+
+            /** @var false|array<int> $unpacked */
+            $unpacked = unpack('V', $this->input, $this->inputOffset);
+            if ($unpacked === false) {
+                throw new CompressionException(
+                    'invalid lz4 frame data - cannot decode dictionary id',
+                    ExceptionCode::COMPRESSION_DECODE_FAILURE->value,
+                    [
+                        'stage' => 'v1_header_dictionary_id_unpack',
+                        'inputOffset' => $this->inputOffset,
+                        'inputEnd' => $this->inputEnd,
+                    ]
+                );
+            }
+            $dictionaryId = $unpacked[1];
+            $this->inputOffset += 4;
         }
 
         if ($this->inputOffset + 1 > $this->inputEnd) {
@@ -875,12 +975,29 @@ final class Lz4Decompressor {
             $this->validateHeaderChecksum($this->input, $headerStart, $this->inputOffset - 1 - $headerStart, $headerChecksum);
         }
 
+        if ($dictionaryId === null) {
+            $dictionary = $this->dictionaryWithoutId;
+        } elseif (isset($this->dictionaries[$dictionaryId])) {
+            $dictionary = $this->dictionaries[$dictionaryId];
+        } else {
+            throw new CompressionException(
+                'lz4 frame names a dictionary that is not registered',
+                ExceptionCode::COMPRESSION_UNKNOWN_DICTIONARY->value,
+                [
+                    'stage' => 'v1_header_dictionary_id',
+                    'dictionaryId' => $dictionaryId,
+                    'dictionaryIdHex' => sprintf('0x%08X', $dictionaryId),
+                ]
+            );
+        }
+
         do {
             $moreBlocks = $this->readVersionOneBlock(
                 $flgBlockChecksum,
                 $validateChecksums,
                 $blockMaximumSize,
                 $blocksIndependent,
+                $dictionary,
             );
         } while ($moreBlocks);
 

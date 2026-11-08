@@ -10,6 +10,13 @@ use Cassandra\Compression\Lz4Decompressor;
 use Cassandra\Exception\ExceptionCode;
 
 class Lz4DecompressorTest extends AbstractUnitTestCase {
+    /**
+     * Two literals, then an 8-byte match at offset 6: 4 bytes from the end of
+     * a dictionary "abcd" and on through the bytes it writes. Then "!".
+     */
+    private const DICTIONARY_SPANNING_BLOCK = "\x24XY\x06\x00\x10!";
+
+    private const LZ4_CLI_DICTIONARY = 'SELECT keyspace_name, table_name FROM system_schema.tables WHERE keyspace_name = ';
     private const MAGIC_LEGACY = 0x184C2102;
     private const MAGIC_V1 = 0x184D2204;
 
@@ -228,6 +235,85 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         );
     }
 
+    public function testDictionaryFrameNamingAnUnregisteredIdIsRefused(): void {
+        $dec = new Lz4Decompressor(self::versionOneFrame(0x61, 0x40, [['x', true]], dictionaryId: 7), preferExtension: false);
+        $dec->setDictionary('abcd', 8);
+        $dec->setDictionary('abcd');
+
+        try {
+            $dec->decompress();
+            $this->fail('expected a frame naming an unregistered dictionary to be refused');
+        } catch (CompressionException $e) {
+            $this->assertSame(ExceptionCode::COMPRESSION_UNKNOWN_DICTIONARY->value, $e->getCode());
+            $this->assertSame(7, $e->getContext()['dictionaryId']);
+        }
+    }
+
+    public function testDictionaryFrameRefusesATruncatedDictionaryId(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_INPUT_OVERFLOW->value);
+
+        (new Lz4Decompressor(pack('V', self::MAGIC_V1) . "\x61\x40\x07\x00", preferExtension: false))->decompress();
+    }
+
+    public function testDictionaryFrameUsesTheDictionaryRegisteredUnderItsId(): void {
+        $frame = self::versionOneFrame(0x61, 0x40, [[self::DICTIONARY_SPANNING_BLOCK, false]], dictionaryId: 0xABCD);
+
+        $dec = new Lz4Decompressor($frame, preferExtension: false);
+        $dec->setDictionary('wxyz');
+        $dec->setDictionary('abcd', 0xABCD);
+
+        $this->assertSame('XYabcdXYab!', $dec->decompress());
+    }
+
+    public function testDictionaryIsOnlyUsedForItsTailWithinTheMatchWindow(): void {
+        // Offset 0xFFFF reaches the first byte of the dictionary's last 65,535.
+        $dictionary = str_repeat('-', 100) . 'Z' . str_repeat('.', 0xFFFE);
+        $block = "\x00\xFF\xFF" . "\x10!";
+
+        $dec = new Lz4Decompressor(self::versionOneFrame(0x60, 0x40, [[$block, false]]), preferExtension: false);
+        $dec->setDictionary($dictionary);
+
+        $this->assertSame('Z...!', $dec->decompress());
+    }
+
+    public function testDictionaryRegistrationCanBeRemoved(): void {
+        $dec = new Lz4Decompressor(self::versionOneFrame(0x61, 0x40, [['x', true]], dictionaryId: 3), preferExtension: false);
+        $dec->setDictionary('abcd', 3);
+        $dec->setDictionary(null, 3);
+
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_UNKNOWN_DICTIONARY->value);
+
+        $dec->decompress();
+    }
+
+    public function testDictionaryWithoutIdIsUsedForFramesWrittenByTheLz4Cli(): void {
+        $dec = new Lz4Decompressor(self::lz4CliDictionaryFrame(), preferExtension: false);
+        $dec->setDictionary(self::LZ4_CLI_DICTIONARY);
+
+        $this->assertSame(self::LZ4_CLI_DICTIONARY . "'app';", $dec->decompress());
+    }
+
+    public function testFrameReferencingADictionaryFailsWithoutOne(): void {
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_OUTPUT_UNDERFLOW->value);
+
+        (new Lz4Decompressor(self::lz4CliDictionaryFrame(), preferExtension: false))->decompress();
+    }
+
+    public function testIndependentBlocksEachSeeTheDictionary(): void {
+        $frame = self::versionOneFrame(0x60, 0x40, [
+            [self::DICTIONARY_SPANNING_BLOCK, false],
+            [self::DICTIONARY_SPANNING_BLOCK, false],
+        ]);
+
+        $dec = new Lz4Decompressor($frame, preferExtension: false);
+        $dec->setDictionary('abcd');
+
+        $this->assertSame('XYabcdXYab!XYabcdXYab!', $dec->decompress());
+    }
+
     public function testIndependentFrameBlocksCannotReferenceAnEarlierBlock(): void {
         $this->expectException(CompressionException::class);
         $this->expectExceptionCode(ExceptionCode::COMPRESSION_OUTPUT_UNDERFLOW->value);
@@ -236,6 +322,31 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
             self::versionOneFrame(0x60, 0x40, [["\x10A", false], ["\x00\x01\x00", false]]),
             preferExtension: false,
         ))->decompress();
+    }
+
+    public function testLinkedBlocksReachPastEarlierBlocksIntoTheDictionary(): void {
+        // The second block's match starts 2 bytes into the first block's output
+        // and 4 bytes before it, in the dictionary.
+        $frame = self::versionOneFrame(0x40, 0x40, [
+            ["\x20XY", false],
+            ["\x00\x06\x00\x10!", false],
+        ]);
+
+        $dec = new Lz4Decompressor($frame, preferExtension: false);
+        $dec->setDictionary('abcd');
+
+        $this->assertSame('XYabcd!', $dec->decompress());
+    }
+
+    public function testSetDictionaryRejectsAnIdOutsideTheUnsigned32BitRange(): void {
+        if (PHP_INT_SIZE < 8) {
+            $this->markTestSkipped('every int is a valid Dict-ID bit pattern on 32-bit PHP');
+        }
+
+        $this->expectException(CompressionException::class);
+        $this->expectExceptionCode(ExceptionCode::COMPRESSION_ILLEGAL_VALUE->value);
+
+        (new Lz4Decompressor())->setDictionary('abcd', 0x100000000);
     }
 
     public function testSetInputCutsALengthPastTheEndOfTheStringBackToIt(): void {
@@ -349,13 +460,6 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
         ))->decompress();
     }
 
-    public function testVersionOneFrameRejectsDictionaryFrames(): void {
-        $this->expectException(CompressionException::class);
-        $this->expectExceptionCode(ExceptionCode::COMPRESSION_UNSUPPORTED_DICTIONARY->value);
-
-        (new Lz4Decompressor(self::versionOneFrame(0x61, 0x40, [['x', true]]), preferExtension: false))->decompress();
-    }
-
     /**
      * @dataProvider invalidFrameDescriptorProvider
      *
@@ -392,17 +496,27 @@ class Lz4DecompressorTest extends AbstractUnitTestCase {
     }
 
     /**
+     * `lz4 -D` (v1.9.4) output for {@see self::LZ4_CLI_DICTIONARY} followed by
+     * "'app';": one block that is a single match into the dictionary, no
+     * Dict-ID, and a content checksum.
+     */
+    private static function lz4CliDictionaryFrame(): string {
+
+        return (string) hex2bin('04224d186440a70b0000000f51003e6027617070273b00000000bb281708');
+    }
+
+    /**
      * @param list<array{string, bool}> $blocks block data and whether it is stored uncompressed
      * @param int<0, 255> $flg
      * @param int<0, 255> $bd
      */
-    private static function versionOneFrame(int $flg, int $bd, array $blocks, int $contentSize = 0): string {
+    private static function versionOneFrame(int $flg, int $bd, array $blocks, int $contentSize = 0, int $dictionaryId = 1): string {
         $descriptor = chr($flg) . chr($bd);
         if (($flg & 0x08) !== 0) {
             $descriptor .= pack('V2', $contentSize, 0);
         }
         if (($flg & 0x01) !== 0) {
-            $descriptor .= pack('V', 1);
+            $descriptor .= pack('V', $dictionaryId);
         }
 
         $headerChecksum = ord(hash('xxh32', $descriptor, true, ['seed' => 0])[2]);

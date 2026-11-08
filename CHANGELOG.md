@@ -14,6 +14,7 @@ See [UPGRADE.md](UPGRADE.md) for what to change.
 * **Authentication extension point**: implement `Connection\Authenticator` for multi-round SASL mechanisms. Password authentication is `PasswordAuthenticator`.
 * **Maps with any key**: `MapEncodeOption` and `MapCollection::fromEntries()` represent object and composite keys losslessly.
 * **Request compression**: `Lz4Compressor` compresses outgoing frames as well. The `lz4` extension is used automatically when installed.
+* **LZ4 frame dictionaries**: `Lz4Decompressor::setDictionary()` decodes v1 frames compressed with a dictionary, whether the frame names it by Dict-ID or not (as `lz4 -D` writes them).
 * `UuidEncodeOption::AS_BINARY`, and raw 16-byte input for `Uuid`/`Timeuuid`.
 * `maxOrphanedStreams`, and `SocketNodeConfig::$connectTimeoutInSeconds`.
 * `Statement::isTimedOut()`, `isAbandoned()` and `peekResponse()`; `Connection::getKeyspace()` and `getRequestTimeout()`.
